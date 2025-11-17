@@ -122,7 +122,7 @@ def run_daily_scan():
         print("ERROR: ECHOTIK_USERNAME and ECHOTIK_PASSWORD environment variables must be set!")
         return
     
-    yesterday = (datetime.utcnow() - timedelta(days=1)).strftime('%Y-%m-%d')
+    yesterday = (datetime.utcnow() - timedelta(days=3)).strftime('%Y-%m-%d')
     
     # Create scan record
     with app.app_context():
@@ -144,7 +144,7 @@ def run_daily_scan():
     for page in range(1, PAGES_TO_SCAN + 1):
         print(f"  Page {page}/{PAGES_TO_SCAN}...", end=" ")
         
-        data = get_product_rankings(yesterday, rank_type=1, sort_by=1, page_num=page)
+        data = get_product_rankings(target_date, rank_type=1, sort_by=1, page_num=page)
         
         if not data or 'data' not in data or not data['data']:
             print("❌ No more data")
