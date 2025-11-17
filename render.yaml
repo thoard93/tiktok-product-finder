@@ -63,6 +63,6 @@ services:
 
 databases:
   - name: tiktok-db
-    plan: starter  # $7/month - 1GB storage, 30 days retention
+    plan: free  # $7/month - 1GB storage, 30 days retention
     databaseName: tiktok_products
     user: tiktok_user
