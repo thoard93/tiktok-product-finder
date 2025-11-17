@@ -9,7 +9,9 @@ from app import app, db, ProductScan, Product
 API_BASE_URL = "https://open.echotik.live/api/v2"
 API_USERNAME = os.environ.get('ECHOTIK_USERNAME')
 API_PASSWORD = os.environ.get('ECHOTIK_PASSWORD')
-
+print(f"DEBUG: API_USERNAME is set: {bool(API_USERNAME)}")
+print(f"DEBUG: API_PASSWORD is set: {bool(API_PASSWORD)}")
+print(f"DEBUG: Using region: {REGION}")
 # Scanner Settings (from environment or defaults)
 REGION = os.environ.get('SCAN_REGION', 'US')
 PAGES_TO_SCAN = int(os.environ.get('PAGES_TO_SCAN', '20'))
