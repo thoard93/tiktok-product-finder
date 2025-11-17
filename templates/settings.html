@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - TikTok Product Finder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header-content {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid white;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        
+        .card h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .info-box {
+            background: #f0f7ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .info-box p {
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .settings-grid {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .setting-item label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .setting-item p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .setting-item input,
+        .setting-item select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .credentials {
+            background: #fff9e6;
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .credentials code {
+            background: #333;
+            color: #0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>⚙️ Settings</h1>
+            <a href="/dashboard" class="btn btn-secondary">← Back to Dashboard</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="card">
+            <h2>Login Credentials</h2>
+            <div class="credentials">
+                <p><strong>Default Login:</strong></p>
+                <p>Username: <code>admin</code></p>
+                <p>Password: <code>changeme123</code></p>
+                <br>
+                <p><strong>⚠️ Important:</strong> Change your password after first login by updating the database or contact support.</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>EchoTik API Configuration</h2>
+            <div class="info-box">
+                <p><strong>These settings are configured via environment variables on your hosting platform (Render.com).</strong></p>
+                <p>To update your API credentials or scan settings, go to your Render dashboard and update the environment variables.</p>
+            </div>
+            
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <label>API Username</label>
+                    <p>Environment variable: <code>ECHOTIK_USERNAME</code></p>
+                </div>
+                
+                <div class="setting-item">
+                    <label>API Password</label>
+                    <p>Environment variable: <code>ECHOTIK_PASSWORD</code></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Scan Settings</h2>
+            <div class="info-box">
+                <p>Configure these via environment variables on Render:</p>
+            </div>
+            
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <label>Region</label>
+                    <p><code>SCAN_REGION</code> - Default: US</p>
+                    <p>Options: US, GB, ID, TH, PH, MY, VN, SG</p>
+                </div>
+                
+                <div class="setting-item">
+                    <label>Pages to Scan</label>
+                    <p><code>PAGES_TO_SCAN</code> - Default: 20 (200 products)</p>
+                </div>
+                
+                <div class="setting-item">
+                    <label>Minimum Sales</label>
+                    <p><code>MIN_SALES</code> - Default: 10</p>
+                </div>
+                
+                <div class="setting-item">
+                    <label>Maximum Influencers</label>
+                    <p><code>MAX_INFLUENCERS</code> - Default: 500</p>
+                </div>
+                
+                <div class="setting-item">
+                    <label>Minimum Commission</label>
+                    <p><code>MIN_COMMISSION</code> - Default: 0.10 (10%)</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Daily Scan Schedule</h2>
+            <div class="info-box">
+                <p>The daily scan runs automatically every day via Render's Cron Job feature.</p>
+                <p>Default schedule: 9:00 AM UTC (configured in render.yaml)</p>
+                <p>To change the schedule, update the <code>schedule</code> field in render.yaml and redeploy.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

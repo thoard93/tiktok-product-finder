@@ -1,0 +1,68 @@
+services:
+  # Web Service (Flask App)
+  - type: web
+    name: tiktok-product-finder
+    env: python
+    plan: starter  # $7/month - always on
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ECHOTIK_USERNAME
+        sync: false  # You'll set this manually
+      - key: ECHOTIK_PASSWORD
+        sync: false  # You'll set this manually
+      - key: SCAN_REGION
+        value: US
+      - key: PAGES_TO_SCAN
+        value: 20
+      - key: MIN_SALES
+        value: 10
+      - key: MAX_INFLUENCERS
+        value: 500
+      - key: MIN_COMMISSION
+        value: 0.10
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tiktok-db
+          property: connectionString
+
+  # Cron Job (Daily Scanner)
+  - type: cron
+    name: tiktok-daily-scanner
+    env: python
+    schedule: "0 9 * * *"  # Run at 9 AM UTC every day
+    buildCommand: pip install -r requirements.txt
+    startCommand: python daily_scanner.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ECHOTIK_USERNAME
+        sync: false
+      - key: ECHOTIK_PASSWORD
+        sync: false
+      - key: SCAN_REGION
+        value: US
+      - key: PAGES_TO_SCAN
+        value: 20
+      - key: MIN_SALES
+        value: 10
+      - key: MAX_INFLUENCERS
+        value: 500
+      - key: MIN_COMMISSION
+        value: 0.10
+      - key: MIN_GMV
+        value: 100
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tiktok-db
+          property: connectionString
+
+databases:
+  - name: tiktok-db
+    plan: starter  # $7/month - 1GB storage, 30 days retention
+    databaseName: tiktok_products
+    user: tiktok_user
