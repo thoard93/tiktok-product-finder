@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Product Finder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            background: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .tab:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, select {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .stats {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        .product-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .gem-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            background: #f5f5f5;
+        }
+
+        .product-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .product-seller {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .product-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-item-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 3px;
+        }
+
+        .stat-item-value {
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .competition-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .competition-low {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .competition-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .competition-high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .product-link {
+            display: block;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .product-link:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: white;
+            font-size: 1.5em;
+        }
+
+        .no-products {
+            background: white;
+            border-radius: 15px;
+            padding: 50px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .no-products-text {
+            font-size: 1.3em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 TikTok Product Finder</h1>
+            <p class="subtitle">Discover high-potential products and hidden gems from top brands</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="all">📊 All Products</button>
+            <button class="tab" data-tab="gems">💎 Brand Hunter Gems</button>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="brandFilter">Filter by Brand:</label>
+                <input type="text" id="brandFilter" placeholder="Enter brand name...">
+            </div>
+            <div class="control-group">
+                <label for="sortBy">Sort by:</label>
+                <select id="sortBy">
+                    <option value="best">Best Opportunities</option>
+                    <option value="low">Low to High Competition</option>
+                    <option value="high">High to Low Competition</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalProducts">-</div>
+                    <div class="stat-label">Total Products</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="lastUpdated">-</div>
+                    <div class="stat-label">Last Updated</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="productsContainer" class="loading">Loading products...</div>
+    </div>
+
+    <script>
+        let currentTab = 'all';
+        let allProducts = [];
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentTab = tab.dataset.tab;
+                loadProducts();
+            });
+        });
+
+        // Filter and sort listeners
+        document.getElementById('brandFilter').addEventListener('input', filterAndSort);
+        document.getElementById('sortBy').addEventListener('change', filterAndSort);
+
+        function loadProducts() {
+            const container = document.getElementById('productsContainer');
+            container.innerHTML = '<div class="loading">Loading products...</div>';
+
+            const params = new URLSearchParams({
+                tab: currentTab,
+                brand: document.getElementById('brandFilter').value,
+                sort: document.getElementById('sortBy').value
+            });
+
+            fetch(`/api/products?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    allProducts = data.products;
+                    document.getElementById('totalProducts').textContent = data.total_products;
+                    document.getElementById('lastUpdated').textContent = data.scan_date || 'No data';
+                    displayProducts(data.products);
+                })
+                .catch(error => {
+                    console.error('Error loading products:', error);
+                    container.innerHTML = '<div class="no-products"><p class="no-products-text">Error loading products</p></div>';
+                });
+        }
+
+        function filterAndSort() {
+            loadProducts();
+        }
+
+        function displayProducts(products) {
+            const container = document.getElementById('productsContainer');
+
+            if (products.length === 0) {
+                container.innerHTML = '<div class="no-products"><p class="no-products-text">No products found</p></div>';
+                return;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'products-grid';
+
+            products.forEach(product => {
+                const card = createProductCard(product);
+                grid.appendChild(card);
+            });
+
+            container.innerHTML = '';
+            container.appendChild(grid);
+        }
+
+        function createProductCard(product) {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+
+            // Add gem badge for Brand Hunter tab
+            let gemBadge = '';
+            if (currentTab === 'gems') {
+                gemBadge = '<div class="gem-badge">💎 Hidden Gem</div>';
+            }
+
+            // Determine competition level
+            let competitionClass = 'competition-low';
+            if (product.total_influencers > 100) {
+                competitionClass = 'competition-high';
+            } else if (product.total_influencers > 50) {
+                competitionClass = 'competition-medium';
+            }
+
+            // Format numbers
+            const sales = product.sales.toLocaleString();
+            const gmv = '$' + product.gmv.toLocaleString();
+            const commission = product.commission_rate + '%';
+            const earnings = '$' + product.potential_earnings.toLocaleString();
+
+            // Use proxy for images if image_url exists
+            let imageHtml = '<img src="/static/placeholder.png" alt="No Image" class="product-image">';
+            if (product.image_url) {
+                const proxyUrl = `/proxy-image?url=${encodeURIComponent(product.image_url)}`;
+                imageHtml = `<img src="${proxyUrl}" alt="${product.product_name}" class="product-image" onerror="this.src='/static/placeholder.png'">`;
+            }
+
+            card.innerHTML = `
+                ${gemBadge}
+                ${imageHtml}
+                <div class="product-name">${product.product_name}</div>
+                <div class="product-seller">📦 ${product.seller_name}</div>
+                <div class="product-stats">
+                    <div class="stat-item">
+                        <div class="stat-item-label">Sales</div>
+                        <div class="stat-item-value">${sales}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-item-label">Revenue</div>
+                        <div class="stat-item-value">${gmv}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-item-label">Competition</div>
+                        <div class="stat-item-value">
+                            ${product.total_influencers}
+                            <span class="competition-badge ${competitionClass}">
+                                ${competitionClass === 'competition-low' ? 'LOW' : competitionClass === 'competition-medium' ? 'MED' : 'HIGH'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-item-label">Commission</div>
+                        <div class="stat-item-value">${commission}</div>
+                    </div>
+                </div>
+                <div style="margin: 15px 0; padding: 12px; background: #e8f5e9; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.85em; color: #2e7d32; margin-bottom: 3px;">💰 Potential Earnings</div>
+                    <div style="font-size: 1.3em; font-weight: bold; color: #1b5e20;">${earnings}</div>
+                </div>
+                <a href="${product.tiktok_url}" target="_blank" class="product-link">View on TikTok Shop →</a>
+            `;
+
+            return card;
+        }
+
+        // Load products on page load
+        loadProducts();
+    </script>
+</body>
+</html>
