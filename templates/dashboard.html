@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Product Finder Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            color: #333;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .filter-group label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        
+        .filter-group input,
+        .filter-group select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .section-title {
+            color: white;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .product-card {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+        }
+        
+        .product-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .product-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .product-content {
+            padding: 20px;
+            position: relative;
+        }
+        
+        .product-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+        
+        .product-seller {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+        
+        .product-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .product-stat {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .product-stat-label {
+            color: #666;
+            font-size: 0.8rem;
+            margin-bottom: 3px;
+        }
+        
+        .product-stat-value {
+            color: #333;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        
+        .product-metrics {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .metric {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .metric-label {
+            color: #666;
+            font-size: 0.75rem;
+            margin-bottom: 3px;
+        }
+        
+        .metric-value {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .metric-badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge-low {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .badge-high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .commission-bar {
+            background: linear-gradient(to right, #4ade80, #22c55e);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .earnings-bar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+        
+        .product-link {
+            display: block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 12px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        
+        .product-link:hover {
+            opacity: 0.9;
+        }
+        
+        .no-data {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            color: #666;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        .pagination a,
+        .pagination span {
+            padding: 10px 15px;
+            background: white;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .pagination .active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .rating {
+            color: #fbbf24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 TikTok Product Finder</h1>
+            {% if scan %}
+            <p>Last scan: {{ scan.scan_date.strftime('%B %d, %Y at %I:%M %p') }} | Region: {{ scan.region or 'US' }}</p>
+            {% endif %}
+        </div>
+        
+        {% if scan %}
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Products</div>
+                <div class="stat-value">{{ stats.total_products }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total GMV</div>
+                <div class="stat-value">${{ "{:,.0f}".format(stats.total_gmv) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Potential Earnings</div>
+                <div class="stat-value">${{ "{:,.0f}".format(stats.total_earnings) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Commission</div>
+                <div class="stat-value">{{ "{:.1f}".format(stats.avg_commission) }}%</div>
+            </div>
+        </div>
+        
+        <div class="filters">
+            <form method="get">
+                <div class="filters-grid">
+                    <div class="filter-group">
+                        <label>Minimum Sales</label>
+                        <input type="number" name="min_sales" value="{{ filters.min_sales }}" placeholder="e.g., 100">
+                    </div>
+                    <div class="filter-group">
+                        <label>Max Price</label>
+                        <input type="number" step="0.01" name="max_price" value="{{ filters.max_price or '' }}" placeholder="e.g., 50">
+                    </div>
+                    <div class="filter-group">
+                        <label>Min Earnings</label>
+                        <input type="number" step="0.01" name="min_earnings" value="{{ filters.min_earnings }}" placeholder="e.g., 1000">
+                    </div>
+                    <div class="filter-group">
+                        <label>Brand/Seller Search</label>
+                        <input type="text" name="brand_search" value="{{ filters.brand_search or '' }}" placeholder="e.g., Nike">
+                    </div>
+                    <div class="filter-group">
+                        <label>Sort By</label>
+                        <select name="sort_by">
+                            <option value="potential_earnings" {% if filters.sort_by == 'potential_earnings' %}selected{% endif %}>Potential Earnings</option>
+                            <option value="sales" {% if filters.sort_by == 'sales' %}selected{% endif %}>Sales</option>
+                            <option value="gmv" {% if filters.sort_by == 'gmv' %}selected{% endif %}>GMV</option>
+                            <option value="commission" {% if filters.sort_by == 'commission' %}selected{% endif %}>Commission Rate</option>
+                            <option value="competition_low" {% if filters.sort_by == 'competition_low' %}selected{% endif %}>Competition (Low to High)</option>
+                            <option value="competition_high" {% if filters.sort_by == 'competition_high' %}selected{% endif %}>Competition (High to Low)</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" style="margin-top: 15px; padding: 10px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 5px; font-weight: 600; cursor: pointer;">Apply Filters</button>
+            </form>
+        </div>
+        
+        <h2 class="section-title">🏆 Top Products</h2>
+        
+        {% if products %}
+        <div class="products-grid">
+            {% for product in products %}
+            <div class="product-card">
+                <div style="position: relative;">
+                    {% if product.image_url %}
+                    <div class="product-image">
+                        <img src="{{ product.image_url }}" alt="{{ product.product_name }}" onerror="this.parentElement.innerHTML='<div style=\'width:100%;height:200px;display:flex;align-items:center;justify-content:center;background:#f0f0f0;color:#999;\'>No Image Available</div>'">
+                    </div>
+                    {% else %}
+                    <div class="product-image">No Image Available</div>
+                    {% endif %}
+                    <div class="product-badge">#{{ (pagination.page - 1) * 20 + loop.index }} Top Pick</div>
+                </div>
+                
+                <div class="product-content">
+                    <h3 class="product-title">{{ product.product_name }}</h3>
+                    {% if product.seller_name %}
+                    <div class="product-seller">by {{ product.seller_name }}</div>
+                    {% endif %}
+                    
+                    <div class="product-stats">
+                        <div class="product-stat">
+                            <div class="product-stat-label">Sales</div>
+                            <div class="product-stat-value">{{ "{:,}".format(product.sales) }}</div>
+                        </div>
+                        <div class="product-stat">
+                            <div class="product-stat-label">Revenue</div>
+                            <div class="product-stat-value">${{ "{:,}".format(product.gmv|int) }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="product-metrics">
+                        <div class="metric">
+                            <div class="metric-label">Competition</div>
+                            <div class="metric-value">{{ "{:,}".format(product.total_influencers or 0) }}</div>
+                            <div class="metric-badge {% if product.total_influencers < 100 %}badge-low{% elif product.total_influencers < 1000 %}badge-medium{% else %}badge-high{% endif %}">
+                                {% if product.total_influencers < 100 %}LOW{% elif product.total_influencers < 1000 %}MED{% else %}HIGH{% endif %}
+                            </div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Rating</div>
+                            <div class="metric-value rating">⭐ {{ product.rank|round(1) if product.rank else 'N/A' }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="commission-bar">
+                        Commission Rate: {{ "{:.1f}".format(product.commission_rate) }}%
+                    </div>
+                    
+                    <div class="earnings-bar">
+                        💰 Potential Earnings: ${{ "{:,}".format(product.potential_earnings|int) }}
+                    </div>
+                    
+                    <a href="{{ product.tiktok_url }}" target="_blank" class="product-link">
+                        View on TikTok Shop
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if pagination and pagination.pages > 1 %}
+        <div class="pagination">
+            {% if pagination.has_prev %}
+            <a href="?page={{ pagination.prev_num }}&min_sales={{ filters.min_sales }}&max_price={{ filters.max_price or '' }}&min_earnings={{ filters.min_earnings }}&brand_search={{ filters.brand_search or '' }}&sort_by={{ filters.sort_by }}">← Previous</a>
+            {% endif %}
+            
+            {% for page_num in pagination.iter_pages() %}
+                {% if page_num %}
+                    <a href="?page={{ page_num }}&min_sales={{ filters.min_sales }}&max_price={{ filters.max_price or '' }}&min_earnings={{ filters.min_earnings }}&brand_search={{ filters.brand_search or '' }}&sort_by={{ filters.sort_by }}" 
+                       class="{% if page_num == pagination.page %}active{% endif %}">
+                        {{ page_num }}
+                    </a>
+                {% else %}
+                    <span>...</span>
+                {% endif %}
+            {% endfor %}
+            
+            {% if pagination.has_next %}
+            <a href="?page={{ pagination.next_num }}&min_sales={{ filters.min_sales }}&max_price={{ filters.max_price or '' }}&min_earnings={{ filters.min_earnings }}&brand_search={{ filters.brand_search or '' }}&sort_by={{ filters.sort_by }}">Next →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="no-data">
+            <h2>No products found</h2>
+            <p>Try adjusting your filters or run a new scan</p>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="no-data">
+            <h2>No scan data available</h2>
+            <p>Run your scanner to populate the dashboard with products</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
