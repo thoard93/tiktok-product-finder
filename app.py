@@ -87,13 +87,6 @@ def index():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-
-# Add to app.py
-@app.route('/proxy-image')
-def proxy_image():
-    image_url = request.args.get('url')
-    if not image_url:
-        return '', 404
     
     try:
         response = requests.get(image_url, timeout=5)
