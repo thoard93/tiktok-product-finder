@@ -3,486 +3,421 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ product.product_name }} - Product Details</title>
+    <title>Product Details - TikTok Shop Finder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --bg-hover: #22222f;
+            --accent: #fe2c55;
+            --tiktok-cyan: #25f4ee;
+            --success: #00d26a;
+            --warning: #ffb800;
+            --text-primary: #ffffff;
+            --text-secondary: #8b8b9e;
+            --border: #2a2a3a;
         }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .back-button {
-            display: inline-block;
-            background: white;
-            color: #667eea;
-            padding: 12px 24px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 600;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: all 0.3s;
-        }
-
-        .back-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-        }
-
-        .detail-card {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-            position: relative;
-        }
-
-        .gem-badge {
-            position: absolute;
-            top: 30px;
-            right: 30px;
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 25px;
-            font-size: 1em;
-            font-weight: bold;
-            box-shadow: 0 4px 15px rgba(240, 147, 251, 0.3);
-        }
-
-        .product-header {
-            display: grid;
-            grid-template-columns: 400px 1fr;
-            gap: 40px;
-            margin-bottom: 40px;
-        }
-
-        .product-image-container {
-            width: 100%;
-            height: 400px;
-            border-radius: 15px;
-            overflow: hidden;
-            background: #f5f5f5;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .product-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .no-image-placeholder {
-            font-size: 4em;
-            color: #ccc;
-        }
-
-        .product-main-info {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .product-title {
-            font-size: 2.5em;
-            font-weight: 700;
-            color: #333;
-            margin-bottom: 15px;
-            line-height: 1.3;
-        }
-
-        .product-seller {
-            font-size: 1.3em;
-            color: #666;
-            margin-bottom: 25px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .seller-icon {
-            font-size: 1.5em;
-        }
-
-        .quick-stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .quick-stat {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            text-align: center;
-        }
-
-        .quick-stat-value {
-            font-size: 2em;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .quick-stat-label {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
-
-        .details-section {
-            margin-top: 40px;
-        }
-
-        .section-title {
-            font-size: 1.8em;
-            font-weight: 700;
-            color: #333;
-            margin-bottom: 25px;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 40px;
-        }
-
-        .stat-box {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 12px;
-            border-left: 4px solid #667eea;
-        }
-
-        .stat-box-label {
-            font-size: 0.9em;
-            color: #666;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        .stat-box-value {
-            font-size: 1.8em;
-            font-weight: bold;
-            color: #333;
-        }
-
-        .stat-box-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 5px;
-            font-size: 0.7em;
-            font-weight: bold;
-            margin-left: 8px;
-            vertical-align: middle;
-        }
-
-        .badge-low {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .badge-medium {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .badge-high {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .earnings-highlight {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            margin: 30px 0;
-            box-shadow: 0 6px 25px rgba(17, 153, 142, 0.3);
-        }
-
-        .earnings-label {
-            font-size: 1.1em;
-            margin-bottom: 10px;
-            opacity: 0.95;
-        }
-
-        .earnings-value {
-            font-size: 3em;
-            font-weight: bold;
-        }
-
-        .earnings-subtitle {
-            font-size: 0.9em;
-            margin-top: 10px;
-            opacity: 0.9;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 15px;
-            margin-top: 30px;
-        }
-
-        .action-button {
-            flex: 1;
-            padding: 18px;
-            border: none;
-            border-radius: 12px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            text-align: center;
-            transition: all 0.3s;
-            display: block;
-        }
-
-        .button-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .button-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .button-secondary {
-            background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
-        }
-
-        .button-secondary:hover {
-            background: #f8f9fa;
-            transform: translateY(-2px);
-        }
-
-        .metadata {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 12px;
-            margin-top: 30px;
-        }
-
-        .metadata-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .metadata-row:last-child {
-            border-bottom: none;
-        }
-
-        .metadata-label {
-            color: #666;
-            font-weight: 600;
-        }
-
-        .metadata-value {
-            color: #333;
-        }
-
-        @media (max-width: 768px) {
-            .product-header {
-                grid-template-columns: 1fr;
-            }
-
-            .product-image-container {
-                height: 300px;
-            }
-
-            .product-title {
-                font-size: 1.8em;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .action-buttons {
-                flex-direction: column;
-            }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Space Grotesk', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        
+        .header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 1rem 2rem; position: sticky; top: 0; z-index: 100; }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .back-link { display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); text-decoration: none; }
+        .back-link:hover { color: var(--accent); }
+        .logo { display: flex; align-items: center; gap: 0.75rem; }
+        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #fe2c55 0%, #25f4ee 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+        .logo-text { font-size: 1.25rem; font-weight: 600; }
+        .logo-text span { color: var(--accent); }
+        
+        .main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .product-header { display: grid; grid-template-columns: 400px 1fr; gap: 2rem; margin-bottom: 2rem; }
+        .product-image-section { background: var(--bg-card); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+        .product-image { width: 100%; aspect-ratio: 1; object-fit: cover; }
+        .product-info { display: flex; flex-direction: column; gap: 1.5rem; }
+        .product-title { font-size: 1.75rem; font-weight: 600; line-height: 1.3; }
+        .product-meta { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .meta-badge { background: var(--bg-card); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; }
+        .meta-badge.highlight { border-color: var(--accent); color: var(--accent); }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; text-align: center; }
+        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stat-value { font-size: 1.75rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; margin-bottom: 0.25rem; }
+        .stat-value.accent { color: var(--accent); }
+        .stat-value.cyan { color: var(--tiktok-cyan); }
+        .stat-value.success { color: var(--success); }
+        .stat-value.warning { color: var(--warning); }
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; }
+        
+        .action-buttons { display: flex; gap: 1rem; margin-top: auto; }
+        .btn { padding: 0.75rem 1.5rem; border-radius: 8px; font-family: inherit; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s; }
+        .btn-primary { background: var(--accent); color: white; border: none; }
+        .btn-primary:hover { background: #ff1744; transform: translateY(-2px); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-primary); }
+        .btn-outline:hover { border-color: var(--accent); background: var(--bg-hover); }
+        
+        .tabs-container { margin-top: 2rem; }
+        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+        .tab { padding: 1rem 1.5rem; background: transparent; border: none; color: var(--text-secondary); font-family: inherit; font-size: 1rem; cursor: pointer; position: relative; }
+        .tab:hover { color: var(--text-primary); }
+        .tab.active { color: var(--accent); }
+        .tab.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .analysis-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .section-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .video-analysis-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .video-stat-card { background: var(--bg-secondary); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .video-stat-period { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem; }
+        .video-stat-value { font-size: 2rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .video-stat-label { font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem; }
+        
+        .competition-meter { margin-top: 1rem; }
+        .meter-label { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
+        .meter-bar { height: 8px; background: var(--bg-secondary); border-radius: 4px; overflow: hidden; }
+        .meter-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .meter-fill.low { background: var(--success); }
+        .meter-fill.medium { background: var(--warning); }
+        .meter-fill.high { background: var(--accent); }
+        
+        .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; color: var(--text-secondary); }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        @media (max-width: 900px) {
+            .product-header { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .video-analysis-grid { grid-template-columns: 1fr; }
         }
     </style>
+
+<style>
+.product-detail-image {
+    width: 100%;
+    max-width: 400px;
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    border-radius: 12px;
+    position: relative;
+}
+
+.product-detail-image .product-icon {
+    font-size: 100px;
+    opacity: 0.5;
+    margin-bottom: 10px;
+}
+
+.product-detail-image .view-hint {
+    background: rgba(0,0,0,0.5);
+    color: rgba(255,255,255,0.8);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+</style>
+
 </head>
 <body>
-    <div class="container">
-        <a href="/" class="back-button">← Back to Dashboard</a>
-
-        <div class="detail-card">
-            {% if is_gem %}
-            <div class="gem-badge">💎 Hidden Gem</div>
-            {% endif %}
-
-            <div class="product-header">
-                <div class="product-image-container">
-                    {% if product.image_url %}
-                    <img src="/proxy-image?url={{ product.image_url }}" 
-                         alt="{{ product.product_name }}" 
-                         class="product-image"
-                         onerror="this.parentElement.innerHTML='<span class=\'no-image-placeholder\'>📦</span>'">
-                    {% else %}
-                    <span class="no-image-placeholder">📦</span>
-                    {% endif %}
-                </div>
-
-                <div class="product-main-info">
-                    <h1 class="product-title">{{ product.product_name }}</h1>
-                    <div class="product-seller">
-                        <span class="seller-icon">🏪</span>
-                        <span>{{ product.seller_name }}</span>
-                    </div>
-
-                    <div class="quick-stats">
-                        <div class="quick-stat">
-                            <div class="quick-stat-value">${{ "%.2f"|format(product.avg_price) }}</div>
-                            <div class="quick-stat-label">Price</div>
-                        </div>
-                        <div class="quick-stat">
-                            <div class="quick-stat-value">{{ "%.1f"|format(product.commission_rate) }}%</div>
-                            <div class="quick-stat-label">Commission</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="earnings-highlight">
-                <div class="earnings-label">💰 Potential Earnings</div>
-                <div class="earnings-value">${{ "{:,.2f}".format(product.potential_earnings) }}</div>
-                <div class="earnings-subtitle">Based on current sales and commission rate</div>
-            </div>
-
-            <div class="details-section">
-                <h2 class="section-title">📊 Product Statistics</h2>
-                
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="stat-box-label">Total Sales</div>
-                        <div class="stat-box-value">{{ "{:,}".format(product.sales) }}</div>
-                    </div>
-
-                    <div class="stat-box">
-                        <div class="stat-box-label">Total Revenue (GMV)</div>
-                        <div class="stat-box-value">${{ "{:,.0f}".format(product.gmv) }}</div>
-                    </div>
-
-                    <div class="stat-box">
-                        <div class="stat-box-label">Competition Level</div>
-                        <div class="stat-box-value">
-                            {{ product.total_influencers }}
-                            {% if product.total_influencers <= 50 %}
-                            <span class="stat-box-badge badge-low">LOW</span>
-                            {% elif product.total_influencers <= 100 %}
-                            <span class="stat-box-badge badge-medium">MEDIUM</span>
-                            {% else %}
-                            <span class="stat-box-badge badge-high">HIGH</span>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="stat-box">
-                        <div class="stat-box-label">Commission Rate</div>
-                        <div class="stat-box-value">{{ "%.1f"|format(product.commission_rate) }}%</div>
-                    </div>
-                </div>
-
-                <h2 class="section-title">💡 Opportunity Analysis</h2>
-                
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="stat-box-label">Revenue Per Influencer</div>
-                        <div class="stat-box-value">
-                            {% if product.total_influencers > 0 %}
-                            ${{ "{:,.0f}".format(product.gmv / product.total_influencers) }}
-                            {% else %}
-                            ${{ "{:,.0f}".format(product.gmv) }}
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="stat-box">
-                        <div class="stat-box-label">Average Sale Price</div>
-                        <div class="stat-box-value">${{ "%.2f"|format(product.avg_price) }}</div>
-                    </div>
-
-                    <div class="stat-box">
-                        <div class="stat-box-label">Your Potential Commission</div>
-                        <div class="stat-box-value">${{ "%.2f"|format(product.avg_price * product.commission_rate / 100) }}</div>
-                    </div>
-
-                    <div class="stat-box">
-                        <div class="stat-box-label">Market Saturation</div>
-                        <div class="stat-box-value">
-                            {% if product.total_influencers <= 30 %}
-                            Very Low 🔥
-                            {% elif product.total_influencers <= 75 %}
-                            Low 🌟
-                            {% elif product.total_influencers <= 150 %}
-                            Moderate ⚡
-                            {% else %}
-                            High 📈
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="action-buttons">
-                <a href="{{ product.tiktok_url }}" target="_blank" class="action-button button-primary">
-                    View on TikTok Shop →
-                </a>
-                <a href="/" class="action-button button-secondary">
-                    ← Back to Products
-                </a>
-            </div>
-
-            <div class="metadata">
-                <div class="metadata-row">
-                    <span class="metadata-label">Product ID:</span>
-                    <span class="metadata-value">{{ product.product_id }}</span>
-                </div>
-                <div class="metadata-row">
-                    <span class="metadata-label">Scan Date:</span>
-                    <span class="metadata-value">{{ scan.scan_date.strftime('%Y-%m-%d %H:%M') }}</span>
-                </div>
-                <div class="metadata-row">
-                    <span class="metadata-label">Scan Type:</span>
-                    <span class="metadata-value">
-                        {% if scan.scan_type == 'brand_hunter' %}
-                        💎 Brand Hunter
-                        {% else %}
-                        📊 General Scan
-                        {% endif %}
-                    </span>
-                </div>
-                <div class="metadata-row">
-                    <span class="metadata-label">Region:</span>
-                    <span class="metadata-value">{{ scan.region }}</span>
-                </div>
+    <header class="header">
+        <div class="header-content">
+            <a href="/" class="back-link">← Back to Products</a>
+            <div class="logo">
+                <div class="logo-icon">TS</div>
+                <div class="logo-text">TikTok<span>Shop</span> Finder</div>
             </div>
         </div>
-    </div>
+    </header>
+    <main class="main">
+        <div id="productContent">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 1rem;">Loading product details...</p>
+            </div>
+        </div>
+    </main>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const productId = urlParams.get('id');
+        
+        function formatCurrency(v) { if (!v) return '$0'; if (v >= 1e6) return '$'+(v/1e6).toFixed(1)+'M'; if (v >= 1e3) return '$'+(v/1e3).toFixed(1)+'K'; return '$'+v.toFixed(0); }
+        function formatNumber(v) { if (!v) return '0'; if (v >= 1e6) return (v/1e6).toFixed(1)+'M'; if (v >= 1e3) return (v/1e3).toFixed(1)+'K'; return v.toString(); }
+        function getCompetitionLevel(inf, vid) {
+            const t = (inf||0) + (vid||0)/10;
+            if (t <= 5) return {level:'Low',class:'low',percent:20};
+            if (t <= 20) return {level:'Medium',class:'medium',percent:50};
+            if (t <= 50) return {level:'High',class:'high',percent:75};
+            return {level:'Very High',class:'high',percent:95};
+        }
+        function getImageUrl(url) {
+            if (!url) return 'https://via.placeholder.com/400x400?text=No+Image';
+            if (url.includes('ibyteimg.com')||url.includes('tiktokcdn')||url.includes('volces.com')) return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+            return url;
+        }
+        
+        function renderProduct(p) {
+            const comp = getCompetitionLevel(p.influencer_count||p.total_influencers, p.video_count);
+            const tiktokUrl = p.tiktok_url || `https://shop.tiktok.com/view/product/${p.product_id}`;
+            const echotikUrl = `https://echotik.live/products/${p.product_id}`;
+            const earnings = p.potential_earnings || (p.gmv * (p.commission_rate||0) / 100);
+            const inf = p.influencer_count || p.total_influencers || 0;
+            
+            document.getElementById('productContent').innerHTML = `
+                <div class="product-header">
+                    <div class="product-image-section">
+                        <img class="product-image" src="${getImageUrl(p.image_url||p.cover_url)}" alt="${p.product_name}" onerror="this.src='https://via.placeholder.com/400x400?text=No+Image'">
+                    </div>
+                    <div class="product-info">
+                        <h1 class="product-title">${p.product_name}</h1>
+                        <div class="product-meta">
+                            <span class="meta-badge">🏪 ${p.seller_name||'Unknown Seller'}</span>
+                            ${p.rating?`<span class="meta-badge">⭐ ${p.rating.toFixed(1)}</span>`:''}
+                            ${p.free_shipping?'<span class="meta-badge highlight">🚚 Free Shipping</span>':''}
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-value accent">${formatCurrency(p.gmv)}</div><div class="stat-label">Total GMV</div></div>
+                            <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">${formatNumber(p.sales)}</div><div class="stat-label">Units Sold</div></div>
+                            <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-value success">${formatCurrency(earnings)}</div><div class="stat-label">Potential</div></div>
+                            <div class="stat-card"><div class="stat-icon">%</div><div class="stat-value warning">${(p.commission_rate||0).toFixed(0)}%</div><div class="stat-label">Commission</div></div>
+                        </div>
+                        <div class="action-buttons">
+                            <a href="${tiktokUrl}" target="_blank" class="btn btn-primary">🔍 Search on TikTok</a>
+                            <a href="${echotikUrl}" target="_blank" class="btn btn-outline">📊 View on EchoTik</a>
+                            <button class="btn btn-outline" onclick="fetchLiveData('${p.product_id}')">🔄 Refresh Data</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab active" onclick="switchTab('overview')">Overview</button>
+                        <button class="tab" onclick="switchTab('video')">Video Analysis</button>
+                        <button class="tab" onclick="switchTab('competition')">Competition</button>
+                    </div>
+                    <div id="tab-overview" class="tab-content active">
+                        <div class="analysis-section">
+                            <h3 class="section-title">📈 Sales Performance</h3>
+                            <div class="video-analysis-grid">
+                                <div class="video-stat-card"><div class="video-stat-period">Last 7 Days</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatCurrency(p.gmv_7d||0)}</div><div class="video-stat-label">${formatNumber(p.sales_7d||0)} units</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Last 30 Days</div><div class="video-stat-value" style="color:var(--success)">${formatCurrency(p.gmv_30d||0)}</div><div class="video-stat-label">${formatNumber(p.sales_30d||0)} units</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">All Time</div><div class="video-stat-value" style="color:var(--accent)">${formatCurrency(p.gmv||0)}</div><div class="video-stat-label">${formatNumber(p.sales||0)} units</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="tab-video" class="tab-content">
+                        <div class="analysis-section">
+                            <h3 class="section-title">🎬 Video Activity</h3>
+                            <div class="video-analysis-grid">
+                                <div class="video-stat-card"><div class="video-stat-period">Last 7 Days</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatNumber(p.videos_7d||0)}</div><div class="video-stat-label">New Videos</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Last 30 Days</div><div class="video-stat-value" style="color:var(--success)">${formatNumber(p.videos_30d||0)}</div><div class="video-stat-label">New Videos</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Total</div><div class="video-stat-value" style="color:var(--accent)">${formatNumber(p.video_count||0)}</div><div class="video-stat-label">All Videos</div></div>
+                            </div>
+                            <p style="margin-top:1rem;color:var(--text-secondary);font-size:0.9rem;">💡 Click "Refresh Data" to fetch latest video counts from EchoTik API.</p>
+                        </div>
+                        <div class="analysis-section">
+                            <h3 class="section-title">📺 Live Streams</h3>
+                            <div class="video-stat-card" style="max-width:200px"><div class="video-stat-period">Total</div><div class="video-stat-value" style="color:var(--warning)">${formatNumber(p.live_count||0)}</div><div class="video-stat-label">Livestreams</div></div>
+                        </div>
+                    </div>
+                    <div id="tab-competition" class="tab-content">
+                        <div class="analysis-section">
+                            <h3 class="section-title">🎯 Competition Analysis</h3>
+                            <div class="stats-grid" style="margin-bottom:1.5rem;">
+                                <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-value cyan">${formatNumber(inf)}</div><div class="stat-label">Influencers</div></div>
+                                <div class="stat-card"><div class="stat-icon">🎬</div><div class="stat-value">${formatNumber(p.video_count||0)}</div><div class="stat-label">Videos</div></div>
+                                <div class="stat-card"><div class="stat-icon">📺</div><div class="stat-value">${formatNumber(p.live_count||0)}</div><div class="stat-label">Livestreams</div></div>
+                                <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-value ${comp.class}">${comp.level}</div><div class="stat-label">Competition</div></div>
+                            </div>
+                            <div class="competition-meter">
+                                <div class="meter-label"><span>Competition Level</span><span>${comp.level}</span></div>
+                                <div class="meter-bar"><div class="meter-fill ${comp.class}" style="width:${comp.percent}%"></div></div>
+                            </div>
+                            <div style="margin-top:1.5rem;padding:1rem;background:var(--bg-secondary);border-radius:8px;">
+                                <h4 style="margin-bottom:0.75rem;">💡 Competition Insight</h4>
+                                ${getInsight(inf,p.gmv)}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+        
+        function getInsight(inf,gmv) {
+            const g = formatCurrency(gmv);
+            if (inf<=3) return `<p style="color:var(--success)">🏆 <strong>Untapped!</strong> Only ${inf} influencers. ${g} proven sales - move fast!</p>`;
+            if (inf<=10) return `<p style="color:var(--tiktok-cyan)">✅ <strong>Low Competition.</strong> ${inf} influencers, ${g} GMV. Good opportunity.</p>`;
+            if (inf<=30) return `<p style="color:var(--warning)">⚡ <strong>Medium Competition.</strong> ${inf} influencers. Need quality content to stand out.</p>`;
+            if (inf<=50) return `<p style="color:var(--accent)">⚠️ <strong>High Competition.</strong> ${inf} influencers. Find a unique angle.</p>`;
+            return `<p style="color:var(--accent)">❌ <strong>Saturated.</strong> ${inf}+ influencers. Consider alternatives.</p>`;
+        }
+        
+        function switchTab(t) {
+            document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
+            document.querySelector(`[onclick="switchTab('${t}')"]`).classList.add('active');
+            document.getElementById(`tab-${t}`).classList.add('active');
+        }
+        
+        async function fetchLiveData(pid) {
+            const btn = event.target;
+            btn.textContent = '⏳ Loading...';
+            btn.disabled = true;
+            try {
+                const r = await fetch(`/api/product/${pid}/refresh`);
+                const d = await r.json();
+                if (d.success) location.reload();
+                else alert('Failed: '+(d.error||'Unknown error'));
+            } catch(e) { alert('Error: '+e.message); }
+            btn.textContent = '🔄 Refresh Data';
+            btn.disabled = false;
+        }
+        
+        async function loadProduct() {
+            if (!productId) {
+                document.getElementById('productContent').innerHTML = '<div class="loading"><h2>No product ID</h2><p><a href="/" style="color:var(--accent)">Back to dashboard</a></p></div>';
+                return;
+            }
+            try {
+                const r = await fetch(`/api/product/${productId}`);
+                const d = await r.json();
+                if (d.success && d.product) {
+                    renderProduct(d.product);
+                    document.title = d.product.product_name + ' - TikTok Shop Finder';
+                } else throw new Error(d.error||'Product not found');
+            } catch(e) {
+                document.getElementById('productContent').innerHTML = `<div class="loading"><h2>Error</h2><p>${e.message}</p><p><a href="/" style="color:var(--accent)">Back</a></p></div>`;
+            }
+        }
+        loadProduct();
+    </script>
+
+<script>
+// Update video counts display after refresh
+function updateVideoDisplay(data) {
+    // Update 7 day counts
+    const video7dEl = document.querySelector('[data-video-7d]');
+    if (video7dEl) video7dEl.textContent = data.video_7d || 0;
+    
+    const live7dEl = document.querySelector('[data-live-7d]');
+    if (live7dEl) live7dEl.textContent = data.live_7d || 0;
+    
+    // Update 30 day counts
+    const video30dEl = document.querySelector('[data-video-30d]');
+    if (video30dEl) video30dEl.textContent = data.video_30d || 0;
+    
+    const live30dEl = document.querySelector('[data-live-30d]');
+    if (live30dEl) live30dEl.textContent = data.live_30d || 0;
+    
+    // Update totals
+    const videoTotalEl = document.querySelector('[data-video-total]');
+    if (videoTotalEl) videoTotalEl.textContent = data.video_count || 0;
+    
+    const liveTotalEl = document.querySelector('[data-live-total]');
+    if (liveTotalEl) liveTotalEl.textContent = data.live_count || 0;
+    
+    // Update influencer count
+    const iflEl = document.querySelector('[data-influencer-count]');
+    if (iflEl) iflEl.textContent = data.influencer_count || data.total_influencers || 0;
+    
+    // Update seller name
+    const sellerEl = document.querySelector('[data-seller-name]');
+    if (sellerEl && data.seller_name) sellerEl.textContent = data.seller_name;
+    
+    // Update image
+    const imgEl = document.querySelector('.product-image');
+    if (imgEl && data.cover_url) {
+        imgEl.src = '/api/image-proxy?url=' + encodeURIComponent(data.cover_url);
+    }
+}
+
+// Override refresh button click
+document.addEventListener('DOMContentLoaded', function() {
+    const refreshBtn = document.querySelector('[onclick*="refresh"]') || 
+                       document.querySelector('button:contains("Refresh")') ||
+                       document.getElementById('refresh-btn');
+    
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const productId = window.location.search.split('id=')[1];
+            if (!productId) return;
+            
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = '⏳ Refreshing...';
+            
+            fetch('/api/product/' + productId + '/refresh')
+                .then(r => r.json())
+                .then(result => {
+                    if (result.success && result.data) {
+                        updateVideoDisplay(result.data);
+                        alert('✅ Data refreshed from EchoTik!');
+                        // Reload to show all updates
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + (result.error || 'Unknown error'));
+                    }
+                })
+                .catch(err => {
+                    alert('Error refreshing: ' + err.message);
+                })
+                .finally(() => {
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = '🔄 Refresh Data';
+                });
+        });
+    }
+});
+</script>
+
+
+<script>
+function getProductIcon(name) {
+    const n = (name || '').toLowerCase();
+    if (n.includes('hair') || n.includes('wig')) return '💇';
+    if (n.includes('brush') || n.includes('comb')) return '💆';
+    if (n.includes('bag') || n.includes('purse') || n.includes('handbag')) return '👜';
+    if (n.includes('shoe') || n.includes('sneaker') || n.includes('boot')) return '👟';
+    if (n.includes('dress') || n.includes('cloth') || n.includes('shirt') || n.includes('tee')) return '👗';
+    if (n.includes('watch')) return '⌚';
+    if (n.includes('phone') || n.includes('case') || n.includes('charger')) return '📱';
+    if (n.includes('jewelry') || n.includes('necklace') || n.includes('ring') || n.includes('earring')) return '💍';
+    if (n.includes('makeup') || n.includes('cosmetic') || n.includes('lipstick') || n.includes('mascara')) return '💄';
+    if (n.includes('skin') || n.includes('cream') || n.includes('serum') || n.includes('lotion')) return '🧴';
+    if (n.includes('toy') || n.includes('game')) return '🎮';
+    if (n.includes('book')) return '📚';
+    if (n.includes('food') || n.includes('snack') || n.includes('noodle') || n.includes('soup') || n.includes('pho')) return '🍜';
+    if (n.includes('drink') || n.includes('coffee') || n.includes('tea')) return '☕';
+    if (n.includes('fitness') || n.includes('gym') || n.includes('workout') || n.includes('weight')) return '💪';
+    if (n.includes('baby') || n.includes('kid')) return '👶';
+    if (n.includes('pet') || n.includes('dog') || n.includes('cat')) return '🐕';
+    if (n.includes('car') || n.includes('auto') || n.includes('vehicle') || n.includes('diesel') || n.includes('heater')) return '🚗';
+    if (n.includes('garden') || n.includes('plant')) return '🌱';
+    if (n.includes('kitchen') || n.includes('cook')) return '🍳';
+    if (n.includes('tool') || n.includes('drill')) return '🔧';
+    if (n.includes('lamp') || n.includes('light') || n.includes('led')) return '💡';
+    if (n.includes('bed') || n.includes('pillow') || n.includes('mattress')) return '🛏️';
+    if (n.includes('crystal') || n.includes('stone') || n.includes('gem')) return '💎';
+    if (n.includes('wash') || n.includes('machine') || n.includes('laundry')) return '🧺';
+    if (n.includes('camera') || n.includes('gimbal') || n.includes('stabilizer') || n.includes('tripod')) return '📷';
+    if (n.includes('headphone') || n.includes('earphone') || n.includes('speaker') || n.includes('audio')) return '🎧';
+    if (n.includes('glasses') || n.includes('sunglass')) return '🕶️';
+    if (n.includes('wallet') || n.includes('card holder')) return '👛';
+    return '📦';
+}
+
+// Set icon on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const iconEl = document.querySelector('.product-icon');
+    const titleEl = document.querySelector('h1, .product-title, [class*="title"]');
+    if (iconEl && titleEl) {
+        iconEl.textContent = getProductIcon(titleEl.textContent);
+    }
+});
+</script>
+
 </body>
 </html>

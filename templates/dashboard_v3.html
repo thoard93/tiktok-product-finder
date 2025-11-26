@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Shop Product Finder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --bg-hover: #22222f;
+            --accent: #fe2c55;
+            --accent-glow: rgba(254, 44, 85, 0.3);
+            --tiktok-cyan: #25f4ee;
+            --success: #00d26a;
+            --warning: #ffb800;
+            --text-primary: #ffffff;
+            --text-secondary: #8b8b9e;
+            --border: #2a2a3a;
+            --gradient-1: linear-gradient(135deg, #fe2c55 0%, #25f4ee 100%);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--gradient-1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+        
+        .logo-text {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .logo-text span {
+            color: var(--accent);
+        }
+        
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .stat-value.accent { color: var(--accent); }
+        .stat-value.cyan { color: var(--tiktok-cyan); }
+        .stat-value.success { color: var(--success); }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Main Content */
+        .main {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        /* Filter Bar */
+        .filter-bar {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .filter-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .filter-input, .filter-select {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.875rem;
+            min-width: 140px;
+        }
+        
+        .filter-input:focus, .filter-select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+        }
+        
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.6rem 1.25rem;
+            border-radius: 6px;
+            font-family: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #ff1744;
+            transform: translateY(-1px);
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+        
+        .btn-outline:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+        }
+        
+        /* Quick Filters */
+        .quick-filters {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .quick-filter {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .quick-filter:hover {
+            border-color: var(--accent);
+            background: var(--bg-hover);
+        }
+        
+        .quick-filter.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        
+        .quick-filter .count {
+            background: var(--bg-card);
+            padding: 0.1rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .quick-filter.active .count {
+            background: rgba(0,0,0,0.2);
+        }
+        
+        /* Product Grid */
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.25rem;
+        }
+        
+        .product-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+        
+        .product-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(254, 44, 85, 0.15);
+        }
+        
+        .product-image-container {
+            position: relative;
+            aspect-ratio: 1;
+            background: var(--bg-secondary);
+            overflow: hidden;
+        }
+        
+        .product-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .product-badges {
+            position: absolute;
+            top: 0.75rem;
+            left: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge-hot {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .badge-gem {
+            background: var(--tiktok-cyan);
+            color: black;
+        }
+        
+        .badge-untapped {
+            background: var(--success);
+            color: white;
+        }
+        
+        .badge-commission {
+            background: rgba(0, 0, 0, 0.7);
+            color: var(--warning);
+        }
+        
+        .product-content {
+            padding: 1rem;
+        }
+        
+        .product-name {
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 0.75rem;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .product-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+        
+        .metric {
+            background: var(--bg-secondary);
+            padding: 0.5rem;
+            border-radius: 6px;
+        }
+        
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .metric-value.highlight {
+            color: var(--success);
+        }
+        
+        .metric-label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        .product-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 0.75rem;
+            margin-top: 0.75rem;
+            border-top: 1px solid var(--border);
+        }
+        
+        .influencer-count {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .influencer-count.low { color: var(--success); }
+        .influencer-count.medium { color: var(--warning); }
+        .influencer-count.high { color: var(--accent); }
+        
+        .seller-name {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Loading State */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem;
+            color: var(--text-secondary);
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+            padding: 1rem;
+        }
+        
+        .page-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--accent);
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .page-info {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state h3 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .stats-bar {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .filter-bar {
+                flex-direction: column;
+            }
+            
+            .product-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            }
+        }
+    </style>
+
+<style>
+.product-image-placeholder {
+    width: 100%;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    font-weight: bold;
+    color: rgba(255,255,255,0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Different gradient backgrounds based on product type */
+.gradient-1 { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); }
+.gradient-2 { background: linear-gradient(135deg, #1a1a2e 0%, #2d132c 50%, #801336 100%); }
+.gradient-3 { background: linear-gradient(135deg, #1a1a2e 0%, #1e3a2f 50%, #2d6a4f 100%); }
+.gradient-4 { background: linear-gradient(135deg, #1a1a2e 0%, #2c2c54 50%, #474787 100%); }
+.gradient-5 { background: linear-gradient(135deg, #1a1a2e 0%, #3d2c29 50%, #6b4423 100%); }
+
+.product-image-placeholder::before {
+    content: '📦';
+    font-size: 64px;
+    opacity: 0.4;
+}
+
+.product-image-placeholder .category-icon {
+    position: absolute;
+    font-size: 64px;
+    opacity: 0.4;
+}
+
+/* Commission badge styling */
+.commission-badge-high {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #00b894, #00cec9);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 14px;
+    z-index: 10;
+}
+
+/* Quick stats overlay */
+.quick-stats {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    padding: 20px 10px 10px;
+    display: flex;
+    justify-content: space-around;
+}
+
+.quick-stat {
+    text-align: center;
+    color: white;
+}
+
+.quick-stat-value {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.quick-stat-label {
+    font-size: 10px;
+    opacity: 0.7;
+}
+</style>
+
+</head>
+<body>
+
+<script>
+// Get gradient class based on product ID hash
+function getGradientClass(productId) {
+    const hash = String(productId).split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0);
+    return 'gradient-' + (Math.abs(hash) % 5 + 1);
+}
+
+// Get emoji icon based on product name
+function getProductIcon(name) {
+    const nameLower = (name || '').toLowerCase();
+    if (nameLower.includes('hair') || nameLower.includes('wig')) return '💇';
+    if (nameLower.includes('brush') || nameLower.includes('comb')) return '💆';
+    if (nameLower.includes('bag') || nameLower.includes('purse')) return '👜';
+    if (nameLower.includes('shoe') || nameLower.includes('sneaker')) return '👟';
+    if (nameLower.includes('dress') || nameLower.includes('cloth')) return '👗';
+    if (nameLower.includes('watch')) return '⌚';
+    if (nameLower.includes('phone') || nameLower.includes('case')) return '📱';
+    if (nameLower.includes('jewelry') || nameLower.includes('necklace') || nameLower.includes('ring')) return '💍';
+    if (nameLower.includes('makeup') || nameLower.includes('cosmetic') || nameLower.includes('lipstick')) return '💄';
+    if (nameLower.includes('skin') || nameLower.includes('cream') || nameLower.includes('serum')) return '🧴';
+    if (nameLower.includes('toy') || nameLower.includes('game')) return '🎮';
+    if (nameLower.includes('book')) return '📚';
+    if (nameLower.includes('food') || nameLower.includes('snack')) return '🍪';
+    if (nameLower.includes('drink') || nameLower.includes('coffee') || nameLower.includes('tea')) return '☕';
+    if (nameLower.includes('fitness') || nameLower.includes('gym') || nameLower.includes('workout')) return '💪';
+    if (nameLower.includes('baby') || nameLower.includes('kid')) return '👶';
+    if (nameLower.includes('pet') || nameLower.includes('dog') || nameLower.includes('cat')) return '🐕';
+    if (nameLower.includes('car') || nameLower.includes('auto')) return '🚗';
+    if (nameLower.includes('garden') || nameLower.includes('plant')) return '🌱';
+    if (nameLower.includes('kitchen') || nameLower.includes('cook')) return '🍳';
+    if (nameLower.includes('tool') || nameLower.includes('drill')) return '🔧';
+    if (nameLower.includes('lamp') || nameLower.includes('light')) return '💡';
+    if (nameLower.includes('bed') || nameLower.includes('pillow') || nameLower.includes('mattress')) return '🛏️';
+    if (nameLower.includes('crystal') || nameLower.includes('stone')) return '💎';
+    if (nameLower.includes('wash') || nameLower.includes('machine')) return '🧺';
+    return '📦';
+}
+
+// Format currency
+function formatCurrency(value) {
+    if (value >= 1000000) return '$' + (value / 1000000).toFixed(1) + 'M';
+    if (value >= 1000) return '$' + (value / 1000).toFixed(1) + 'K';
+    return '$' + value.toFixed(0);
+}
+</script>
+
+
+<script>
+function getCleanImageUrl(url) {
+    if (!url || url === '[]' || url === '') {
+        return 'https://via.placeholder.com/300x300/1a1a2e/ffffff?text=No+Image';
+    }
+    // Parse JSON if needed
+    if (url.startsWith('[')) {
+        try {
+            var arr = JSON.parse(url);
+            if (arr.length > 0) {
+                arr.sort(function(a,b) { return (a.index||0) - (b.index||0); });
+                url = arr[0].url || '';
+            }
+        } catch(e) { return 'https://via.placeholder.com/300x300/1a1a2e/ffffff?text=No+Image'; }
+    }
+    // Return direct URL (no proxy - let browser load it)
+    return url || 'https://via.placeholder.com/300x300/1a1a2e/ffffff?text=No+Image';
+}
+</script>
+
+
+<!-- Robust Card Click Fix -->
+<script>
+(function() {
+    // Store original renderProducts if it exists
+    var originalRender = window.renderProducts;
+    
+    // Override to add data-product-id after render
+    window.renderProducts = function(products) {
+        // Call original if exists
+        if (originalRender) {
+            originalRender(products);
+        }
+        
+        // Wait for DOM update then add product IDs
+        setTimeout(function() {
+            var cards = document.querySelectorAll('.product-card');
+            cards.forEach(function(card, index) {
+                if (products && products[index]) {
+                    var pid = products[index].product_id || products[index].id;
+                    if (pid) {
+                        card.setAttribute('data-product-id', pid);
+                    }
+                }
+            });
+            console.log('Added product IDs to', cards.length, 'cards');
+        }, 100);
+    };
+    
+    // Also patch displayProducts if that's what's used
+    var originalDisplay = window.displayProducts;
+    window.displayProducts = function(products) {
+        if (originalDisplay) {
+            originalDisplay(products);
+        }
+        setTimeout(function() {
+            var cards = document.querySelectorAll('.product-card');
+            cards.forEach(function(card, index) {
+                if (products && products[index]) {
+                    var pid = products[index].product_id || products[index].id;
+                    if (pid) {
+                        card.setAttribute('data-product-id', pid);
+                    }
+                }
+            });
+        }, 100);
+    };
+    
+    // Store products globally when fetched
+    var originalFetch = window.fetch;
+    window.productsCache = [];
+    
+    window.fetch = function(url, options) {
+        return originalFetch(url, options).then(function(response) {
+            // Clone response so we can read it
+            var clone = response.clone();
+            
+            // If this is a products API call, cache the data
+            if (url.includes('/api/products')) {
+                clone.json().then(function(data) {
+                    if (data && data.products) {
+                        window.productsCache = data.products;
+                        
+                        // Add IDs to cards after a short delay
+                        setTimeout(function() {
+                            var cards = document.querySelectorAll('.product-card');
+                            cards.forEach(function(card, index) {
+                                if (window.productsCache[index]) {
+                                    var pid = window.productsCache[index].product_id || window.productsCache[index].id;
+                                    if (pid) {
+                                        card.setAttribute('data-product-id', pid);
+                                    }
+                                }
+                            });
+                            console.log('✅ Added product IDs to', cards.length, 'cards from API response');
+                        }, 200);
+                    }
+                }).catch(function() {});
+            }
+            
+            return response;
+        });
+    };
+    
+    // Click handler
+    document.addEventListener('click', function(e) {
+        var card = e.target.closest('.product-card');
+        if (!card) return;
+        
+        var productId = card.getAttribute('data-product-id');
+        
+        // Fallback: try to get from cache by index
+        if (!productId || productId === 'null' || productId === 'undefined') {
+            var cards = Array.from(document.querySelectorAll('.product-card'));
+            var index = cards.indexOf(card);
+            if (index >= 0 && window.productsCache && window.productsCache[index]) {
+                productId = window.productsCache[index].product_id || window.productsCache[index].id;
+            }
+        }
+        
+        if (productId && productId !== 'null' && productId !== 'undefined') {
+            console.log('Navigating to product:', productId);
+            window.location.href = '/product?id=' + productId;
+        } else {
+            console.warn('No product ID found');
+        }
+    }, true);
+    
+    console.log('✅ Robust card click handler installed');
+})();
+</script>
+
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">TS</div>
+                <div class="logo-text">TikTok<span>Shop</span> Finder</div>
+            </div>
+            <div class="stats-bar" id="statsBar">
+                <div class="stat-item">
+                    <div class="stat-value accent" id="totalProducts">-</div>
+                    <div class="stat-label">Products</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value cyan" id="hiddenGems">-</div>
+                    <div class="stat-label">Hidden Gems</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value success" id="untappedCount">-</div>
+                    <div class="stat-label">Untapped</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="avgCommission">-</div>
+                    <div class="stat-label">Avg Commission</div>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <main class="main">
+        <div class="filter-bar">
+            <div class="filter-group search-input">
+                <label class="filter-label">Search Products</label>
+                <input type="text" class="filter-input" id="searchInput" placeholder="Search by name...">
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Sort By</label>
+                <select class="filter-select" id="sortBy">
+                    <option value="gmv">GMV (Total Sales)</option>
+                    <option value="potential_earnings">Potential Earnings</option>
+                    <option value="commission_rate">Commission Rate</option>
+                    <option value="sales">Units Sold</option>
+                    <option value="influencer_count">Influencer Count</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Min Commission</label>
+                <select class="filter-select" id="minCommission">
+                    <option value="">Any</option>
+                    <option value="10">10%+</option>
+                    <option value="15">15%+</option>
+                    <option value="20">20%+</option>
+                    <option value="25">25%+</option>
+                    <option value="30">30%+</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Competition</label>
+                <select class="filter-select" id="competition">
+                    <option value="">All Levels</option>
+                    <option value="untapped">🏆 Untapped (0-3)</option>
+                    <option value="low">✅ Low (4-10)</option>
+                    <option value="medium">⚡ Medium (11-30)</option>
+                    <option value="high">⚠️ High (31-50)</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="applyFilters()">Apply Filters</button>
+            <button class="btn btn-outline" onclick="resetFilters()">Reset</button>
+        </div>
+        
+        <div class="quick-filters">
+            <div class="quick-filter" onclick="quickFilter('all')" id="qf-all">
+                All Products <span class="count" id="qf-all-count">0</span>
+            </div>
+            <div class="quick-filter" onclick="quickFilter('gems')" id="qf-gems">
+                💎 Hidden Gems <span class="count" id="qf-gems-count">0</span>
+            </div>
+            <div class="quick-filter" onclick="quickFilter('untapped')" id="qf-untapped">
+                🏆 Untapped <span class="count" id="qf-untapped-count">0</span>
+            </div>
+            <div class="quick-filter" onclick="quickFilter('high-commission')" id="qf-commission">
+                💰 High Commission <span class="count" id="qf-commission-count">0</span>
+            </div>
+        </div>
+        
+        <div class="product-grid" id="productGrid">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 1rem;">Loading products...</p>
+            </div>
+        </div>
+        
+        <div class="pagination" id="pagination"></div>
+    </main>
+    
+    <script>
+        // State
+        let currentPage = 1;
+        let currentFilters = {};
+        let stats = {};
+        
+        // Format currency
+        function formatCurrency(value) {
+            if (value >= 1000000) return '$' + (value / 1000000).toFixed(1) + 'M';
+            if (value >= 1000) return '$' + (value / 1000).toFixed(1) + 'K';
+            return '$' + value.toFixed(0);
+        }
+        
+        // Format number
+        function formatNumber(value) {
+            if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+            if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
+            return value.toString();
+        }
+        
+        // Get competition class
+        function getCompetitionClass(count) {
+            if (count <= 3) return 'low';
+            if (count <= 30) return 'medium';
+            return 'high';
+        }
+        
+        // Get image URL (handle proxy)
+        function getImageUrl(url) {
+            if (!url) return 'https://via.placeholder.com/300?text=No+Image';
+            // Use proxy if needed
+            if (url.includes('ibyteimg.com') || url.includes('tiktokcdn')) {
+                return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+            }
+            return url;
+        }
+        
+        // Create product card
+
+        // Create product card - FIXED VERSION
+        function createProductCard(product) {
+            const iflCount = product.influencer_count || product.total_influencers || 0;
+            const commissionRate = product.commission_rate || 0;
+            const gmv = product.gmv || 0;
+            const earnings = product.potential_earnings || (gmv * commissionRate / 100);
+            const productId = product.product_id || product.id;
+            
+            // Determine badges
+            let badges = '';
+            if (commissionRate >= 20) {
+                badges += '<span class="badge badge-commission">' + commissionRate.toFixed(0) + '%</span>';
+            }
+            if (iflCount <= 3 && iflCount > 0 && gmv > 100) {
+                badges += '<span class="badge badge-untapped">UNTAPPED</span>';
+            } else if (iflCount <= 50 && iflCount >= 3) {
+                badges += '<span class="badge badge-gem">HIDDEN GEM</span>';
+            }
+            if (product.sales_trend === 1 || product.trend_label === 'rising') {
+                badges += '<span class="badge badge-hot">🔥 HOT</span>';
+            }
+            
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            card.style.cursor = 'pointer';
+            card.onclick = function() {
+                window.location.href = '/product?id=' + productId;
+            };
+            
+            card.innerHTML = `
+                <div class="product-image-container">
+                    <div class="product-image-placeholder ${getGradientClass(product.product_id)}">
+                    <span class="category-icon">${getProductIcon(product.product_name)}</span>
+                </div>
+                    <div class="product-badges">${badges}</div>
+                </div>
+                <div class="product-content">
+                    <div class="product-name">${product.product_name || 'Unknown Product'}</div>
+                    <div class="product-metrics">
+                        <div class="metric">
+                            <div class="metric-value">${formatCurrency(gmv)}</div>
+                            <div class="metric-label">GMV</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${formatNumber(product.sales || 0)}</div>
+                            <div class="metric-label">Units Sold</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value highlight">${formatCurrency(earnings)}</div>
+                            <div class="metric-label">Potential</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${commissionRate.toFixed(0)}%</div>
+                            <div class="metric-label">Commission</div>
+                        </div>
+                    </div>
+                    <div class="product-footer">
+                        <div class="influencer-count ${getCompetitionClass(iflCount)}">
+                            👥 ${iflCount} influencers
+                        </div>
+                        <div class="seller-name" title="${product.seller_name || ''}">${product.seller_name || 'Unknown'}</div>
+                    </div>
+                </div>
+            `;
+            
+            return card.outerHTML;
+        }
+
+        
+        // Load products
+        async function loadProducts(page = 1, filters = {}) {
+            const grid = document.getElementById('productGrid');
+            grid.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 1rem;">Loading products...</p></div>';
+            
+            try {
+                // Build query string
+                const params = new URLSearchParams({
+                    page: page,
+                    per_page: 20,
+                    sort_by: filters.sort_by || 'gmv',
+                    sort_order: 'desc',
+                    ...filters
+                });
+                
+                const response = await fetch(`/api/products?${params}`);
+                const data = await response.json();
+                
+                console.log('API Response:', data); // Debug
+                
+                if (data.success && data.products && data.products.length > 0) {
+                    grid.innerHTML = data.products.map(createProductCard).join('');
+                    updatePagination(data.pagination);
+                } else if (data.products && data.products.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state">
+                            <h3>No products found</h3>
+                            <p>Try adjusting your filters or search criteria</p>
+                        </div>
+                    `;
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error loading products:', error);
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Error loading products</h3>
+                        <p>${error.message}</p>
+                        <p style="margin-top: 1rem; font-size: 0.85rem;">
+                            Check: <a href="/api/debug" target="_blank" style="color: var(--accent)">/api/debug</a>
+                        </p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Load stats
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                if (data.success && data.stats) {
+                    stats = data.stats;
+                    document.getElementById('totalProducts').textContent = formatNumber(stats.total_products || 0);
+                    document.getElementById('hiddenGems').textContent = formatNumber(stats.hidden_gems || 0);
+                    document.getElementById('untappedCount').textContent = formatNumber(stats.untapped_products || 0);
+                    document.getElementById('avgCommission').textContent = (stats.avg_commission || 0).toFixed(1) + '%';
+                    
+                    // Update quick filter counts
+                    document.getElementById('qf-all-count').textContent = stats.total_products || 0;
+                    document.getElementById('qf-gems-count').textContent = stats.hidden_gems || 0;
+                    document.getElementById('qf-untapped-count').textContent = stats.untapped_products || 0;
+                    document.getElementById('qf-commission-count').textContent = stats.high_commission || 0;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        // Update pagination
+        function updatePagination(pagination) {
+            if (!pagination) return;
+            
+            const container = document.getElementById('pagination');
+            container.innerHTML = `
+                <button class="page-btn" onclick="goToPage(${pagination.page - 1})" ${!pagination.has_prev ? 'disabled' : ''}>
+                    ← Previous
+                </button>
+                <span class="page-info">
+                    Page ${pagination.page} of ${pagination.pages} (${pagination.total} products)
+                </span>
+                <button class="page-btn" onclick="goToPage(${pagination.page + 1})" ${!pagination.has_next ? 'disabled' : ''}>
+                    Next →
+                </button>
+            `;
+        }
+        
+        // Navigation
+        function goToPage(page) {
+            currentPage = page;
+            loadProducts(page, currentFilters);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // Apply filters
+        function applyFilters() {
+            currentFilters = {};
+            
+            const search = document.getElementById('searchInput').value;
+            if (search) currentFilters.search = search;
+            
+            const sortBy = document.getElementById('sortBy').value;
+            if (sortBy) currentFilters.sort_by = sortBy;
+            
+            const minCommission = document.getElementById('minCommission').value;
+            if (minCommission) currentFilters.min_commission = minCommission;
+            
+            const competition = document.getElementById('competition').value;
+            if (competition) currentFilters.competition = competition;
+            
+            currentPage = 1;
+            loadProducts(1, currentFilters);
+            
+            // Update active quick filter
+            document.querySelectorAll('.quick-filter').forEach(el => el.classList.remove('active'));
+        }
+        
+        // Reset filters
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('sortBy').value = 'gmv';
+            document.getElementById('minCommission').value = '';
+            document.getElementById('competition').value = '';
+            
+            currentFilters = {};
+            currentPage = 1;
+            loadProducts(1, {});
+            
+            // Reset quick filters
+            document.querySelectorAll('.quick-filter').forEach(el => el.classList.remove('active'));
+            document.getElementById('qf-all').classList.add('active');
+        }
+        
+        // Quick filters
+        function quickFilter(type) {
+            // Update UI
+            document.querySelectorAll('.quick-filter').forEach(el => el.classList.remove('active'));
+            document.getElementById('qf-' + (type === 'all' ? 'all' : type === 'gems' ? 'gems' : type === 'untapped' ? 'untapped' : 'commission')).classList.add('active');
+            
+            // Reset form filters
+            document.getElementById('minCommission').value = '';
+            document.getElementById('competition').value = '';
+            
+            // Apply quick filter
+            currentFilters = {};
+            
+            if (type === 'gems') {
+                currentFilters.min_influencers = 3;
+                currentFilters.max_influencers = 50;
+            } else if (type === 'untapped') {
+                currentFilters.competition = 'untapped';
+            } else if (type === 'high-commission') {
+                currentFilters.min_commission = 15;
+            }
+            
+            currentPage = 1;
+            loadProducts(1, currentFilters);
+        }
+        
+        // Search on enter
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') applyFilters();
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadProducts(1, {});
+            document.getElementById('qf-all').classList.add('active');
+        });
+    </script>
+
+
+
+</body>
+</html>
