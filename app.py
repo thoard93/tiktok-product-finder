@@ -880,6 +880,163 @@ def refresh_product(product_id):
         return jsonify({'error': str(e)}), 500
 
 
+
+@app.route('/api/scan', methods=['GET', 'POST'])
+def run_scan():
+    """Run a product scan - can be triggered by cron job"""
+    import requests
+    from requests.auth import HTTPBasicAuth
+    
+    API_BASE = "https://open.echotik.live/api/v3/echotik"
+    USERNAME = os.getenv('ECHOTIK_USERNAME')
+    PASSWORD = os.getenv('ECHOTIK_PASSWORD')
+    
+    # Optional: Add a secret key to prevent unauthorized scans
+    secret = request.args.get('secret', '')
+    expected_secret = os.getenv('SCAN_SECRET', '')
+    if expected_secret and secret != expected_secret:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        scan_id = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        new_products = 0
+        updated_products = 0
+        
+        # Scan multiple pages
+        for page in range(1, 6):  # 5 pages = ~100 products
+            response = requests.get(
+                f"{API_BASE}/product/list",
+                params={
+                    'page': page,
+                    'size': 20,
+                    'sort_by': 'sale_cnt',
+                    'sort_type': 'desc'
+                },
+                auth=HTTPBasicAuth(USERNAME, PASSWORD),
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                continue
+            
+            data = response.json()
+            products = data.get('data', [])
+            
+            if not products:
+                break
+            
+            for p in products:
+                product_id = str(p.get('product_id', ''))
+                if not product_id:
+                    continue
+                
+                # Check if product exists
+                existing = Product.query.filter(Product.product_id == product_id).first()
+                
+                commission = float(p.get('product_commission_rate', 0) or 0)
+                if commission > 0 and commission < 1:
+                    commission = commission * 100
+                
+                # Skip 0% commission
+                if commission <= 0:
+                    continue
+                
+                gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
+                
+                if existing:
+                    # Update existing
+                    existing.gmv = gmv
+                    existing.sales = int(p.get('total_sale_cnt', 0) or 0)
+                    existing.commission_rate = commission
+                    existing.potential_earnings = gmv * commission / 100
+                    existing.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                    existing.video_count = int(p.get('total_video_cnt', 0) or 0)
+                    existing.updated_at = datetime.utcnow()
+                    updated_products += 1
+                else:
+                    # Insert new
+                    new_product = Product(
+                        product_id=product_id,
+                        product_name=p.get('product_name', ''),
+                        gmv=gmv,
+                        sales=int(p.get('total_sale_cnt', 0) or 0),
+                        commission_rate=commission,
+                        potential_earnings=gmv * commission / 100,
+                        influencer_count=int(p.get('total_ifl_cnt', 0) or 0),
+                        total_influencers=int(p.get('total_ifl_cnt', 0) or 0),
+                        video_count=int(p.get('total_video_cnt', 0) or 0),
+                        price=float(p.get('product_price', 0) or 0),
+                        rating=float(p.get('product_rating', 0) or 0),
+                        scan_id=scan_id,
+                        first_seen=datetime.utcnow(),
+                        created_at=datetime.utcnow()
+                    )
+                    db.session.add(new_product)
+                    new_products += 1
+            
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'scan_id': scan_id,
+            'new_products': new_products,
+            'updated_products': updated_products,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/products/recent')
+def get_recent_products():
+    """Get products filtered by time period"""
+    period = request.args.get('period', 'all')  # today, yesterday, week, month, all
+    
+    now = datetime.utcnow()
+    
+    if period == 'today':
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == 'yesterday':
+        start_date = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == 'week':
+        start_date = now - timedelta(days=7)
+    elif period == 'month':
+        start_date = now - timedelta(days=30)
+    else:
+        start_date = None
+    
+    query = Product.query
+    
+    if period == 'yesterday':
+        query = query.filter(Product.first_seen >= start_date, Product.first_seen < end_date)
+    elif start_date:
+        query = query.filter(Product.first_seen >= start_date)
+    
+    # Apply standard filters
+    min_commission = request.args.get('min_commission', type=float)
+    if min_commission:
+        query = query.filter(Product.commission_rate >= min_commission)
+    
+    products = query.order_by(Product.first_seen.desc()).limit(100).all()
+    
+    return jsonify([{
+        'product_id': p.product_id,
+        'product_name': p.product_name,
+        'gmv': float(p.gmv or 0),
+        'sales': int(p.sales or 0),
+        'commission_rate': float(p.commission_rate or 0),
+        'potential_earnings': float(p.potential_earnings or 0),
+        'influencer_count': int(p.influencer_count or 0),
+        'first_seen': p.first_seen.isoformat() if p.first_seen else None,
+        'image_url': p.image_url or ''
+    } for p in products])
+
+
+
 if __name__ == '__main__':
     with app.app_context():
         # Try to create tables (won't overwrite existing)
