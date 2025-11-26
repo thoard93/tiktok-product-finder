@@ -542,6 +542,93 @@
 }
 </style>
 
+
+<style>
+/* Time tabs */
+.time-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.time-tab {
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: #2a2a3e;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 13px;
+    border: none;
+    transition: all 0.2s;
+}
+
+.time-tab:hover {
+    background: #3a3a4e;
+    color: white;
+}
+
+.time-tab.active {
+    background: #6366f1;
+    color: white;
+}
+
+/* Favorites */
+.favorite-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.5);
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    font-size: 18px;
+    z-index: 20;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.favorite-btn:hover {
+    background: rgba(0,0,0,0.7);
+    transform: scale(1.1);
+}
+
+.favorite-btn.favorited {
+    color: #ff6b6b;
+}
+
+.favorite-btn:not(.favorited) {
+    color: #666;
+}
+
+/* Favorites filter button */
+.favorites-filter {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a5a) !important;
+}
+
+.favorites-filter.active {
+    box-shadow: 0 0 0 2px #ff6b6b;
+}
+
+/* New badge for recent products */
+.new-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #00b894, #00cec9);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 15;
+}
+</style>
+
 </head>
 <body>
 
@@ -944,7 +1031,7 @@ function getCleanImageUrl(url) {
                     ...filters
                 });
                 
-                const response = await fetch(`/api/products?${params}`);
+                const response = await fetch(`/api/products?period=${currentTimePeriod}&${params}`);
                 const data = await response.json();
                 
                 console.log('API Response:', data); // Debug
@@ -1104,6 +1191,90 @@ function getCleanImageUrl(url) {
     </script>
 
 
+
+
+<script>
+// ==================== FAVORITES ====================
+const FAVORITES_KEY = 'tiktokshop_favorites';
+
+function getFavorites() {
+    try {
+        return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function saveFavorites(favorites) {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    updateFavoritesCount();
+}
+
+function toggleFavorite(productId) {
+    const favorites = getFavorites();
+    const index = favorites.indexOf(productId);
+    
+    if (index > -1) {
+        favorites.splice(index, 1);
+    } else {
+        favorites.push(productId);
+    }
+    
+    saveFavorites(favorites);
+    return index === -1; // Returns true if now favorited
+}
+
+function isFavorited(productId) {
+    return getFavorites().includes(productId);
+}
+
+function updateFavoritesCount() {
+    const count = getFavorites().length;
+    const badge = document.getElementById('favorites-count');
+    if (badge) {
+        badge.textContent = count;
+        badge.style.display = count > 0 ? 'inline' : 'none';
+    }
+}
+
+// ==================== TIME FILTERING ====================
+let currentTimePeriod = 'all';
+
+function setTimePeriod(period) {
+    currentTimePeriod = period;
+    
+    // Update active tab
+    document.querySelectorAll('.time-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.period === period);
+    });
+    
+    // Reload products
+    loadProducts();
+}
+
+// ==================== FAVORITES FILTER ====================
+let showOnlyFavorites = false;
+
+function toggleFavoritesFilter() {
+    showOnlyFavorites = !showOnlyFavorites;
+    document.getElementById('favorites-filter-btn').classList.toggle('active', showOnlyFavorites);
+    loadProducts();
+}
+
+// ==================== CHECK IF NEW (last 24h) ====================
+function isNewProduct(firstSeen) {
+    if (!firstSeen) return false;
+    const seen = new Date(firstSeen);
+    const now = new Date();
+    const hoursDiff = (now - seen) / (1000 * 60 * 60);
+    return hoursDiff < 24;
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateFavoritesCount();
+});
+</script>
 
 </body>
 </html>
