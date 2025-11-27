@@ -395,6 +395,46 @@ def list_top_brands():
         'page': page
     })
 
+@app.route('/api/debug', methods=['GET'])
+def debug_api():
+    """Debug endpoint to see raw EchoTik API response"""
+    try:
+        url = f"{BASE_URL}/seller/list"
+        params = {
+            "page_num": 1,
+            "page_size": 20,
+            "region": "US",
+            "seller_sort_field": 3,
+            "seller_sort_type": 1
+        }
+        response = requests.get(
+            url,
+            auth=get_auth(),
+            params=params,
+            timeout=30
+        )
+        return jsonify({
+            'debug_info': {
+                'url': url,
+                'params': params,
+                'auth_username': ECHOTIK_USERNAME[:3] + '***' if ECHOTIK_USERNAME else 'NOT SET',
+                'auth_password_set': bool(ECHOTIK_PASSWORD)
+            },
+            'response': {
+                'status_code': response.status_code,
+                'raw_data': response.json()
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'debug_info': {
+                'url': f"{BASE_URL}/seller/list",
+                'auth_username': ECHOTIK_USERNAME[:3] + '***' if ECHOTIK_USERNAME else 'NOT SET',
+                'auth_password_set': bool(ECHOTIK_PASSWORD)
+            }
+        }), 500
+
 # =============================================================================
 # PRODUCTS ENDPOINTS
 # =============================================================================
