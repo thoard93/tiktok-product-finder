@@ -86,21 +86,27 @@ def get_auth():
 def get_top_brands(page=1):
     """Get top brands/sellers sorted by GMV"""
     try:
+        url = f"{BASE_URL}/seller/list"
+        params = {
+            "page_num": page,
+            "page_size": 20,
+            "region": "US",
+            "seller_sort_field": 3,  # GMV
+            "seller_sort_type": 1    # Descending
+        }
+        print(f"Calling API: {url} with params: {params}")
         response = requests.get(
-            f"{BASE_URL}/seller/list",
+            url,
             auth=get_auth(),
-            params={
-                "page_num": page,
-                "page_size": 20,
-                "region": "US",
-                "seller_sort_field": 3,  # GMV
-                "seller_sort_type": 1    # Descending
-            },
+            params=params,
             timeout=30
         )
+        print(f"Response status: {response.status_code}")
         data = response.json()
         if data.get('code') == 0:
-            return data.get('data', {}).get('list', [])
+            brands = data.get('data', {}).get('list', [])
+            print(f"Got {len(brands)} brands")
+            return brands
         print(f"Get brands error: {data}")
         return []
     except Exception as e:
