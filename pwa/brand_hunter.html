@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f0f23">
+    <title>Brand Hunter | TikTok Shop</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #0f0f23;
+            --bg-secondary: #1a1a2e;
+            --bg-card: #16213e;
+            --bg-hover: #1f3460;
+            --accent: #e94560;
+            --accent-green: #00d26a;
+            --accent-blue: #4d7cfe;
+            --accent-gold: #ffd700;
+            --accent-purple: #a855f7;
+            --text-primary: #ffffff;
+            --text-secondary: #8892b0;
+            --text-muted: #5a6275;
+            --border: #2d3748;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            padding: 1rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-purple) 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+        
+        .logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+        
+        .logo-text span {
+            color: var(--accent);
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 0.6rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #d63850;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+        }
+        
+        .btn-success {
+            background: var(--accent-green);
+            color: white;
+        }
+        
+        /* Navigation Tabs */
+        .nav-tabs {
+            display: flex;
+            gap: 0.25rem;
+            background: var(--bg-secondary);
+            padding: 0.5rem;
+            border-radius: 12px;
+            margin: 1rem auto;
+            max-width: 500px;
+        }
+        
+        .nav-tab {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        
+        .nav-tab.active {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .nav-tab:hover:not(.active) {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 1.5rem 2rem;
+        }
+        
+        /* Stats Bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+        
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        .stat-value.green { color: var(--accent-green); }
+        .stat-value.blue { color: var(--accent-blue); }
+        .stat-value.gold { color: var(--accent-gold); }
+        .stat-value.purple { color: var(--accent-purple); }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.25rem;
+        }
+        
+        /* Search Bar */
+        .search-container {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .search-input {
+            flex: 1;
+            min-width: 250px;
+            padding: 0.875rem 1.25rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+        
+        /* Filter Pills */
+        .filter-pills {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .pill {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .pill:hover {
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+        
+        .pill.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+        
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Brand Grid */
+        .brand-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1rem;
+        }
+        
+        .brand-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .brand-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(233, 69, 96, 0.15);
+        }
+        
+        .brand-card.followed {
+            border-color: var(--accent-green);
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(0, 210, 106, 0.05) 100%);
+        }
+        
+        .brand-header {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .brand-logo {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            background: var(--bg-hover);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+            overflow: hidden;
+        }
+        
+        .brand-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .brand-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .brand-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .brand-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        
+        .brand-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .brand-stat {
+            text-align: center;
+            padding: 0.5rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+        
+        .brand-stat-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .brand-stat-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        
+        .brand-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .brand-actions .btn {
+            flex: 1;
+            justify-content: center;
+            padding: 0.6rem;
+            font-size: 0.8rem;
+        }
+        
+        .follow-btn.following {
+            background: var(--accent-green);
+        }
+        
+        /* Product Grid */
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        
+        .product-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+        
+        .product-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+        
+        .product-card.new {
+            border-color: var(--accent-green);
+        }
+        
+        .product-image {
+            width: 100%;
+            height: 180px;
+            background: var(--bg-secondary);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .product-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .product-badges {
+            position: absolute;
+            top: 0.75rem;
+            left: 0.75rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        
+        .badge-new {
+            background: var(--accent-green);
+            color: white;
+        }
+        
+        .badge-gem {
+            background: var(--accent-purple);
+            color: white;
+        }
+        
+        .badge-hot {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .badge-brand {
+            background: var(--accent-blue);
+            color: white;
+        }
+        
+        .product-content {
+            padding: 1rem;
+        }
+        
+        .product-brand {
+            font-size: 0.75rem;
+            color: var(--accent-blue);
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+        
+        .product-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .product-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .metric {
+            background: var(--bg-secondary);
+            padding: 0.5rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        
+        .metric-value.green { color: var(--accent-green); }
+        .metric-value.gold { color: var(--accent-gold); }
+        .metric-value.purple { color: var(--accent-purple); }
+        
+        .metric-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        
+        .product-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border);
+        }
+        
+        .influencer-count {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .influencer-count.low {
+            color: var(--accent-green);
+        }
+        
+        .view-btn {
+            padding: 0.4rem 0.8rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .view-btn:hover {
+            background: #d63850;
+        }
+        
+        /* Loading State */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+        
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--accent-green);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 1000;
+            opacity: 0;
+            transition: all 0.3s;
+        }
+        
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .header-actions {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .stats-bar {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .search-container {
+                flex-direction: column;
+            }
+            
+            .search-input {
+                width: 100%;
+            }
+            
+            .brand-grid, .product-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+        
+        /* Refresh indicator */
+        .refresh-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-purple), var(--accent));
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .refresh-indicator.active {
+            display: block;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="refresh-indicator" id="refreshIndicator"></div>
+    
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">🏷️</div>
+                <div class="logo-text"><span>Brand</span> Hunter</div>
+            </div>
+            
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="discoverBrands()">
+                    🔍 Discover Brands
+                </button>
+                <button class="btn btn-primary" onclick="runFullScan()">
+                    🚀 Full Scan
+                </button>
+            </div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="stat-value blue" id="totalBrands">0</div>
+                <div class="stat-label">Brands</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value green" id="followedBrands">0</div>
+                <div class="stat-label">Following</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value purple" id="totalGems">0</div>
+                <div class="stat-label">Gems Found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value gold" id="newToday">0</div>
+                <div class="stat-label">New Today</div>
+            </div>
+        </div>
+        
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <button class="nav-tab active" data-tab="products" onclick="switchTab('products')">
+                💎 Products
+            </button>
+            <button class="nav-tab" data-tab="brands" onclick="switchTab('brands')">
+                🏪 Brands
+            </button>
+        </div>
+        
+        <!-- Products Tab -->
+        <div class="tab-content active" id="productsTab">
+            <div class="search-container">
+                <input type="text" class="search-input" id="productSearch" 
+                       placeholder="Search products..." onkeyup="debounceSearch(event, 'products')">
+                <button class="btn btn-secondary" onclick="loadProducts(true)">🔄 Refresh</button>
+            </div>
+            
+            <div class="filter-pills" id="productFilters">
+                <button class="pill active" data-filter="all" onclick="filterProducts('all', this)">All Gems</button>
+                <button class="pill" data-filter="untapped" onclick="filterProducts('untapped', this)">🏆 Untapped (1-3)</button>
+                <button class="pill" data-filter="low" onclick="filterProducts('low', this)">✅ Low (4-15)</button>
+                <button class="pill" data-filter="medium" onclick="filterProducts('medium', this)">⚡ Medium (16-30)</button>
+                <button class="pill" data-filter="new" onclick="filterProducts('new', this)">🆕 New Today</button>
+            </div>
+            
+            <div class="product-grid" id="productGrid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 1rem;">Loading products...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Brands Tab -->
+        <div class="tab-content" id="brandsTab">
+            <div class="search-container">
+                <input type="text" class="search-input" id="brandSearch" 
+                       placeholder="Search brands (e.g., QVC, VEVOR, Shark)..." 
+                       onkeyup="debounceSearch(event, 'brands')">
+                <button class="btn btn-secondary" onclick="searchBrandOnEchotik()">🔍 Search EchoTik</button>
+            </div>
+            
+            <div class="filter-pills" id="brandFilters">
+                <button class="pill active" data-filter="followed" onclick="filterBrands('followed', this)">⭐ Following</button>
+                <button class="pill" data-filter="all" onclick="filterBrands('all', this)">All Brands</button>
+                <button class="pill" data-filter="top" onclick="filterBrands('top', this)">🔥 Top GMV</button>
+            </div>
+            
+            <div class="brand-grid" id="brandGrid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 1rem;">Loading brands...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // State
+        let currentTab = 'products';
+        let currentProductFilter = 'all';
+        let currentBrandFilter = 'followed';
+        let productPage = 1;
+        let brandPage = 1;
+        let isLoading = false;
+        let searchTimeout = null;
+        
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadProducts(true);
+            loadBrands(true);
+        });
+        
+        // ==================== TAB SWITCHING ====================
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+            
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`${tab}Tab`).classList.add('active');
+        }
+        
+        // ==================== STATS ====================
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats/brand-hunter');
+                const data = await response.json();
+                
+                if (data.success && data.stats) {
+                    document.getElementById('totalBrands').textContent = data.stats.total_brands || 0;
+                    document.getElementById('followedBrands').textContent = data.stats.followed_brands || 0;
+                    document.getElementById('totalGems').textContent = data.stats.hidden_gems || 0;
+                    document.getElementById('newToday').textContent = data.stats.new_today || 0;
+                }
+            } catch (e) {
+                console.error('Stats error:', e);
+            }
+        }
+        
+        // ==================== PRODUCTS ====================
+        async function loadProducts(reset = false) {
+            if (isLoading) return;
+            isLoading = true;
+            
+            const grid = document.getElementById('productGrid');
+            const search = document.getElementById('productSearch').value;
+            
+            if (reset) {
+                productPage = 1;
+                grid.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 1rem;">Loading products...</p></div>';
+            }
+            
+            try {
+                const params = new URLSearchParams({
+                    page: productPage,
+                    per_page: 20,
+                    sort_by: 'gmv',
+                    sort_order: 'desc'
+                });
+                
+                if (search) params.append('search', search);
+                
+                // Apply filters
+                if (currentProductFilter === 'untapped') {
+                    params.append('min_influencers', 1);
+                    params.append('max_influencers', 3);
+                } else if (currentProductFilter === 'low') {
+                    params.append('min_influencers', 4);
+                    params.append('max_influencers', 15);
+                } else if (currentProductFilter === 'medium') {
+                    params.append('min_influencers', 16);
+                    params.append('max_influencers', 30);
+                } else if (currentProductFilter === 'new') {
+                    params.append('new_today', 'true');
+                } else {
+                    // All gems: 1-50 influencers
+                    params.append('min_influencers', 1);
+                    params.append('max_influencers', 50);
+                }
+                
+                const response = await fetch(`/api/products?${params}`);
+                const data = await response.json();
+                
+                if (data.success && data.products) {
+                    const html = data.products.length > 0 
+                        ? data.products.map(createProductCard).join('')
+                        : '<div class="empty-state"><h3>No products found</h3><p>Try adjusting your filters or run a scan</p></div>';
+                    
+                    if (reset) {
+                        grid.innerHTML = html;
+                    } else {
+                        grid.insertAdjacentHTML('beforeend', html);
+                    }
+                    
+                    productPage++;
+                }
+            } catch (e) {
+                console.error('Products error:', e);
+                if (reset) {
+                    grid.innerHTML = '<div class="empty-state"><h3>Error loading products</h3></div>';
+                }
+            }
+            
+            isLoading = false;
+        }
+        
+        function createProductCard(p) {
+            const isNew = isNewToday(p.first_seen);
+            const influencerClass = (p.influencer_count || 0) <= 10 ? 'low' : '';
+            const gmv = formatCurrency(p.gmv || 0);
+            const potential = formatCurrency(p.potential_earnings || 0);
+            const commission = (p.commission_rate || 0).toFixed(0);
+            const influencers = p.influencer_count || 0;
+            const imgUrl = p.cached_image_url || p.image_url || '';
+            
+            let badges = '';
+            if (isNew) badges += '<span class="badge badge-new">NEW</span>';
+            if (influencers <= 3) badges += '<span class="badge badge-gem">💎 GEM</span>';
+            
+            return `
+                <div class="product-card ${isNew ? 'new' : ''}">
+                    <div class="product-image">
+                        ${imgUrl ? `<img src="${imgUrl}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+                        <div class="product-badges">${badges}</div>
+                    </div>
+                    <div class="product-content">
+                        <div class="product-brand">🏪 ${p.seller_name || 'Unknown Brand'}</div>
+                        <div class="product-name">${p.product_name || 'Unknown Product'}</div>
+                        <div class="product-metrics">
+                            <div class="metric">
+                                <div class="metric-value">${gmv}</div>
+                                <div class="metric-label">GMV</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value green">${potential}</div>
+                                <div class="metric-label">Potential</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value gold">${commission}%</div>
+                                <div class="metric-label">Commission</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value purple">${p.sales_30d || 0}</div>
+                                <div class="metric-label">30d Sales</div>
+                            </div>
+                        </div>
+                        <div class="product-footer">
+                            <div class="influencer-count ${influencerClass}">
+                                👥 ${influencers} creator${influencers !== 1 ? 's' : ''}
+                            </div>
+                            <button class="view-btn" onclick="viewProduct('${p.product_id}')">View</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function filterProducts(filter, btn) {
+            currentProductFilter = filter;
+            document.querySelectorAll('#productFilters .pill').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            loadProducts(true);
+        }
+        
+        function viewProduct(productId) {
+            window.open(`/product?id=${productId}`, '_blank');
+        }
+        
+        // ==================== BRANDS ====================
+        async function loadBrands(reset = false) {
+            if (isLoading) return;
+            isLoading = true;
+            
+            const grid = document.getElementById('brandGrid');
+            const search = document.getElementById('brandSearch').value;
+            
+            if (reset) {
+                brandPage = 1;
+                grid.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 1rem;">Loading brands...</p></div>';
+            }
+            
+            try {
+                const params = new URLSearchParams({
+                    page: brandPage,
+                    per_page: 20
+                });
+                
+                if (search) params.append('search', search);
+                if (currentBrandFilter === 'followed') params.append('followed', 'true');
+                if (currentBrandFilter === 'top') params.append('sort_by', 'gmv');
+                
+                const response = await fetch(`/api/brands?${params}`);
+                const data = await response.json();
+                
+                console.log('Brands response:', data);
+                
+                if (data.success && data.brands) {
+                    const html = data.brands.length > 0 
+                        ? data.brands.map(createBrandCard).join('')
+                        : '<div class="empty-state"><h3>No brands found</h3><p>Search for brands or run discovery</p></div>';
+                    
+                    if (reset) {
+                        grid.innerHTML = html;
+                    } else {
+                        grid.insertAdjacentHTML('beforeend', html);
+                    }
+                    
+                    brandPage++;
+                } else {
+                    // Handle error case
+                    console.error('Brands API error:', data.error || 'Unknown error');
+                    if (reset) {
+                        grid.innerHTML = `<div class="empty-state"><h3>Error loading brands</h3><p>${data.error || 'Please try again'}</p></div>`;
+                    }
+                }
+            } catch (e) {
+                console.error('Brands fetch error:', e);
+                if (reset) {
+                    grid.innerHTML = `<div class="empty-state"><h3>Error loading brands</h3><p>${e.message}</p></div>`;
+                }
+            }
+            
+            isLoading = false;
+        }
+        
+        function createBrandCard(b) {
+            const gmv = formatCurrency(b.total_gmv || 0);
+            const sales = formatNumber(b.total_sales || 0);
+            const products = formatNumber(b.total_products || 0);
+            const initial = (b.seller_name || 'B').charAt(0).toUpperCase();
+            
+            return `
+                <div class="brand-card ${b.is_followed ? 'followed' : ''}" onclick="viewBrandProducts('${b.seller_id}')">
+                    <div class="brand-header">
+                        <div class="brand-logo">
+                            ${b.cover_url ? `<img src="${b.cover_url}" alt="" onerror="this.parentElement.innerHTML='${initial}'">` : initial}
+                        </div>
+                        <div class="brand-info">
+                            <div class="brand-name">${b.seller_name || 'Unknown Brand'}</div>
+                            <div class="brand-meta">
+                                ${b.is_followed ? '⭐ Following' : ''} 
+                                ${b.products_found ? `• ${b.products_found} gems found` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="brand-stats">
+                        <div class="brand-stat">
+                            <div class="brand-stat-value">${gmv}</div>
+                            <div class="brand-stat-label">GMV</div>
+                        </div>
+                        <div class="brand-stat">
+                            <div class="brand-stat-value">${sales}</div>
+                            <div class="brand-stat-label">Sales</div>
+                        </div>
+                        <div class="brand-stat">
+                            <div class="brand-stat-value">${products}</div>
+                            <div class="brand-stat-label">Products</div>
+                        </div>
+                    </div>
+                    <div class="brand-actions">
+                        <button class="btn ${b.is_followed ? 'btn-success' : 'btn-secondary'} follow-btn" 
+                                onclick="event.stopPropagation(); toggleFollow('${b.seller_id}', ${b.is_followed})">
+                            ${b.is_followed ? '✓ Following' : '+ Follow'}
+                        </button>
+                        <button class="btn btn-primary" onclick="event.stopPropagation(); scanBrand('${b.seller_id}')">
+                            🔍 Scan
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function filterBrands(filter, btn) {
+            currentBrandFilter = filter;
+            document.querySelectorAll('#brandFilters .pill').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            loadBrands(true);
+        }
+        
+        async function toggleFollow(sellerId, isFollowed) {
+            try {
+                const endpoint = isFollowed ? 'unfollow' : 'follow';
+                const response = await fetch(`/api/brands/${sellerId}/${endpoint}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(isFollowed ? 'Unfollowed brand' : 'Now following brand!');
+                    loadBrands(true);
+                    loadStats();
+                }
+            } catch (e) {
+                showToast('Error updating follow status');
+            }
+        }
+        
+        async function scanBrand(sellerId) {
+            showRefresh(true);
+            showToast('Scanning brand for gems...');
+            
+            try {
+                const response = await fetch(`/api/brands/${sellerId}/products?refresh=true&max_influencers=50`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(`Found ${data.new_products || 0} new gems!`);
+                    loadProducts(true);
+                    loadStats();
+                }
+            } catch (e) {
+                showToast('Error scanning brand');
+            }
+            
+            showRefresh(false);
+        }
+        
+        function viewBrandProducts(sellerId) {
+            // Filter products by this brand
+            document.getElementById('productSearch').value = '';
+            switchTab('products');
+            // Load brand-specific products
+            loadBrandProducts(sellerId);
+        }
+        
+        async function loadBrandProducts(sellerId) {
+            const grid = document.getElementById('productGrid');
+            grid.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 1rem;">Loading brand products...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/brands/${sellerId}/products`);
+                const data = await response.json();
+                
+                if (data.success && data.products) {
+                    const html = data.products.length > 0 
+                        ? data.products.map(createProductCard).join('')
+                        : '<div class="empty-state"><h3>No gems found for this brand</h3><p>Try scanning the brand for new products</p></div>';
+                    grid.innerHTML = html;
+                }
+            } catch (e) {
+                grid.innerHTML = '<div class="empty-state"><h3>Error loading products</h3></div>';
+            }
+        }
+        
+        async function searchBrandOnEchotik() {
+            const search = document.getElementById('brandSearch').value;
+            if (!search) {
+                showToast('Enter a brand name to search');
+                return;
+            }
+            
+            showRefresh(true);
+            showToast(`Searching EchoTik for "${search}"...`);
+            
+            try {
+                const response = await fetch(`/api/brands/search/${encodeURIComponent(search)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(`Found ${data.count} brand(s)!`);
+                    loadBrands(true);
+                }
+            } catch (e) {
+                showToast('Error searching');
+            }
+            
+            showRefresh(false);
+        }
+        
+        // ==================== ACTIONS ====================
+        async function discoverBrands() {
+            showRefresh(true);
+            showToast('Discovering top brands...');
+            
+            try {
+                const response = await fetch('/api/brands/discover-and-follow?pages=5');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(`Discovered ${data.discovered} brands, followed ${data.newly_followed}!`);
+                    loadBrands(true);
+                    loadStats();
+                }
+            } catch (e) {
+                showToast('Error discovering brands');
+            }
+            
+            showRefresh(false);
+        }
+        
+        async function runFullScan() {
+            showRefresh(true);
+            showToast('Running full Brand Hunter scan...');
+            
+            try {
+                const response = await fetch('/api/brands/full-scan?notify=true');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(`Found ${data.new_products} new gems from ${data.brands_scanned} brands!`);
+                    loadProducts(true);
+                    loadStats();
+                }
+            } catch (e) {
+                showToast('Error running scan');
+            }
+            
+            showRefresh(false);
+        }
+        
+        // ==================== UTILITIES ====================
+        function formatCurrency(num) {
+            if (num >= 1000000) return '$' + (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return '$' + (num / 1000).toFixed(1) + 'K';
+            return '$' + num.toFixed(0);
+        }
+        
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+        
+        function isNewToday(dateStr) {
+            if (!dateStr) return false;
+            const date = new Date(dateStr);
+            const today = new Date();
+            return date.toDateString() === today.toDateString();
+        }
+        
+        function debounceSearch(event, type) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (type === 'products') loadProducts(true);
+                else loadBrands(true);
+            }, 300);
+        }
+        
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        function showRefresh(show) {
+            document.getElementById('refreshIndicator').classList.toggle('active', show);
+        }
+        
+        // Infinite scroll
+        window.addEventListener('scroll', () => {
+            if (isLoading) return;
+            
+            const scrollY = window.scrollY;
+            const visible = window.innerHeight;
+            const pageHeight = document.documentElement.scrollHeight;
+            
+            if (scrollY + visible >= pageHeight - 500) {
+                if (currentTab === 'products') loadProducts(false);
+                else loadBrands(false);
+            }
+        });
+    </script>
+</body>
+</html>
