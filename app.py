@@ -1,0 +1,3893 @@
+"""
+TikTok Shop Product Finder - Enhanced Version 3.0
+Fixes display issues + adds new features
+
+New Features:
+- Momentum Score calculation
+- Trend detection (rising/stable/falling)
+- Influencer count filtering (finally working!)
+- Category filtering
+- Competition analysis
+- Smart sorting options
+- Telegram notifications for new hidden gems
+"""
+
+from flask import Flask, render_template, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from sqlalchemy import text, func, desc, asc
+from decimal import Decimal
+import os
+from dotenv import load_dotenv
+import json
+from datetime import datetime, timedelta
+import time
+import requests
+from requests.auth import HTTPBasicAuth
+
+# Telegram Configuration
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '8265804607:AAEnAPrz_KfTKH2xWp4AK-qA4pvdkUjEmo8')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '7379075068')
+
+
+def extract_image_url(data):
+    """Extract clean image URL from string or JSON array"""
+    if not data:
+        return ''
+    if isinstance(data, str):
+        if data.startswith('http'):
+            return data
+        if data.startswith('['):
+            try:
+                import json
+                arr = json.loads(data)
+                if arr:
+                    arr.sort(key=lambda x: x.get('index', 0))
+                    return arr[0].get('url', '')
+            except:
+                pass
+    if isinstance(data, list) and data:
+        data.sort(key=lambda x: x.get('index', 0))
+        return data[0].get('url', '')
+    return ''
+
+
+load_dotenv()
+
+app = Flask(__name__, template_folder='pwa')
+CORS(app)
+
+# Database configuration
+db_url = os.getenv('DATABASE_URL', '')
+if db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# ============================================================================
+# ENHANCED DATABASE MODEL - Now captures more API fields
+# ============================================================================
+
+class Product(db.Model):
+    __tablename__ = 'product'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.String(50), unique=True)
+    product_name = db.Column(db.String(500))
+    
+    # GMV & Sales - now with time ranges
+    gmv = db.Column(db.Numeric(15, 2))  # total_sale_gmv_amt
+    gmv_7d = db.Column(db.Numeric(15, 2))  # NEW: 7-day GMV
+    gmv_30d = db.Column(db.Numeric(15, 2))  # NEW: 30-day GMV
+    
+    sales = db.Column(db.Integer)  # total_sale_cnt
+    sales_7d = db.Column(db.Integer)  # NEW: 7-day sales
+    sales_30d = db.Column(db.Integer)  # NEW: 30-day sales
+    
+    # Commission
+    commission_rate = db.Column(db.Numeric(5, 2))
+    potential_earnings = db.Column(db.Numeric(15, 2))
+    
+    # NEW: Influencer & Competition data
+    influencer_count = db.Column(db.Integer)  # total_ifl_cnt - THE KEY FIELD!
+    video_count = db.Column(db.Integer)  # total_video_cnt
+    videos_7d = db.Column(db.Integer)  # Videos in last 7 days
+    videos_30d = db.Column(db.Integer)  # Videos in last 30 days
+    live_count = db.Column(db.Integer)  # total_live_cnt
+    
+    # NEW: Product metrics
+    price = db.Column(db.Numeric(10, 2))
+    rating = db.Column(db.Numeric(3, 2))  # product_rating
+    review_count = db.Column(db.Integer)
+    
+    # NEW: Trend & Status
+    sales_trend = db.Column(db.Integer)  # 0=stable, 1=up, 2=down
+    listing_date = db.Column(db.String(20))  # first_crawl_dt
+    is_delisted = db.Column(db.Boolean, default=False)
+    free_shipping = db.Column(db.Boolean, default=False)
+    discount = db.Column(db.String(20))
+    
+    # Product availability status
+    product_status = db.Column(db.String(20), default='active')  # active, out_of_stock, removed, unavailable
+    status_checked_at = db.Column(db.DateTime)  # When status was last verified
+    status_note = db.Column(db.String(200))  # Additional status info
+    
+    # NEW: Category info
+    category_id = db.Column(db.String(20))
+    category_l2_id = db.Column(db.String(20))
+    category_l3_id = db.Column(db.String(20))
+    
+    # Seller info
+    seller_id = db.Column(db.String(50))
+    seller_name = db.Column(db.String(200))
+    
+    # Media
+    image_url = db.Column(db.Text)
+    
+    # Image Caching - for EchoTik batch cover download API
+    cached_image_url = db.Column(db.Text)           # Temporary accessible URL from EchoTik
+    image_cached_at = db.Column(db.DateTime)        # When the cached URL was fetched
+    
+    # Scan tracking
+    scan_id = db.Column(db.Integer, db.ForeignKey('product_scan.id'))
+    scan_type = db.Column(db.String(50))  # 'brand_hunter', 'general', 'category'
+    
+    # NEW: Calculated fields (updated on scan)
+    momentum_score = db.Column(db.Numeric(5, 2))  # Our custom score!
+    competition_level = db.Column(db.String(20))  # 'low', 'medium', 'high'
+    opportunity_score = db.Column(db.Numeric(5, 2))  # Combined ranking
+    
+    # Time tracking for daily scans
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)  # When product was first discovered
+    total_influencers = db.Column(db.Integer)  # Alias for influencer_count
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def calculate_momentum(self):
+        """Calculate momentum score based on 7d vs 30d performance"""
+        if not self.sales_30d or self.sales_30d == 0:
+            return 0
+        
+        # 7-day sales as percentage of 30-day (ideally >23% = accelerating)
+        weekly_ratio = (self.sales_7d or 0) / self.sales_30d
+        
+        # Score: >30% of monthly in 7 days = hot, <15% = cooling
+        if weekly_ratio > 0.35:
+            return 100  # 🔥 On fire
+        elif weekly_ratio > 0.28:
+            return 80   # 📈 Accelerating
+        elif weekly_ratio > 0.23:
+            return 60   # ✅ Healthy
+        elif weekly_ratio > 0.15:
+            return 40   # ⚠️ Slowing
+        else:
+            return 20   # ❄️ Cooling
+    
+    def get_competition_level(self):
+        """Determine competition level based on influencer count"""
+        count = self.influencer_count or 0
+        if count <= 3:
+            return 'untapped'      # 🏆 Golden opportunity
+        elif count <= 10:
+            return 'low'           # ✅ Easy entry
+        elif count <= 30:
+            return 'medium'        # ⚡ Competitive but doable
+        elif count <= 50:
+            return 'high'          # ⚠️ Crowded
+        else:
+            return 'saturated'     # ❌ Very hard to rank
+    
+    def to_dict(self):
+        """Safe serialization with field mapping"""
+        def safe_float(val):
+            if val is None:
+                return None
+            if isinstance(val, Decimal):
+                return float(val)
+            return val
+        
+        def safe_int(val):
+            return int(val) if val is not None else None
+        
+        # Calculate dynamic fields
+        momentum = self.calculate_momentum()
+        competition = self.get_competition_level()
+        
+        return {
+            'id': self.id,
+            'product_id': self.product_id,
+            'product_name': self.product_name or 'Unknown Product',
+            'title': self.product_name or 'Unknown Product',  # Alias for JS compatibility
+            
+            # Sales data
+            'gmv': safe_float(self.gmv) or 0,
+            'gmv_7d': safe_float(self.gmv_7d),
+            'gmv_30d': safe_float(self.gmv_30d),
+            'sales': safe_int(self.sales) or 0,
+            'sales_7d': safe_int(self.sales_7d),
+            'sales_30d': safe_int(self.sales_30d),
+            
+            # Commission & Earnings
+            'commission_rate': safe_float(self.commission_rate) or 0,
+            'potential_earnings': safe_float(self.potential_earnings) or 0,
+            
+            # Competition metrics
+            'influencer_count': safe_int(self.influencer_count) or 0,
+            'total_ifl_cnt': safe_int(self.influencer_count) or 0,  # API field name
+            'video_count': safe_int(self.video_count) or 0,
+            'videos_7d': safe_int(self.videos_7d) or 0,
+            'videos_30d': safe_int(self.videos_30d) or 0,
+            'live_count': safe_int(self.live_count) or 0,
+            
+            # Product metrics
+            'price': safe_float(self.price),
+            'rating': safe_float(self.rating),
+            'review_count': safe_int(self.review_count),
+            
+            # Trend & Status
+            'sales_trend': self.sales_trend,
+            'trend_label': {0: 'stable', 1: 'rising', 2: 'falling'}.get(self.sales_trend, 'unknown'),
+            'listing_date': self.listing_date,
+            'is_delisted': self.is_delisted or False,
+            'free_shipping': self.free_shipping or False,
+            'discount': self.discount,
+            
+            # Product availability
+            'product_status': self.product_status or 'active',
+            'status_checked_at': self.status_checked_at.isoformat() if self.status_checked_at else None,
+            'status_note': self.status_note,
+            'is_available': (self.product_status or 'active') == 'active',
+            
+            # Categories
+            'category_id': self.category_id,
+            'category_l2_id': self.category_l2_id,
+            'category_l3_id': self.category_l3_id,
+            
+            # Seller
+            'seller_id': self.seller_id,
+            'seller_name': self.seller_name or 'Unknown Seller',
+            
+            # Media
+            'image_url': self.image_url or '',
+            'images': self.image_url or '',  # Alias
+            'cached_image_url': self.cached_image_url or '',  # Accessible signed URL
+            'image_cached_at': self.image_cached_at.isoformat() if self.image_cached_at else None,
+            
+            # Scan info
+            'scan_type': self.scan_type,
+            'first_seen': self.first_seen.isoformat() if self.first_seen else None,
+            
+            # Calculated scores
+            'momentum_score': momentum,
+            'momentum_label': self._get_momentum_label(momentum),
+            'competition_level': competition,
+            'opportunity_score': safe_float(self.opportunity_score),
+        }
+    
+    def _get_momentum_label(self, score):
+        if score >= 80:
+            return '🔥 Hot'
+        elif score >= 60:
+            return '📈 Rising'
+        elif score >= 40:
+            return '✅ Stable'
+        else:
+            return '❄️ Cooling'
+
+
+class ProductScan(db.Model):
+    __tablename__ = 'product_scan'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    scan_date = db.Column(db.DateTime, default=datetime.utcnow)
+    total_products_scanned = db.Column(db.Integer)
+    total_qualified = db.Column(db.Integer)
+    scan_type = db.Column(db.String(50))
+    region = db.Column(db.String(10), default='US')
+    filters_used = db.Column(db.Text)  # JSON string of filters
+    
+    products = db.relationship('Product', backref='scan', lazy=True)
+
+
+# ============================================================================
+# BRAND MODEL - For tracking followed shops/sellers
+# ============================================================================
+
+class Brand(db.Model):
+    __tablename__ = 'brand'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    seller_id = db.Column(db.String(50), unique=True, nullable=False)
+    seller_name = db.Column(db.String(200))
+    
+    # Brand metrics from EchoTik
+    total_gmv = db.Column(db.Numeric(15, 2))  # total_sale_gmv_amt
+    total_sales = db.Column(db.Integer)  # total_sale_cnt
+    gmv_7d = db.Column(db.Numeric(15, 2))
+    gmv_30d = db.Column(db.Numeric(15, 2))
+    sales_7d = db.Column(db.Integer)
+    sales_30d = db.Column(db.Integer)
+    
+    # Product counts
+    total_products = db.Column(db.Integer)  # total_product_cnt
+    crawled_products = db.Column(db.Integer)  # total_crawl_product_cnt
+    
+    # Influencer/creator metrics
+    total_influencers = db.Column(db.Integer)  # total_ifl_cnt
+    total_videos = db.Column(db.Integer)  # total_video_cnt
+    total_lives = db.Column(db.Integer)  # total_live_cnt
+    
+    # Brand info
+    avg_price = db.Column(db.Numeric(10, 2))  # spu_avg_price
+    rating = db.Column(db.Numeric(3, 2))
+    cover_url = db.Column(db.Text)
+    
+    # Category
+    category_id = db.Column(db.String(20))
+    category_name = db.Column(db.String(100))
+    
+    # Tracking
+    is_followed = db.Column(db.Boolean, default=False)
+    follow_priority = db.Column(db.Integer, default=0)  # Higher = scan first
+    last_scanned = db.Column(db.DateTime)
+    products_found = db.Column(db.Integer, default=0)  # Low-competition products found
+    
+    # Sales method: 1=Video, 2=Live
+    sales_flag = db.Column(db.Integer)
+    sales_trend_flag = db.Column(db.Integer)  # 0=stable, 1=up, 2=down
+    from_flag = db.Column(db.Integer)  # 1=Local, 2=Cross-border
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'seller_id': self.seller_id,
+            'seller_name': self.seller_name or 'Unknown Brand',
+            'total_gmv': float(self.total_gmv or 0),
+            'total_sales': self.total_sales or 0,
+            'gmv_7d': float(self.gmv_7d or 0),
+            'gmv_30d': float(self.gmv_30d or 0),
+            'sales_7d': self.sales_7d or 0,
+            'sales_30d': self.sales_30d or 0,
+            'total_products': self.total_products or 0,
+            'crawled_products': self.crawled_products or 0,
+            'total_influencers': self.total_influencers or 0,
+            'total_videos': self.total_videos or 0,
+            'total_lives': self.total_lives or 0,
+            'avg_price': float(self.avg_price or 0),
+            'rating': float(self.rating or 0),
+            'cover_url': self.cover_url or '',
+            'category_name': self.category_name or '',
+            'is_followed': self.is_followed or False,
+            'follow_priority': self.follow_priority or 0,
+            'last_scanned': self.last_scanned.isoformat() if self.last_scanned else None,
+            'products_found': self.products_found or 0,
+            'sales_flag': self.sales_flag,
+            'sales_trend_flag': self.sales_trend_flag,
+            'from_flag': self.from_flag,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def parse_cover_url(raw):
+    """Extract clean URL from cover_url which may be a JSON array string."""
+    if not raw:
+        return None
+    if isinstance(raw, str):
+        if raw.startswith('['):
+            try:
+                urls = json.loads(raw)
+                if urls and isinstance(urls, list) and len(urls) > 0:
+                    return urls[0].get('url') if isinstance(urls[0], dict) else urls[0]
+            except json.JSONDecodeError:
+                return raw if raw.startswith('http') else None
+        elif raw.startswith('http'):
+            return raw
+    elif isinstance(raw, list) and len(raw) > 0:
+        return raw[0].get('url') if isinstance(raw[0], dict) else raw[0]
+    return None
+
+
+def get_cached_image_urls(cover_urls, auth):
+    """
+    Call EchoTik's batch cover download API to get temporary accessible URLs.
+    
+    Args:
+        cover_urls: List of original cover URLs (max 10 per call)
+        auth: HTTPBasicAuth object with EchoTik credentials
+    
+    Returns:
+        Dict mapping original URL -> temporary accessible URL
+    """
+    if not cover_urls:
+        return {}
+    
+    # API only accepts URLs from this domain
+    valid_urls = [url for url in cover_urls if url and 'echosell-images.tos-ap-southeast-1.volces.com' in url]
+    
+    if not valid_urls:
+        return {}
+    
+    # Max 10 URLs per request
+    url_string = ','.join(valid_urls[:10])
+    
+    try:
+        response = requests.get(
+            'https://open.echotik.live/api/v3/echotik/batch/cover/download',
+            params={'cover_urls': url_string},
+            auth=auth,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('code') == 0 and data.get('data'):
+                # Response format: [{"original_url": "signed_url"}, ...]
+                result = {}
+                for item in data['data']:
+                    if isinstance(item, dict):
+                        for orig_url, signed_url in item.items():
+                            if signed_url and signed_url.startswith('http'):
+                                result[orig_url] = signed_url
+                return result
+        
+        print(f"EchoTik image API error: {response.status_code}")
+        return {}
+        
+    except Exception as e:
+        print(f"EchoTik image API exception: {e}")
+        return {}
+
+
+def refresh_product_images(batch_size=10, delay=0.5):
+    """
+    Refresh cached image URLs for all products.
+    Call this during daily scan or via /api/refresh-images endpoint.
+    
+    Args:
+        batch_size: Products per API call (max 10)
+        delay: Seconds between batches to avoid rate limiting
+    
+    Returns:
+        Dict with stats about the refresh operation
+    """
+    auth = HTTPBasicAuth(
+        os.environ.get('ECHOTIK_USERNAME'),
+        os.environ.get('ECHOTIK_PASSWORD')
+    )
+    
+    stats = {
+        'total_products': 0,
+        'processed': 0,
+        'success': 0,
+        'failed': 0,
+        'skipped': 0,
+        'no_image_url': 0
+    }
+    
+    try:
+        # Get all products (including those without image_url to count them)
+        all_products = Product.query.all()
+        stats['total_products'] = len(all_products)
+        
+        # Filter to products with image_url
+        products = [p for p in all_products if p.image_url and p.image_url.strip()]
+        stats['no_image_url'] = stats['total_products'] - len(products)
+        
+        if not products:
+            return stats
+        
+        # Process in batches of 10
+        for i in range(0, len(products), batch_size):
+            batch = products[i:i + batch_size]
+            
+            # Build URL -> Product mapping
+            url_to_products = {}
+            for product in batch:
+                try:
+                    # Parse the image_url (may be JSON array)
+                    parsed_url = parse_cover_url(product.image_url)
+                    if parsed_url and 'echosell-images.tos-ap-southeast-1.volces.com' in parsed_url:
+                        if parsed_url not in url_to_products:
+                            url_to_products[parsed_url] = []
+                        url_to_products[parsed_url].append(product)
+                    else:
+                        stats['skipped'] += 1
+                except Exception as e:
+                    print(f"Error parsing image_url for product {product.product_id}: {e}")
+                    stats['skipped'] += 1
+            
+            if not url_to_products:
+                continue
+            
+            # Call the API
+            cover_urls = list(url_to_products.keys())
+            result = get_cached_image_urls(cover_urls, auth)
+            
+            # Update products with new cached URLs
+            for original_url, products_list in url_to_products.items():
+                cached_url = result.get(original_url)
+                for product in products_list:
+                    stats['processed'] += 1
+                    if cached_url:
+                        product.cached_image_url = cached_url
+                        product.image_cached_at = datetime.utcnow()
+                        stats['success'] += 1
+                    else:
+                        stats['failed'] += 1
+            
+            # Commit this batch
+            try:
+                db.session.commit()
+            except Exception as e:
+                print(f"DB commit error: {e}")
+                db.session.rollback()
+            
+            # Rate limiting delay
+            if i + batch_size < len(products):
+                time.sleep(delay)
+        
+        return stats
+        
+    except Exception as e:
+        print(f"refresh_product_images error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+# ============================================================================
+# SELLER NAME FETCHING
+# ============================================================================
+
+def get_seller_details(seller_ids, auth):
+    """
+    Fetch seller details from EchoTik API.
+    Uses the seller detail endpoint to get seller names.
+    
+    Args:
+        seller_ids: List of seller IDs to fetch
+        auth: HTTPBasicAuth object
+    
+    Returns:
+        Dict mapping seller_id -> seller_name
+    """
+    result = {}
+    
+    for seller_id in seller_ids:
+        try:
+            # Call EchoTik seller detail API
+            response = requests.get(
+                'https://open.echotik.live/api/v3/echotik/seller/detail',
+                params={
+                    'seller_id': seller_id,
+                    'region': 'US'
+                },
+                auth=auth,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('code') == 0 and data.get('data'):
+                    seller_data = data['data']
+                    # Handle both single object and list response
+                    if isinstance(seller_data, list) and len(seller_data) > 0:
+                        seller_data = seller_data[0]
+                    
+                    seller_name = seller_data.get('seller_name') or seller_data.get('shop_name') or seller_data.get('name')
+                    if seller_name:
+                        result[seller_id] = seller_name
+                        print(f"  Found seller: {seller_id} -> {seller_name}")
+            else:
+                print(f"  Seller API error for {seller_id}: {response.status_code}")
+                
+        except Exception as e:
+            print(f"  Error fetching seller {seller_id}: {e}")
+    
+    return result
+
+
+def verify_product_status(product_id, auth):
+    """
+    Verify if a product is still available on TikTok Shop.
+    
+    Args:
+        product_id: TikTok product ID
+        auth: HTTPBasicAuth object
+    
+    Returns:
+        Dict with status info: {'status': 'active/out_of_stock/removed', 'note': '...'}
+    """
+    try:
+        # Use EchoTik product detail API to check status
+        # API expects 'product_ids' (plural) not 'product_id'
+        response = requests.get(
+            'https://open.echotik.live/api/v3/echotik/product/detail',
+            params={'product_ids': product_id, 'region': 'US'},
+            auth=auth,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Check if API returned error (product not found)
+            if data.get('code') != 0:
+                error_msg = data.get('message', 'Unknown error')
+                if 'not found' in error_msg.lower() or 'not exist' in error_msg.lower():
+                    return {'status': 'removed', 'note': 'Product not found in API'}
+                return {'status': 'unavailable', 'note': error_msg}
+            
+            # API returns list of products, get the first one
+            product_data = data.get('data', {})
+            if isinstance(product_data, list):
+                if len(product_data) == 0:
+                    return {'status': 'removed', 'note': 'Product not found (empty response)'}
+                product_data = product_data[0]
+            
+            # Check for delisted/removed indicators
+            if product_data.get('is_delisted') or product_data.get('is_deleted'):
+                return {'status': 'removed', 'note': 'Product delisted by seller'}
+            
+            # Check stock status
+            stock_status = product_data.get('stock_status', '').lower()
+            if stock_status == 'out_of_stock' or product_data.get('is_out_of_stock'):
+                return {'status': 'out_of_stock', 'note': 'Product out of stock'}
+            
+            # Check sale status (some APIs return this)
+            sale_status = product_data.get('sale_status', '').lower()
+            if sale_status in ['removed', 'deleted', 'banned', 'off_shelf']:
+                return {'status': 'removed', 'note': f'Product status: {sale_status}'}
+            
+            # If we got valid data back, product is active
+            return {'status': 'active', 'note': 'Product available'}
+        
+        elif response.status_code == 404:
+            return {'status': 'removed', 'note': 'Product not found (404)'}
+        else:
+            return {'status': 'unknown', 'note': f'API returned {response.status_code}'}
+            
+    except Exception as e:
+        return {'status': 'unknown', 'note': f'Error: {str(e)}'}
+
+
+# ============================================================================
+# TELEGRAM NOTIFICATIONS
+# ============================================================================
+
+def send_telegram_message(message, parse_mode='HTML'):
+    """
+    Send a message to Telegram bot.
+    
+    Args:
+        message: Text to send (can include HTML formatting)
+        parse_mode: 'HTML' or 'Markdown'
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+        payload = {
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': message,
+            'parse_mode': parse_mode,
+            'disable_web_page_preview': False
+        }
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Telegram error: {e}")
+        return False
+
+
+def notify_new_hidden_gems(hours_back=24, min_gmv=100):
+    """
+    Find new hidden gems discovered in the last X hours and send Telegram notifications.
+    
+    Args:
+        hours_back: Look for products added in the last X hours
+        min_gmv: Minimum GMV to notify about
+    
+    Returns:
+        Dict with notification stats
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=hours_back)
+    
+    # Find new hidden gems (3-50 influencers, good GMV, active)
+    new_gems = Product.query.filter(
+        Product.influencer_count.between(3, 50),
+        Product.gmv >= min_gmv,
+        Product.commission_rate > 0,
+        Product.first_seen >= cutoff,
+        db.or_(
+            Product.product_status.is_(None),
+            Product.product_status == '',
+            Product.product_status == 'active'
+        )
+    ).order_by(Product.gmv.desc()).limit(10).all()
+    
+    if not new_gems:
+        return {'notified': 0, 'message': 'No new hidden gems found'}
+    
+    # Build message
+    header = f"💎 <b>{len(new_gems)} New Hidden Gems Found!</b>\n"
+    header += f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+    
+    product_messages = []
+    for p in new_gems:
+        gmv = float(p.gmv) if p.gmv else 0
+        commission = float(p.commission_rate) if p.commission_rate else 0
+        earnings = gmv * commission / 100
+        influencers = p.influencer_count or 0
+        
+        # Competition level emoji
+        if influencers <= 3:
+            comp_emoji = "🏆"
+            comp_text = "UNTAPPED"
+        elif influencers <= 10:
+            comp_emoji = "✅"
+            comp_text = "Low"
+        elif influencers <= 30:
+            comp_emoji = "⚡"
+            comp_text = "Medium"
+        else:
+            comp_emoji = "⚠️"
+            comp_text = "High"
+        
+        msg = f"<b>{p.product_name[:50]}{'...' if len(p.product_name or '') > 50 else ''}</b>\n"
+        msg += f"💰 GMV: ${gmv:,.0f} | 📦 Sold: {p.sales or 0:,}\n"
+        msg += f"💵 Commission: {commission:.0f}% (${earnings:,.0f} potential)\n"
+        msg += f"{comp_emoji} {influencers} influencers ({comp_text})\n"
+        msg += f"🔗 <a href='https://tiktok-product-finder.onrender.com/product?id={p.product_id}'>View Details</a>\n"
+        
+        product_messages.append(msg)
+    
+    # Send in batches if needed (Telegram has 4096 char limit)
+    full_message = header + "\n".join(product_messages)
+    
+    if len(full_message) > 4000:
+        # Send header + first few products
+        send_telegram_message(header + "\n".join(product_messages[:5]))
+        if len(product_messages) > 5:
+            send_telegram_message("📋 <b>More gems:</b>\n\n" + "\n".join(product_messages[5:]))
+    else:
+        send_telegram_message(full_message)
+    
+    return {
+        'notified': len(new_gems),
+        'products': [{'name': p.product_name, 'gmv': float(p.gmv or 0)} for p in new_gems]
+    }
+
+
+def notify_single_product(product, reason="New Hidden Gem"):
+    """Send notification for a single product"""
+    gmv = float(product.gmv) if product.gmv else 0
+    commission = float(product.commission_rate) if product.commission_rate else 0
+    earnings = gmv * commission / 100
+    influencers = product.influencer_count or 0
+    
+    msg = f"💎 <b>{reason}</b>\n"
+    msg += f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+    msg += f"<b>{product.product_name}</b>\n\n"
+    msg += f"💰 GMV: ${gmv:,.0f}\n"
+    msg += f"📦 Units Sold: {product.sales or 0:,}\n"
+    msg += f"💵 Commission: {commission:.0f}%\n"
+    msg += f"🎯 Potential Earnings: ${earnings:,.0f}\n"
+    msg += f"👥 Influencers: {influencers}\n"
+    msg += f"🏪 Seller: {product.seller_name or 'Unknown'}\n\n"
+    msg += f"🔗 <a href='https://tiktok-product-finder.onrender.com/product?id={product.product_id}'>View in App</a>"
+    
+    return send_telegram_message(msg)
+
+
+def refresh_seller_names(delay=0.3):
+    """
+    Refresh seller names for all products that have seller_id but no seller_name.
+    
+    Args:
+        delay: Seconds between API calls to avoid rate limiting
+    
+    Returns:
+        Dict with stats about the refresh operation
+    """
+    auth = HTTPBasicAuth(
+        os.environ.get('ECHOTIK_USERNAME'),
+        os.environ.get('ECHOTIK_PASSWORD')
+    )
+    
+    stats = {
+        'total_products': 0,
+        'unique_sellers': 0,
+        'sellers_found': 0,
+        'products_updated': 0,
+        'already_have_name': 0
+    }
+    
+    try:
+        # Get all products
+        all_products = Product.query.all()
+        stats['total_products'] = len(all_products)
+        
+        # Find unique seller_ids that need names
+        seller_to_products = {}
+        for p in all_products:
+            if p.seller_id and p.seller_id.strip():
+                if p.seller_name and p.seller_name.strip() and p.seller_name != 'TikTok Shop':
+                    stats['already_have_name'] += 1
+                else:
+                    if p.seller_id not in seller_to_products:
+                        seller_to_products[p.seller_id] = []
+                    seller_to_products[p.seller_id].append(p)
+        
+        stats['unique_sellers'] = len(seller_to_products)
+        
+        if not seller_to_products:
+            return stats
+        
+        print(f"Fetching names for {len(seller_to_products)} unique sellers...")
+        
+        # Fetch seller details one at a time (API doesn't support batch)
+        seller_names = {}
+        for i, seller_id in enumerate(seller_to_products.keys()):
+            print(f"  [{i+1}/{len(seller_to_products)}] Fetching seller {seller_id}...")
+            
+            names = get_seller_details([seller_id], auth)
+            seller_names.update(names)
+            
+            if seller_id in names:
+                stats['sellers_found'] += 1
+            
+            # Rate limiting
+            if i < len(seller_to_products) - 1:
+                time.sleep(delay)
+        
+        # Update products with seller names
+        for seller_id, products in seller_to_products.items():
+            if seller_id in seller_names:
+                for p in products:
+                    p.seller_name = seller_names[seller_id]
+                    stats['products_updated'] += 1
+        
+        # Commit all changes
+        db.session.commit()
+        print(f"Updated {stats['products_updated']} products with seller names")
+        
+        return stats
+        
+    except Exception as e:
+        print(f"refresh_seller_names error: {e}")
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        raise
+
+def get_safe_product_data(product):
+    """Safely extract product data handling missing columns"""
+    # Try to use the model's to_dict() if it's a model instance
+    if hasattr(product, 'to_dict'):
+        return product.to_dict()
+    
+    # Otherwise, handle raw row data
+    result = {}
+    
+    # Map of expected fields with defaults
+    field_defaults = {
+        'id': 0,
+        'product_id': '',
+        'product_name': 'Unknown',
+        'gmv': 0,
+        'sales': 0,
+        'commission_rate': 0,
+        'potential_earnings': 0,
+        'seller_name': 'Unknown',
+        'image_url': '',
+        'influencer_count': 0,
+    }
+    
+    for field, default in field_defaults.items():
+        try:
+            val = getattr(product, field, default) if hasattr(product, field) else default
+            # Convert Decimal to float
+            if isinstance(val, Decimal):
+                val = float(val)
+            result[field] = val
+        except:
+            result[field] = default
+    
+    return result
+
+
+# ============================================================================
+# PWA ROUTES
+# ============================================================================
+
+@app.route('/manifest.json')
+def manifest():
+    """Serve PWA manifest"""
+    return app.send_static_file('manifest.json')
+
+
+@app.route('/service-worker.js')
+def service_worker():
+    """Serve service worker from root (required for PWA scope)"""
+    response = app.send_static_file('service-worker.js')
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+
+@app.route('/offline.html')
+def offline():
+    """Offline fallback page"""
+    return app.send_static_file('offline.html')
+
+
+def is_mobile():
+    """Detect if request is from mobile device"""
+    user_agent = request.headers.get('User-Agent', '').lower()
+    mobile_keywords = ['iphone', 'ipad', 'android', 'mobile', 'webos', 'blackberry']
+    return any(keyword in user_agent for keyword in mobile_keywords)
+
+
+# ============================================================================
+# API ROUTES
+# ============================================================================
+
+@app.route('/')
+def dashboard():
+    """Main dashboard page - Brand Hunter"""
+    # Check for legacy mode
+    if request.args.get('legacy') == '1':
+        if is_mobile():
+            try:
+                return render_template('dashboard_mobile.html')
+            except:
+                pass
+        return render_template('dashboard_v3.html')
+    
+    # Default: Brand Hunter dashboard
+    try:
+        return render_template('brand_hunter.html')
+    except:
+        return render_template('dashboard_v3.html')
+
+
+@app.route('/legacy')
+def legacy_dashboard():
+    """Legacy product finder dashboard"""
+    if is_mobile():
+        try:
+            return render_template('dashboard_mobile.html')
+        except:
+            pass
+    return render_template('dashboard_v3.html')
+
+
+@app.route('/mobile')
+def mobile_dashboard():
+    """Mobile version - Brand Hunter"""
+    try:
+        return render_template('brand_hunter.html')
+    except:
+        return render_template('dashboard_mobile.html')
+
+
+@app.route('/desktop')
+def desktop_dashboard():
+    """Desktop version - Brand Hunter"""
+    try:
+        return render_template('brand_hunter.html')
+    except:
+        return render_template('dashboard_v3.html')
+
+
+@app.route('/api/products')
+def get_products():
+    """
+    Get products with filtering and sorting
+    
+    Query params:
+    - page: Page number (default 1)
+    - per_page: Items per page (default 20, max 100)
+    - sort_by: Field to sort by (gmv, sales, commission_rate, momentum_score, etc.)
+    - sort_order: asc or desc (default desc)
+    - min_commission: Minimum commission rate filter
+    - max_influencers: Maximum influencer count filter
+    - min_influencers: Minimum influencer count filter
+    - competition: Competition level filter (untapped, low, medium, high, saturated)
+    - trend: Trend filter (rising, stable, falling)
+    - search: Product name search
+    - scan_type: Filter by scan type
+    """
+    try:
+        # Pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        
+        # Sorting
+        sort_by = request.args.get('sort_by', 'gmv')
+        sort_order = request.args.get('sort_order', 'desc')
+        
+        # Start query
+        query = Product.query
+        
+        # Exclude non-promotable products by default (0 commission = can't promote)
+        query = query.filter(Product.commission_rate > 0)
+        
+        # Filter by product availability status
+        # By default, only show 'active' products (hide out_of_stock, removed, etc.)
+        show_unavailable = request.args.get('show_unavailable', 'false').lower() == 'true'
+        status_filter = request.args.get('status')
+        
+        if status_filter:
+            # Explicit status filter
+            query = query.filter(Product.product_status == status_filter)
+        elif not show_unavailable:
+            # Default: only show active products (status is NULL, empty, or 'active')
+            query = query.filter(
+                db.or_(
+                    Product.product_status.is_(None),
+                    Product.product_status == '',
+                    Product.product_status == 'active'
+                )
+            )
+        
+        # Time period filter
+        period = request.args.get('period', 'all')
+        now = datetime.utcnow()
+        if period == 'today':
+            start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            query = query.filter(Product.first_seen >= start_date)
+        elif period == 'yesterday':
+            start_date = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            query = query.filter(Product.first_seen >= start_date, Product.first_seen < end_date)
+        elif period == 'week':
+            start_date = now - timedelta(days=7)
+            query = query.filter(Product.first_seen >= start_date)
+        elif period == 'month':
+            start_date = now - timedelta(days=30)
+            query = query.filter(Product.first_seen >= start_date)
+        
+        # Apply filters
+        min_commission = request.args.get('min_commission', type=float)
+        if min_commission:
+            query = query.filter(Product.commission_rate >= min_commission)
+        
+        max_influencers = request.args.get('max_influencers', type=int)
+        if max_influencers:
+            query = query.filter(Product.influencer_count <= max_influencers)
+        
+        min_influencers = request.args.get('min_influencers', type=int)
+        if min_influencers:
+            query = query.filter(Product.influencer_count >= min_influencers)
+        
+        # Minimum GMV filter
+        min_gmv = request.args.get('min_gmv', type=float)
+        if min_gmv:
+            query = query.filter(Product.gmv >= min_gmv)
+        
+        # Competition level filter (requires calculating on fly or pre-stored)
+        competition = request.args.get('competition')
+        if competition == 'untapped':
+            query = query.filter(Product.influencer_count <= 3)
+        elif competition == 'low':
+            query = query.filter(Product.influencer_count.between(4, 10))
+        elif competition == 'medium':
+            query = query.filter(Product.influencer_count.between(11, 30))
+        elif competition == 'high':
+            query = query.filter(Product.influencer_count.between(31, 50))
+        elif competition == 'saturated':
+            query = query.filter(Product.influencer_count > 50)
+        
+        # Trend filter
+        trend = request.args.get('trend')
+        if trend == 'rising':
+            query = query.filter(Product.sales_trend == 1)
+        elif trend == 'stable':
+            query = query.filter(Product.sales_trend == 0)
+        elif trend == 'falling':
+            query = query.filter(Product.sales_trend == 2)
+        
+        # Search
+        search = request.args.get('search')
+        if search:
+            query = query.filter(Product.product_name.ilike(f'%{search}%'))
+        
+        # Scan type filter
+        scan_type = request.args.get('scan_type')
+        if scan_type:
+            query = query.filter(Product.scan_type == scan_type)
+        
+        # New today filter
+        new_today = request.args.get('new_today')
+        if new_today == 'true':
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            query = query.filter(Product.first_seen >= today_start)
+        
+        # Apply sorting
+        sort_column = getattr(Product, sort_by, Product.gmv)
+        if sort_order == 'desc':
+            query = query.order_by(desc(sort_column))
+        else:
+            query = query.order_by(asc(sort_column))
+        
+        # Execute paginated query
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        # Serialize products
+        products = [get_safe_product_data(p) for p in paginated.items]
+        
+        return jsonify({
+            'success': True,
+            'products': products,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': paginated.total,
+                'pages': paginated.pages,
+                'has_next': paginated.has_next,
+                'has_prev': paginated.has_prev
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'products': []
+        }), 500
+
+
+@app.route('/api/stats')
+def get_stats():
+    """Get dashboard statistics"""
+    try:
+        total_products = Product.query.count()
+        
+        # Count available products (active or unverified)
+        available_filter = db.or_(
+            Product.product_status.is_(None),
+            Product.product_status == '',
+            Product.product_status == 'active'
+        )
+        
+        available_products = Product.query.filter(available_filter).count()
+        
+        # Count unavailable
+        unavailable_products = Product.query.filter(
+            Product.product_status.in_(['removed', 'out_of_stock', 'unavailable'])
+        ).count()
+        
+        # Initialize stats
+        stats = {
+            'total_products': available_products,
+            'total_all': total_products,
+            'unavailable': unavailable_products,
+            'hidden_gems': 0,
+            'high_commission': 0,
+            'rising_products': 0,
+            'total_gmv': 0,
+            'avg_commission': 0,
+            'untapped': 0,
+            'untapped_products': 0,
+        }
+        
+        # Count hidden gems (3-50 influencers) - only available
+        try:
+            stats['hidden_gems'] = Product.query.filter(
+                Product.influencer_count.between(3, 50)
+            ).filter(available_filter).count()
+        except:
+            pass
+        
+        # Count high commission (>15%) - only available
+        try:
+            stats['high_commission'] = Product.query.filter(
+                Product.commission_rate >= 15
+            ).filter(available_filter).count()
+        except:
+            pass
+        
+        # Count rising products - only available
+        try:
+            stats['rising_products'] = Product.query.filter(
+                Product.sales_trend == 1
+            ).filter(available_filter).count()
+        except:
+            pass
+        
+        # Sum total GMV - only available
+        try:
+            result = db.session.query(func.sum(Product.gmv)).filter(available_filter).scalar()
+            stats['total_gmv'] = float(result) if result else 0
+        except:
+            pass
+        
+        # Average commission - only available
+        try:
+            result = db.session.query(func.avg(Product.commission_rate)).filter(available_filter).scalar()
+            stats['avg_commission'] = round(float(result), 2) if result else 0
+        except:
+            pass
+        
+        # Untapped products (0-3 influencers) - only available
+        try:
+            untapped_count = Product.query.filter(
+                Product.influencer_count <= 3
+            ).filter(available_filter).count()
+            stats['untapped_products'] = untapped_count
+            stats['untapped'] = untapped_count
+        except:
+            pass
+        
+        return jsonify({
+            'success': True,
+            'stats': stats  # Keep wrapped in 'stats' for frontend compatibility
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'stats': {'total_products': 0}
+        }), 500
+
+
+@app.route('/api/opportunities')
+def get_opportunities():
+    """
+    Get best opportunities - products with high potential and low competition
+    
+    Scoring formula:
+    - Potential earnings weight: 40%
+    - Low competition bonus: 30%
+    - Momentum weight: 20%
+    - Commission rate: 10%
+    """
+    try:
+        # Query products with enough data
+        products = Product.query.filter(
+            Product.gmv > 0,
+            Product.commission_rate > 0
+        ).all()
+        
+        opportunities = []
+        for p in products:
+            # Calculate opportunity score
+            earnings_score = min((p.potential_earnings or 0) / 10000, 1) * 40  # Max 40 points
+            
+            # Competition score (lower is better)
+            ifl_count = p.influencer_count or 0
+            if ifl_count <= 3:
+                competition_score = 30  # Untapped
+            elif ifl_count <= 10:
+                competition_score = 25  # Low
+            elif ifl_count <= 30:
+                competition_score = 15  # Medium
+            elif ifl_count <= 50:
+                competition_score = 5   # High
+            else:
+                competition_score = 0   # Saturated
+            
+            # Momentum score
+            momentum = p.calculate_momentum() if hasattr(p, 'calculate_momentum') else 50
+            momentum_score = (momentum / 100) * 20  # Max 20 points
+            
+            # Commission score
+            comm_rate = float(p.commission_rate or 0)
+            commission_score = min(comm_rate / 40, 1) * 10  # Max 10 points at 40%
+            
+            total_score = earnings_score + competition_score + momentum_score + commission_score
+            
+            product_data = get_safe_product_data(p)
+            product_data['opportunity_score'] = round(total_score, 1)
+            opportunities.append(product_data)
+        
+        # Sort by opportunity score
+        opportunities.sort(key=lambda x: x['opportunity_score'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'opportunities': opportunities[:50],  # Top 50
+            'total': len(opportunities)
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'opportunities': []
+        }), 500
+
+
+@app.route('/api/hidden-gems')
+def get_hidden_gems():
+    """Get products with 3-50 influencers (the sweet spot)"""
+    try:
+        products = Product.query.filter(
+            Product.influencer_count.between(3, 50),
+            Product.gmv > 100  # At least some sales
+        ).order_by(desc(Product.potential_earnings)).limit(100).all()
+        
+        return jsonify({
+            'success': True,
+            'products': [get_safe_product_data(p) for p in products],
+            'total': len(products)
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'products': []
+        }), 500
+
+
+@app.route('/api/untapped')
+def get_untapped():
+    """Get products with 0-3 influencers (first mover advantage)"""
+    try:
+        products = Product.query.filter(
+            Product.influencer_count <= 3,
+            Product.gmv > 50  # Has some traction
+        ).order_by(desc(Product.gmv)).limit(100).all()
+        
+        return jsonify({
+            'success': True,
+            'products': [get_safe_product_data(p) for p in products],
+            'total': len(products)
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'products': []
+        }), 500
+
+
+@app.route('/api/rising')
+def get_rising():
+    """Get products with rising sales trend"""
+    try:
+        products = Product.query.filter(
+            Product.sales_trend == 1
+        ).order_by(desc(Product.gmv_7d)).limit(100).all()
+        
+        return jsonify({
+            'success': True,
+            'products': [get_safe_product_data(p) for p in products],
+            'total': len(products)
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'products': []
+        }), 500
+
+
+@app.route('/api/debug')
+def debug_info():
+    """Debug endpoint to diagnose issues"""
+    try:
+        # Get table info
+        with db.engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'product'
+            """))
+            columns = [row[0] for row in result.fetchall()]
+        
+        # Sample product
+        sample = Product.query.first()
+        sample_data = get_safe_product_data(sample) if sample else None
+        
+        # Count products
+        total = Product.query.count()
+        
+        return jsonify({
+            'success': True,
+            'debug': {
+                'total_products': total,
+                'table_columns': columns,
+                'sample_product': sample_data,
+                'flask_config': {
+                    'database_connected': True,
+                    'debug_mode': app.debug
+                }
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+
+@app.route('/api/image-proxy')
+def image_proxy():
+    """Proxy images to avoid CORS issues, handles JSON array format"""
+    import requests
+    import json
+    
+    url = request.args.get('url', '')
+    
+    if not url:
+        return 'No URL provided', 400
+    
+    # Handle JSON array format
+    if url.startswith('['):
+        try:
+            images = json.loads(url)
+            if isinstance(images, list) and len(images) > 0:
+                # Get first image by lowest index
+                sorted_images = sorted(images, key=lambda x: x.get('index', 999))
+                url = sorted_images[0].get('url', '')
+        except:
+            pass
+    
+    if not url or not url.startswith('http'):
+        return 'Invalid URL', 400
+    
+    try:
+        response = requests.get(url, timeout=10, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://www.tiktok.com/'
+        })
+        
+        if response.status_code == 200:
+            return response.content, 200, {
+                'Content-Type': response.headers.get('Content-Type', 'image/jpeg'),
+                'Cache-Control': 'public, max-age=86400'
+            }
+        else:
+            return f'Error fetching image: {response.status_code}', response.status_code
+            
+    except Exception as e:
+        return f'Error: {str(e)}', 500
+
+
+@app.route('/product')
+def product_detail_page():
+    """Product detail page"""
+    return render_template('product_detail.html')
+
+
+@app.route('/api/product/<product_id>')
+def get_product_detail(product_id):
+    """Get detailed info for a single product"""
+    try:
+        product = Product.query.filter_by(product_id=product_id).first()
+        
+        if not product:
+            # Try by database ID
+            product = Product.query.filter_by(id=product_id).first()
+        
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        # Build response with all available fields
+        data = {
+            'id': product.id,
+            'product_id': product.product_id,
+            'product_name': getattr(product, 'product_name', '') or '',
+            
+            # Sales data
+            'gmv': float(getattr(product, 'gmv', 0) or 0),
+            'gmv_7d': float(getattr(product, 'gmv_7d', 0) or 0),
+            'gmv_30d': float(getattr(product, 'gmv_30d', 0) or 0),
+            'sales': int(getattr(product, 'sales', 0) or 0),
+            'sales_7d': int(getattr(product, 'sales_7d', 0) or 0),
+            'sales_30d': int(getattr(product, 'sales_30d', 0) or 0),
+            
+            # Commission
+            'commission_rate': float(getattr(product, 'commission_rate', 0) or 0),
+            'potential_earnings': float(getattr(product, 'potential_earnings', 0) or 0),
+            
+            # Competition - check both field names
+            'influencer_count': int(getattr(product, 'influencer_count', 0) or getattr(product, 'total_influencers', 0) or 0),
+            'total_influencers': int(getattr(product, 'total_influencers', 0) or getattr(product, 'influencer_count', 0) or 0),
+            'video_count': int(getattr(product, 'video_count', 0) or 0),
+            'live_count': int(getattr(product, 'live_count', 0) or 0),
+            
+            # Video analysis (will be populated by refresh)
+            'videos_7d': int(getattr(product, 'videos_7d', 0) or 0),
+            'videos_30d': int(getattr(product, 'videos_30d', 0) or 0),
+            'videos_90d': int(getattr(product, 'videos_90d', 0) or 0),
+            
+            # Product info
+            'price': float(getattr(product, 'price', 0) or getattr(product, 'avg_price', 0) or 0),
+            'rating': float(getattr(product, 'rating', 0) or 0),
+            'review_count': int(getattr(product, 'review_count', 0) or 0),
+            
+            # Status
+            'sales_trend': getattr(product, 'sales_trend', 0),
+            'listing_date': getattr(product, 'listing_date', None),
+            'free_shipping': getattr(product, 'free_shipping', False) or False,
+            
+            # Seller
+            'seller_id': getattr(product, 'seller_id', None),
+            'seller_name': getattr(product, 'seller_name', '') or 'Unknown',
+            
+            # Media - include cached_image_url for signed URLs
+            'image_url': getattr(product, 'image_url', '') or getattr(product, 'cover_url', '') or '',
+            'cover_url': getattr(product, 'cover_url', '') or getattr(product, 'image_url', '') or '',
+            'cached_image_url': getattr(product, 'cached_image_url', '') or '',
+            
+            # Links
+            'tiktok_url': getattr(product, 'tiktok_url', None) or f'https://shop.tiktok.com/view/product/{product.product_id}',
+        }
+        
+        return jsonify({'success': True, 'product': data})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+
+
+@app.route('/api/product/<product_id>/refresh')
+def refresh_product(product_id):
+    """Refresh product data from EchoTik API"""
+    import requests
+    from requests.auth import HTTPBasicAuth
+    
+    API_BASE = "https://open.echotik.live/api/v3/echotik"
+    USERNAME = os.getenv('ECHOTIK_USERNAME')
+    PASSWORD = os.getenv('ECHOTIK_PASSWORD')
+    
+    try:
+        # Fetch fresh data from EchoTik
+        response = requests.get(
+            f"{API_BASE}/product/detail",
+            params={'product_ids': str(product_id)},
+            auth=HTTPBasicAuth(USERNAME, PASSWORD),
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            return jsonify({'error': f'API error: {response.status_code}'}), 500
+        
+        data = response.json()
+        products = data.get('data', [])
+        
+        if not products:
+            return jsonify({'error': 'Product not found in API'}), 404
+        
+        p = products[0] if isinstance(products, list) else products
+        
+        # Extract all the data
+        update_data = {
+            'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+            'gmv_7d': float(p.get('total_sale_gmv_7d_amt', 0) or 0),
+            'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+            'sales': int(p.get('total_sale_cnt', 0) or 0),
+            'sales_7d': int(p.get('total_sale_7d_cnt', 0) or 0),
+            'sales_30d': int(p.get('total_sale_30d_cnt', 0) or 0),
+            'influencer_count': int(p.get('total_ifl_cnt', 0) or 0),
+            'video_count': int(p.get('total_video_cnt', 0) or 0),
+            'live_count': int(p.get('total_live_cnt', 0) or 0),
+            'videos_7d': int(p.get('total_video_7d_cnt', 0) or p.get('video_7d_cnt', 0) or 0),
+            'videos_30d': int(p.get('total_video_30d_cnt', 0) or p.get('video_30d_cnt', 0) or 0),
+            'commission_rate': float(p.get('product_commission_rate', 0) or 0),
+            'rating': float(p.get('product_rating', 0) or 0),
+            'review_count': int(p.get('review_count', 0) or 0),
+            'cover_url': extract_image_url(p.get('cover_url', '')),
+            'seller_name': p.get('seller_name', '') or p.get('shop_name', ''),
+            'seller_id': str(p.get('seller_id', '')) if p.get('seller_id') else '',
+        }
+        
+        # Log API response keys for debugging
+        print(f"EchoTik API keys for video data: {[k for k in p.keys() if 'video' in k.lower()]}")
+        
+        # Fix commission rate if needed
+        if update_data['commission_rate'] > 0 and update_data['commission_rate'] < 1:
+            update_data['commission_rate'] = update_data['commission_rate'] * 100
+        
+        update_data['potential_earnings'] = update_data['gmv'] * update_data['commission_rate'] / 100
+        
+        # Update database - use string comparison for product_id
+        product = Product.query.filter(Product.product_id == str(product_id)).first()
+        
+        if product:
+            for key, value in update_data.items():
+                if hasattr(product, key):
+                    setattr(product, key, value)
+            
+            if update_data['cover_url']:
+                product.image_url = update_data['cover_url']
+            if update_data['influencer_count']:
+                product.total_influencers = update_data['influencer_count']
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Product refreshed',
+                'data': update_data
+            })
+        else:
+            return jsonify({'error': 'Product not found in database'}), 404
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+
+@app.route('/api/scan', methods=['GET', 'POST'])
+def run_scan():
+    """Run a product scan - can be triggered by cron job"""
+    import requests
+    from requests.auth import HTTPBasicAuth
+    
+    API_BASE = "https://open.echotik.live/api/v3/echotik"
+    USERNAME = os.getenv('ECHOTIK_USERNAME')
+    PASSWORD = os.getenv('ECHOTIK_PASSWORD')
+    
+    # Optional: Add a secret key to prevent unauthorized scans
+    secret = request.args.get('secret', '')
+    expected_secret = os.getenv('SCAN_SECRET', '')
+    if expected_secret and secret != expected_secret:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        scan_id = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        new_products = 0
+        updated_products = 0
+        
+        # Scan multiple pages
+        for page in range(1, 6):  # 5 pages = ~100 products
+            response = requests.get(
+                f"{API_BASE}/product/list",
+                params={
+                    'page': page,
+                    'size': 20,
+                    'sort_by': 'sale_cnt',
+                    'sort_type': 'desc'
+                },
+                auth=HTTPBasicAuth(USERNAME, PASSWORD),
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                continue
+            
+            data = response.json()
+            products = data.get('data', [])
+            
+            if not products:
+                break
+            
+            for p in products:
+                product_id = str(p.get('product_id', ''))
+                if not product_id:
+                    continue
+                
+                # Check if product exists
+                existing = Product.query.filter(Product.product_id == product_id).first()
+                
+                commission = float(p.get('product_commission_rate', 0) or 0)
+                if commission > 0 and commission < 1:
+                    commission = commission * 100
+                
+                # Skip 0% commission
+                if commission <= 0:
+                    continue
+                
+                gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
+                
+                if existing:
+                    # Update existing
+                    existing.gmv = gmv
+                    existing.sales = int(p.get('total_sale_cnt', 0) or 0)
+                    existing.commission_rate = commission
+                    existing.potential_earnings = gmv * commission / 100
+                    existing.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                    existing.video_count = int(p.get('total_video_cnt', 0) or 0)
+                    existing.updated_at = datetime.utcnow()
+                    # Update seller_id if we have one
+                    seller_id = p.get('seller_id')
+                    if seller_id:
+                        existing.seller_id = str(seller_id)
+                    # Update image_url if we have one
+                    cover_url = p.get('cover_url')
+                    if cover_url:
+                        existing.image_url = cover_url if isinstance(cover_url, str) else json.dumps(cover_url)
+                    updated_products += 1
+                else:
+                    # Insert new - include image_url and seller_id
+                    cover_url = p.get('cover_url')
+                    image_url_str = cover_url if isinstance(cover_url, str) else json.dumps(cover_url) if cover_url else None
+                    seller_id_val = p.get('seller_id')
+                    
+                    new_product = Product(
+                        product_id=product_id,
+                        product_name=p.get('product_name', ''),
+                        gmv=gmv,
+                        sales=int(p.get('total_sale_cnt', 0) or 0),
+                        commission_rate=commission,
+                        potential_earnings=gmv * commission / 100,
+                        influencer_count=int(p.get('total_ifl_cnt', 0) or 0),
+                        total_influencers=int(p.get('total_ifl_cnt', 0) or 0),
+                        video_count=int(p.get('total_video_cnt', 0) or 0),
+                        price=float(p.get('product_price', 0) or 0),
+                        rating=float(p.get('product_rating', 0) or 0),
+                        image_url=image_url_str,
+                        seller_id=str(seller_id_val) if seller_id_val else None,
+                        scan_id=scan_id,
+                        first_seen=datetime.utcnow(),
+                        created_at=datetime.utcnow()
+                    )
+                    db.session.add(new_product)
+                    new_products += 1
+            
+            db.session.commit()
+        
+        # Optional: Refresh images after scan
+        image_stats = None
+        if request.args.get('refresh_images', '').lower() == 'true':
+            print("Refreshing product images...")
+            image_stats = refresh_product_images(batch_size=10, delay=0.3)
+            print(f"Image refresh: {image_stats['success']} success, {image_stats['failed']} failed")
+        
+        # Optional: Send Telegram notification for new hidden gems
+        telegram_stats = None
+        if request.args.get('notify', '').lower() == 'true' and new_products > 0:
+            print("Sending Telegram notifications...")
+            telegram_stats = notify_new_hidden_gems(hours_back=1, min_gmv=100)
+            print(f"Telegram: Notified about {telegram_stats.get('notified', 0)} products")
+        
+        result = {
+            'success': True,
+            'scan_id': scan_id,
+            'new_products': new_products,
+            'updated_products': updated_products,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        if image_stats:
+            result['image_refresh'] = image_stats
+        
+        if telegram_stats:
+            result['telegram'] = telegram_stats
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/products/recent')
+def get_recent_products():
+    """Get products filtered by time period"""
+    period = request.args.get('period', 'all')  # today, yesterday, week, month, all
+    
+    now = datetime.utcnow()
+    
+    if period == 'today':
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == 'yesterday':
+        start_date = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == 'week':
+        start_date = now - timedelta(days=7)
+    elif period == 'month':
+        start_date = now - timedelta(days=30)
+    else:
+        start_date = None
+    
+    query = Product.query
+    
+    if period == 'yesterday':
+        query = query.filter(Product.first_seen >= start_date, Product.first_seen < end_date)
+    elif start_date:
+        query = query.filter(Product.first_seen >= start_date)
+    
+    # Apply standard filters
+    min_commission = request.args.get('min_commission', type=float)
+    if min_commission:
+        query = query.filter(Product.commission_rate >= min_commission)
+    
+    products = query.order_by(Product.first_seen.desc()).limit(100).all()
+    
+    return jsonify([{
+        'product_id': p.product_id,
+        'product_name': p.product_name,
+        'gmv': float(p.gmv or 0),
+        'sales': int(p.sales or 0),
+        'commission_rate': float(p.commission_rate or 0),
+        'potential_earnings': float(p.potential_earnings or 0),
+        'influencer_count': int(p.influencer_count or 0),
+        'first_seen': p.first_seen.isoformat() if p.first_seen else None,
+        'image_url': p.image_url or '',
+        'cached_image_url': p.cached_image_url or ''
+    } for p in products])
+
+
+@app.route('/api/migrate')
+def run_migration():
+    """Add missing columns to database - run once"""
+    try:
+        with db.engine.connect() as conn:
+            # Add first_seen column if not exists
+            conn.execute(text("""
+                ALTER TABLE product ADD COLUMN IF NOT EXISTS first_seen TIMESTAMP DEFAULT NOW()
+            """))
+            conn.execute(text("""
+                UPDATE product SET first_seen = created_at WHERE first_seen IS NULL
+            """))
+            # Add total_influencers column if not exists
+            conn.execute(text("""
+                ALTER TABLE product ADD COLUMN IF NOT EXISTS total_influencers INTEGER
+            """))
+            conn.execute(text("""
+                UPDATE product SET total_influencers = influencer_count WHERE total_influencers IS NULL
+            """))
+            conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Migration completed - first_seen and total_influencers columns added'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/migrate-images')
+def migrate_images():
+    """Add cached image columns to the database."""
+    try:
+        with db.engine.connect() as conn:
+            # Check if columns exist and add them
+            conn.execute(text("""
+                ALTER TABLE product ADD COLUMN IF NOT EXISTS cached_image_url TEXT
+            """))
+            conn.execute(text("""
+                ALTER TABLE product ADD COLUMN IF NOT EXISTS image_cached_at TIMESTAMP
+            """))
+            conn.commit()
+            
+        return jsonify({
+            'success': True,
+            'message': 'Image columns added: cached_image_url, image_cached_at'
+        })
+                
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/refresh-images')
+def refresh_images():
+    """
+    Refresh cached image URLs for all products.
+    Can be called manually or added to daily cron job.
+    This endpoint is FREE - doesn't count against EchoTik API limits!
+    
+    Optional params:
+    - limit: Max products to process (default: 50 to avoid timeout)
+    """
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        
+        # Quick debug check first
+        total = Product.query.count()
+        with_image = Product.query.filter(
+            Product.image_url.isnot(None),
+            Product.image_url != ''
+        ).count()
+        
+        if with_image == 0:
+            return jsonify({
+                'success': False,
+                'message': f'No products have image_url set. Run /api/scan first to populate image URLs.',
+                'total_products': total,
+                'products_with_image_url': with_image
+            })
+        
+        # Modified to process limited products
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        # Get products that need image refresh (no cached_image_url or old)
+        products = Product.query.filter(
+            Product.image_url.isnot(None),
+            Product.image_url != ''
+        ).limit(limit).all()
+        
+        stats = {'processed': 0, 'success': 0, 'failed': 0, 'skipped': 0}
+        
+        # Process in batches of 10
+        for i in range(0, len(products), 10):
+            batch = products[i:i + 10]
+            
+            url_to_products = {}
+            for product in batch:
+                try:
+                    parsed_url = parse_cover_url(product.image_url)
+                    if parsed_url and 'echosell-images' in parsed_url:
+                        if parsed_url not in url_to_products:
+                            url_to_products[parsed_url] = []
+                        url_to_products[parsed_url].append(product)
+                    else:
+                        stats['skipped'] += 1
+                except:
+                    stats['skipped'] += 1
+            
+            if url_to_products:
+                result = get_cached_image_urls(list(url_to_products.keys()), auth)
+                
+                for orig_url, prods in url_to_products.items():
+                    cached = result.get(orig_url)
+                    for p in prods:
+                        stats['processed'] += 1
+                        if cached:
+                            p.cached_image_url = cached
+                            p.image_cached_at = datetime.utcnow()
+                            stats['success'] += 1
+                        else:
+                            stats['failed'] += 1
+                
+                db.session.commit()
+            
+            time.sleep(0.3)
+        
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'message': f"Refreshed {stats['success']} images, {stats['failed']} failed, {stats['skipped']} skipped",
+            'note': f'Processed {limit} products. Call again or use ?limit=100 for more.'
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(error_trace)
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'trace': error_trace
+        }), 500
+
+
+@app.route('/api/refresh-sellers')
+def refresh_sellers():
+    """
+    Refresh seller names for all products.
+    Fetches seller details from EchoTik API for products missing seller_name.
+    Uses ~1 API call per unique seller_id.
+    
+    Optional params:
+    - limit: Max sellers to fetch (default: 20 to avoid timeout)
+    """
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        # Find products needing seller names
+        products = Product.query.filter(
+            Product.seller_id.isnot(None),
+            Product.seller_id != '',
+            db.or_(
+                Product.seller_name.is_(None),
+                Product.seller_name == '',
+                Product.seller_name == 'TikTok Shop',
+                Product.seller_name == 'Unknown Seller'
+            )
+        ).all()
+        
+        if not products:
+            return jsonify({
+                'success': True,
+                'message': 'All products already have seller names!',
+                'stats': {'sellers_needed': 0}
+            })
+        
+        # Get unique seller_ids
+        seller_to_products = {}
+        for p in products:
+            if p.seller_id not in seller_to_products:
+                seller_to_products[p.seller_id] = []
+            seller_to_products[p.seller_id].append(p)
+        
+        # Limit number of sellers to fetch
+        seller_ids = list(seller_to_products.keys())[:limit]
+        
+        stats = {
+            'total_sellers_needed': len(seller_to_products),
+            'sellers_processed': 0,
+            'sellers_found': 0,
+            'products_updated': 0
+        }
+        
+        for seller_id in seller_ids:
+            stats['sellers_processed'] += 1
+            
+            names = get_seller_details([seller_id], auth)
+            
+            if seller_id in names:
+                stats['sellers_found'] += 1
+                for p in seller_to_products[seller_id]:
+                    p.seller_name = names[seller_id]
+                    stats['products_updated'] += 1
+            
+            time.sleep(0.3)
+        
+        db.session.commit()
+        
+        remaining = len(seller_to_products) - len(seller_ids)
+        
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'message': f"Found {stats['sellers_found']}/{stats['sellers_processed']} sellers, updated {stats['products_updated']} products",
+            'note': f'{remaining} sellers remaining. Call again or use ?limit=50 for more.' if remaining > 0 else 'All done!'
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(error_trace)
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'trace': error_trace
+        }), 500
+
+
+@app.route('/api/debug-sellers')
+def debug_sellers():
+    """Debug endpoint to check seller_id status in database"""
+    try:
+        total = Product.query.count()
+        
+        # Count by seller_id status
+        with_seller_id = Product.query.filter(
+            Product.seller_id.isnot(None),
+            Product.seller_id != ''
+        ).count()
+        
+        with_seller_name = Product.query.filter(
+            Product.seller_name.isnot(None),
+            Product.seller_name != '',
+            Product.seller_name != 'TikTok Shop',
+            Product.seller_name != 'Unknown Seller',
+            Product.seller_name != 'Unknown'
+        ).count()
+        
+        # Get sample of seller_ids
+        sample_products = Product.query.filter(
+            Product.seller_id.isnot(None)
+        ).limit(5).all()
+        
+        samples = [{
+            'product_id': p.product_id,
+            'product_name': p.product_name[:50] if p.product_name else None,
+            'seller_id': p.seller_id,
+            'seller_name': p.seller_name
+        } for p in sample_products]
+        
+        return jsonify({
+            'success': True,
+            'total_products': total,
+            'with_seller_id': with_seller_id,
+            'with_seller_name': with_seller_name,
+            'without_seller_id': total - with_seller_id,
+            'sample_products': samples
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'trace': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/test-image-refresh')
+def test_image_refresh():
+    """Test image refresh with just 5 products to verify it works"""
+    try:
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        # Get just 5 products with image_url
+        products = Product.query.filter(
+            Product.image_url.isnot(None),
+            Product.image_url != ''
+        ).limit(5).all()
+        
+        if not products:
+            return jsonify({'success': False, 'message': 'No products with image_url'})
+        
+        results = []
+        for p in products:
+            parsed_url = parse_cover_url(p.image_url)
+            result_item = {
+                'product_id': p.product_id,
+                'original_url': parsed_url[:50] if parsed_url else None,
+                'cached_url': None,
+                'status': 'skipped'
+            }
+            
+            if parsed_url and 'echosell-images' in parsed_url:
+                # Call API for this one URL
+                api_result = get_cached_image_urls([parsed_url], auth)
+                if parsed_url in api_result:
+                    p.cached_image_url = api_result[parsed_url]
+                    p.image_cached_at = datetime.utcnow()
+                    result_item['cached_url'] = api_result[parsed_url][:80] + '...'
+                    result_item['status'] = 'success'
+                else:
+                    result_item['status'] = 'api_failed'
+            
+            results.append(result_item)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test completed',
+            'results': results
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'trace': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/test-seller-refresh')
+def test_seller_refresh():
+    """Test seller refresh with just 3 sellers to verify it works"""
+    try:
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        # Get 3 unique seller_ids that need names
+        products = Product.query.filter(
+            Product.seller_id.isnot(None),
+            Product.seller_id != '',
+            db.or_(
+                Product.seller_name.is_(None),
+                Product.seller_name == '',
+                Product.seller_name == 'TikTok Shop'
+            )
+        ).limit(10).all()
+        
+        if not products:
+            return jsonify({'success': False, 'message': 'No products need seller names'})
+        
+        # Get unique seller_ids
+        seller_ids = list(set(p.seller_id for p in products))[:3]
+        
+        results = []
+        for seller_id in seller_ids:
+            result_item = {
+                'seller_id': seller_id,
+                'seller_name': None,
+                'status': 'pending'
+            }
+            
+            # Call API
+            names = get_seller_details([seller_id], auth)
+            if seller_id in names:
+                result_item['seller_name'] = names[seller_id]
+                result_item['status'] = 'success'
+                
+                # Update all products with this seller
+                for p in products:
+                    if p.seller_id == seller_id:
+                        p.seller_name = names[seller_id]
+            else:
+                result_item['status'] = 'not_found'
+            
+            results.append(result_item)
+            time.sleep(0.3)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test completed',
+            'results': results
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'trace': traceback.format_exc()
+        }), 500
+
+
+# ============================================================================
+# PRODUCT STATUS VERIFICATION
+# ============================================================================
+
+@app.route('/api/verify-product/<product_id>')
+def verify_single_product(product_id):
+    """
+    Verify if a single product is still available.
+    Updates the product_status in database.
+    """
+    try:
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        product = Product.query.filter_by(product_id=product_id).first()
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found in database'}), 404
+        
+        # Verify status via API
+        result = verify_product_status(product_id, auth)
+        
+        # Update database
+        product.product_status = result['status']
+        product.status_note = result['note']
+        product.status_checked_at = datetime.utcnow()
+        
+        # Also update is_delisted for compatibility
+        if result['status'] in ['removed', 'unavailable']:
+            product.is_delisted = True
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'product_id': product_id,
+            'status': result['status'],
+            'note': result['note'],
+            'is_available': result['status'] == 'active'
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'trace': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/verify-products')
+def verify_products_batch():
+    """
+    Verify multiple products that haven't been checked recently.
+    Useful for cleaning up the database.
+    
+    Query params:
+    - limit: Max products to verify (default 20, to avoid timeout)
+    - older_than_days: Only verify products not checked in X days (default 7)
+    """
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        older_than_days = request.args.get('older_than_days', 7, type=int)
+        
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        cutoff_date = datetime.utcnow() - timedelta(days=older_than_days)
+        
+        # Find products that need verification
+        # Priority: never checked > checked long ago
+        products = Product.query.filter(
+            db.or_(
+                Product.status_checked_at.is_(None),
+                Product.status_checked_at < cutoff_date
+            )
+        ).order_by(
+            Product.status_checked_at.asc().nullsfirst()
+        ).limit(limit).all()
+        
+        if not products:
+            return jsonify({
+                'success': True,
+                'message': 'All products have been verified recently',
+                'stats': {'verified': 0}
+            })
+        
+        stats = {
+            'verified': 0,
+            'active': 0,
+            'out_of_stock': 0,
+            'removed': 0,
+            'unknown': 0
+        }
+        
+        results = []
+        for product in products:
+            result = verify_product_status(product.product_id, auth)
+            
+            product.product_status = result['status']
+            product.status_note = result['note']
+            product.status_checked_at = datetime.utcnow()
+            
+            if result['status'] in ['removed', 'unavailable']:
+                product.is_delisted = True
+            
+            stats['verified'] += 1
+            stats[result['status']] = stats.get(result['status'], 0) + 1
+            
+            results.append({
+                'product_id': product.product_id,
+                'name': product.product_name[:50] if product.product_name else None,
+                'status': result['status'],
+                'note': result['note']
+            })
+            
+            # Small delay to avoid rate limiting
+            time.sleep(0.3)
+        
+        db.session.commit()
+        
+        # Count remaining unverified
+        remaining = Product.query.filter(
+            db.or_(
+                Product.status_checked_at.is_(None),
+                Product.status_checked_at < cutoff_date
+            )
+        ).count()
+        
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'results': results,
+            'remaining': remaining,
+            'message': f"Verified {stats['verified']} products. {stats['removed']} removed, {stats['out_of_stock']} out of stock."
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'trace': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/mark-unavailable/<product_id>', methods=['POST', 'GET'])
+def mark_product_unavailable(product_id):
+    """
+    Manually mark a product as unavailable.
+    Useful when you discover a product is gone while browsing.
+    """
+    try:
+        status = request.args.get('status', 'removed')
+        note = request.args.get('note', 'Manually marked as unavailable')
+        
+        product = Product.query.filter_by(product_id=product_id).first()
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        product.product_status = status
+        product.status_note = note
+        product.status_checked_at = datetime.utcnow()
+        product.is_delisted = True
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'product_id': product_id,
+            'status': status,
+            'message': f'Product marked as {status}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/product-status-stats')
+def product_status_stats():
+    """Get statistics about product availability status"""
+    try:
+        total = Product.query.count()
+        
+        # Count by status
+        active = Product.query.filter(
+            db.or_(
+                Product.product_status.is_(None),
+                Product.product_status == '',
+                Product.product_status == 'active'
+            )
+        ).count()
+        
+        out_of_stock = Product.query.filter(
+            Product.product_status == 'out_of_stock'
+        ).count()
+        
+        removed = Product.query.filter(
+            Product.product_status.in_(['removed', 'unavailable'])
+        ).count()
+        
+        # Never verified
+        never_checked = Product.query.filter(
+            Product.status_checked_at.is_(None)
+        ).count()
+        
+        # Checked more than 7 days ago
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        stale = Product.query.filter(
+            Product.status_checked_at < week_ago
+        ).count()
+        
+        return jsonify({
+            'success': True,
+            'total_products': total,
+            'status_counts': {
+                'active': active,
+                'out_of_stock': out_of_stock,
+                'removed': removed
+            },
+            'verification': {
+                'never_checked': never_checked,
+                'stale_over_7_days': stale,
+                'needs_verification': never_checked + stale
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# BRAND HUNTER ENDPOINTS
+# ============================================================================
+
+@app.route('/api/brands/setup')
+def setup_brands():
+    """Create the brands table if it doesn't exist"""
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS brand (
+                    id SERIAL PRIMARY KEY,
+                    seller_id VARCHAR(50) UNIQUE NOT NULL,
+                    seller_name VARCHAR(200),
+                    total_gmv NUMERIC(15, 2),
+                    total_sales INTEGER,
+                    gmv_7d NUMERIC(15, 2),
+                    gmv_30d NUMERIC(15, 2),
+                    sales_7d INTEGER,
+                    sales_30d INTEGER,
+                    total_products INTEGER,
+                    crawled_products INTEGER,
+                    total_influencers INTEGER,
+                    total_videos INTEGER,
+                    total_lives INTEGER,
+                    avg_price NUMERIC(10, 2),
+                    rating NUMERIC(3, 2),
+                    cover_url TEXT,
+                    category_id VARCHAR(20),
+                    category_name VARCHAR(100),
+                    is_followed BOOLEAN DEFAULT FALSE,
+                    follow_priority INTEGER DEFAULT 0,
+                    last_scanned TIMESTAMP,
+                    products_found INTEGER DEFAULT 0,
+                    sales_flag INTEGER,
+                    sales_trend_flag INTEGER,
+                    from_flag INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            '''))
+            conn.commit()
+        return jsonify({'success': True, 'message': 'Brand table created'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/brands')
+def list_brands():
+    """
+    List brands with optional filters.
+    
+    Query params:
+    - search: Search by name
+    - followed: true/false - filter by followed status
+    - sort_by: gmv, sales, products, name (default: gmv)
+    - page, per_page: pagination
+    """
+    try:
+        search = request.args.get('search', '')
+        followed_only = request.args.get('followed', '').lower() == 'true'
+        sort_by = request.args.get('sort_by', 'gmv')
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        query = Brand.query
+        
+        if search:
+            query = query.filter(Brand.seller_name.ilike(f'%{search}%'))
+        
+        if followed_only:
+            query = query.filter(Brand.is_followed == True)
+        
+        # Sorting
+        if sort_by == 'sales':
+            query = query.order_by(Brand.total_sales.desc().nullslast())
+        elif sort_by == 'products':
+            query = query.order_by(Brand.total_products.desc().nullslast())
+        elif sort_by == 'name':
+            query = query.order_by(Brand.seller_name.asc())
+        elif sort_by == 'priority':
+            query = query.order_by(Brand.follow_priority.desc(), Brand.total_gmv.desc().nullslast())
+        else:  # Default: GMV
+            query = query.order_by(Brand.total_gmv.desc().nullslast())
+        
+        # Pagination
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        brands = [b.to_dict() for b in pagination.items]
+        
+        return jsonify({
+            'success': True,
+            'brands': brands,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': pagination.total,
+                'total_pages': pagination.pages
+            },
+            'followed_count': Brand.query.filter(Brand.is_followed == True).count()
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/brands/discover')
+def discover_brands():
+    """
+    Discover top brands from EchoTik Shop List API.
+    
+    Query params:
+    - pages: Number of pages to fetch (default: 5, max: 10)
+    - sort_by: 1=sales_count, 2=gmv, 3=avg_price (default: 2)
+    """
+    try:
+        pages = min(request.args.get('pages', 5, type=int), 10)
+        sort_by = request.args.get('sort_by', 2, type=int)  # 2 = GMV
+        
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        discovered = 0
+        updated = 0
+        
+        for page in range(1, pages + 1):
+            response = requests.get(
+                'https://open.echotik.live/api/v3/echotik/seller/list',
+                params={
+                    'region': 'US',
+                    'page_num': page,
+                    'page_size': 10,
+                    'seller_sort_field': sort_by,
+                    'sort_type': 1,  # desc
+                    'sales_flag': 1,  # Video sales
+                },
+                auth=auth,
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                continue
+            
+            data = response.json()
+            shops = data.get('data', [])
+            
+            if not shops:
+                break
+            
+            for shop in shops:
+                seller_id = str(shop.get('seller_id', ''))
+                if not seller_id:
+                    continue
+                
+                # Check if brand exists
+                existing = Brand.query.filter_by(seller_id=seller_id).first()
+                
+                brand_data = {
+                    'seller_name': shop.get('seller_name', ''),
+                    'total_gmv': float(shop.get('total_sale_gmv_amt', 0) or 0),
+                    'total_sales': int(shop.get('total_sale_cnt', 0) or 0),
+                    'gmv_7d': float(shop.get('total_sale_gmv_7d_amt', 0) or 0),
+                    'gmv_30d': float(shop.get('total_sale_gmv_30d_amt', 0) or 0),
+                    'sales_7d': int(shop.get('total_sale_7d_cnt', 0) or 0),
+                    'sales_30d': int(shop.get('total_sale_30d_cnt', 0) or 0),
+                    'total_products': int(shop.get('total_product_cnt', 0) or 0),
+                    'crawled_products': int(shop.get('total_crawl_product_cnt', 0) or 0),
+                    'total_influencers': int(shop.get('total_ifl_cnt', 0) or 0),
+                    'total_videos': int(shop.get('total_video_cnt', 0) or 0),
+                    'total_lives': int(shop.get('total_live_cnt', 0) or 0),
+                    'avg_price': float(shop.get('spu_avg_price', 0) or 0),
+                    'rating': float(shop.get('rating', 0) or 0),
+                    'cover_url': shop.get('cover_url', ''),
+                    'category_id': shop.get('category_id', ''),
+                    'sales_flag': shop.get('sales_flag'),
+                    'sales_trend_flag': shop.get('sales_trend_flag'),
+                    'from_flag': shop.get('from_flag'),
+                }
+                
+                if existing:
+                    for key, value in brand_data.items():
+                        setattr(existing, key, value)
+                    existing.updated_at = datetime.utcnow()
+                    updated += 1
+                else:
+                    new_brand = Brand(seller_id=seller_id, **brand_data)
+                    db.session.add(new_brand)
+                    discovered += 1
+            
+            db.session.commit()
+            time.sleep(0.3)  # Rate limiting
+        
+        return jsonify({
+            'success': True,
+            'discovered': discovered,
+            'updated': updated,
+            'total_brands': Brand.query.count(),
+            'message': f'Discovered {discovered} new brands, updated {updated} existing'
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/brands/<seller_id>/follow', methods=['POST', 'GET'])
+def follow_brand(seller_id):
+    """Follow a brand to monitor for new products"""
+    try:
+        brand = Brand.query.filter_by(seller_id=seller_id).first()
+        if not brand:
+            return jsonify({'success': False, 'error': 'Brand not found'}), 404
+        
+        priority = request.args.get('priority', 0, type=int)
+        brand.is_followed = True
+        brand.follow_priority = priority
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'brand': brand.to_dict(),
+            'message': f'Now following {brand.seller_name}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/brands/<seller_id>/unfollow', methods=['POST', 'GET'])
+def unfollow_brand(seller_id):
+    """Unfollow a brand"""
+    try:
+        brand = Brand.query.filter_by(seller_id=seller_id).first()
+        if not brand:
+            return jsonify({'success': False, 'error': 'Brand not found'}), 404
+        
+        brand.is_followed = False
+        brand.follow_priority = 0
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Unfollowed {brand.seller_name}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/brands/<seller_id>/products')
+def get_brand_products(seller_id):
+    """
+    Get products from a specific brand, filtering for low-competition opportunities.
+    
+    Query params:
+    - max_influencers: Max influencer count (default: 50)
+    - min_influencers: Min influencer count (default: 1)
+    - min_sales_30d: Minimum 30-day sales (default: 1)
+    - pages: Pages to fetch (default: 3)
+    - refresh: true to fetch fresh from API
+    """
+    try:
+        max_influencers = request.args.get('max_influencers', 50, type=int)
+        min_influencers = request.args.get('min_influencers', 1, type=int)
+        min_sales_30d = request.args.get('min_sales_30d', 1, type=int)
+        pages = request.args.get('pages', 3, type=int)
+        refresh = request.args.get('refresh', '').lower() == 'true'
+        
+        brand = Brand.query.filter_by(seller_id=seller_id).first()
+        
+        if refresh or not brand:
+            # Fetch from EchoTik API
+            auth = HTTPBasicAuth(
+                os.environ.get('ECHOTIK_USERNAME'),
+                os.environ.get('ECHOTIK_PASSWORD')
+            )
+            
+            all_products = []
+            new_products = 0
+            updated_products = 0
+            
+            for page in range(1, pages + 1):
+                response = requests.get(
+                    'https://open.echotik.live/api/v3/echotik/seller/product/list',
+                    params={
+                        'seller_id': seller_id,
+                        'page_num': page,
+                        'page_size': 10,
+                        'seller_product_sort_field': 4,  # Sort by 7d sales
+                        'sort_type': 1,  # desc
+                    },
+                    auth=auth,
+                    timeout=30
+                )
+                
+                if response.status_code != 200:
+                    continue
+                
+                data = response.json()
+                products = data.get('data', [])
+                
+                if not products:
+                    break
+                
+                for p in products:
+                    product_id = str(p.get('product_id', ''))
+                    if not product_id:
+                        continue
+                    
+                    influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                    sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                    
+                    # Filter for low-competition products
+                    if influencer_count < min_influencers or influencer_count > max_influencers:
+                        continue
+                    
+                    if sales_30d < min_sales_30d:
+                        continue
+                    
+                    commission = float(p.get('product_commission_rate', 0) or 0)
+                    if commission > 0 and commission < 1:
+                        commission = commission * 100
+                    
+                    # Skip 0% commission
+                    if commission <= 0:
+                        continue
+                    
+                    product_data = {
+                        'product_name': p.get('product_name', ''),
+                        'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+                        'gmv_7d': float(p.get('total_sale_gmv_7d_amt', 0) or 0),
+                        'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+                        'sales': int(p.get('total_sale_cnt', 0) or 0),
+                        'sales_7d': int(p.get('total_sale_7d_cnt', 0) or 0),
+                        'sales_30d': sales_30d,
+                        'commission_rate': commission,
+                        'influencer_count': influencer_count,
+                        'video_count': int(p.get('total_video_cnt', 0) or 0),
+                        'videos_7d': int(p.get('total_video_7d_cnt', 0) or 0),
+                        'videos_30d': int(p.get('total_video_30d_cnt', 0) or 0),
+                        'price': float(p.get('spu_avg_price', 0) or p.get('min_price', 0) or 0),
+                        'rating': float(p.get('product_rating', 0) or 0),
+                        'seller_id': seller_id,
+                        'seller_name': brand.seller_name if brand else p.get('seller_name', ''),
+                        'image_url': extract_image_url(p.get('cover_url', '')),
+                        'scan_type': 'brand_hunter',
+                    }
+                    
+                    product_data['potential_earnings'] = product_data['gmv'] * commission / 100
+                    
+                    # Check if exists
+                    existing = Product.query.filter_by(product_id=product_id).first()
+                    
+                    if existing:
+                        for key, value in product_data.items():
+                            if hasattr(existing, key):
+                                setattr(existing, key, value)
+                        existing.updated_at = datetime.utcnow()
+                        updated_products += 1
+                    else:
+                        new_prod = Product(
+                            product_id=product_id,
+                            first_seen=datetime.utcnow(),
+                            **product_data
+                        )
+                        db.session.add(new_prod)
+                        new_products += 1
+                    
+                    all_products.append({**product_data, 'product_id': product_id, 'is_new': not existing})
+                
+                time.sleep(0.3)
+            
+            db.session.commit()
+            
+            # Update brand's last_scanned
+            if brand:
+                brand.last_scanned = datetime.utcnow()
+                brand.products_found = len(all_products)
+                db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'products': all_products,
+                'new_products': new_products,
+                'updated_products': updated_products,
+                'total': len(all_products),
+                'brand': brand.to_dict() if brand else None
+            })
+        else:
+            # Return from database
+            products = Product.query.filter(
+                Product.seller_id == seller_id,
+                Product.influencer_count >= min_influencers,
+                Product.influencer_count <= max_influencers,
+                db.or_(
+                    Product.product_status.is_(None),
+                    Product.product_status == '',
+                    Product.product_status == 'active'
+                )
+            ).order_by(Product.gmv.desc()).limit(50).all()
+            
+            return jsonify({
+                'success': True,
+                'products': [p.to_dict() for p in products],
+                'total': len(products),
+                'brand': brand.to_dict()
+            })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/brands/scan')
+def scan_followed_brands():
+    """
+    Scan all followed brands for new low-competition products.
+    This is the main daily scan endpoint for Brand Hunter.
+    
+    Query params:
+    - max_influencers: Max influencer count (default: 50)
+    - min_sales_30d: Minimum 30-day sales (default: 1)
+    - notify: true to send Telegram notifications
+    """
+    try:
+        max_influencers = request.args.get('max_influencers', 50, type=int)
+        min_sales_30d = request.args.get('min_sales_30d', 1, type=int)
+        should_notify = request.args.get('notify', '').lower() == 'true'
+        
+        followed_brands = Brand.query.filter(
+            Brand.is_followed == True
+        ).order_by(Brand.follow_priority.desc(), Brand.total_gmv.desc()).all()
+        
+        if not followed_brands:
+            return jsonify({
+                'success': False,
+                'error': 'No followed brands. Use /api/brands/discover first, then follow some brands.'
+            })
+        
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        total_new = 0
+        total_updated = 0
+        new_products_list = []
+        brands_scanned = 0
+        
+        for brand in followed_brands:
+            try:
+                for page in range(1, 4):  # 3 pages per brand
+                    response = requests.get(
+                        'https://open.echotik.live/api/v3/echotik/seller/product/list',
+                        params={
+                            'seller_id': brand.seller_id,
+                            'page_num': page,
+                            'page_size': 10,
+                            'seller_product_sort_field': 4,  # 7d sales
+                            'sort_type': 1,
+                        },
+                        auth=auth,
+                        timeout=30
+                    )
+                    
+                    if response.status_code != 200:
+                        break
+                    
+                    data = response.json()
+                    products = data.get('data', [])
+                    
+                    if not products:
+                        break
+                    
+                    for p in products:
+                        product_id = str(p.get('product_id', ''))
+                        if not product_id:
+                            continue
+                        
+                        influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                        sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                        
+                        # Filter
+                        if influencer_count > max_influencers or influencer_count < 1:
+                            continue
+                        if sales_30d < min_sales_30d:
+                            continue
+                        
+                        commission = float(p.get('product_commission_rate', 0) or 0)
+                        if commission > 0 and commission < 1:
+                            commission = commission * 100
+                        if commission <= 0:
+                            continue
+                        
+                        # Check if new
+                        existing = Product.query.filter_by(product_id=product_id).first()
+                        
+                        product_data = {
+                            'product_name': p.get('product_name', ''),
+                            'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+                            'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+                            'sales': int(p.get('total_sale_cnt', 0) or 0),
+                            'sales_30d': sales_30d,
+                            'commission_rate': commission,
+                            'influencer_count': influencer_count,
+                            'seller_id': brand.seller_id,
+                            'seller_name': brand.seller_name,
+                            'image_url': extract_image_url(p.get('cover_url', '')),
+                            'scan_type': 'brand_hunter',
+                            'price': float(p.get('min_price', 0) or 0),
+                        }
+                        product_data['potential_earnings'] = product_data['gmv'] * commission / 100
+                        
+                        if existing:
+                            for key, value in product_data.items():
+                                if hasattr(existing, key):
+                                    setattr(existing, key, value)
+                            total_updated += 1
+                        else:
+                            new_prod = Product(
+                                product_id=product_id,
+                                first_seen=datetime.utcnow(),
+                                **product_data
+                            )
+                            db.session.add(new_prod)
+                            total_new += 1
+                            new_products_list.append({
+                                'product_id': product_id,
+                                'product_name': product_data['product_name'],
+                                'brand': brand.seller_name,
+                                'gmv': product_data['gmv'],
+                                'commission': commission,
+                                'influencers': influencer_count,
+                            })
+                    
+                    time.sleep(0.3)
+                
+                brand.last_scanned = datetime.utcnow()
+                brands_scanned += 1
+                
+            except Exception as e:
+                print(f"Error scanning brand {brand.seller_name}: {e}")
+                continue
+        
+        db.session.commit()
+        
+        # Send Telegram notification for new products
+        if should_notify and new_products_list:
+            msg = f"🏷️ <b>Brand Hunter: {len(new_products_list)} New Products!</b>\n"
+            msg += f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+            
+            for p in new_products_list[:10]:  # Limit to 10
+                earnings = p['gmv'] * p['commission'] / 100
+                msg += f"<b>{p['product_name'][:40]}...</b>\n"
+                msg += f"🏪 {p['brand']} | 👥 {p['influencers']} influencers\n"
+                msg += f"💰 ${p['gmv']:,.0f} GMV | 💵 {p['commission']:.0f}% (${earnings:,.0f})\n"
+                msg += f"🔗 <a href='https://tiktok-product-finder.onrender.com/product?id={p['product_id']}'>View</a>\n\n"
+            
+            if len(new_products_list) > 10:
+                msg += f"...and {len(new_products_list) - 10} more!\n"
+            
+            send_telegram_message(msg)
+        
+        return jsonify({
+            'success': True,
+            'brands_scanned': brands_scanned,
+            'new_products': total_new,
+            'updated_products': total_updated,
+            'new_products_list': new_products_list[:20],
+            'message': f'Scanned {brands_scanned} brands. Found {total_new} new low-competition products!'
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/brands/search/<query>')
+def search_brands_echotik(query):
+    """
+    Search for a specific brand on EchoTik and add to database.
+    
+    This searches EchoTik's shop list with a name filter.
+    """
+    try:
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        # Search through multiple pages to find matching brands
+        found_brands = []
+        
+        for page in range(1, 6):  # Search 5 pages
+            response = requests.get(
+                'https://open.echotik.live/api/v3/echotik/seller/list',
+                params={
+                    'region': 'US',
+                    'page_num': page,
+                    'page_size': 10,
+                    'seller_sort_field': 2,  # GMV
+                    'sort_type': 1,
+                },
+                auth=auth,
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                continue
+            
+            data = response.json()
+            shops = data.get('data', [])
+            
+            if not shops:
+                break
+            
+            for shop in shops:
+                seller_name = shop.get('seller_name', '')
+                if query.lower() in seller_name.lower():
+                    seller_id = str(shop.get('seller_id', ''))
+                    
+                    # Add/update in database
+                    existing = Brand.query.filter_by(seller_id=seller_id).first()
+                    
+                    brand_data = {
+                        'seller_name': seller_name,
+                        'total_gmv': float(shop.get('total_sale_gmv_amt', 0) or 0),
+                        'total_sales': int(shop.get('total_sale_cnt', 0) or 0),
+                        'total_products': int(shop.get('total_product_cnt', 0) or 0),
+                        'total_influencers': int(shop.get('total_ifl_cnt', 0) or 0),
+                        'avg_price': float(shop.get('spu_avg_price', 0) or 0),
+                    }
+                    
+                    if existing:
+                        for key, value in brand_data.items():
+                            setattr(existing, key, value)
+                        found_brands.append(existing.to_dict())
+                    else:
+                        new_brand = Brand(seller_id=seller_id, **brand_data)
+                        db.session.add(new_brand)
+                        db.session.flush()
+                        found_brands.append(new_brand.to_dict())
+            
+            time.sleep(0.3)
+        
+        db.session.commit()
+        
+        # Also search local database
+        local_matches = Brand.query.filter(
+            Brand.seller_name.ilike(f'%{query}%')
+        ).all()
+        
+        local_ids = {b['seller_id'] for b in found_brands}
+        for brand in local_matches:
+            if brand.seller_id not in local_ids:
+                found_brands.append(brand.to_dict())
+        
+        return jsonify({
+            'success': True,
+            'query': query,
+            'results': found_brands,
+            'count': len(found_brands)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/brands/clear-old-products')
+def clear_old_products():
+    """
+    Clear products that are NOT from followed brands.
+    This removes unreliable small-seller products.
+    
+    Query params:
+    - confirm: must be 'yes' to actually delete
+    - keep_brand_hunter: true to only keep brand_hunter products (default: true)
+    """
+    try:
+        confirm = request.args.get('confirm', '') == 'yes'
+        keep_brand_hunter = request.args.get('keep_brand_hunter', 'true').lower() == 'true'
+        
+        # Get followed brand seller IDs
+        followed_brands = Brand.query.filter(Brand.is_followed == True).all()
+        followed_seller_ids = [b.seller_id for b in followed_brands]
+        
+        if keep_brand_hunter:
+            # Count products to delete (not from followed brands AND not brand_hunter type)
+            to_delete = Product.query.filter(
+                db.and_(
+                    db.or_(
+                        Product.seller_id.is_(None),
+                        Product.seller_id == '',
+                        ~Product.seller_id.in_(followed_seller_ids)
+                    ),
+                    db.or_(
+                        Product.scan_type.is_(None),
+                        Product.scan_type != 'brand_hunter'
+                    )
+                )
+            )
+        else:
+            # Delete all products not from followed brands
+            to_delete = Product.query.filter(
+                db.or_(
+                    Product.seller_id.is_(None),
+                    Product.seller_id == '',
+                    ~Product.seller_id.in_(followed_seller_ids)
+                )
+            )
+        
+        count = to_delete.count()
+        
+        if not confirm:
+            return jsonify({
+                'success': True,
+                'preview': True,
+                'products_to_delete': count,
+                'followed_brands': len(followed_brands),
+                'message': f'Would delete {count} products. Add ?confirm=yes to execute.',
+                'followed_brand_names': [b.seller_name for b in followed_brands]
+            })
+        
+        # Actually delete
+        deleted = to_delete.delete(synchronize_session=False)
+        db.session.commit()
+        
+        remaining = Product.query.count()
+        
+        return jsonify({
+            'success': True,
+            'deleted': deleted,
+            'remaining_products': remaining,
+            'followed_brands': len(followed_brands),
+            'message': f'Deleted {deleted} old products. {remaining} products remaining from followed brands.'
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/brands/discover-and-follow')
+def discover_and_follow_brands():
+    """
+    Discover top brands and automatically follow those meeting criteria.
+    
+    Query params:
+    - pages: Pages to scan (default: 10)
+    - min_gmv: Minimum total GMV to auto-follow (default: 1000000 = $1M)
+    - min_products: Minimum products to auto-follow (default: 50)
+    - auto_follow: true to automatically follow qualifying brands (default: true)
+    """
+    try:
+        pages = min(request.args.get('pages', 10, type=int), 10)
+        min_gmv = request.args.get('min_gmv', 1000000, type=float)
+        min_products = request.args.get('min_products', 50, type=int)
+        auto_follow = request.args.get('auto_follow', 'true').lower() == 'true'
+        
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        discovered = 0
+        followed = 0
+        brands_list = []
+        
+        for page in range(1, pages + 1):
+            response = requests.get(
+                'https://open.echotik.live/api/v3/echotik/seller/list',
+                params={
+                    'region': 'US',
+                    'page_num': page,
+                    'page_size': 10,
+                    'seller_sort_field': 2,  # GMV
+                    'sort_type': 1,  # desc
+                    'sales_flag': 1,  # Video sales
+                },
+                auth=auth,
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                continue
+            
+            data = response.json()
+            shops = data.get('data', [])
+            
+            if not shops:
+                break
+            
+            for shop in shops:
+                seller_id = str(shop.get('seller_id', ''))
+                if not seller_id:
+                    continue
+                
+                total_gmv = float(shop.get('total_sale_gmv_amt', 0) or 0)
+                total_products = int(shop.get('total_product_cnt', 0) or 0)
+                seller_name = shop.get('seller_name', '')
+                
+                # Check if exists
+                existing = Brand.query.filter_by(seller_id=seller_id).first()
+                
+                brand_data = {
+                    'seller_name': seller_name,
+                    'total_gmv': total_gmv,
+                    'total_sales': int(shop.get('total_sale_cnt', 0) or 0),
+                    'gmv_7d': float(shop.get('total_sale_gmv_7d_amt', 0) or 0),
+                    'gmv_30d': float(shop.get('total_sale_gmv_30d_amt', 0) or 0),
+                    'sales_7d': int(shop.get('total_sale_7d_cnt', 0) or 0),
+                    'sales_30d': int(shop.get('total_sale_30d_cnt', 0) or 0),
+                    'total_products': total_products,
+                    'crawled_products': int(shop.get('total_crawl_product_cnt', 0) or 0),
+                    'total_influencers': int(shop.get('total_ifl_cnt', 0) or 0),
+                    'total_videos': int(shop.get('total_video_cnt', 0) or 0),
+                    'avg_price': float(shop.get('spu_avg_price', 0) or 0),
+                    'rating': float(shop.get('rating', 0) or 0),
+                    'cover_url': shop.get('cover_url', ''),
+                    'sales_flag': shop.get('sales_flag'),
+                    'sales_trend_flag': shop.get('sales_trend_flag'),
+                }
+                
+                # Should we auto-follow?
+                qualifies = total_gmv >= min_gmv and total_products >= min_products
+                
+                if existing:
+                    for key, value in brand_data.items():
+                        setattr(existing, key, value)
+                    if auto_follow and qualifies and not existing.is_followed:
+                        existing.is_followed = True
+                        followed += 1
+                    brands_list.append({
+                        'name': seller_name,
+                        'gmv': total_gmv,
+                        'products': total_products,
+                        'followed': existing.is_followed,
+                        'newly_followed': auto_follow and qualifies and not existing.is_followed
+                    })
+                else:
+                    new_brand = Brand(
+                        seller_id=seller_id,
+                        is_followed=auto_follow and qualifies,
+                        **brand_data
+                    )
+                    db.session.add(new_brand)
+                    discovered += 1
+                    if auto_follow and qualifies:
+                        followed += 1
+                    brands_list.append({
+                        'name': seller_name,
+                        'gmv': total_gmv,
+                        'products': total_products,
+                        'followed': auto_follow and qualifies,
+                        'newly_followed': auto_follow and qualifies
+                    })
+            
+            db.session.commit()
+            time.sleep(0.3)
+        
+        total_followed = Brand.query.filter(Brand.is_followed == True).count()
+        
+        return jsonify({
+            'success': True,
+            'discovered': discovered,
+            'newly_followed': followed,
+            'total_followed': total_followed,
+            'total_brands': Brand.query.count(),
+            'brands': brands_list,
+            'criteria': {
+                'min_gmv': min_gmv,
+                'min_products': min_products
+            },
+            'message': f'Discovered {discovered} brands, auto-followed {followed}. Total followed: {total_followed}'
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/brands/full-scan')
+def brand_hunter_full_scan():
+    """
+    Complete Brand Hunter scan:
+    1. Discover new brands
+    2. Auto-follow qualifying brands
+    3. Scan all followed brands for low-competition products
+    4. Send Telegram notification
+    
+    This is the endpoint to use for daily cron jobs.
+    
+    Query params:
+    - max_influencers: Max influencer count (default: 50)
+    - min_sales_30d: Min 30-day sales (default: 1)
+    - notify: Send Telegram notification (default: true)
+    """
+    try:
+        max_influencers = request.args.get('max_influencers', 50, type=int)
+        min_sales_30d = request.args.get('min_sales_30d', 1, type=int)
+        should_notify = request.args.get('notify', 'true').lower() == 'true'
+        
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        # Step 1: Discover and follow top brands (3 pages)
+        discovered_brands = 0
+        newly_followed = 0
+        
+        for page in range(1, 4):
+            try:
+                response = requests.get(
+                    'https://open.echotik.live/api/v3/echotik/seller/list',
+                    params={
+                        'region': 'US',
+                        'page_num': page,
+                        'page_size': 10,
+                        'seller_sort_field': 2,
+                        'sort_type': 1,
+                        'sales_flag': 1,
+                    },
+                    auth=auth,
+                    timeout=30
+                )
+                
+                if response.status_code != 200:
+                    continue
+                
+                shops = response.json().get('data', [])
+                
+                for shop in shops:
+                    seller_id = str(shop.get('seller_id', ''))
+                    if not seller_id:
+                        continue
+                    
+                    total_gmv = float(shop.get('total_sale_gmv_amt', 0) or 0)
+                    total_products = int(shop.get('total_product_cnt', 0) or 0)
+                    
+                    existing = Brand.query.filter_by(seller_id=seller_id).first()
+                    
+                    brand_data = {
+                        'seller_name': shop.get('seller_name', ''),
+                        'total_gmv': total_gmv,
+                        'total_sales': int(shop.get('total_sale_cnt', 0) or 0),
+                        'total_products': total_products,
+                        'gmv_30d': float(shop.get('total_sale_gmv_30d_amt', 0) or 0),
+                        'sales_30d': int(shop.get('total_sale_30d_cnt', 0) or 0),
+                    }
+                    
+                    qualifies = total_gmv >= 1000000 and total_products >= 50
+                    
+                    if existing:
+                        for key, value in brand_data.items():
+                            setattr(existing, key, value)
+                        if qualifies and not existing.is_followed:
+                            existing.is_followed = True
+                            newly_followed += 1
+                    else:
+                        new_brand = Brand(
+                            seller_id=seller_id,
+                            is_followed=qualifies,
+                            **brand_data
+                        )
+                        db.session.add(new_brand)
+                        discovered_brands += 1
+                        if qualifies:
+                            newly_followed += 1
+                
+                db.session.commit()
+                time.sleep(0.2)
+            except Exception as e:
+                print(f"Error discovering brands: {e}")
+        
+        # Step 2: Scan all followed brands
+        followed_brands = Brand.query.filter(Brand.is_followed == True).order_by(
+            Brand.follow_priority.desc(), Brand.total_gmv.desc()
+        ).all()
+        
+        total_new = 0
+        total_updated = 0
+        new_products_list = []
+        brands_scanned = 0
+        
+        for brand in followed_brands:
+            try:
+                for page in range(1, 4):
+                    response = requests.get(
+                        'https://open.echotik.live/api/v3/echotik/seller/product/list',
+                        params={
+                            'seller_id': brand.seller_id,
+                            'page_num': page,
+                            'page_size': 10,
+                            'seller_product_sort_field': 4,
+                            'sort_type': 1,
+                        },
+                        auth=auth,
+                        timeout=30
+                    )
+                    
+                    if response.status_code != 200:
+                        break
+                    
+                    products = response.json().get('data', [])
+                    if not products:
+                        break
+                    
+                    for p in products:
+                        product_id = str(p.get('product_id', ''))
+                        if not product_id:
+                            continue
+                        
+                        influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                        sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                        
+                        if influencer_count > max_influencers or influencer_count < 1:
+                            continue
+                        if sales_30d < min_sales_30d:
+                            continue
+                        
+                        commission = float(p.get('product_commission_rate', 0) or 0)
+                        if commission > 0 and commission < 1:
+                            commission = commission * 100
+                        if commission <= 0:
+                            continue
+                        
+                        existing = Product.query.filter_by(product_id=product_id).first()
+                        
+                        product_data = {
+                            'product_name': p.get('product_name', ''),
+                            'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+                            'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+                            'sales': int(p.get('total_sale_cnt', 0) or 0),
+                            'sales_30d': sales_30d,
+                            'commission_rate': commission,
+                            'influencer_count': influencer_count,
+                            'seller_id': brand.seller_id,
+                            'seller_name': brand.seller_name,
+                            'image_url': extract_image_url(p.get('cover_url', '')),
+                            'scan_type': 'brand_hunter',
+                            'price': float(p.get('min_price', 0) or 0),
+                        }
+                        product_data['potential_earnings'] = product_data['gmv'] * commission / 100
+                        
+                        if existing:
+                            for key, value in product_data.items():
+                                if hasattr(existing, key):
+                                    setattr(existing, key, value)
+                            total_updated += 1
+                        else:
+                            new_prod = Product(
+                                product_id=product_id,
+                                first_seen=datetime.utcnow(),
+                                **product_data
+                            )
+                            db.session.add(new_prod)
+                            total_new += 1
+                            new_products_list.append({
+                                'product_id': product_id,
+                                'product_name': product_data['product_name'],
+                                'brand': brand.seller_name,
+                                'gmv': product_data['gmv'],
+                                'commission': commission,
+                                'influencers': influencer_count,
+                            })
+                    
+                    time.sleep(0.2)
+                
+                brand.last_scanned = datetime.utcnow()
+                brands_scanned += 1
+                
+            except Exception as e:
+                print(f"Error scanning brand {brand.seller_name}: {e}")
+        
+        db.session.commit()
+        
+        # Step 3: Send notification
+        if should_notify and new_products_list:
+            msg = f"🏷️ <b>Brand Hunter Daily Scan</b>\n"
+            msg += f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+            msg += f"📊 Scanned {brands_scanned} brands\n"
+            msg += f"🆕 Found {len(new_products_list)} new gems!\n\n"
+            
+            for p in new_products_list[:8]:
+                earnings = p['gmv'] * p['commission'] / 100
+                msg += f"<b>{p['product_name'][:35]}...</b>\n"
+                msg += f"🏪 {p['brand']} | 👥 {p['influencers']} creators\n"
+                msg += f"💰 ${p['gmv']:,.0f} | 💵 {p['commission']:.0f}% (${earnings:,.0f})\n\n"
+            
+            if len(new_products_list) > 8:
+                msg += f"<i>...and {len(new_products_list) - 8} more!</i>\n"
+            
+            msg += f"\n🔗 <a href='https://tiktok-product-finder.onrender.com'>View All</a>"
+            
+            send_telegram_message(msg)
+        
+        return jsonify({
+            'success': True,
+            'discovered_brands': discovered_brands,
+            'newly_followed_brands': newly_followed,
+            'brands_scanned': brands_scanned,
+            'total_followed_brands': len(followed_brands),
+            'new_products': total_new,
+            'updated_products': total_updated,
+            'new_products_list': new_products_list[:20],
+            'message': f'Full scan complete! {total_new} new gems from {brands_scanned} brands.'
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/stats/brand-hunter')
+def brand_hunter_stats():
+    """Get Brand Hunter specific stats"""
+    try:
+        total_brands = Brand.query.count()
+        followed_brands = Brand.query.filter(Brand.is_followed == True).count()
+        
+        # Products from brand hunter
+        brand_products = Product.query.filter(Product.scan_type == 'brand_hunter').count()
+        
+        # Gems (1-50 influencers with commission)
+        gems = Product.query.filter(
+            Product.scan_type == 'brand_hunter',
+            Product.influencer_count >= 1,
+            Product.influencer_count <= 50,
+            Product.commission_rate > 0
+        ).count()
+        
+        # New today
+        today = datetime.utcnow().date()
+        new_today = Product.query.filter(
+            Product.scan_type == 'brand_hunter',
+            db.func.date(Product.first_seen) == today
+        ).count()
+        
+        # Top brands by products found
+        top_brands = db.session.query(
+            Brand.seller_name,
+            db.func.count(Product.id).label('product_count')
+        ).join(
+            Product, Brand.seller_id == Product.seller_id
+        ).filter(
+            Brand.is_followed == True
+        ).group_by(Brand.seller_name).order_by(
+            db.desc('product_count')
+        ).limit(10).all()
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_brands': total_brands,
+                'followed_brands': followed_brands,
+                'brand_products': brand_products,
+                'hidden_gems': gems,
+                'new_today': new_today,
+            },
+            'top_brands': [{'name': b[0], 'products': b[1]} for b in top_brands]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# TELEGRAM NOTIFICATION ENDPOINTS
+# ============================================================================
+
+@app.route('/api/telegram/test')
+def telegram_test():
+    """Test Telegram bot connection"""
+    try:
+        success = send_telegram_message("🔔 <b>Test Notification</b>\n\nYour TikTok Shop Finder bot is working!")
+        return jsonify({
+            'success': success,
+            'message': 'Test message sent!' if success else 'Failed to send message',
+            'bot_token_set': bool(TELEGRAM_BOT_TOKEN),
+            'chat_id_set': bool(TELEGRAM_CHAT_ID)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/telegram/notify-gems')
+def telegram_notify_gems():
+    """
+    Send Telegram notification for new hidden gems.
+    
+    Query params:
+    - hours: Look back X hours (default 24)
+    - min_gmv: Minimum GMV to include (default 100)
+    """
+    try:
+        hours = request.args.get('hours', 24, type=int)
+        min_gmv = request.args.get('min_gmv', 100, type=float)
+        
+        result = notify_new_hidden_gems(hours_back=hours, min_gmv=min_gmv)
+        
+        return jsonify({
+            'success': True,
+            **result
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/telegram/notify-product/<product_id>')
+def telegram_notify_product(product_id):
+    """Send Telegram notification for a specific product"""
+    try:
+        product = Product.query.filter_by(product_id=product_id).first()
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        reason = request.args.get('reason', 'Product Alert')
+        success = notify_single_product(product, reason)
+        
+        return jsonify({
+            'success': success,
+            'product_name': product.product_name,
+            'message': 'Notification sent!' if success else 'Failed to send'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/telegram/daily-report')
+def telegram_daily_report():
+    """Send a daily summary report to Telegram"""
+    try:
+        # Get stats
+        total = Product.query.filter(
+            db.or_(
+                Product.product_status.is_(None),
+                Product.product_status == '',
+                Product.product_status == 'active'
+            )
+        ).count()
+        
+        # New products (last 24h)
+        yesterday = datetime.utcnow() - timedelta(hours=24)
+        new_products = Product.query.filter(Product.first_seen >= yesterday).count()
+        
+        # Hidden gems
+        gems = Product.query.filter(
+            Product.influencer_count.between(3, 50),
+            db.or_(
+                Product.product_status.is_(None),
+                Product.product_status == '',
+                Product.product_status == 'active'
+            )
+        ).count()
+        
+        # Untapped
+        untapped = Product.query.filter(
+            Product.influencer_count <= 3,
+            db.or_(
+                Product.product_status.is_(None),
+                Product.product_status == '',
+                Product.product_status == 'active'
+            )
+        ).count()
+        
+        # Top new gem
+        top_gem = Product.query.filter(
+            Product.influencer_count.between(3, 50),
+            Product.first_seen >= yesterday,
+            db.or_(
+                Product.product_status.is_(None),
+                Product.product_status == '',
+                Product.product_status == 'active'
+            )
+        ).order_by(Product.gmv.desc()).first()
+        
+        msg = "📊 <b>Daily TikTok Shop Report</b>\n"
+        msg += f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        msg += f"📦 Total Active Products: <b>{total:,}</b>\n"
+        msg += f"🆕 New Today: <b>{new_products}</b>\n"
+        msg += f"💎 Hidden Gems: <b>{gems}</b>\n"
+        msg += f"🏆 Untapped: <b>{untapped}</b>\n\n"
+        
+        if top_gem:
+            msg += f"⭐ <b>Top New Gem:</b>\n"
+            msg += f"{top_gem.product_name[:40]}...\n"
+            msg += f"GMV: ${float(top_gem.gmv or 0):,.0f} | {top_gem.influencer_count} influencers\n\n"
+        
+        msg += f"🔗 <a href='https://tiktok-product-finder.onrender.com'>Open Dashboard</a>"
+        
+        success = send_telegram_message(msg)
+        
+        return jsonify({
+            'success': success,
+            'stats': {
+                'total': total,
+                'new_today': new_products,
+                'gems': gems,
+                'untapped': untapped
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/add-video-columns')
+def add_video_columns():
+    """Add videos_7d and videos_30d columns to database"""
+    try:
+        with db.engine.connect() as conn:
+            try:
+                conn.execute(text('ALTER TABLE product ADD COLUMN IF NOT EXISTS videos_7d INTEGER'))
+            except:
+                pass
+            try:
+                conn.execute(text('ALTER TABLE product ADD COLUMN IF NOT EXISTS videos_30d INTEGER'))
+            except:
+                pass
+            conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Video columns added: videos_7d, videos_30d'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/fix-scan-id')
+def fix_scan_id_constraint():
+    """Remove NOT NULL constraint from scan_id to allow Brand Hunter products"""
+    try:
+        with db.engine.connect() as conn:
+            # Drop the NOT NULL constraint on scan_id
+            conn.execute(text('ALTER TABLE product ALTER COLUMN scan_id DROP NOT NULL'))
+            conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'scan_id constraint removed - Brand Hunter can now add products'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/debug-echotik/<product_id>')
+def debug_echotik_api(product_id):
+    """Debug endpoint to see raw EchoTik API response for a product"""
+    try:
+        auth = HTTPBasicAuth(
+            os.environ.get('ECHOTIK_USERNAME'),
+            os.environ.get('ECHOTIK_PASSWORD')
+        )
+        
+        response = requests.get(
+            'https://open.echotik.live/api/v3/echotik/product/detail',
+            params={'product_ids': product_id, 'region': 'US'},
+            auth=auth,
+            timeout=30
+        )
+        
+        data = response.json()
+        
+        # Extract video-related keys
+        if data.get('data'):
+            p = data['data'][0] if isinstance(data['data'], list) else data['data']
+            video_keys = {k: v for k, v in p.items() if 'video' in k.lower()}
+            return jsonify({
+                'success': True,
+                'video_related_fields': video_keys,
+                'all_keys': list(p.keys()),
+                'raw_data': p
+            })
+        
+        return jsonify({
+            'success': False,
+            'error': 'No data returned',
+            'response': data
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/add-status-columns')
+def add_status_columns():
+    """Add product status columns to database if they don't exist"""
+    try:
+        with db.engine.connect() as conn:
+            # Add product_status column
+            try:
+                conn.execute(text('''
+                    ALTER TABLE product ADD COLUMN IF NOT EXISTS product_status VARCHAR(20) DEFAULT 'active'
+                '''))
+            except:
+                pass
+            
+            # Add status_checked_at column
+            try:
+                conn.execute(text('''
+                    ALTER TABLE product ADD COLUMN IF NOT EXISTS status_checked_at TIMESTAMP
+                '''))
+            except:
+                pass
+            
+            # Add status_note column
+            try:
+                conn.execute(text('''
+                    ALTER TABLE product ADD COLUMN IF NOT EXISTS status_note VARCHAR(200)
+                '''))
+            except:
+                pass
+            
+            conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Status columns added: product_status, status_checked_at, status_note'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+if __name__ == '__main__':
+    with app.app_context():
+        # Try to create tables (won't overwrite existing)
+        try:
+            db.create_all()
+        except:
+            pass
+    
+    print("=" * 50)
+    print("🚀 TikTok Shop Product Finder v3.0")
+    print("=" * 50)
+    print(f"Dashboard: http://127.0.0.1:5000")
+    print(f"API Debug: http://127.0.0.1:5000/api/debug")
+    print(f"Products:  http://127.0.0.1:5000/api/products")
+    print("=" * 50)
+    
+    app.run(host='0.0.0.0', debug=True, port=5000)
