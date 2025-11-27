@@ -11,6 +11,7 @@ Strategy:
 
 import os
 import requests
+from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
@@ -27,7 +28,7 @@ if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
 db = SQLAlchemy(app)
 
 # EchoTik API Config
-BASE_URL = "https://open.echotik.live/api/v2"
+BASE_URL = "https://open.echotik.live/api/v3/echotik"
 ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
 ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
 
@@ -78,35 +79,18 @@ class Product(db.Model):
 # ECHOTIK API HELPERS
 # =============================================================================
 
-def get_auth_token():
-    """Get authentication token from EchoTik"""
-    try:
-        response = requests.post(
-            f"{BASE_URL}/login",
-            json={
-                "username": ECHOTIK_USERNAME,
-                "password": ECHOTIK_PASSWORD
-            },
-            timeout=10
-        )
-        data = response.json()
-        if data.get('code') == 0:
-            return data.get('data', {}).get('token')
-        else:
-            print(f"Auth error: {data}")
-            return None
-    except Exception as e:
-        print(f"Auth exception: {e}")
-        return None
+def get_auth():
+    """Get HTTPBasicAuth for EchoTik API v3"""
+    return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
 
-def get_top_brands(token, page=1):
+def get_top_brands(page=1):
     """Get top brands/sellers sorted by GMV"""
     try:
-        response = requests.post(
+        response = requests.get(
             f"{BASE_URL}/seller/list",
-            headers={"Authorization": f"Bearer {token}"},
-            json={
-                "page_number": page,
+            auth=get_auth(),
+            params={
+                "page_num": page,
                 "page_size": 20,
                 "region": "US",
                 "seller_sort_field": 3,  # GMV
@@ -123,28 +107,28 @@ def get_top_brands(token, page=1):
         print(f"Get brands exception: {e}")
         return []
 
-def get_seller_products(token, seller_id, page=1, page_size=10):
+def get_seller_products(seller_id, page=1, page_size=10):
     """
     Get products from a seller sorted by INFLUENCER COUNT DESCENDING
-    
+
     Sort Fields (seller_product_sort_field):
         1 = Total Sales
         2 = 7-day GMV
         3 = Total GMV
         4 = 30-day Sales
         5 = Influencers  <-- USING THIS
-    
+
     Sort Type:
         1 = Descending (highest first) <-- USING THIS
         2 = Ascending
     """
     try:
-        response = requests.post(
+        response = requests.get(
             f"{BASE_URL}/seller/product/list",
-            headers={"Authorization": f"Bearer {token}"},
-            json={
+            auth=get_auth(),
+            params={
                 "seller_id": seller_id,
-                "page_number": page,
+                "page_num": page,
                 "page_size": page_size,
                 "region": "US",
                 "seller_product_sort_field": 5,  # INFLUENCERS
@@ -182,14 +166,10 @@ def scan_top_brands():
     min_influencers = request.args.get('min_influencers', 1, type=int)
     max_influencers = request.args.get('max_influencers', 100, type=int)
     min_sales = request.args.get('min_sales', 1, type=int)
-    
-    token = get_auth_token()
-    if not token:
-        return jsonify({'error': 'Authentication failed'}), 500
-    
+
     # Get top brands
     print(f"Fetching top {num_brands} brands...")
-    brands = get_top_brands(token, page=1)
+    brands = get_top_brands(page=1)
     
     if not brands:
         return jsonify({'error': 'Failed to fetch brands'}), 500
@@ -227,7 +207,7 @@ def scan_top_brands():
         hit_threshold = False
         
         for page in range(1, pages_per_brand + 1):
-            data = get_seller_products(token, seller_id, page=page)
+            data = get_seller_products(seller_id, page=page)
             
             if not data or not data.get('list'):
                 print(f"  No more products at page {page}")
@@ -309,11 +289,7 @@ def scan_single_brand(seller_id):
     min_influencers = request.args.get('min_influencers', 1, type=int)
     max_influencers = request.args.get('max_influencers', 100, type=int)
     min_sales = request.args.get('min_sales', 1, type=int)
-    
-    token = get_auth_token()
-    if not token:
-        return jsonify({'error': 'Authentication failed'}), 500
-    
+
     products_found = 0
     products_saved = 0
     seller_name = "Unknown"
@@ -325,7 +301,7 @@ def scan_single_brand(seller_id):
         if page % 10 == 0:
             print(f"Scanning page {page}...")
         
-        data = get_seller_products(token, seller_id, page=page)
+        data = get_seller_products(seller_id, page=page)
         
         if not data or not data.get('list'):
             break
@@ -399,12 +375,8 @@ def scan_single_brand(seller_id):
 def list_top_brands():
     """Get list of top brands from EchoTik"""
     page = request.args.get('page', 1, type=int)
-    
-    token = get_auth_token()
-    if not token:
-        return jsonify({'error': 'Authentication failed'}), 500
-    
-    brands = get_top_brands(token, page=page)
+
+    brands = get_top_brands(page=page)
     
     return jsonify({
         'brands': [{
