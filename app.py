@@ -72,6 +72,8 @@ class Product(db.Model):
     commission_rate = db.Column(db.Float, default=0)
     price = db.Column(db.Float, default=0)
     image_url = db.Column(db.Text)
+    cached_image_url = db.Column(db.Text)  # Signed URL that works
+    image_cached_at = db.Column(db.DateTime)  # When cache was created
     scan_type = db.Column(db.String(50), default='brand_hunter')
     first_seen = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -90,7 +92,8 @@ class Product(db.Model):
             'influencer_count': self.influencer_count,
             'commission_rate': self.commission_rate,
             'price': self.price,
-            'image_url': self.image_url,
+            'image_url': self.cached_image_url or self.image_url,  # Prefer cached
+            'cached_image_url': self.cached_image_url,
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
@@ -123,6 +126,53 @@ def parse_cover_url(raw):
     elif isinstance(raw, list) and len(raw) > 0:
         return raw[0].get('url') if isinstance(raw[0], dict) else raw[0]
     return None
+
+def get_cached_image_urls(cover_urls):
+    """
+    Call EchoTik's batch cover download API to get signed URLs.
+    
+    Args:
+        cover_urls: List of original cover URLs (max 10 per call)
+    
+    Returns:
+        Dict mapping original URL -> signed URL
+    """
+    if not cover_urls:
+        return {}
+    
+    # Filter for valid EchoTik URLs
+    valid_urls = [url for url in cover_urls if url and 'echosell-images' in str(url)]
+    
+    if not valid_urls:
+        return {}
+    
+    # Max 10 URLs per request
+    url_string = ','.join(valid_urls[:10])
+    
+    try:
+        response = requests.get(
+            f"{BASE_URL}/batch/cover/download",
+            params={'cover_urls': url_string},
+            auth=get_auth(),
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('code') == 0 and data.get('data'):
+                result = {}
+                for item in data['data']:
+                    if isinstance(item, dict):
+                        for orig_url, signed_url in item.items():
+                            if signed_url and signed_url.startswith('http'):
+                                result[orig_url] = signed_url
+                return result
+        
+        return {}
+        
+    except Exception as e:
+        print(f"EchoTik image API exception: {e}")
+        return {}
 
 def get_top_brands(page=1):
     """
@@ -587,6 +637,9 @@ def get_product_detail(product_id):
         if not product:
             return jsonify({'success': False, 'error': 'Product not found'}), 404
         
+        # Use cached image if available, otherwise fall back to proxy
+        image_url = product.cached_image_url or f'/api/image-proxy/{product_id}'
+        
         data = {
             'product_id': product.product_id,
             'product_name': product.product_name or '',
@@ -609,9 +662,9 @@ def get_product_detail(product_id):
             # Product info
             'price': float(product.price or 0),
             
-            # Media - use proxy endpoint instead of slow API call
-            'image_url': product.image_url or '',
-            'cached_image_url': f'/api/image-proxy/{product_id}',
+            # Media - use cached URL for instant loading
+            'image_url': image_url,
+            'cached_image_url': image_url,
             
             # Links
             'tiktok_url': f'https://www.tiktok.com/shop/product/{product.product_id}',
@@ -668,6 +721,73 @@ def get_stats():
             'good_61_100': good
         }
     })
+
+
+@app.route('/api/refresh-images', methods=['POST', 'GET'])
+def refresh_images():
+    """
+    Batch refresh cached image URLs for products.
+    Call this after scanning to get working image URLs.
+    """
+    try:
+        batch_size = request.args.get('batch', 50, type=int)
+        
+        # Get products with image_url but no cached_image_url (or old cache)
+        products = Product.query.filter(
+            Product.image_url.isnot(None),
+            Product.image_url != '',
+            db.or_(
+                Product.cached_image_url.is_(None),
+                Product.cached_image_url == ''
+            )
+        ).limit(batch_size).all()
+        
+        if not products:
+            return jsonify({'success': True, 'message': 'No images need refreshing', 'refreshed': 0})
+        
+        # Group by batches of 10 (API limit)
+        refreshed = 0
+        for i in range(0, len(products), 10):
+            batch = products[i:i+10]
+            
+            # Get original URLs
+            url_to_product = {}
+            for p in batch:
+                parsed_url = parse_cover_url(p.image_url)
+                if parsed_url:
+                    url_to_product[parsed_url] = p
+            
+            if not url_to_product:
+                continue
+            
+            # Get signed URLs
+            signed_urls = get_cached_image_urls(list(url_to_product.keys()))
+            
+            # Update products
+            for orig_url, signed_url in signed_urls.items():
+                if orig_url in url_to_product:
+                    product = url_to_product[orig_url]
+                    product.cached_image_url = signed_url
+                    product.image_cached_at = datetime.utcnow()
+                    refreshed += 1
+            
+            db.session.commit()
+            time.sleep(0.3)  # Rate limiting
+        
+        return jsonify({
+            'success': True,
+            'message': f'Refreshed {refreshed} images',
+            'refreshed': refreshed,
+            'remaining': Product.query.filter(
+                Product.image_url.isnot(None),
+                Product.cached_image_url.is_(None)
+            ).count()
+        })
+        
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 @app.route('/api/clear', methods=['POST'])
 def clear_products():
@@ -737,48 +857,28 @@ def pwa_files(filename):
 
 @app.route('/api/image-proxy/<product_id>')
 def image_proxy(product_id):
-    """Proxy product images using EchoTik's batch cover download API"""
+    """Proxy product images - fast version without EchoTik API call"""
     product = Product.query.get(product_id)
     if not product or not product.image_url:
         return '', 404
     
     image_url = product.image_url
     
-    # If URL is from EchoTik's image server, try to get signed URL
-    if image_url and 'echosell-images' in image_url:
-        try:
-            response = requests.get(
-                f"{BASE_URL}/batch/cover/download",
-                params={'cover_urls': image_url},
-                auth=get_auth(),
-                timeout=10
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('code') == 0 and data.get('data'):
-                    for item in data['data']:
-                        if isinstance(item, dict):
-                            for orig_url, signed_url in item.items():
-                                if signed_url and signed_url.startswith('http'):
-                                    image_url = signed_url
-                                    break
-        except Exception as e:
-            print(f"Image API error: {e}")
-    
-    # Fetch the image
+    # Try to fetch the image directly (works for some URLs)
     try:
-        response = requests.get(image_url, timeout=10, headers={
+        response = requests.get(image_url, timeout=5, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Referer': 'https://www.tiktok.com/'
         })
         if response.status_code == 200:
             return response.content, 200, {
                 'Content-Type': response.headers.get('Content-Type', 'image/jpeg'),
-                'Cache-Control': 'public, max-age=3600'
+                'Cache-Control': 'public, max-age=86400'
             }
     except:
         pass
     
+    # If direct fetch fails, return 404 (frontend will show placeholder)
     return '', 404
 
 @app.route('/api/init-db', methods=['POST', 'GET'])
@@ -787,15 +887,27 @@ def init_database():
     try:
         db.create_all()
         
-        # Try to add sales_7d column if it doesn't exist
-        try:
-            db.session.execute(db.text('ALTER TABLE products ADD COLUMN sales_7d INTEGER DEFAULT 0'))
-            db.session.commit()
-            return jsonify({'success': True, 'message': 'Database initialized and sales_7d column added'})
-        except Exception as e:
-            db.session.rollback()
-            # Column probably already exists
-            return jsonify({'success': True, 'message': 'Database initialized (sales_7d column already exists)'})
+        # Try to add missing columns
+        columns_to_add = [
+            ('sales_7d', 'INTEGER DEFAULT 0'),
+            ('cached_image_url', 'TEXT'),
+            ('image_cached_at', 'TIMESTAMP'),
+        ]
+        
+        added = []
+        for col_name, col_type in columns_to_add:
+            try:
+                db.session.execute(db.text(f'ALTER TABLE products ADD COLUMN {col_name} {col_type}'))
+                db.session.commit()
+                added.append(col_name)
+            except Exception as e:
+                db.session.rollback()
+                # Column probably already exists
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Database initialized. Added columns: {added if added else "none (already exist)"}'
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
