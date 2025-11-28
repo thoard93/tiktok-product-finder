@@ -238,8 +238,8 @@
                         <div class="stats-grid">
                             <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-value accent">${formatCurrency(p.gmv)}</div><div class="stat-label">Total GMV</div></div>
                             <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">${formatNumber(p.sales)}</div><div class="stat-label">Units Sold</div></div>
-                            <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-value success">${formatCurrency(earnings)}</div><div class="stat-label">Potential</div></div>
-                            <div class="stat-card"><div class="stat-icon">%</div><div class="stat-value warning">${(p.commission_rate||0).toFixed(0)}%</div><div class="stat-label">Commission</div></div>
+                            <div class="stat-card"><div class="stat-icon">👤</div><div class="stat-value cyan">${formatNumber(p.influencer_count||0)}</div><div class="stat-label">Influencers</div></div>
+                            <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-value success">${formatCurrency(p.price||0)}</div><div class="stat-label">Price</div></div>
                         </div>
                         <div class="action-buttons">
                             <a href="${tiktokUrl}" target="_blank" class="btn btn-primary">🔍 Search on TikTok</a>
@@ -273,16 +273,18 @@
                     <div id="tab-video" class="tab-content">
                         <div class="analysis-section">
                             <h3 class="section-title">🎬 Video Activity</h3>
+                            ${(p.videos_7d || p.videos_30d || p.video_count) ? `
                             <div class="video-analysis-grid">
                                 <div class="video-stat-card"><div class="video-stat-period">Last 7 Days</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatNumber(p.videos_7d||0)}</div><div class="video-stat-label">New Videos</div></div>
                                 <div class="video-stat-card"><div class="video-stat-period">Last 30 Days</div><div class="video-stat-value" style="color:var(--success)">${formatNumber(p.videos_30d||0)}</div><div class="video-stat-label">New Videos</div></div>
                                 <div class="video-stat-card"><div class="video-stat-period">Total</div><div class="video-stat-value" style="color:var(--accent)">${formatNumber(p.video_count||0)}</div><div class="video-stat-label">All Videos</div></div>
                             </div>
-                            <p style="margin-top:1rem;color:var(--text-secondary);font-size:0.9rem;">💡 Click "Refresh Data" to fetch latest video counts from EchoTik API.</p>
-                        </div>
-                        <div class="analysis-section">
-                            <h3 class="section-title">📺 Live Streams</h3>
-                            <div class="video-stat-card" style="max-width:200px"><div class="video-stat-period">Total</div><div class="video-stat-value" style="color:var(--warning)">${formatNumber(p.live_count||0)}</div><div class="video-stat-label">Livestreams</div></div>
+                            ` : `
+                            <p style="color:var(--text-secondary);padding:1rem;background:var(--bg-secondary);border-radius:8px;">
+                                📊 Video data not available for this product.<br>
+                                <span style="font-size:0.85rem;">Use "Search on TikTok" to find videos promoting this product.</span>
+                            </p>
+                            `}
                         </div>
                     </div>
                     <div id="tab-competition" class="tab-content">
