@@ -26,6 +26,35 @@
         
         .content { padding: 12px; }
         
+        /* Search Bar */
+        .search-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 0.9rem;
+        }
+        
+        .search-input::placeholder { color: #666; }
+        
+        .search-btn {
+            padding: 10px 16px;
+            background: #e94560;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
         /* Stats Card */
         .stats-card {
             background: linear-gradient(135deg, #e94560, #0f3460);
@@ -43,6 +72,32 @@
         .stat-item { text-align: center; }
         .stat-value { font-size: 1.3rem; font-weight: bold; }
         .stat-label { font-size: 0.65rem; color: rgba(255,255,255,0.7); }
+        
+        /* Date Filter Pills */
+        .date-filter {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .date-pill {
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            color: #fff;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .date-pill.active {
+            background: #e94560;
+            border-color: #e94560;
+        }
+        
+        .date-pill:hover { background: rgba(233,69,96,0.3); }
         
         /* Strategy Banner */
         .strategy-banner {
@@ -65,6 +120,42 @@
             line-height: 1.4;
         }
         
+        /* Scan Settings */
+        .scan-settings {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .scan-settings h4 {
+            color: #e94560;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .setting-row label {
+            color: #aaa;
+            font-size: 0.8rem;
+        }
+        
+        .setting-row input {
+            width: 80px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            text-align: center;
+        }
+        
         /* Filter Pills */
         .filter-pills {
             display: flex;
@@ -78,20 +169,24 @@
             padding: 8px 12px;
             background: rgba(255,255,255,0.1);
             border: none;
-            border-radius: 16px;
+            border-radius: 20px;
             color: #fff;
+            font-size: 0.8rem;
             cursor: pointer;
             white-space: nowrap;
-            font-size: 0.8rem;
+            transition: all 0.2s;
         }
         
-        .pill.active { background: #e94560; }
+        .pill.active {
+            background: #e94560;
+        }
+        
         .pill .count {
             background: rgba(0,0,0,0.3);
-            padding: 2px 8px;
+            padding: 2px 6px;
             border-radius: 10px;
-            margin-left: 5px;
-            font-size: 0.75rem;
+            margin-left: 4px;
+            font-size: 0.7rem;
         }
         
         /* Product Grid */
@@ -102,16 +197,11 @@
         }
         
         @media (min-width: 768px) {
-            .product-grid {
-                grid-template-columns: repeat(4, 1fr);
-                gap: 12px;
-            }
+            .product-grid { grid-template-columns: repeat(4, 1fr); }
         }
         
         @media (min-width: 1200px) {
-            .product-grid {
-                grid-template-columns: repeat(5, 1fr);
-            }
+            .product-grid { grid-template-columns: repeat(5, 1fr); }
         }
         
         .product-card {
@@ -120,25 +210,31 @@
             overflow: hidden;
             cursor: pointer;
             transition: transform 0.2s;
+            position: relative;
         }
         
-        .product-card:active { transform: scale(0.98); }
+        .product-card:hover {
+            transform: scale(1.02);
+        }
         
         .product-image {
             width: 100%;
             aspect-ratio: 1;
             object-fit: cover;
-            background: rgba(0,0,0,0.2);
+            background: #333;
         }
         
-        .product-info { padding: 10px; }
+        .product-info {
+            padding: 10px;
+        }
         
         .product-name {
             font-size: 0.75rem;
+            font-weight: 500;
             line-height: 1.3;
             height: 2.6em;
             overflow: hidden;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         
         .product-stats {
@@ -146,99 +242,82 @@
             justify-content: space-between;
             align-items: center;
             font-size: 0.7rem;
+            color: #aaa;
         }
         
         .influencer-badge {
+            background: #333;
             padding: 3px 8px;
             border-radius: 10px;
             font-size: 0.65rem;
-            font-weight: bold;
         }
         
-        .influencer-badge.untapped { background: #e94560; }
-        .influencer-badge.low { background: #9b59b6; }
-        .influencer-badge.medium { background: #f39c12; color: #000; }
-        .influencer-badge.good { background: #2ecc71; color: #000; }
+        .influencer-badge.hot { background: #e94560; color: #fff; }
+        .influencer-badge.warm { background: #f39c12; color: #fff; }
+        .influencer-badge.cool { background: #3498db; color: #fff; }
         
-        /* Action Bar */
-        .action-bar {
+        /* Favorite Heart */
+        .favorite-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            background: rgba(0,0,0,0.5);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+        
+        .favorite-btn:hover { background: rgba(0,0,0,0.7); transform: scale(1.1); }
+        .favorite-btn.active { background: #e94560; }
+        
+        /* Bottom Nav */
+        .bottom-nav {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(26,26,46,0.98);
-            padding: 15px;
+            background: rgba(0,0,0,0.95);
+            padding: 12px;
             display: flex;
             gap: 10px;
-            backdrop-filter: blur(10px);
         }
         
-        .action-btn {
+        .nav-btn {
             flex: 1;
-            padding: 16px;
+            padding: 12px;
             border: none;
-            border-radius: 12px;
-            font-size: 1rem;
-            font-weight: 600;
+            border-radius: 10px;
+            font-weight: bold;
             cursor: pointer;
+            font-size: 0.9rem;
         }
         
-        .action-btn.primary { background: #e94560; color: #fff; }
-        .action-btn.secondary { background: rgba(255,255,255,0.1); color: #fff; }
-        .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        /* Loading & Empty States */
-        .loading, .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #888;
-        }
-        
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(255,255,255,0.1);
-            border-top-color: #e94560;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-        
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .empty-state .icon { font-size: 4rem; margin-bottom: 15px; }
-        
-        /* Scan Settings */
-        .scan-settings {
-            background: rgba(0,0,0,0.2);
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .scan-settings h4 {
-            margin-bottom: 12px;
-            color: #e94560;
-        }
-        
-        .setting-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .setting-row label { color: #aaa; font-size: 0.9rem; }
-        
-        .setting-row input, .setting-row select {
+        .nav-btn.secondary {
             background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 8px;
-            padding: 8px 12px;
             color: #fff;
-            width: 100px;
-            text-align: center;
         }
+        
+        .nav-btn.primary {
+            background: linear-gradient(135deg, #e94560, #f39c12);
+            color: #fff;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .empty-state .icon { font-size: 3rem; margin-bottom: 10px; }
         
         /* Toast */
         .toast {
@@ -246,23 +325,18 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: #2ecc71;
+            background: #333;
             color: #fff;
-            padding: 15px 25px;
-            border-radius: 12px;
-            font-weight: 600;
+            padding: 12px 24px;
+            border-radius: 8px;
             z-index: 1000;
             display: none;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
         
-        .toast.show { display: block; animation: slideIn 0.3s ease; }
-        .toast.error { background: #e74c3c; }
+        .toast.error { background: #e94560; }
+        .toast.show { display: block; animation: fadeIn 0.3s; }
         
-        @keyframes slideIn {
-            from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
-            to { transform: translateX(-50%) translateY(0); opacity: 1; }
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(-10px); } }
     </style>
 </head>
 <body>
@@ -272,6 +346,22 @@
     </div>
     
     <div class="content">
+        <!-- Search Bar -->
+        <div class="search-container">
+            <input type="text" class="search-input" id="brand-search" placeholder="🔍 Search brands...">
+            <button class="search-btn" onclick="applyFilters()">Search</button>
+        </div>
+        
+        <!-- Date Filter -->
+        <div class="date-filter">
+            <button class="date-pill active" data-date="all" onclick="setDateFilter('all', this)">All Time</button>
+            <button class="date-pill" data-date="today" onclick="setDateFilter('today', this)">Today</button>
+            <button class="date-pill" data-date="yesterday" onclick="setDateFilter('yesterday', this)">Yesterday</button>
+            <button class="date-pill" data-date="7days" onclick="setDateFilter('7days', this)">Last 7 Days</button>
+            <button class="date-pill" data-date="favorites" onclick="setDateFilter('favorites', this)">❤️ Favorites</button>
+        </div>
+        
+        <!-- Stats -->
         <div class="stats-card">
             <div class="stats-grid">
                 <div class="stat-item">
@@ -293,12 +383,14 @@
             </div>
         </div>
         
+        <!-- Strategy Banner -->
         <div class="strategy-banner">
             <h3>📈 Strategy: 7-Day Momentum + Low Competition</h3>
             <p>Scans top brands by GMV, sorts products by 7-day sales (recent momentum), 
                filters for 1-100 influencers. Hot NOW + low competition = opportunity!</p>
         </div>
         
+        <!-- Scan Settings -->
         <div class="scan-settings">
             <h4>⚙️ Scan Settings</h4>
             <div class="setting-row">
@@ -327,6 +419,7 @@
             </div>
         </div>
         
+        <!-- Influencer Filter Pills -->
         <div class="filter-pills">
             <button class="pill active" onclick="filterProducts('all', this)">
                 All <span class="count" id="count-all">0</span>
@@ -345,6 +438,7 @@
             </button>
         </div>
         
+        <!-- Products Grid -->
         <div id="products-container" class="product-grid">
             <div class="empty-state" style="grid-column: 1/-1;">
                 <div class="icon">🔍</div>
@@ -354,68 +448,99 @@
         </div>
     </div>
     
-    <div class="action-bar">
-        <button class="action-btn secondary" onclick="loadProducts()">↻ Refresh</button>
-        <button class="action-btn primary" id="scan-btn" onclick="scanTopBrands()">🎯 Scan Top Brands</button>
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav">
+        <button class="nav-btn secondary" onclick="loadProducts()">↻ Refresh</button>
+        <button class="nav-btn primary" id="scan-btn" onclick="startScan()">🔍 Scan Top Brands</button>
     </div>
     
-    <div class="toast" id="toast"></div>
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
     
     <script>
         let allProducts = [];
         let currentFilter = 'all';
+        let currentDateFilter = 'all';
+        let currentBrandSearch = '';
         
+        // Load products on page load
         document.addEventListener('DOMContentLoaded', () => {
-            loadStats();
             loadProducts();
+            loadStats();
+            
+            // Enable search on Enter key
+            document.getElementById('brand-search').addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') applyFilters();
+            });
         });
         
         function showToast(message, isError = false) {
             const toast = document.getElementById('toast');
             toast.textContent = message;
-            toast.className = 'toast show' + (isError ? ' error' : '');
-            setTimeout(() => toast.classList.remove('show'), 4000);
+            toast.className = `toast show ${isError ? 'error' : ''}`;
+            setTimeout(() => toast.className = 'toast', 3000);
+        }
+        
+        function setDateFilter(filter, btn) {
+            currentDateFilter = filter;
+            document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            applyFilters();
+        }
+        
+        function applyFilters() {
+            currentBrandSearch = document.getElementById('brand-search').value.trim();
+            loadProducts();
+        }
+        
+        async function loadProducts() {
+            try {
+                let url = `/api/products?limit=500`;
+                
+                if (currentDateFilter === 'favorites') {
+                    url += `&favorites=true`;
+                } else if (currentDateFilter !== 'all') {
+                    url += `&date=${currentDateFilter}`;
+                }
+                
+                if (currentBrandSearch) {
+                    url += `&brand=${encodeURIComponent(currentBrandSearch)}`;
+                }
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                allProducts = data.products || [];
+                
+                updateCounts();
+                filterProducts(currentFilter);
+            } catch (err) {
+                showToast('Failed to load products', true);
+            }
         }
         
         async function loadStats() {
             try {
                 const response = await fetch('/api/stats');
                 const data = await response.json();
-                
                 document.getElementById('total-products').textContent = data.total_products || 0;
                 document.getElementById('unique-brands').textContent = data.unique_brands || 0;
                 document.getElementById('untapped-count').textContent = data.breakdown?.untapped_1_10 || 0;
                 document.getElementById('low-count').textContent = data.breakdown?.low_11_30 || 0;
             } catch (err) {
-                console.error('Stats error:', err);
+                console.error('Failed to load stats:', err);
             }
         }
         
-        async function loadProducts() {
-            const container = document.getElementById('products-container');
-            container.innerHTML = '<div class="loading" style="grid-column:1/-1"><div class="spinner"></div>Loading...</div>';
-            
-            try {
-                const response = await fetch('/api/products?limit=200');
-                const data = await response.json();
-                
-                allProducts = data.products || [];
-                updateFilterCounts();
-                renderProducts();
-                loadStats();
-            } catch (err) {
-                container.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">❌</div><p>Failed to load</p></div>';
-            }
-        }
-        
-        function updateFilterCounts() {
-            const counts = {
-                all: allProducts.length,
-                untapped: allProducts.filter(p => p.influencer_count >= 1 && p.influencer_count <= 10).length,
-                low: allProducts.filter(p => p.influencer_count >= 11 && p.influencer_count <= 30).length,
-                medium: allProducts.filter(p => p.influencer_count >= 31 && p.influencer_count <= 60).length,
-                good: allProducts.filter(p => p.influencer_count >= 61 && p.influencer_count <= 100).length
-            };
+        function updateCounts() {
+            const counts = { all: 0, untapped: 0, low: 0, medium: 0, good: 0 };
+            allProducts.forEach(p => {
+                counts.all++;
+                const inf = p.influencer_count || 0;
+                if (inf >= 1 && inf <= 10) counts.untapped++;
+                else if (inf >= 11 && inf <= 30) counts.low++;
+                else if (inf >= 31 && inf <= 60) counts.medium++;
+                else if (inf >= 61 && inf <= 100) counts.good++;
+            });
             
             document.getElementById('count-all').textContent = counts.all;
             document.getElementById('count-untapped').textContent = counts.untapped;
@@ -424,56 +549,63 @@
             document.getElementById('count-good').textContent = counts.good;
         }
         
-        function filterProducts(filter, element) {
+        function filterProducts(filter, btn) {
             currentFilter = filter;
-            document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-            if (element) element.classList.add('active');
-            renderProducts();
-        }
-        
-        function renderProducts() {
-            const container = document.getElementById('products-container');
             
-            let filtered = allProducts;
-            
-            switch(currentFilter) {
-                case 'untapped':
-                    filtered = allProducts.filter(p => p.influencer_count >= 1 && p.influencer_count <= 10);
-                    break;
-                case 'low':
-                    filtered = allProducts.filter(p => p.influencer_count >= 11 && p.influencer_count <= 30);
-                    break;
-                case 'medium':
-                    filtered = allProducts.filter(p => p.influencer_count >= 31 && p.influencer_count <= 60);
-                    break;
-                case 'good':
-                    filtered = allProducts.filter(p => p.influencer_count >= 61 && p.influencer_count <= 100);
-                    break;
+            if (btn) {
+                document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
             }
             
-            if (filtered.length === 0) {
+            let filtered = allProducts;
+            if (filter === 'untapped') {
+                filtered = allProducts.filter(p => p.influencer_count >= 1 && p.influencer_count <= 10);
+            } else if (filter === 'low') {
+                filtered = allProducts.filter(p => p.influencer_count >= 11 && p.influencer_count <= 30);
+            } else if (filter === 'medium') {
+                filtered = allProducts.filter(p => p.influencer_count >= 31 && p.influencer_count <= 60);
+            } else if (filter === 'good') {
+                filtered = allProducts.filter(p => p.influencer_count >= 61 && p.influencer_count <= 100);
+            }
+            
+            renderProducts(filtered);
+        }
+        
+        function renderProducts(products) {
+            const container = document.getElementById('products-container');
+            
+            if (!products || products.length === 0) {
                 container.innerHTML = `
-                    <div class="empty-state" style="grid-column:1/-1">
+                    <div class="empty-state" style="grid-column: 1/-1;">
                         <div class="icon">🔍</div>
                         <p>No products found</p>
-                        <p style="font-size:0.85rem; margin-top:10px;">Click "Scan Top Brands" to find gems!</p>
+                        <p style="font-size:0.85rem; margin-top:10px;">Try adjusting your filters or scan more brands!</p>
                     </div>
                 `;
                 return;
             }
             
-            container.innerHTML = filtered.map(p => {
-                const badgeClass = p.influencer_count <= 10 ? 'untapped' : 
-                                   p.influencer_count <= 30 ? 'low' : 
-                                   p.influencer_count <= 60 ? 'medium' : 'good';
+            container.innerHTML = products.map(p => {
+                const inf = p.influencer_count || 0;
+                let badgeClass = '';
+                if (inf <= 10) badgeClass = 'hot';
+                else if (inf <= 30) badgeClass = 'warm';
+                else if (inf <= 60) badgeClass = 'cool';
+                
+                const isFav = p.is_favorite ? 'active' : '';
+                const heartIcon = p.is_favorite ? '❤️' : '🤍';
                 
                 return `
-                    <div class="product-card" onclick="openProduct('${p.product_id}')">
+                    <div class="product-card">
+                        <button class="favorite-btn ${isFav}" onclick="event.stopPropagation(); toggleFavorite('${p.product_id}', this)">
+                            ${heartIcon}
+                        </button>
                         <img class="product-image" 
                              src="${p.cached_image_url || p.image_url || ''}" 
                              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2240%22>📦</text></svg>'"
-                             alt="">
-                        <div class="product-info">
+                             alt=""
+                             onclick="openProduct('${p.product_id}')">
+                        <div class="product-info" onclick="openProduct('${p.product_id}')">
                             <div class="product-name">${p.product_name}</div>
                             <div class="product-stats">
                                 <span class="influencer-badge ${badgeClass}">${p.influencer_count} 👤</span>
@@ -488,7 +620,32 @@
             }).join('');
         }
         
-        async function scanTopBrands() {
+        async function toggleFavorite(productId, btn) {
+            try {
+                const response = await fetch(`/api/favorite/${productId}`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update UI
+                    btn.classList.toggle('active');
+                    btn.textContent = data.is_favorite ? '❤️' : '🤍';
+                    
+                    // Update local data
+                    const product = allProducts.find(p => p.product_id === productId);
+                    if (product) product.is_favorite = data.is_favorite;
+                    
+                    showToast(data.is_favorite ? '❤️ Added to favorites' : '💔 Removed from favorites');
+                }
+            } catch (err) {
+                showToast('Failed to update favorite', true);
+            }
+        }
+        
+        function openProduct(productId) {
+            window.location.href = `/product?id=${productId}`;
+        }
+        
+        async function startScan() {
             const btn = document.getElementById('scan-btn');
             const originalText = btn.textContent;
             btn.textContent = '⏳ Scanning...';
@@ -514,6 +671,7 @@
                     // Auto-increment start rank for next batch
                     document.getElementById('start-rank').value = parseInt(startRank) + parseInt(numBrands);
                     loadProducts();
+                    loadStats();
                 }
             } catch (err) {
                 showToast('Scan failed: ' + err.message, true);
@@ -521,11 +679,6 @@
                 btn.textContent = originalText;
                 btn.disabled = false;
             }
-        }
-        
-        function openProduct(productId) {
-            // Go to internal product detail page
-            window.location.href = `/product?id=${productId}`;
         }
     </script>
 </body>

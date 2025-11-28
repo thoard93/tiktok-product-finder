@@ -273,16 +273,21 @@
                     <div id="tab-video" class="tab-content">
                         <div class="analysis-section">
                             <h3 class="section-title">🎬 Video Activity</h3>
-                            ${(p.videos_7d || p.videos_30d || p.video_count) ? `
+                            ${(p.video_7d || p.video_30d || p.video_count) ? `
                             <div class="video-analysis-grid">
-                                <div class="video-stat-card"><div class="video-stat-period">Last 7 Days</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatNumber(p.videos_7d||0)}</div><div class="video-stat-label">New Videos</div></div>
-                                <div class="video-stat-card"><div class="video-stat-period">Last 30 Days</div><div class="video-stat-value" style="color:var(--success)">${formatNumber(p.videos_30d||0)}</div><div class="video-stat-label">New Videos</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Last 7 Days</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatNumber(p.video_7d||0)}</div><div class="video-stat-label">New Videos</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Last 30 Days</div><div class="video-stat-value" style="color:var(--success)">${formatNumber(p.video_30d||0)}</div><div class="video-stat-label">New Videos</div></div>
                                 <div class="video-stat-card"><div class="video-stat-period">Total</div><div class="video-stat-value" style="color:var(--accent)">${formatNumber(p.video_count||0)}</div><div class="video-stat-label">All Videos</div></div>
+                            </div>
+                            <div class="video-analysis-grid" style="margin-top:1rem;">
+                                <div class="video-stat-card"><div class="video-stat-period">Live Streams</div><div class="video-stat-value" style="color:var(--warning)">${formatNumber(p.live_count||0)}</div><div class="video-stat-label">Total</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Views</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatNumber(p.views_count||0)}</div><div class="video-stat-label">Total</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Reviews</div><div class="video-stat-value" style="color:var(--success)">${formatNumber(p.review_count||0)}</div><div class="video-stat-label">Total</div></div>
                             </div>
                             ` : `
                             <p style="color:var(--text-secondary);padding:1rem;background:var(--bg-secondary);border-radius:8px;">
-                                📊 Video data not available for this product.<br>
-                                <span style="font-size:0.85rem;">Use "Search on TikTok" to find videos promoting this product.</span>
+                                📊 Video data not loaded yet.<br>
+                                <span style="font-size:0.85rem;">Click "Refresh Data" to fetch video stats from EchoTik.</span>
                             </p>
                             `}
                         </div>
@@ -350,13 +355,27 @@
             btn.textContent = '⏳ Loading...';
             btn.disabled = true;
             try {
-                const r = await fetch(`/api/product/${pid}/refresh`);
+                const r = await fetch(`/api/refresh-product/${pid}`, { method: 'POST' });
                 const d = await r.json();
-                if (d.success) location.reload();
-                else alert('Failed: '+(d.error||'Unknown error'));
-            } catch(e) { alert('Error: '+e.message); }
+                if (d.success) {
+                    showToast('✅ Data refreshed!');
+                    location.reload();
+                } else {
+                    showToast('Failed: '+(d.error||'Unknown error'), true);
+                }
+            } catch(e) { 
+                showToast('Error: '+e.message, true);
+            }
             btn.textContent = '🔄 Refresh Data';
             btn.disabled = false;
+        }
+        
+        function showToast(msg, isError) {
+            const t = document.createElement('div');
+            t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:8px;z-index:1000;color:#fff;background:'+(isError?'#e94560':'#333');
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
         }
         
         async function loadProduct() {
