@@ -470,7 +470,7 @@
                 return `
                     <div class="product-card" onclick="openProduct('${p.product_id}')">
                         <img class="product-image" 
-                             src="/api/image-proxy/${p.product_id}" 
+                             src="${p.cached_image_url || p.image_url || ''}" 
                              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2240%22>📦</text></svg>'"
                              alt="">
                         <div class="product-info">
@@ -479,7 +479,7 @@
                                 <span class="influencer-badge ${badgeClass}">${p.influencer_count} 👤</span>
                                 <span>${(p.sales_7d || 0).toLocaleString()} /7d</span>
                             </div>
-                            <div style="font-size:0.75rem; color:#888; margin-top:6px;">
+                            <div style="font-size:0.65rem; color:#888; margin-top:4px;">
                                 ${p.seller_name || ''}
                             </div>
                         </div>
