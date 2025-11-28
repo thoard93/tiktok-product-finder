@@ -646,38 +646,62 @@
             window.location.href = `/product?id=${productId}`;
         }
         
+        let scanAborted = false;
+        
         async function startScan() {
             const btn = document.getElementById('scan-btn');
-            const originalText = btn.textContent;
-            btn.textContent = '⏳ Scanning...';
-            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            scanAborted = false;
             
-            const startRank = document.getElementById('start-rank').value;
-            const numBrands = document.getElementById('num-brands').value;
-            const pagesPerBrand = document.getElementById('pages-per-brand').value;
+            const startRank = parseInt(document.getElementById('start-rank').value);
+            const numBrands = parseInt(document.getElementById('num-brands').value);
+            const pagesPerBrand = parseInt(document.getElementById('pages-per-brand').value);
             const minInfluencers = document.getElementById('min-influencers').value;
             const maxInfluencers = document.getElementById('max-influencers').value;
             const minSales = document.getElementById('min-sales').value;
             
+            let totalFound = 0;
+            let totalSaved = 0;
+            
             try {
-                const url = `/api/scan?start_rank=${startRank}&brands=${numBrands}&pages_per_brand=${pagesPerBrand}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}&min_sales=${minSales}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                if (data.error) {
-                    showToast(data.error, true);
-                } else {
-                    const rankInfo = data.scan_info?.brand_ranks || '';
-                    showToast(`✅ Brands ${rankInfo}: Found ${data.total_products_found}, saved ${data.total_products_saved} new!`);
-                    // Auto-increment start rank for next batch
-                    document.getElementById('start-rank').value = parseInt(startRank) + parseInt(numBrands);
-                    loadProducts();
-                    loadStats();
+                // Scan brands one at a time to avoid timeout
+                for (let i = 0; i < numBrands; i++) {
+                    if (scanAborted) {
+                        showToast('⏹️ Scan stopped');
+                        break;
+                    }
+                    
+                    const brandRank = startRank + i;
+                    btn.innerHTML = `⏳ Brand ${i + 1}/${numBrands} (Rank #${brandRank})...`;
+                    btn.onclick = () => { scanAborted = true; btn.innerHTML = '⏹️ Stopping...'; };
+                    
+                    const url = `/api/quick-scan?brand_rank=${brandRank}&pages=${pagesPerBrand}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}&min_sales=${minSales}`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        console.error(`Brand ${brandRank} error:`, data.error);
+                        continue;
+                    }
+                    
+                    if (data.result) {
+                        totalFound += data.result.products_found;
+                        totalSaved += data.result.products_saved;
+                        console.log(`Brand #${brandRank} ${data.result.seller_name}: Found ${data.result.products_found}, Saved ${data.result.products_saved}`);
+                    }
                 }
+                
+                showToast(`✅ Scanned ${numBrands} brands: Found ${totalFound}, saved ${totalSaved} new!`);
+                // Auto-increment start rank for next batch
+                document.getElementById('start-rank').value = startRank + numBrands;
+                loadProducts();
+                loadStats();
+                
             } catch (err) {
                 showToast('Scan failed: ' + err.message, true);
             } finally {
-                btn.textContent = originalText;
+                btn.innerHTML = originalText;
+                btn.onclick = startScan;
                 btn.disabled = false;
             }
         }
