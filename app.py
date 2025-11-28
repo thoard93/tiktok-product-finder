@@ -388,10 +388,6 @@ def scan_top_brands():
                     if commission_rate <= 0:
                         continue
                     
-                    # SKIP products with 0 total videos - likely not affiliate-enabled
-                    if video_count <= 0:
-                        continue
-                    
                     brand_result['products_found'] += 1
                     
                     # Parse image URL
@@ -953,29 +949,14 @@ def cleanup_products():
     """
     Remove products that aren't affiliate-eligible:
     - 0% commission (not available for affiliates)
-    - 0 videos (likely not promoted/enabled for affiliates)
     """
     try:
         # Count before cleanup
         total_before = Product.query.count()
         
-        # Find products to delete
-        zero_commission = Product.query.filter(
-            db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None))
-        ).count()
-        
-        zero_videos = Product.query.filter(
-            db.or_(Product.video_count == 0, Product.video_count.is_(None))
-        ).count()
-        
         # Delete products with 0 commission
-        deleted_commission = Product.query.filter(
+        deleted = Product.query.filter(
             db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None))
-        ).delete(synchronize_session=False)
-        
-        # Delete products with 0 videos (that weren't already deleted)
-        deleted_videos = Product.query.filter(
-            db.or_(Product.video_count == 0, Product.video_count.is_(None))
         ).delete(synchronize_session=False)
         
         db.session.commit()
@@ -984,14 +965,10 @@ def cleanup_products():
         
         return jsonify({
             'success': True,
-            'message': f'Cleaned up {total_before - total_after} ineligible products',
+            'message': f'Cleaned up {deleted} products with 0% commission',
             'before': total_before,
             'after': total_after,
-            'removed': {
-                'zero_commission': deleted_commission,
-                'zero_videos': deleted_videos,
-                'total': total_before - total_after
-            }
+            'removed': deleted
         })
     except Exception as e:
         db.session.rollback()
