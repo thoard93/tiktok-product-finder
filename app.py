@@ -587,30 +587,6 @@ def get_product_detail(product_id):
         if not product:
             return jsonify({'success': False, 'error': 'Product not found'}), 404
         
-        # Get cached image URL
-        image_url = product.image_url or ''
-        cached_image_url = ''
-        
-        if image_url and 'echosell-images' in image_url:
-            try:
-                response = requests.get(
-                    f"{BASE_URL}/batch/cover/download",
-                    params={'cover_urls': image_url},
-                    auth=get_auth(),
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('code') == 0 and data.get('data'):
-                        for item in data['data']:
-                            if isinstance(item, dict):
-                                for orig_url, signed_url in item.items():
-                                    if signed_url and signed_url.startswith('http'):
-                                        cached_image_url = signed_url
-                                        break
-            except:
-                pass
-        
         data = {
             'product_id': product.product_id,
             'product_name': product.product_name or '',
@@ -626,7 +602,6 @@ def get_product_detail(product_id):
             
             # Commission
             'commission_rate': float(product.commission_rate or 0),
-            'potential_earnings': float(product.gmv or 0) * float(product.commission_rate or 0) / 100,
             
             # Competition
             'influencer_count': int(product.influencer_count or 0),
@@ -634,13 +609,13 @@ def get_product_detail(product_id):
             # Product info
             'price': float(product.price or 0),
             
-            # Media
-            'image_url': image_url,
-            'cached_image_url': cached_image_url or f'/api/image-proxy/{product_id}',
+            # Media - use proxy endpoint instead of slow API call
+            'image_url': product.image_url or '',
+            'cached_image_url': f'/api/image-proxy/{product_id}',
             
             # Links
-            'tiktok_url': f'https://shop.tiktok.com/view/product/{product.product_id}',
-            'affiliate_url': f'https://www.tiktok.com/shop/product/{product.product_id}',
+            'tiktok_url': f'https://www.tiktok.com/shop/product/{product.product_id}',
+            'affiliate_url': f'https://affiliate.tiktok.com/product/{product.product_id}',
             
             # Timestamps
             'first_seen': product.first_seen.isoformat() if product.first_seen else None,
