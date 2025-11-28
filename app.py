@@ -1,35 +1,38 @@
 """
-TikTok Product Finder - Brand Hunter (Simplified)
+TikTok Product Finder - Brand Hunter (Community Edition)
 Scans TOP BRANDS directly - no follow workflow needed
+
+Features:
+- Discord OAuth login (server members only)
+- Developer passkey bypass
+- Scan locking (one scan at a time)
+- User activity logging
+- Watermarked exports
+- Admin dashboard
 
 Strategy: 
 - Get top brands by GMV from EchoTik
 - Scan their products sorted by 7-DAY SALES DESCENDING
 - Filter for low influencer count (1-100)
 - Save hidden gems automatically
-
-Why 7-day sales descending:
-- Products with recent momentum, not legacy sellers
-- Lower influencer counts than all-time bestsellers
-- Better use of limited pages - active products first
-
-API Reference (EchoTik v3):
-- seller/list: seller_sort_field 1=sales, 2=gmv, 3=avg_price | sort_type 0=asc, 1=desc
-- seller/product/list: seller_product_sort_field 1=total_sale_cnt, 2=gmv, 3=avg_price, 4=7d_sales, 5=7d_gmv | sort_type 0=asc, 1=desc
 """
 
 import os
 import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for
 from flask_sqlalchemy import SQLAlchemy
+from functools import wraps
 import time
 import json
+import hashlib
+import secrets
 
 app = Flask(__name__, static_folder='pwa')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///products.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
 # Fix Render's postgres:// URL
 if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
@@ -46,14 +49,129 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 
 db = SQLAlchemy(app)
 
+# =============================================================================
+# AUTHENTICATION CONFIG
+# =============================================================================
+
+# Discord OAuth Settings (set these in Render environment variables)
+DISCORD_CLIENT_ID = os.environ.get('DISCORD_CLIENT_ID', '')
+DISCORD_CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
+DISCORD_REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://tiktok-product-finder.onrender.com/auth/discord/callback')
+DISCORD_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '')  # Your Discord server ID
+
+# Developer passkey (set in Render environment variables)
+DEV_PASSKEY = os.environ.get('DEV_PASSKEY', 'change-this-passkey-123')
+
+# Admin Discord user IDs (comma-separated)
+ADMIN_DISCORD_IDS = os.environ.get('ADMIN_DISCORD_IDS', '').split(',')
+
 # EchoTik API Config - v3 API with HTTPBasicAuth
 BASE_URL = "https://open.echotik.live/api/v3/echotik"
 ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
 ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
 
 # =============================================================================
+# SCAN LOCK (prevent simultaneous scans)
+# =============================================================================
+
+scan_lock = {
+    'is_locked': False,
+    'locked_by': None,
+    'locked_at': None,
+    'scan_type': None
+}
+
+def acquire_scan_lock(user_id, scan_type='quick'):
+    """Try to acquire scan lock. Returns True if successful."""
+    global scan_lock
+    
+    # Check if lock is stale (over 10 minutes old)
+    if scan_lock['is_locked'] and scan_lock['locked_at']:
+        lock_age = (datetime.utcnow() - scan_lock['locked_at']).total_seconds()
+        if lock_age > 600:  # 10 minutes
+            scan_lock['is_locked'] = False
+    
+    if scan_lock['is_locked']:
+        return False
+    
+    scan_lock['is_locked'] = True
+    scan_lock['locked_by'] = user_id
+    scan_lock['locked_at'] = datetime.utcnow()
+    scan_lock['scan_type'] = scan_type
+    return True
+
+def release_scan_lock(user_id=None):
+    """Release scan lock. If user_id provided, only release if they own it."""
+    global scan_lock
+    if user_id and scan_lock['locked_by'] != user_id:
+        return False
+    scan_lock['is_locked'] = False
+    scan_lock['locked_by'] = None
+    scan_lock['locked_at'] = None
+    scan_lock['scan_type'] = None
+    return True
+
+def get_scan_status():
+    """Get current scan lock status"""
+    if not scan_lock['is_locked']:
+        return {'locked': False}
+    return {
+        'locked': True,
+        'locked_by': scan_lock['locked_by'],
+        'locked_at': scan_lock['locked_at'].isoformat() if scan_lock['locked_at'] else None,
+        'scan_type': scan_lock['scan_type']
+    }
+
+# =============================================================================
 # DATABASE MODELS
 # =============================================================================
+
+class User(db.Model):
+    """Users who can access the tool"""
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    discord_id = db.Column(db.String(50), unique=True, nullable=True)
+    discord_username = db.Column(db.String(100))
+    discord_avatar = db.Column(db.String(255))
+    is_admin = db.Column(db.Boolean, default=False)
+    is_dev_user = db.Column(db.Boolean, default=False)  # Logged in via passkey
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'discord_id': self.discord_id,
+            'discord_username': self.discord_username,
+            'is_admin': self.is_admin,
+            'is_dev_user': self.is_dev_user,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_login': self.last_login.isoformat() if self.last_login else None
+        }
+
+class ActivityLog(db.Model):
+    """Log of user activities"""
+    __tablename__ = 'activity_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    action = db.Column(db.String(100))  # scan, export, favorite, view, etc.
+    details = db.Column(db.Text)  # JSON details
+    ip_address = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref='activities')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.user.discord_username if self.user else 'Unknown',
+            'action': self.action,
+            'details': self.details,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
 
 class Product(db.Model):
     """Products found by scanner"""
@@ -119,6 +237,289 @@ class Product(db.Model):
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
         }
+
+# =============================================================================
+# AUTHENTICATION HELPERS
+# =============================================================================
+
+def log_activity(user_id, action, details=None):
+    """Log user activity"""
+    try:
+        log = ActivityLog(
+            user_id=user_id,
+            action=action,
+            details=json.dumps(details) if details else None,
+            ip_address=request.remote_addr
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print(f"Failed to log activity: {e}")
+
+def get_current_user():
+    """Get current logged-in user from session"""
+    user_id = session.get('user_id')
+    if user_id:
+        return User.query.get(user_id)
+    return None
+
+def login_required(f):
+    """Decorator to require login for routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('user_id'):
+            if request.is_json or request.path.startswith('/api/'):
+                return jsonify({'error': 'Authentication required', 'login_url': '/login'}), 401
+            return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Decorator to require admin access"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user or not user.is_admin:
+            return jsonify({'error': 'Admin access required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+def generate_watermark(user):
+    """Generate a unique watermark for exports"""
+    if not user:
+        return "UNKNOWN"
+    # Create a hash that can be traced back to user but isn't obvious
+    data = f"{user.id}-{user.discord_username}-{datetime.utcnow().strftime('%Y%m%d')}"
+    hash_val = hashlib.md5(data.encode()).hexdigest()[:8].upper()
+    return f"BH-{hash_val}"
+
+# =============================================================================
+# AUTHENTICATION ROUTES
+# =============================================================================
+
+@app.route('/login')
+def login_page():
+    """Show login page"""
+    return send_from_directory(app.static_folder, 'login.html')
+
+@app.route('/auth/discord')
+def discord_login():
+    """Redirect to Discord OAuth"""
+    if not DISCORD_CLIENT_ID:
+        return jsonify({'error': 'Discord OAuth not configured'}), 500
+    
+    # Discord OAuth URL
+    oauth_url = (
+        f"https://discord.com/api/oauth2/authorize"
+        f"?client_id={DISCORD_CLIENT_ID}"
+        f"&redirect_uri={DISCORD_REDIRECT_URI}"
+        f"&response_type=code"
+        f"&scope=identify%20guilds"
+    )
+    return redirect(oauth_url)
+
+@app.route('/auth/discord/callback')
+def discord_callback():
+    """Handle Discord OAuth callback"""
+    code = request.args.get('code')
+    if not code:
+        return redirect('/login?error=no_code')
+    
+    try:
+        # Exchange code for token
+        token_response = requests.post(
+            'https://discord.com/api/oauth2/token',
+            data={
+                'client_id': DISCORD_CLIENT_ID,
+                'client_secret': DISCORD_CLIENT_SECRET,
+                'grant_type': 'authorization_code',
+                'code': code,
+                'redirect_uri': DISCORD_REDIRECT_URI
+            },
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        
+        if token_response.status_code != 200:
+            return redirect('/login?error=token_failed')
+        
+        tokens = token_response.json()
+        access_token = tokens.get('access_token')
+        
+        # Get user info
+        user_response = requests.get(
+            'https://discord.com/api/users/@me',
+            headers={'Authorization': f'Bearer {access_token}'}
+        )
+        
+        if user_response.status_code != 200:
+            return redirect('/login?error=user_failed')
+        
+        discord_user = user_response.json()
+        discord_id = discord_user.get('id')
+        username = discord_user.get('username')
+        avatar = discord_user.get('avatar')
+        
+        # Check if user is in the required guild
+        if DISCORD_GUILD_ID:
+            guilds_response = requests.get(
+                'https://discord.com/api/users/@me/guilds',
+                headers={'Authorization': f'Bearer {access_token}'}
+            )
+            
+            if guilds_response.status_code == 200:
+                guilds = guilds_response.json()
+                guild_ids = [g.get('id') for g in guilds]
+                
+                if DISCORD_GUILD_ID not in guild_ids:
+                    return redirect('/login?error=not_in_server')
+        
+        # Create or update user
+        user = User.query.filter_by(discord_id=discord_id).first()
+        if not user:
+            user = User(
+                discord_id=discord_id,
+                discord_username=username,
+                discord_avatar=avatar,
+                is_admin=discord_id in ADMIN_DISCORD_IDS
+            )
+            db.session.add(user)
+        else:
+            user.discord_username = username
+            user.discord_avatar = avatar
+            user.last_login = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Set session
+        session['user_id'] = user.id
+        session['discord_username'] = username
+        session['is_admin'] = user.is_admin
+        
+        log_activity(user.id, 'login', {'method': 'discord'})
+        
+        return redirect('/')
+        
+    except Exception as e:
+        print(f"Discord OAuth error: {e}")
+        return redirect(f'/login?error=oauth_error')
+
+@app.route('/auth/passkey', methods=['POST'])
+def passkey_login():
+    """Login with developer passkey"""
+    data = request.get_json() or {}
+    passkey = data.get('passkey', '')
+    
+    if not passkey or passkey != DEV_PASSKEY:
+        return jsonify({'error': 'Invalid passkey'}), 401
+    
+    # Create or get dev user
+    user = User.query.filter_by(is_dev_user=True, discord_username='Developer').first()
+    if not user:
+        user = User(
+            discord_id=None,
+            discord_username='Developer',
+            is_admin=True,
+            is_dev_user=True
+        )
+        db.session.add(user)
+        db.session.commit()
+    else:
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+    
+    session['user_id'] = user.id
+    session['discord_username'] = 'Developer'
+    session['is_admin'] = True
+    
+    log_activity(user.id, 'login', {'method': 'passkey'})
+    
+    return jsonify({'success': True, 'redirect': '/'})
+
+@app.route('/auth/logout')
+def logout():
+    """Logout user"""
+    user_id = session.get('user_id')
+    if user_id:
+        log_activity(user_id, 'logout', {})
+    session.clear()
+    return redirect('/login')
+
+@app.route('/api/me')
+@login_required
+def get_me():
+    """Get current user info"""
+    user = get_current_user()
+    return jsonify({
+        'user': user.to_dict() if user else None,
+        'watermark': generate_watermark(user)
+    })
+
+@app.route('/api/scan-status')
+@login_required
+def api_scan_status():
+    """Get current scan lock status"""
+    status = get_scan_status()
+    if status['locked'] and status.get('locked_by'):
+        # Get username of who's scanning
+        locker = User.query.get(status['locked_by'])
+        status['locked_by_username'] = locker.discord_username if locker else 'Unknown'
+    return jsonify(status)
+
+# =============================================================================
+# ADMIN ROUTES
+# =============================================================================
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_page():
+    """Admin dashboard"""
+    return send_from_directory(app.static_folder, 'admin.html')
+
+@app.route('/api/admin/users')
+@login_required
+@admin_required
+def admin_users():
+    """Get all users"""
+    users = User.query.order_by(User.last_login.desc()).all()
+    return jsonify({'users': [u.to_dict() for u in users]})
+
+@app.route('/api/admin/activity')
+@login_required
+@admin_required
+def admin_activity():
+    """Get recent activity"""
+    limit = request.args.get('limit', 100, type=int)
+    logs = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(limit).all()
+    return jsonify({'logs': [l.to_dict() for l in logs]})
+
+@app.route('/api/admin/kick/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_kick_user(user_id):
+    """Remove a user's access"""
+    user = User.query.get(user_id)
+    if user:
+        log_activity(session.get('user_id'), 'admin_kick', {'kicked_user': user.discord_username})
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'error': 'User not found'}), 404
+
+@app.route('/api/log-activity', methods=['POST'])
+@login_required
+def api_log_activity():
+    """Log user activity from frontend"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    data = request.get_json() or {}
+    action = data.get('action', 'unknown')
+    details = data.get('details', {})
+    
+    log_activity(user.id, action, details)
+    return jsonify({'success': True})
 
 # =============================================================================
 # ECHOTIK API HELPERS - v3 API with HTTPBasicAuth
@@ -527,6 +928,7 @@ def scan_top_brands():
         }), 500
 
 @app.route('/api/quick-scan', methods=['GET'])
+@login_required
 def quick_scan():
     """
     Quick scan - scans ONE brand at a time to avoid timeouts.
@@ -538,6 +940,19 @@ def quick_scan():
         max_influencers: Maximum influencer count (default: 100)
         min_sales: Minimum 7-day sales (default: 0)
     """
+    user = get_current_user()
+    user_id = user.id if user else None
+    
+    # Try to acquire scan lock
+    if not acquire_scan_lock(user_id, 'quick'):
+        status = get_scan_status()
+        locker = User.query.get(status.get('locked_by')) if status.get('locked_by') else None
+        return jsonify({
+            'error': 'Scan in progress',
+            'locked_by': locker.discord_username if locker else 'Unknown',
+            'message': f"Please wait - {locker.discord_username if locker else 'Someone'} is currently scanning"
+        }), 423  # 423 = Locked
+    
     try:
         brand_rank = request.args.get('brand_rank', 1, type=int)
         pages = min(request.args.get('pages', 10, type=int), 10)  # Cap at 10 pages to avoid timeout
@@ -646,6 +1061,17 @@ def quick_scan():
         
         db.session.commit()
         
+        # Log activity
+        log_activity(user_id, 'scan', {
+            'type': 'quick',
+            'brand': seller_name,
+            'found': result['products_found'],
+            'saved': result['products_saved']
+        })
+        
+        # Release lock after successful scan
+        release_scan_lock(user_id)
+        
         return jsonify({
             'success': True,
             'result': result,
@@ -655,6 +1081,7 @@ def quick_scan():
     except Exception as e:
         import traceback
         db.session.rollback()
+        release_scan_lock(user_id)  # Release lock on error too
         return jsonify({
             'error': str(e),
             'traceback': traceback.format_exc()
@@ -1406,11 +1833,23 @@ def debug_api():
 # =============================================================================
 
 @app.route('/')
+@login_required
 def index():
     return send_from_directory('pwa', 'brand_hunter.html')
 
+@app.route('/product')
+@login_required
+def product_page():
+    return send_from_directory('pwa', 'product_detail.html')
+
 @app.route('/pwa/<path:filename>')
 def pwa_files(filename):
+    # Allow login.html and admin.html without auth
+    if filename in ['login.html', 'admin.html']:
+        return send_from_directory('pwa', filename)
+    # Other PWA files need auth check
+    if not session.get('user_id'):
+        return redirect('/login')
     return send_from_directory('pwa', filename)
 
 @app.route('/api/image-proxy/<product_id>')
@@ -1445,7 +1884,7 @@ def init_database():
     try:
         db.create_all()
         
-        # Try to add missing columns
+        # Try to add missing columns to products table
         columns_to_add = [
             ('sales_7d', 'INTEGER DEFAULT 0'),
             ('cached_image_url', 'TEXT'),
@@ -1470,9 +1909,43 @@ def init_database():
                 db.session.rollback()
                 # Column probably already exists
         
+        # Create users table if not exists
+        try:
+            db.session.execute(db.text('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    discord_id VARCHAR(50) UNIQUE,
+                    discord_username VARCHAR(100),
+                    discord_avatar VARCHAR(255),
+                    is_admin BOOLEAN DEFAULT FALSE,
+                    is_dev_user BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            '''))
+            db.session.commit()
+        except:
+            db.session.rollback()
+        
+        # Create activity_logs table if not exists
+        try:
+            db.session.execute(db.text('''
+                CREATE TABLE IF NOT EXISTS activity_logs (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    action VARCHAR(100),
+                    details TEXT,
+                    ip_address VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            '''))
+            db.session.commit()
+        except:
+            db.session.rollback()
+        
         return jsonify({
             'success': True, 
-            'message': f'Database initialized. Added columns: {added if added else "none (already exist)"}'
+            'message': f'Database initialized. Added product columns: {added if added else "none (already exist)"}. Users and activity tables ready.'
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
