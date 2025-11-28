@@ -432,7 +432,7 @@ def scan_top_brands():
                         db.session.add(product)
                         brand_result['products_saved'] += 1
                 
-                time.sleep(0.3)
+                time.sleep(0.1)
             
             # Commit after each brand to avoid losing progress
             db.session.commit()
@@ -452,6 +452,141 @@ def scan_top_brands():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
+@app.route('/api/quick-scan', methods=['GET'])
+def quick_scan():
+    """
+    Quick scan - scans ONE brand at a time to avoid timeouts.
+    Call this multiple times with different brand_rank values.
+    
+    Parameters:
+        brand_rank: Which brand to scan (1 = top brand, 2 = second, etc.)
+        pages: Number of pages to scan (default: 10, max 20)
+        max_influencers: Maximum influencer count (default: 100)
+        min_sales: Minimum 7-day sales (default: 0)
+    """
+    try:
+        brand_rank = request.args.get('brand_rank', 1, type=int)
+        pages = min(request.args.get('pages', 10, type=int), 20)  # Cap at 20 pages
+        min_influencers = request.args.get('min_influencers', 1, type=int)
+        max_influencers = request.args.get('max_influencers', 100, type=int)
+        min_sales = request.args.get('min_sales', 0, type=int)
+        
+        # Get the specific brand
+        brand_page = (brand_rank - 1) // 10 + 1
+        brand_offset = (brand_rank - 1) % 10
+        
+        brands_response = get_top_brands(page=brand_page)
+        if not brands_response or len(brands_response) <= brand_offset:
+            return jsonify({'error': f'Brand rank {brand_rank} not found'}), 404
+        
+        brand = brands_response[brand_offset]
+        seller_id = brand.get('seller_id', '')
+        seller_name = brand.get('seller_name', 'Unknown')
+        
+        result = {
+            'brand_rank': brand_rank,
+            'seller_id': seller_id,
+            'seller_name': seller_name,
+            'pages_scanned': 0,
+            'products_scanned': 0,
+            'products_found': 0,
+            'products_saved': 0
+        }
+        
+        for page in range(1, pages + 1):
+            products = get_seller_products(seller_id, page=page)
+            
+            if not products:
+                break
+            
+            result['pages_scanned'] += 1
+            result['products_scanned'] += len(products)
+            
+            for p in products:
+                product_id = p.get('product_id', '')
+                if not product_id:
+                    continue
+                
+                influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                total_sales = int(p.get('total_sale_cnt', 0) or 0)
+                sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                commission_rate = float(p.get('product_commission_rate', 0) or 0)
+                video_count = int(p.get('total_video_cnt', 0) or 0)
+                video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
+                video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
+                live_count = int(p.get('total_live_cnt', 0) or 0)
+                views_count = int(p.get('total_views_cnt', 0) or 0)
+                
+                # Filters
+                if influencer_count < min_influencers or influencer_count > max_influencers:
+                    continue
+                if sales_7d < min_sales:
+                    continue
+                if commission_rate <= 0:
+                    continue
+                
+                result['products_found'] += 1
+                
+                image_url = parse_cover_url(p.get('cover_url', ''))
+                
+                existing = Product.query.get(product_id)
+                if existing:
+                    existing.influencer_count = influencer_count
+                    existing.sales = total_sales
+                    existing.sales_30d = sales_30d
+                    existing.sales_7d = sales_7d
+                    existing.commission_rate = commission_rate
+                    existing.video_count = video_count
+                    existing.video_7d = video_7d
+                    existing.video_30d = video_30d
+                    existing.live_count = live_count
+                    existing.views_count = views_count
+                    existing.last_updated = datetime.utcnow()
+                else:
+                    product = Product(
+                        product_id=product_id,
+                        product_name=p.get('product_name', ''),
+                        seller_id=seller_id,
+                        seller_name=seller_name,
+                        gmv=float(p.get('total_sale_gmv_amt', 0) or 0),
+                        gmv_30d=float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+                        sales=total_sales,
+                        sales_7d=sales_7d,
+                        sales_30d=sales_30d,
+                        influencer_count=influencer_count,
+                        commission_rate=commission_rate,
+                        price=float(p.get('spu_avg_price', 0) or 0),
+                        image_url=image_url,
+                        video_count=video_count,
+                        video_7d=video_7d,
+                        video_30d=video_30d,
+                        live_count=live_count,
+                        views_count=views_count,
+                        scan_type='brand_hunter'
+                    )
+                    db.session.add(product)
+                    result['products_saved'] += 1
+            
+            time.sleep(0.1)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'result': result,
+            'next_brand': brand_rank + 1
+        })
+    
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
 
 @app.route('/api/scan-pages/<seller_id>', methods=['GET'])
 def scan_page_range(seller_id):
