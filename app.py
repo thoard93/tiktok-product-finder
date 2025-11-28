@@ -1072,60 +1072,131 @@ def refresh_images():
     """
     Batch refresh cached image URLs for products.
     Call this after scanning to get working image URLs.
+    
+    Parameters:
+        batch: Number of products to process (default 50)
+        force: If true, refresh ALL products regardless of current cache status
     """
     try:
         batch_size = request.args.get('batch', 50, type=int)
+        force = request.args.get('force', 'false').lower() == 'true'
         
-        # Get products with image_url but no cached_image_url (or old cache)
-        products = Product.query.filter(
-            Product.image_url.isnot(None),
-            Product.image_url != '',
-            db.or_(
-                Product.cached_image_url.is_(None),
-                Product.cached_image_url == ''
-            )
-        ).limit(batch_size).all()
+        if force:
+            # Force refresh - get products with ANY image_url
+            products = Product.query.filter(
+                Product.image_url.isnot(None),
+                Product.image_url != ''
+            ).limit(batch_size).all()
+        else:
+            # Normal refresh - only products needing images
+            # Include products with empty cached_image_url OR no image_url but have product_id
+            products = Product.query.filter(
+                db.or_(
+                    # Has image_url but no cache
+                    db.and_(
+                        Product.image_url.isnot(None),
+                        Product.image_url != '',
+                        db.or_(
+                            Product.cached_image_url.is_(None),
+                            Product.cached_image_url == ''
+                        )
+                    ),
+                    # No image_url at all - we'll try to fetch from API
+                    db.or_(
+                        Product.image_url.is_(None),
+                        Product.image_url == ''
+                    )
+                )
+            ).limit(batch_size).all()
         
         if not products:
-            return jsonify({'success': True, 'message': 'No images need refreshing', 'refreshed': 0})
+            return jsonify({'success': True, 'message': 'No images need refreshing', 'updated': 0})
         
-        # Group by batches of 10 (API limit)
-        refreshed = 0
-        for i in range(0, len(products), 10):
-            batch = products[i:i+10]
+        updated = 0
+        
+        # First, handle products WITH image_url - get signed URLs
+        products_with_urls = [p for p in products if p.image_url]
+        
+        for i in range(0, len(products_with_urls), 10):
+            batch = products_with_urls[i:i+10]
             
-            # Get original URLs
             url_to_product = {}
             for p in batch:
                 parsed_url = parse_cover_url(p.image_url)
                 if parsed_url:
                     url_to_product[parsed_url] = p
             
-            if not url_to_product:
-                continue
+            if url_to_product:
+                signed_urls = get_cached_image_urls(list(url_to_product.keys()))
+                
+                for orig_url, signed_url in signed_urls.items():
+                    if orig_url in url_to_product and signed_url:
+                        product = url_to_product[orig_url]
+                        product.cached_image_url = signed_url
+                        product.image_cached_at = datetime.utcnow()
+                        updated += 1
             
-            # Get signed URLs
-            signed_urls = get_cached_image_urls(list(url_to_product.keys()))
+            time.sleep(0.2)
+        
+        # Second, handle products WITHOUT image_url - try to get from product detail API
+        products_without_urls = [p for p in products if not p.image_url]
+        
+        for i in range(0, len(products_without_urls), 10):
+            batch = products_without_urls[i:i+10]
+            product_ids = [p.product_id for p in batch]
             
-            # Update products
-            for orig_url, signed_url in signed_urls.items():
-                if orig_url in url_to_product:
-                    product = url_to_product[orig_url]
-                    product.cached_image_url = signed_url
-                    product.image_cached_at = datetime.utcnow()
-                    refreshed += 1
+            try:
+                # Call product detail API to get images
+                response = requests.post(
+                    f"{BASE_URL}/product/detail",
+                    json={"product_ids": ",".join(product_ids)},
+                    auth=get_auth(),
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('code') == 0:
+                        api_products = data.get('data', [])
+                        
+                        for api_p in api_products:
+                            pid = api_p.get('product_id', '')
+                            cover_url = api_p.get('cover_url', '')
+                            
+                            if pid and cover_url:
+                                # Find matching product
+                                for p in batch:
+                                    if p.product_id == pid:
+                                        parsed_url = parse_cover_url(cover_url)
+                                        if parsed_url:
+                                            p.image_url = parsed_url
+                                            # Get signed URL
+                                            signed = get_cached_image_urls([parsed_url])
+                                            if signed.get(parsed_url):
+                                                p.cached_image_url = signed[parsed_url]
+                                                p.image_cached_at = datetime.utcnow()
+                                                updated += 1
+                                        break
+            except Exception as e:
+                print(f"Error fetching product images: {e}")
             
-            db.session.commit()
-            time.sleep(0.3)  # Rate limiting
+            time.sleep(0.3)
+        
+        db.session.commit()
+        
+        # Count remaining
+        remaining = Product.query.filter(
+            db.or_(
+                Product.cached_image_url.is_(None),
+                Product.cached_image_url == ''
+            )
+        ).count()
         
         return jsonify({
             'success': True,
-            'message': f'Refreshed {refreshed} images',
-            'refreshed': refreshed,
-            'remaining': Product.query.filter(
-                Product.image_url.isnot(None),
-                Product.cached_image_url.is_(None)
-            ).count()
+            'message': f'Updated {updated} images',
+            'updated': updated,
+            'remaining': remaining
         })
         
     except Exception as e:
