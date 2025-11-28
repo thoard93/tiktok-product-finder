@@ -403,7 +403,7 @@
             </div>
             <div class="setting-row">
                 <label>Pages per brand:</label>
-                <input type="number" id="pages-per-brand" value="10" min="1" max="50">
+                <input type="number" id="pages-per-brand" value="10" min="1" max="10">
             </div>
             <div class="setting-row">
                 <label>Min influencers:</label>
@@ -655,43 +655,67 @@
             
             const startRank = parseInt(document.getElementById('start-rank').value);
             const numBrands = parseInt(document.getElementById('num-brands').value);
-            const pagesPerBrand = parseInt(document.getElementById('pages-per-brand').value);
+            let pagesPerBrand = parseInt(document.getElementById('pages-per-brand').value);
+            // Cap at 10 pages to avoid timeout
+            if (pagesPerBrand > 10) {
+                pagesPerBrand = 10;
+                document.getElementById('pages-per-brand').value = 10;
+                showToast('⚠️ Pages capped at 10 to avoid timeout');
+            }
             const minInfluencers = document.getElementById('min-influencers').value;
             const maxInfluencers = document.getElementById('max-influencers').value;
             const minSales = document.getElementById('min-sales').value;
             
             let totalFound = 0;
             let totalSaved = 0;
+            let brandsCompleted = 0;
+            let errors = 0;
             
             try {
                 // Scan brands one at a time to avoid timeout
                 for (let i = 0; i < numBrands; i++) {
                     if (scanAborted) {
-                        showToast('⏹️ Scan stopped');
+                        showToast(`⏹️ Stopped after ${brandsCompleted} brands`);
                         break;
                     }
                     
                     const brandRank = startRank + i;
-                    btn.innerHTML = `⏳ Brand ${i + 1}/${numBrands} (Rank #${brandRank})...`;
+                    btn.innerHTML = `⏳ ${i + 1}/${numBrands} (Rank #${brandRank})...`;
                     btn.onclick = () => { scanAborted = true; btn.innerHTML = '⏹️ Stopping...'; };
                     
-                    const url = `/api/quick-scan?brand_rank=${brandRank}&pages=${pagesPerBrand}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}&min_sales=${minSales}`;
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    
-                    if (data.error) {
-                        console.error(`Brand ${brandRank} error:`, data.error);
-                        continue;
-                    }
-                    
-                    if (data.result) {
-                        totalFound += data.result.products_found;
-                        totalSaved += data.result.products_saved;
-                        console.log(`Brand #${brandRank} ${data.result.seller_name}: Found ${data.result.products_found}, Saved ${data.result.products_saved}`);
+                    try {
+                        const url = `/api/quick-scan?brand_rank=${brandRank}&pages=${pagesPerBrand}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}&min_sales=${minSales}`;
+                        const response = await fetch(url);
+                        
+                        if (!response.ok) {
+                            console.error(`Brand ${brandRank} HTTP error: ${response.status}`);
+                            errors++;
+                            continue; // Skip this brand, try next
+                        }
+                        
+                        const data = await response.json();
+                        
+                        if (data.error) {
+                            console.error(`Brand ${brandRank} error:`, data.error);
+                            errors++;
+                            continue; // Skip this brand, try next
+                        }
+                        
+                        if (data.result) {
+                            totalFound += data.result.products_found;
+                            totalSaved += data.result.products_saved;
+                            brandsCompleted++;
+                            console.log(`✅ Brand #${brandRank} ${data.result.seller_name}: Found ${data.result.products_found}, Saved ${data.result.products_saved}`);
+                        }
+                    } catch (fetchErr) {
+                        console.error(`Brand ${brandRank} fetch error:`, fetchErr);
+                        errors++;
+                        // Continue to next brand
                     }
                 }
                 
-                showToast(`✅ Scanned ${numBrands} brands: Found ${totalFound}, saved ${totalSaved} new!`);
+                const errorMsg = errors > 0 ? ` (${errors} errors)` : '';
+                showToast(`✅ ${brandsCompleted}/${numBrands} brands: Found ${totalFound}, saved ${totalSaved}${errorMsg}`);
                 // Auto-increment start rank for next batch
                 document.getElementById('start-rank').value = startRank + numBrands;
                 loadProducts();
