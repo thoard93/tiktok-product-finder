@@ -200,32 +200,50 @@ def scan_top_brands():
     Strategy: Get products sorted by sales, filter for low influencer count
     
     Parameters:
-        brands: Number of top brands to scan (default: 5)
+        brands: Number of brands to scan (default: 5)
+        start_rank: Starting brand rank (default: 1, meaning top brand)
         pages_per_brand: Pages to scan per brand (default: 10)
         min_influencers: Minimum influencer count (default: 1)
         max_influencers: Maximum influencer count (default: 100)
-        min_sales: Minimum total sales (default: 10)
+        min_sales: Minimum 7-day sales (default: 0)
     """
     try:
         num_brands = request.args.get('brands', 5, type=int)
+        start_rank = request.args.get('start_rank', 1, type=int)
         pages_per_brand = request.args.get('pages_per_brand', 10, type=int)
         min_influencers = request.args.get('min_influencers', 1, type=int)
         max_influencers = request.args.get('max_influencers', 100, type=int)
-        min_sales = request.args.get('min_sales', 10, type=int)
+        min_sales = request.args.get('min_sales', 0, type=int)
         
-        # Get top brands
-        print(f"Fetching top {num_brands} brands...")
-        brands = get_top_brands(page=1)
+        # Calculate which pages of brands to fetch
+        # EchoTik returns 10 brands per page
+        start_page = (start_rank - 1) // 10 + 1
+        start_offset = (start_rank - 1) % 10
+        
+        # Get brands from the right pages
+        all_brands = []
+        pages_needed = ((start_offset + num_brands - 1) // 10) + 1
+        
+        for page in range(start_page, start_page + pages_needed):
+            brands_page = get_top_brands(page=page)
+            if brands_page:
+                all_brands.extend(brands_page)
+            time.sleep(0.2)
+        
+        # Slice to get exactly the brands we want
+        brands = all_brands[start_offset:start_offset + num_brands]
         
         if not brands:
             return jsonify({'error': 'Failed to fetch brands - check EchoTik credentials'}), 500
-        
-        brands = brands[:num_brands]
         
         results = {
             'brands_scanned': [],
             'total_products_found': 0,
             'total_products_saved': 0,
+            'scan_info': {
+                'brand_ranks': f"{start_rank}-{start_rank + len(brands) - 1}",
+                'pages_per_brand': pages_per_brand
+            },
             'filter_settings': {
                 'min_influencers': min_influencers,
                 'max_influencers': max_influencers,
@@ -313,13 +331,14 @@ def scan_top_brands():
                 
                 time.sleep(0.3)
             
+            # Commit after each brand to avoid losing progress
+            db.session.commit()
+            
             results['brands_scanned'].append(brand_result)
             results['total_products_found'] += brand_result['products_found']
             results['total_products_saved'] += brand_result['products_saved']
             
             print(f"  ✅ Scanned: {brand_result['products_scanned']}, Found: {brand_result['products_found']}, Saved: {brand_result['products_saved']}")
-        
-        db.session.commit()
         
         return jsonify(results)
     
