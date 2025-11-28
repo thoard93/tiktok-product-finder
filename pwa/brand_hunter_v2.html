@@ -562,75 +562,9 @@
             color: #888;
             line-height: 1.4;
         }
-        
-        /* User Header */
-        .user-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            background: rgba(0,0,0,0.2);
-            font-size: 0.8rem;
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .user-avatar {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #e94560;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-        }
-        
-        .user-links a {
-            color: #888;
-            text-decoration: none;
-            margin-left: 15px;
-        }
-        
-        .user-links a:hover {
-            color: #fff;
-        }
-        
-        .scan-indicator {
-            display: none;
-            padding: 8px 12px;
-            background: rgba(245, 158, 11, 0.2);
-            border-bottom: 1px solid #f59e0b;
-            font-size: 0.8rem;
-            color: #f59e0b;
-            text-align: center;
-        }
-        
-        .scan-indicator.show {
-            display: block;
-        }
     </style>
 </head>
 <body>
-    <div class="user-bar">
-        <div class="user-info">
-            <div class="user-avatar" id="user-avatar">?</div>
-            <span id="user-name">Loading...</span>
-        </div>
-        <div class="user-links">
-            <a href="/admin" id="admin-link" style="display:none;">🛡️ Admin</a>
-            <a href="/auth/logout">Logout</a>
-        </div>
-    </div>
-    
-    <div class="scan-indicator" id="scan-indicator">
-        ⏳ <span id="scan-indicator-text">Someone is currently scanning...</span>
-    </div>
-    
     <div class="header">
         <h1>🎯 Brand Hunter</h1>
         <p>Find hidden gems from top brands</p>
@@ -819,11 +753,8 @@
     <div class="modal-overlay" id="tools-modal">
         <div class="modal">
             <h3>🛠️ Tools</h3>
-            <button class="modal-btn" onclick="refreshImages(false)">
-                <span class="icon">🖼️</span> Refresh Missing Images
-            </button>
-            <button class="modal-btn" onclick="refreshImages(true)">
-                <span class="icon">🔄</span> Force Refresh All Images
+            <button class="modal-btn" onclick="refreshImages()">
+                <span class="icon">🖼️</span> Refresh All Images
             </button>
             <button class="modal-btn" onclick="cleanupProducts()">
                 <span class="icon">🧹</span> Cleanup (Remove 0% Commission)
@@ -857,63 +788,13 @@
         let currentScanTab = 'quick';
         let scanAborted = false;
         let knownBrands = [];
-        let currentUser = null;
-        let userWatermark = '';
         
         // Load products on page load
         document.addEventListener('DOMContentLoaded', () => {
-            loadCurrentUser();
             loadProducts();
             loadStats();
             loadKnownBrands();
-            checkScanStatus();
-            
-            // Check scan status every 5 seconds
-            setInterval(checkScanStatus, 5000);
         });
-        
-        async function loadCurrentUser() {
-            try {
-                const response = await fetch('/api/me');
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    return;
-                }
-                const data = await response.json();
-                currentUser = data.user;
-                userWatermark = data.watermark;
-                
-                if (currentUser) {
-                    document.getElementById('user-name').textContent = currentUser.discord_username || 'User';
-                    document.getElementById('user-avatar').textContent = (currentUser.discord_username || 'U')[0].toUpperCase();
-                    
-                    if (currentUser.is_admin) {
-                        document.getElementById('admin-link').style.display = 'inline';
-                    }
-                }
-            } catch (err) {
-                console.error('Failed to load user:', err);
-            }
-        }
-        
-        async function checkScanStatus() {
-            try {
-                const response = await fetch('/api/scan-status');
-                const status = await response.json();
-                
-                const indicator = document.getElementById('scan-indicator');
-                const text = document.getElementById('scan-indicator-text');
-                
-                if (status.locked) {
-                    indicator.classList.add('show');
-                    text.textContent = `${status.locked_by_username || 'Someone'} is currently scanning...`;
-                } else {
-                    indicator.classList.remove('show');
-                }
-            } catch (err) {
-                console.error('Failed to check scan status:', err);
-            }
-        }
         
         async function loadKnownBrands() {
             try {
@@ -1114,14 +995,7 @@
                 else if (inf <= 30) badgeClass = 'warm';
                 else if (inf <= 60) badgeClass = 'cool';
                 
-                // Commission rate - API returns as decimal (0.15 = 15%) 
-                let commission = p.commission_rate || 0;
-                // If it looks like a decimal (less than 1), multiply by 100
-                if (commission > 0 && commission < 1) {
-                    commission = commission * 100;
-                }
-                commission = Math.round(commission * 10) / 10; // Round to 1 decimal
-                
+                const commission = p.commission_rate || 0;
                 let commissionClass = '';
                 if (commission < 5) commissionClass = 'very-low';
                 else if (commission < 10) commissionClass = 'low';
@@ -1309,8 +1183,7 @@
                         btn.innerHTML = `🔍 ${brand.seller_name.substring(0, 10)}... (p${page}-${chunkEnd})`;
                         
                         try {
-                            // Pass seller_name so products get correct brand
-                            const url = `/api/scan-pages/${brand.seller_id}?start=${page}&end=${chunkEnd}&max_influencers=${maxInfluencers}&min_sales=0&seller_name=${encodeURIComponent(brand.seller_name)}`;
+                            const url = `/api/scan-pages/${brand.seller_id}?start=${page}&end=${chunkEnd}&max_influencers=${maxInfluencers}&min_sales=0`;
                             const response = await fetch(url);
                             
                             if (!response.ok) continue;
@@ -1406,17 +1279,13 @@
             document.getElementById('tools-modal').classList.remove('show');
         }
         
-        async function refreshImages(force = false) {
-            const msg = force ? '🔄 Force refreshing all images...' : '🖼️ Refreshing missing images...';
-            showToast(msg, false);
+        async function refreshImages() {
+            showToast('🖼️ Refreshing images...', false);
             closeModal();
             try {
-                const url = force ? '/api/refresh-images?force=true&batch=100' : '/api/refresh-images?batch=100';
-                const response = await fetch(url);
+                const response = await fetch('/api/refresh-images');
                 const data = await response.json();
-                const remaining = data.remaining || 0;
-                const extraMsg = remaining > 0 ? ` (${remaining} still need images)` : '';
-                showToast(`🖼️ Updated ${data.updated || 0} images${extraMsg}`, false, 'success');
+                showToast(`🖼️ Refreshed ${data.updated || 0} images`, false, 'success');
                 loadProducts();
             } catch (err) {
                 showToast('Failed to refresh images', true);
@@ -1425,7 +1294,7 @@
         
         async function refreshImagesQuiet() {
             try {
-                await fetch('/api/refresh-images?batch=100');
+                await fetch('/api/refresh-images');
             } catch (err) {
                 console.error('Failed to refresh images:', err);
             }
@@ -1456,43 +1325,29 @@
                     return;
                 }
                 
-                // Create CSV with watermark
-                const exportDate = new Date().toISOString();
-                const watermarkHeader = `# Brand Hunter Export - ${userWatermark} - ${exportDate}`;
-                const headers = ['Product Name', 'Brand', 'Commission %', 'Influencers', '7-Day Sales', 'Price', 'Product ID', 'TikTok Link', 'Export ID'];
-                const rows = data.products.map(p => {
-                    let commission = p.commission_rate || 0;
-                    if (commission > 0 && commission < 1) commission = commission * 100;
-                    return [
-                        `"${(p.product_name || '').replace(/"/g, '""')}"`,
-                        `"${(p.seller_name || '').replace(/"/g, '""')}"`,
-                        Math.round(commission * 10) / 10,
-                        p.influencer_count || 0,
-                        p.sales_7d || 0,
-                        p.price || 0,
-                        p.product_id,
-                        `https://www.tiktok.com/view/product/${p.product_id}`,
-                        userWatermark  // Watermark in each row for traceability
-                    ];
-                });
+                // Create CSV
+                const headers = ['Product Name', 'Brand', 'Commission %', 'Influencers', '7-Day Sales', 'Price', 'Product ID', 'TikTok Link'];
+                const rows = data.products.map(p => [
+                    `"${(p.product_name || '').replace(/"/g, '""')}"`,
+                    `"${(p.seller_name || '').replace(/"/g, '""')}"`,
+                    p.commission_rate || 0,
+                    p.influencer_count || 0,
+                    p.sales_7d || 0,
+                    p.price || 0,
+                    p.product_id,
+                    `https://www.tiktok.com/view/product/${p.product_id}`
+                ]);
                 
-                const csv = [watermarkHeader, headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
                 
                 // Download
                 const blob = new Blob([csv], { type: 'text/csv' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `brand_hunter_${userWatermark}_${new Date().toISOString().split('T')[0]}.csv`;
+                a.download = `brand_hunter_favorites_${new Date().toISOString().split('T')[0]}.csv`;
                 a.click();
                 URL.revokeObjectURL(url);
-                
-                // Log export activity
-                fetch('/api/log-activity', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'export', details: { count: data.products.length } })
-                }).catch(() => {});
                 
                 showToast(`📤 Exported ${data.products.length} favorites`, false, 'success');
             } catch (err) {
