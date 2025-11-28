@@ -995,7 +995,14 @@
                 else if (inf <= 30) badgeClass = 'warm';
                 else if (inf <= 60) badgeClass = 'cool';
                 
-                const commission = p.commission_rate || 0;
+                // Commission rate - API returns as decimal (0.15 = 15%) 
+                let commission = p.commission_rate || 0;
+                // If it looks like a decimal (less than 1), multiply by 100
+                if (commission > 0 && commission < 1) {
+                    commission = commission * 100;
+                }
+                commission = Math.round(commission * 10) / 10; // Round to 1 decimal
+                
                 let commissionClass = '';
                 if (commission < 5) commissionClass = 'very-low';
                 else if (commission < 10) commissionClass = 'low';
@@ -1327,16 +1334,20 @@
                 
                 // Create CSV
                 const headers = ['Product Name', 'Brand', 'Commission %', 'Influencers', '7-Day Sales', 'Price', 'Product ID', 'TikTok Link'];
-                const rows = data.products.map(p => [
-                    `"${(p.product_name || '').replace(/"/g, '""')}"`,
-                    `"${(p.seller_name || '').replace(/"/g, '""')}"`,
-                    p.commission_rate || 0,
-                    p.influencer_count || 0,
-                    p.sales_7d || 0,
-                    p.price || 0,
-                    p.product_id,
-                    `https://www.tiktok.com/view/product/${p.product_id}`
-                ]);
+                const rows = data.products.map(p => {
+                    let commission = p.commission_rate || 0;
+                    if (commission > 0 && commission < 1) commission = commission * 100;
+                    return [
+                        `"${(p.product_name || '').replace(/"/g, '""')}"`,
+                        `"${(p.seller_name || '').replace(/"/g, '""')}"`,
+                        Math.round(commission * 10) / 10,
+                        p.influencer_count || 0,
+                        p.sales_7d || 0,
+                        p.price || 0,
+                        p.product_id,
+                        `https://www.tiktok.com/view/product/${p.product_id}`
+                    ];
+                });
                 
                 const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
                 

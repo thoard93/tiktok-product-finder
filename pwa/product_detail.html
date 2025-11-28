@@ -207,7 +207,10 @@
             const comp = getCompetitionLevel(p.influencer_count||p.total_influencers, p.video_count);
             const tiktokUrl = p.tiktok_url || `https://shop.tiktok.com/view/product/${p.product_id}`;
             const echotikUrl = `https://echotik.live/products/${p.product_id}`;
-            const earnings = p.potential_earnings || (p.gmv * (p.commission_rate||0) / 100);
+            // Fix commission - if decimal, multiply by 100
+            let commissionRate = p.commission_rate || 0;
+            if (commissionRate > 0 && commissionRate < 1) commissionRate = commissionRate * 100;
+            const earnings = p.potential_earnings || (p.gmv * commissionRate / 100);
             const inf = p.influencer_count || p.total_influencers || 0;
             const imageUrl = getImageUrl(p.cached_image_url, p.image_url || p.cover_url);
             
@@ -232,6 +235,7 @@
                         <h1 class="product-title">${p.product_name}</h1>
                         <div class="product-meta">
                             <span class="meta-badge">🏪 ${p.seller_name||'TikTok Shop'}</span>
+                            <span class="meta-badge" style="background:${commissionRate >= 10 ? '#4ade80' : commissionRate >= 5 ? '#fbbf24' : '#f87171'}; color:#000;">💰 ${commissionRate.toFixed(1)}% Commission</span>
                             ${p.rating?`<span class="meta-badge">⭐ ${p.rating.toFixed(1)}</span>`:''}
                             ${p.free_shipping?'<span class="meta-badge highlight">🚚 Free Shipping</span>':''}
                         </div>
