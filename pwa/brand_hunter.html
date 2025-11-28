@@ -1190,7 +1190,8 @@
                         btn.innerHTML = `🔍 ${brand.seller_name.substring(0, 10)}... (p${page}-${chunkEnd})`;
                         
                         try {
-                            const url = `/api/scan-pages/${brand.seller_id}?start=${page}&end=${chunkEnd}&max_influencers=${maxInfluencers}&min_sales=0`;
+                            // Pass seller_name so products get correct brand
+                            const url = `/api/scan-pages/${brand.seller_id}?start=${page}&end=${chunkEnd}&max_influencers=${maxInfluencers}&min_sales=0&seller_name=${encodeURIComponent(brand.seller_name)}`;
                             const response = await fetch(url);
                             
                             if (!response.ok) continue;
