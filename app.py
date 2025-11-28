@@ -510,6 +510,71 @@ def admin_kick_user(user_id):
         return jsonify({'success': True})
     return jsonify({'error': 'User not found'}), 404
 
+@app.route('/api/admin/migrate')
+@login_required
+@admin_required
+def admin_migrate():
+    """
+    Run database migrations to add new columns.
+    Hit this endpoint once after deploying new code.
+    """
+    results = []
+    
+    try:
+        # Check if we're using PostgreSQL or SQLite
+        is_postgres = 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']
+        
+        if is_postgres:
+            # PostgreSQL - use ALTER TABLE with IF NOT EXISTS
+            migrations = [
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS product_status VARCHAR(50) DEFAULT 'active'",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS status_note VARCHAR(255)",
+            ]
+            
+            for sql in migrations:
+                try:
+                    db.session.execute(db.text(sql))
+                    results.append(f"✅ {sql[:50]}...")
+                except Exception as e:
+                    results.append(f"⚠️ {sql[:30]}... - {str(e)[:50]}")
+            
+            db.session.commit()
+        else:
+            # SQLite - try to add columns, ignore if they exist
+            try:
+                db.session.execute(db.text("ALTER TABLE products ADD COLUMN product_status VARCHAR(50) DEFAULT 'active'"))
+                results.append("✅ Added product_status column")
+            except Exception as e:
+                if 'duplicate column' in str(e).lower():
+                    results.append("ℹ️ product_status column already exists")
+                else:
+                    results.append(f"⚠️ product_status: {str(e)[:50]}")
+            
+            try:
+                db.session.execute(db.text("ALTER TABLE products ADD COLUMN status_note VARCHAR(255)"))
+                results.append("✅ Added status_note column")
+            except Exception as e:
+                if 'duplicate column' in str(e).lower():
+                    results.append("ℹ️ status_note column already exists")
+                else:
+                    results.append(f"⚠️ status_note: {str(e)[:50]}")
+            
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Migration completed',
+            'results': results
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'results': results
+        }), 500
+
 @app.route('/api/log-activity', methods=['POST'])
 @login_required
 def api_log_activity():
