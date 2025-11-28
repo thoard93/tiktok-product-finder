@@ -370,10 +370,26 @@ def scan_top_brands():
                     sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
                     sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
                     
+                    # Get commission and video stats
+                    commission_rate = float(p.get('product_commission_rate', 0) or 0)
+                    video_count = int(p.get('total_video_cnt', 0) or 0)
+                    video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
+                    video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
+                    live_count = int(p.get('total_live_cnt', 0) or 0)
+                    views_count = int(p.get('total_views_cnt', 0) or 0)
+                    
                     # Filter: Must be in target influencer range AND have recent sales
                     if influencer_count < min_influencers or influencer_count > max_influencers:
                         continue
                     if sales_7d < min_sales:  # Filter by 7-day sales, not total
+                        continue
+                    
+                    # SKIP products with 0% commission - not available for affiliates
+                    if commission_rate <= 0:
+                        continue
+                    
+                    # SKIP products with 0 total videos - likely not affiliate-enabled
+                    if video_count <= 0:
                         continue
                     
                     brand_result['products_found'] += 1
@@ -388,6 +404,12 @@ def scan_top_brands():
                         existing.sales = total_sales
                         existing.sales_30d = sales_30d
                         existing.sales_7d = sales_7d
+                        existing.commission_rate = commission_rate
+                        existing.video_count = video_count
+                        existing.video_7d = video_7d
+                        existing.video_30d = video_30d
+                        existing.live_count = live_count
+                        existing.views_count = views_count
                         existing.last_updated = datetime.utcnow()
                     else:
                         product = Product(
@@ -401,9 +423,14 @@ def scan_top_brands():
                             sales_7d=sales_7d,
                             sales_30d=sales_30d,
                             influencer_count=influencer_count,
-                            commission_rate=float(p.get('product_commission_rate', 0) or 0),
+                            commission_rate=commission_rate,
                             price=float(p.get('spu_avg_price', 0) or 0),
                             image_url=image_url,
+                            video_count=video_count,
+                            video_7d=video_7d,
+                            video_30d=video_30d,
+                            live_count=live_count,
+                            views_count=views_count,
                             scan_type='brand_hunter'
                         )
                         db.session.add(product)
@@ -918,6 +945,56 @@ def get_brands():
             'brands': [{'seller_id': b.seller_id, 'seller_name': b.seller_name, 'product_count': b.product_count} for b in brands]
         })
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cleanup', methods=['POST', 'GET'])
+def cleanup_products():
+    """
+    Remove products that aren't affiliate-eligible:
+    - 0% commission (not available for affiliates)
+    - 0 videos (likely not promoted/enabled for affiliates)
+    """
+    try:
+        # Count before cleanup
+        total_before = Product.query.count()
+        
+        # Find products to delete
+        zero_commission = Product.query.filter(
+            db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None))
+        ).count()
+        
+        zero_videos = Product.query.filter(
+            db.or_(Product.video_count == 0, Product.video_count.is_(None))
+        ).count()
+        
+        # Delete products with 0 commission
+        deleted_commission = Product.query.filter(
+            db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None))
+        ).delete(synchronize_session=False)
+        
+        # Delete products with 0 videos (that weren't already deleted)
+        deleted_videos = Product.query.filter(
+            db.or_(Product.video_count == 0, Product.video_count.is_(None))
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        
+        total_after = Product.query.count()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cleaned up {total_before - total_after} ineligible products',
+            'before': total_before,
+            'after': total_after,
+            'removed': {
+                'zero_commission': deleted_commission,
+                'zero_videos': deleted_videos,
+                'total': total_before - total_after
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
