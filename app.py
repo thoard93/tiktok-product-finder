@@ -21,7 +21,7 @@ API Reference (EchoTik v3):
 import os
 import requests
 from requests.auth import HTTPBasicAuth
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 import time
@@ -74,6 +74,19 @@ class Product(db.Model):
     image_url = db.Column(db.Text)
     cached_image_url = db.Column(db.Text)  # Signed URL that works
     image_cached_at = db.Column(db.DateTime)  # When cache was created
+    
+    # Video/Live stats from EchoTik
+    video_count = db.Column(db.Integer, default=0)
+    video_7d = db.Column(db.Integer, default=0)
+    video_30d = db.Column(db.Integer, default=0)
+    live_count = db.Column(db.Integer, default=0)
+    views_count = db.Column(db.Integer, default=0)
+    product_rating = db.Column(db.Float, default=0)
+    review_count = db.Column(db.Integer, default=0)
+    
+    # User features
+    is_favorite = db.Column(db.Boolean, default=False)
+    
     scan_type = db.Column(db.String(50), default='brand_hunter')
     first_seen = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -94,6 +107,14 @@ class Product(db.Model):
             'price': self.price,
             'image_url': self.cached_image_url or self.image_url,  # Prefer cached
             'cached_image_url': self.cached_image_url,
+            'video_count': self.video_count,
+            'video_7d': self.video_7d,
+            'video_30d': self.video_30d,
+            'live_count': self.live_count,
+            'views_count': self.views_count,
+            'product_rating': self.product_rating,
+            'review_count': self.review_count,
+            'is_favorite': self.is_favorite,
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
@@ -607,19 +628,57 @@ def list_top_brands():
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    """Get all saved products"""
+    """Get all saved products with filtering options"""
     min_influencers = request.args.get('min_influencers', 1, type=int)
     max_influencers = request.args.get('max_influencers', 500, type=int)
-    limit = request.args.get('limit', 200, type=int)
+    limit = request.args.get('limit', 500, type=int)
     
-    products = Product.query.filter(
+    # Date filter: today, yesterday, 7days, all
+    date_filter = request.args.get('date', 'all')
+    
+    # Brand/seller search
+    brand_search = request.args.get('brand', '').strip()
+    
+    # Favorites only
+    favorites_only = request.args.get('favorites', 'false').lower() == 'true'
+    
+    # Build query
+    query = Product.query.filter(
         Product.influencer_count >= min_influencers,
         Product.influencer_count <= max_influencers
-    ).order_by(Product.sales.desc()).limit(limit).all()
+    )
+    
+    # Apply date filter
+    now = datetime.utcnow()
+    if date_filter == 'today':
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        query = query.filter(Product.first_seen >= start_of_day)
+    elif date_filter == 'yesterday':
+        start_of_yesterday = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_yesterday = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        query = query.filter(Product.first_seen >= start_of_yesterday, Product.first_seen < end_of_yesterday)
+    elif date_filter == '7days':
+        week_ago = now - timedelta(days=7)
+        query = query.filter(Product.first_seen >= week_ago)
+    
+    # Apply brand search
+    if brand_search:
+        query = query.filter(Product.seller_name.ilike(f'%{brand_search}%'))
+    
+    # Apply favorites filter
+    if favorites_only:
+        query = query.filter(Product.is_favorite == True)
+    
+    products = query.order_by(Product.sales_7d.desc()).limit(limit).all()
     
     return jsonify({
         'products': [p.to_dict() for p in products],
-        'total': len(products)
+        'total': len(products),
+        'filters': {
+            'date': date_filter,
+            'brand': brand_search,
+            'favorites_only': favorites_only
+        }
     })
 
 @app.route('/product')
@@ -661,6 +720,18 @@ def get_product_detail(product_id):
             
             # Product info
             'price': float(product.price or 0),
+            
+            # Video/Live stats
+            'video_count': int(product.video_count or 0),
+            'video_7d': int(product.video_7d or 0),
+            'video_30d': int(product.video_30d or 0),
+            'live_count': int(product.live_count or 0),
+            'views_count': int(product.views_count or 0),
+            'product_rating': float(product.product_rating or 0),
+            'review_count': int(product.review_count or 0),
+            
+            # Favorites
+            'is_favorite': product.is_favorite or False,
             
             # Media - use cached URL for instant loading
             'image_url': image_url,
@@ -796,6 +867,118 @@ def clear_products():
     db.session.commit()
     return jsonify({'success': True, 'message': 'All products cleared'})
 
+
+@app.route('/api/favorite/<product_id>', methods=['POST'])
+def toggle_favorite(product_id):
+    """Toggle favorite status for a product"""
+    try:
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        product.is_favorite = not product.is_favorite
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'product_id': product_id,
+            'is_favorite': product.is_favorite
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/favorites', methods=['GET'])
+def get_favorites():
+    """Get all favorited products"""
+    try:
+        products = Product.query.filter_by(is_favorite=True).order_by(Product.sales_7d.desc()).all()
+        return jsonify({
+            'success': True,
+            'products': [p.to_dict() for p in products],
+            'count': len(products)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/brands', methods=['GET'])
+def get_brands():
+    """Get list of unique brands/sellers"""
+    try:
+        brands = db.session.query(
+            Product.seller_id,
+            Product.seller_name,
+            db.func.count(Product.product_id).label('product_count')
+        ).group_by(Product.seller_id, Product.seller_name).order_by(db.desc('product_count')).all()
+        
+        return jsonify({
+            'success': True,
+            'brands': [{'seller_id': b.seller_id, 'seller_name': b.seller_name, 'product_count': b.product_count} for b in brands]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/refresh-product/<product_id>', methods=['POST'])
+def refresh_product_data(product_id):
+    """Fetch fresh data for a product from EchoTik's product detail API"""
+    try:
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        # Call EchoTik product detail API
+        response = requests.get(
+            f"{BASE_URL}/product/detail",
+            params={'product_ids': product_id},
+            auth=get_auth(),
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            return jsonify({'success': False, 'error': f'API returned {response.status_code}'}), 500
+        
+        data = response.json()
+        if data.get('code') != 0 or not data.get('data'):
+            return jsonify({'success': False, 'error': 'No data returned from API'}), 500
+        
+        p = data['data'][0]
+        
+        # Update product with fresh data
+        product.sales = int(p.get('total_sale_cnt', 0) or 0)
+        product.sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+        product.sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+        product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
+        product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
+        product.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+        product.commission_rate = float(p.get('product_commission_rate', 0) or 0)
+        product.price = float(p.get('spu_avg_price', 0) or 0)
+        
+        # Video/Live stats
+        product.video_count = int(p.get('total_video_cnt', 0) or 0)
+        product.video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
+        product.video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
+        product.live_count = int(p.get('total_live_cnt', 0) or 0)
+        product.views_count = int(p.get('total_views_cnt', 0) or 0)
+        product.product_rating = float(p.get('product_rating', 0) or 0)
+        product.review_count = int(p.get('review_count', 0) or 0)
+        
+        product.last_updated = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Product data refreshed',
+            'product': product.to_dict()
+        })
+        
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
 # =============================================================================
 # DEBUG ENDPOINT
 # =============================================================================
@@ -892,6 +1075,14 @@ def init_database():
             ('sales_7d', 'INTEGER DEFAULT 0'),
             ('cached_image_url', 'TEXT'),
             ('image_cached_at', 'TIMESTAMP'),
+            ('video_count', 'INTEGER DEFAULT 0'),
+            ('video_7d', 'INTEGER DEFAULT 0'),
+            ('video_30d', 'INTEGER DEFAULT 0'),
+            ('live_count', 'INTEGER DEFAULT 0'),
+            ('views_count', 'INTEGER DEFAULT 0'),
+            ('product_rating', 'FLOAT DEFAULT 0'),
+            ('review_count', 'INTEGER DEFAULT 0'),
+            ('is_favorite', 'BOOLEAN DEFAULT FALSE'),
         ]
         
         added = []
