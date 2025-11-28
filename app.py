@@ -204,6 +204,8 @@ class Product(db.Model):
     
     # User features
     is_favorite = db.Column(db.Boolean, default=False)
+    product_status = db.Column(db.String(50), default='active')  # active, removed, out_of_stock
+    status_note = db.Column(db.String(255))  # Optional note about status
     
     scan_type = db.Column(db.String(50), default='brand_hunter')
     first_seen = db.Column(db.DateTime, default=datetime.utcnow)
@@ -233,6 +235,8 @@ class Product(db.Model):
             'product_rating': self.product_rating,
             'review_count': self.review_count,
             'is_favorite': self.is_favorite,
+            'product_status': self.product_status or 'active',
+            'status_note': self.status_note,
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
@@ -1353,10 +1357,11 @@ def get_products():
     # Favorites only
     favorites_only = request.args.get('favorites', 'false').lower() == 'true'
     
-    # Build query
+    # Build query - exclude unavailable products by default
     query = Product.query.filter(
         Product.influencer_count >= min_influencers,
-        Product.influencer_count <= max_influencers
+        Product.influencer_count <= max_influencers,
+        db.or_(Product.product_status == None, Product.product_status == 'active')
     )
     
     # Apply date filter
@@ -1444,6 +1449,10 @@ def get_product_detail(product_id):
             # Favorites
             'is_favorite': product.is_favorite or False,
             
+            # Status
+            'product_status': product.product_status or 'active',
+            'status_note': product.status_note,
+            
             # Media - use cached URL for instant loading
             'image_url': image_url,
             'cached_image_url': image_url,
@@ -1462,6 +1471,48 @@ def get_product_detail(product_id):
     except Exception as e:
         import traceback
         return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/mark-unavailable/<product_id>')
+@login_required
+def mark_unavailable(product_id):
+    """Mark a product as unavailable (removed or out of stock)"""
+    try:
+        status = request.args.get('status', 'removed')
+        note = request.args.get('note', '')
+        
+        # Validate status
+        if status not in ['removed', 'out_of_stock', 'active']:
+            return jsonify({'success': False, 'error': 'Invalid status'}), 400
+        
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        product.product_status = status
+        product.status_note = note
+        product.last_updated = datetime.utcnow()
+        db.session.commit()
+        
+        # Log the activity
+        user = get_current_user()
+        if user:
+            log_activity(user.id, 'mark_unavailable', {
+                'product_id': product_id,
+                'status': status,
+                'note': note
+            })
+        
+        return jsonify({
+            'success': True,
+            'product_id': product_id,
+            'status': status,
+            'message': f'Product marked as {status}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/stats', methods=['GET'])
