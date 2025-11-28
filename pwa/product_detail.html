@@ -205,7 +205,8 @@
         
         function renderProduct(p) {
             const comp = getCompetitionLevel(p.influencer_count||p.total_influencers, p.video_count);
-            const tiktokUrl = p.tiktok_url || `https://shop.tiktok.com/view/product/${p.product_id}`;
+            const tiktokUrl = `https://www.tiktok.com/view/product/${p.product_id}`;
+            const tiktokSearchUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(p.product_name || '')}`;
             const echotikUrl = `https://echotik.live/products/${p.product_id}`;
             // Fix commission - if decimal, multiply by 100
             let commissionRate = p.commission_rate || 0;
@@ -246,7 +247,8 @@
                             <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-value success">${formatCurrency(p.price||0)}</div><div class="stat-label">Price</div></div>
                         </div>
                         <div class="action-buttons">
-                            <a href="${tiktokUrl}" target="_blank" class="btn btn-primary">🔍 Search on TikTok</a>
+                            <a href="${tiktokUrl}" target="_blank" class="btn btn-primary">🛒 View on TikTok</a>
+                            <a href="${tiktokSearchUrl}" target="_blank" class="btn btn-secondary" style="background:#333;margin-top:8px;">🔍 Search Product Name</a>
                             <a href="${echotikUrl}" target="_blank" class="btn btn-outline">📊 View on EchoTik</a>
                             <button class="btn btn-outline" onclick="fetchLiveData('${p.product_id}')">🔄 Refresh Data</button>
                             <button class="btn btn-outline" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="markUnavailable('${p.product_id}')">❌ Mark Unavailable</button>
