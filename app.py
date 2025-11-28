@@ -268,6 +268,42 @@ def get_seller_products(seller_id, page=1, page_size=10):
         print(f"Seller products exception: {e}")
         return []
 
+
+@app.route('/api/debug-seller/<seller_id>', methods=['GET'])
+def debug_seller_products(seller_id):
+    """
+    Debug endpoint - returns raw API response for a seller's products
+    Use this to see what fields EchoTik returns
+    """
+    try:
+        page = request.args.get('page', 1, type=int)
+        response = requests.get(
+            f"{BASE_URL}/seller/product/list",
+            params={
+                "seller_id": seller_id,
+                "page_num": page,
+                "page_size": 5,
+                "seller_product_sort_field": 4,
+                "sort_type": 1
+            },
+            auth=get_auth(),
+            timeout=30
+        )
+        data = response.json()
+        
+        # Get just the first product's keys to see what fields are available
+        products = data.get('data', [])
+        sample_fields = list(products[0].keys()) if products else []
+        
+        return jsonify({
+            'raw_response_code': data.get('code'),
+            'product_count': len(products),
+            'available_fields': sample_fields,
+            'first_product_sample': products[0] if products else None
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # MAIN SCANNING ENDPOINTS
 # =============================================================================
@@ -636,6 +672,7 @@ def scan_page_range(seller_id):
         end: Ending page (default: 50)
         max_influencers: Max influencer filter (default: 100)
         min_sales: Min 7-day sales (default: 0)
+        seller_name: Optional seller name to use (for brand scan)
     """
     try:
         start_page = request.args.get('start', 1, type=int)
@@ -643,11 +680,12 @@ def scan_page_range(seller_id):
         min_influencers = request.args.get('min_influencers', 1, type=int)
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
+        seller_name_param = request.args.get('seller_name', '')
         
         products_scanned = 0
         products_found = 0
         products_saved = 0
-        seller_name = "Unknown"
+        seller_name = seller_name_param or "Unknown"
         
         for page in range(start_page, end_page + 1):
             products = get_seller_products(seller_id, page=page)
@@ -661,24 +699,51 @@ def scan_page_range(seller_id):
                 if not product_id:
                     continue
                 
+                # Try to get seller_name from product if we don't have it
                 if seller_name == "Unknown":
-                    seller_name = p.get('seller_name', 'Unknown') or "Unknown"
+                    seller_name = p.get('seller_name', '') or p.get('shop_name', '') or "Unknown"
                 
                 influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
                 sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
                 total_sales = int(p.get('total_sale_cnt', 0) or 0)
                 sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                commission_rate = float(p.get('product_commission_rate', 0) or 0)
                 
+                # Get video stats
+                video_count = int(p.get('total_video_cnt', 0) or 0)
+                video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
+                video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
+                live_count = int(p.get('total_live_cnt', 0) or 0)
+                views_count = int(p.get('total_views_cnt', 0) or 0)
+                
+                # Filters
                 if influencer_count < min_influencers or influencer_count > max_influencers:
                     continue
                 if sales_7d < min_sales:
                     continue
+                # NOTE: Not filtering 0% commission here - seller/product/list API may not return commission
+                # Use "Refresh Data" on product detail page to get real commission from product detail API
                 
                 products_found += 1
                 image_url = parse_cover_url(p.get('cover_url', ''))
                 
                 existing = Product.query.get(product_id)
-                if not existing:
+                if existing:
+                    # Update existing product
+                    existing.influencer_count = influencer_count
+                    existing.sales = total_sales
+                    existing.sales_7d = sales_7d
+                    existing.sales_30d = sales_30d
+                    existing.commission_rate = commission_rate
+                    existing.video_count = video_count
+                    existing.video_7d = video_7d
+                    existing.video_30d = video_30d
+                    existing.live_count = live_count
+                    existing.views_count = views_count
+                    if seller_name != "Unknown":
+                        existing.seller_name = seller_name
+                    existing.last_updated = datetime.utcnow()
+                else:
                     product = Product(
                         product_id=product_id,
                         product_name=p.get('product_name', ''),
@@ -690,15 +755,20 @@ def scan_page_range(seller_id):
                         sales_7d=sales_7d,
                         sales_30d=sales_30d,
                         influencer_count=influencer_count,
-                        commission_rate=float(p.get('product_commission_rate', 0) or 0),
+                        commission_rate=commission_rate,
                         price=float(p.get('spu_avg_price', 0) or 0),
                         image_url=image_url,
+                        video_count=video_count,
+                        video_7d=video_7d,
+                        video_30d=video_30d,
+                        live_count=live_count,
+                        views_count=views_count,
                         scan_type='page_range'
                     )
                     db.session.add(product)
                     products_saved += 1
             
-            time.sleep(0.2)
+            time.sleep(0.1)
         
         db.session.commit()
         
