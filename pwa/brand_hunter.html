@@ -753,8 +753,11 @@
     <div class="modal-overlay" id="tools-modal">
         <div class="modal">
             <h3>🛠️ Tools</h3>
-            <button class="modal-btn" onclick="refreshImages()">
-                <span class="icon">🖼️</span> Refresh All Images
+            <button class="modal-btn" onclick="refreshImages(false)">
+                <span class="icon">🖼️</span> Refresh Missing Images
+            </button>
+            <button class="modal-btn" onclick="refreshImages(true)">
+                <span class="icon">🔄</span> Force Refresh All Images
             </button>
             <button class="modal-btn" onclick="cleanupProducts()">
                 <span class="icon">🧹</span> Cleanup (Remove 0% Commission)
@@ -1287,13 +1290,17 @@
             document.getElementById('tools-modal').classList.remove('show');
         }
         
-        async function refreshImages() {
-            showToast('🖼️ Refreshing images...', false);
+        async function refreshImages(force = false) {
+            const msg = force ? '🔄 Force refreshing all images...' : '🖼️ Refreshing missing images...';
+            showToast(msg, false);
             closeModal();
             try {
-                const response = await fetch('/api/refresh-images');
+                const url = force ? '/api/refresh-images?force=true&batch=100' : '/api/refresh-images?batch=100';
+                const response = await fetch(url);
                 const data = await response.json();
-                showToast(`🖼️ Refreshed ${data.updated || 0} images`, false, 'success');
+                const remaining = data.remaining || 0;
+                const extraMsg = remaining > 0 ? ` (${remaining} still need images)` : '';
+                showToast(`🖼️ Updated ${data.updated || 0} images${extraMsg}`, false, 'success');
                 loadProducts();
             } catch (err) {
                 showToast('Failed to refresh images', true);
@@ -1302,7 +1309,7 @@
         
         async function refreshImagesQuiet() {
             try {
-                await fetch('/api/refresh-images');
+                await fetch('/api/refresh-images?batch=100');
             } catch (err) {
                 console.error('Failed to refresh images:', err);
             }
