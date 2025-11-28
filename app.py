@@ -35,6 +35,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
     app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
 
+# Connection pool settings to handle Render's connection drops
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,  # Test connection before using
+    'pool_recycle': 300,    # Recycle connections every 5 minutes
+    'pool_size': 5,
+    'max_overflow': 10,
+    'pool_timeout': 30,
+}
+
 db = SQLAlchemy(app)
 
 # EchoTik API Config - v3 API with HTTPBasicAuth
