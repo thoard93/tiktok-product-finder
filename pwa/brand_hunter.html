@@ -302,12 +302,16 @@
         <div class="scan-settings">
             <h4>⚙️ Scan Settings</h4>
             <div class="setting-row">
+                <label>Start from rank:</label>
+                <input type="number" id="start-rank" value="1" min="1" max="500">
+            </div>
+            <div class="setting-row">
                 <label>Brands to scan:</label>
-                <input type="number" id="num-brands" value="5" min="1" max="20">
+                <input type="number" id="num-brands" value="3" min="1" max="10">
             </div>
             <div class="setting-row">
                 <label>Pages per brand:</label>
-                <input type="number" id="pages-per-brand" value="10" min="1" max="50">
+                <input type="number" id="pages-per-brand" value="5" min="1" max="20">
             </div>
             <div class="setting-row">
                 <label>Min influencers:</label>
@@ -319,7 +323,7 @@
             </div>
             <div class="setting-row">
                 <label>Min 7-day sales:</label>
-                <input type="number" id="min-sales" value="10" min="1">
+                <input type="number" id="min-sales" value="0" min="0">
             </div>
         </div>
         
@@ -490,6 +494,7 @@
             btn.textContent = '⏳ Scanning...';
             btn.disabled = true;
             
+            const startRank = document.getElementById('start-rank').value;
             const numBrands = document.getElementById('num-brands').value;
             const pagesPerBrand = document.getElementById('pages-per-brand').value;
             const minInfluencers = document.getElementById('min-influencers').value;
@@ -497,14 +502,17 @@
             const minSales = document.getElementById('min-sales').value;
             
             try {
-                const url = `/api/scan?brands=${numBrands}&pages_per_brand=${pagesPerBrand}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}&min_sales=${minSales}`;
+                const url = `/api/scan?start_rank=${startRank}&brands=${numBrands}&pages_per_brand=${pagesPerBrand}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}&min_sales=${minSales}`;
                 const response = await fetch(url);
                 const data = await response.json();
                 
                 if (data.error) {
                     showToast(data.error, true);
                 } else {
-                    showToast(`✅ Found ${data.total_products_found} products, saved ${data.total_products_saved} new!`);
+                    const rankInfo = data.scan_info?.brand_ranks || '';
+                    showToast(`✅ Brands ${rankInfo}: Found ${data.total_products_found}, saved ${data.total_products_saved} new!`);
+                    // Auto-increment start rank for next batch
+                    document.getElementById('start-rank').value = parseInt(startRank) + parseInt(numBrands);
                     loadProducts();
                 }
             } catch (err) {
