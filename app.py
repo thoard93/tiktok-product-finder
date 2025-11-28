@@ -1112,7 +1112,26 @@ def scan_page_range(seller_id):
         products_scanned = 0
         products_found = 0
         products_saved = 0
-        seller_name = seller_name_param or "Unknown"
+        seller_name = seller_name_param or ""
+        
+        # If no seller_name provided, try to get it from seller detail API
+        if not seller_name:
+            try:
+                seller_response = requests.get(
+                    f"{BASE_URL}/seller/detail",
+                    params={"seller_id": seller_id},
+                    auth=get_auth(),
+                    timeout=10
+                )
+                if seller_response.status_code == 200:
+                    seller_data = seller_response.json()
+                    if seller_data.get('code') == 0 and seller_data.get('data'):
+                        seller_name = seller_data['data'].get('seller_name', '') or seller_data['data'].get('shop_name', '')
+            except:
+                pass
+        
+        if not seller_name:
+            seller_name = "Unknown"
         
         for page in range(start_page, end_page + 1):
             products = get_seller_products(seller_id, page=page)
@@ -1126,9 +1145,9 @@ def scan_page_range(seller_id):
                 if not product_id:
                     continue
                 
-                # Try to get seller_name from product if we don't have it
+                # Try to get seller_name from product if we still don't have it
                 if seller_name == "Unknown":
-                    seller_name = p.get('seller_name', '') or p.get('shop_name', '') or "Unknown"
+                    seller_name = p.get('seller_name', '') or p.get('shop_name', '') or p.get('seller', {}).get('name', '') or "Unknown"
                 
                 influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
                 sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
