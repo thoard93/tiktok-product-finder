@@ -164,7 +164,7 @@
 <body>
     <header class="header">
         <div class="header-content">
-            <a href="/" class="back-link">← Back to Products</a>
+            <a href="javascript:void(0)" onclick="goBack()" class="back-link">← Back to Products</a>
             <div class="logo">
                 <div class="logo-icon">TS</div>
                 <div class="logo-text">TikTok<span>Shop</span> Finder</div>
@@ -180,6 +180,16 @@
         </div>
     </main>
     <script>
+        // Smart back navigation - uses history if available, otherwise goes to home
+        function goBack() {
+            // Check if we came from Brand Hunter (has history)
+            if (document.referrer && document.referrer.includes(window.location.origin)) {
+                history.back();
+            } else {
+                window.location.href = '/';
+            }
+        }
+        
         const urlParams = new URLSearchParams(window.location.search);
         const productId = urlParams.get('id');
         
