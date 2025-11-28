@@ -461,13 +461,13 @@ def quick_scan():
     
     Parameters:
         brand_rank: Which brand to scan (1 = top brand, 2 = second, etc.)
-        pages: Number of pages to scan (default: 10, max 20)
+        pages: Number of pages to scan (default: 10, max 10 to avoid timeout)
         max_influencers: Maximum influencer count (default: 100)
         min_sales: Minimum 7-day sales (default: 0)
     """
     try:
         brand_rank = request.args.get('brand_rank', 1, type=int)
-        pages = min(request.args.get('pages', 10, type=int), 20)  # Cap at 20 pages
+        pages = min(request.args.get('pages', 10, type=int), 10)  # Cap at 10 pages to avoid timeout
         min_influencers = request.args.get('min_influencers', 1, type=int)
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
