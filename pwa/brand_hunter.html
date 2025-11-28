@@ -1249,6 +1249,7 @@
                 document.getElementById('start-rank').value = startRank + numBrands;
                 
                 // Auto refresh images after scan
+                showToast('🖼️ Loading images...', false);
                 await refreshImagesQuiet();
                 
                 loadProducts();
@@ -1424,10 +1425,19 @@
         }
         
         async function refreshImagesQuiet() {
-            try {
-                await fetch('/api/refresh-images?batch=100');
-            } catch (err) {
-                console.error('Failed to refresh images:', err);
+            // Keep refreshing until no more images need updating (or max 5 batches)
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch('/api/refresh-images?batch=100');
+                    const data = await response.json();
+                    if (!data.remaining || data.remaining === 0 || data.updated === 0) {
+                        break; // All done
+                    }
+                    await new Promise(r => setTimeout(r, 300)); // Small delay between batches
+                } catch (err) {
+                    console.error('Failed to refresh images:', err);
+                    break;
+                }
             }
         }
         
