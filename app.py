@@ -272,6 +272,43 @@ def get_seller_products(seller_id, page=1, page_size=10):
 # MAIN SCANNING ENDPOINTS
 # =============================================================================
 
+@app.route('/api/top-brands', methods=['GET'])
+def get_top_brands_list():
+    """
+    Get list of top brands by GMV
+    
+    Parameters:
+        start_rank: Starting rank (1 = top brand)
+        count: Number of brands to return
+    """
+    try:
+        start_rank = request.args.get('start_rank', 1, type=int)
+        count = request.args.get('count', 10, type=int)
+        
+        # Calculate which pages to fetch
+        start_page = (start_rank - 1) // 10 + 1
+        start_offset = (start_rank - 1) % 10
+        
+        all_brands = []
+        pages_needed = ((start_offset + count - 1) // 10) + 1
+        
+        for page in range(start_page, start_page + pages_needed):
+            brands_page = get_top_brands(page=page)
+            if brands_page:
+                all_brands.extend(brands_page)
+            time.sleep(0.1)
+        
+        brands = all_brands[start_offset:start_offset + count]
+        
+        return jsonify({
+            'success': True,
+            'brands': brands,
+            'count': len(brands)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/scan', methods=['GET'])
 def scan_top_brands():
     """
@@ -940,9 +977,17 @@ def get_stats():
     # Get unique brands
     brands = db.session.query(Product.seller_name).distinct().count()
     
+    # Get favorites count
+    favorites = Product.query.filter(Product.is_favorite == True).count()
+    
     return jsonify({
         'total_products': total,
         'unique_brands': brands,
+        'untapped': untapped,
+        'low_competition': low,
+        'medium_competition': medium,
+        'good_competition': good,
+        'favorites': favorites,
         'breakdown': {
             'untapped_1_10': untapped,
             'low_11_30': low,
