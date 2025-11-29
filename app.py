@@ -2273,20 +2273,20 @@ def get_product_category(product_name):
     name_lower = product_name.lower()
     
     categories = {
-        'beauty': ['serum', 'cream', 'lotion', 'skincare', 'makeup', 'mascara', 'lipstick', 'foundation', 'moisturizer', 'cleanser', 'toner', 'sunscreen', 'face', 'skin'],
+        'beauty': ['serum', 'cream', 'lotion', 'skincare', 'makeup', 'mascara', 'lipstick', 'foundation', 'moisturizer', 'cleanser', 'toner', 'sunscreen', 'face', 'skin', 'eye cream', 'anti-aging'],
         'hair': ['shampoo', 'conditioner', 'hair', 'brush', 'comb', 'dryer', 'straightener', 'curler'],
-        'fashion': ['dress', 'shirt', 'pants', 'jeans', 'jacket', 'coat', 'sweater', 'hoodie', 'shoes', 'sneakers', 'boots', 'heels', 'bag', 'purse', 'handbag', 'wallet', 'belt', 'scarf', 'hat', 'sunglasses', 'jewelry', 'necklace', 'bracelet', 'ring', 'earring', 'watch'],
-        'kitchen': ['pan', 'pot', 'knife', 'cutting', 'blender', 'mixer', 'cooker', 'fryer', 'toaster', 'kettle', 'coffee', 'mug', 'plate', 'bowl', 'utensil', 'spatula', 'spoon', 'fork', 'container', 'storage', 'bottle', 'cup', 'glass'],
-        'home': ['pillow', 'blanket', 'curtain', 'rug', 'lamp', 'light', 'candle', 'vase', 'frame', 'mirror', 'clock', 'organizer', 'basket', 'shelf', 'holder'],
-        'tech': ['phone', 'case', 'charger', 'cable', 'earbuds', 'headphones', 'speaker', 'mouse', 'keyboard', 'stand', 'mount', 'tripod', 'camera', 'ring light'],
-        'fitness': ['yoga', 'mat', 'dumbbell', 'weight', 'band', 'resistance', 'gym', 'workout', 'protein', 'shaker', 'bottle', 'fitness', 'exercise'],
-        'baby': ['baby', 'infant', 'toddler', 'diaper', 'bottle', 'pacifier', 'stroller', 'carrier'],
-        'pet': ['dog', 'cat', 'pet', 'collar', 'leash', 'bowl', 'toy', 'bed', 'treat'],
-        'outdoor': ['camping', 'tent', 'backpack', 'hiking', 'fishing', 'grill', 'cooler', 'chair', 'umbrella'],
-        'tools': ['tool', 'drill', 'hammer', 'screwdriver', 'wrench', 'tape', 'measure', 'level'],
-        'car': ['car', 'auto', 'vehicle', 'seat', 'steering', 'dash', 'mount', 'freshener'],
-        'health': ['vitamin', 'supplement', 'medicine', 'pill', 'thermometer', 'massager', 'heating', 'ice'],
-        'cleaning': ['cleaner', 'mop', 'broom', 'vacuum', 'sponge', 'brush', 'detergent', 'spray'],
+        'fashion': ['dress', 'shirt', 'pants', 'jeans', 'jacket', 'coat', 'sweater', 'hoodie', 'shoes', 'sneakers', 'boots', 'heels', 'bag', 'purse', 'handbag', 'wallet', 'belt', 'scarf', 'hat', 'sunglasses', 'jewelry', 'necklace', 'bracelet', 'ring', 'earring', 'watch', 'clothing', 'apparel', 'top', 'blouse', 'skirt', 'shorts'],
+        'kitchen': ['pan', 'pot', 'knife', 'cutting', 'blender', 'mixer', 'cooker', 'fryer', 'toaster', 'kettle', 'coffee', 'mug', 'plate', 'bowl', 'utensil', 'spatula', 'spoon', 'fork', 'container', 'storage', 'cup', 'glass', 'drink mix', 'sodastream'],
+        'home': ['pillow', 'pillowcase', 'blanket', 'curtain', 'rug', 'lamp', 'candle', 'vase', 'frame', 'mirror', 'clock', 'organizer', 'basket', 'shelf', 'holder', 'bedding', 'sheets', 'duvet'],
+        'tech': ['phone', 'case', 'charger', 'cable', 'earbuds', 'headphones', 'speaker', 'mouse', 'keyboard', 'stand', 'mount', 'tripod', 'camera', 'ring light', 'laptop', 'tablet'],
+        'fitness': ['yoga', 'mat', 'dumbbell', 'weight', 'band', 'resistance', 'gym', 'workout', 'protein', 'shaker', 'fitness', 'exercise', 'vibration plate', 'treadmill'],
+        'baby': ['baby', 'infant', 'toddler', 'diaper', 'pacifier', 'stroller', 'carrier', 'nursery'],
+        'pet': ['dog', 'cat', 'pet', 'collar', 'leash', 'toy', 'bed', 'treat'],
+        'outdoor': ['camping', 'tent', 'backpack', 'hiking', 'fishing', 'grill', 'cooler', 'umbrella', 'garden', 'patio'],
+        'tools': ['tool', 'drill', 'hammer', 'screwdriver', 'wrench', 'tape', 'measure', 'level', 'lift', 'hydraulic', 'cart', 'jack', 'compressor', 'welder', 'saw', 'sander', 'grinder', 'workbench', 'vevor', 'scaffold', 'ladder', 'dolly', 'hoist', 'clamp', 'vise', 'industrial', 'mechanic', 'garage', 'workshop'],
+        'car': ['car', 'auto', 'vehicle', 'seat', 'steering', 'dash', 'freshener', 'automotive'],
+        'health': ['vitamin', 'supplement', 'medicine', 'pill', 'thermometer', 'massager', 'heating', 'ice pack'],
+        'cleaning': ['cleaner', 'mop', 'broom', 'vacuum', 'sponge', 'detergent', 'spray'],
     }
     
     for category, keywords in categories.items():
@@ -2296,90 +2296,102 @@ def get_product_category(product_name):
 
 
 def get_scene_prompt(product_name, category):
-    """Generate a RANDOMIZED lifestyle scene prompt based on product category - simple flowing style like user's successful prompts"""
+    """Generate a RANDOMIZED lifestyle scene prompt based on product category
+    
+    IMPORTANT: Small products (beauty, hair) should be CLOSER to camera with readable text
+    Large products (tools, fitness) can be farther back
+    All images need room above product for video push effect
+    """
     import random
     
     # Background items by category - realistic and subtle, blurred/out of focus
     background_items = {
         'beauty': [
-            "folded towels, a candle, a small plant and skincare bottles placed around but out of focus",
+            "folded towels, a candle, and a small plant placed around but out of focus",
             "a soap dispenser, rolled face towel, and a small succulent",
             "cotton pads in a jar, a small mirror, and a ceramic dish",
-            "a ceramic tray, small vase with dried flowers, and folded washcloths",
-            "a glass jar, small candle, and a jade roller blurred slightly"
+            "a ceramic tray, small vase with dried flowers, and folded washcloths"
         ],
         'hair': [
             "a hairbrush, folded towel, and small potted plant blurred in the background",
-            "a round mirror, hair clips in a dish, and a ceramic container",
-            "a wooden brush, cotton towel, and decorative bottle out of focus"
+            "a round mirror, hair clips in a dish, and a ceramic container"
+        ],
+        'fashion': [
+            "a ceramic vase, stack of magazines, and a coffee cup in the corner blurred",
+            "a small plant, decorative tray, and sunglasses placed nearby out of focus"
         ],
         'kitchen': [
             "a fruit bowl, cookbook stand, and ceramic utensil holder blurred in the background",
             "fresh herbs in a pot, wooden cutting board, and linen napkin",
-            "a coffee mug, small plant, and woven placemat out of focus",
-            "copper measuring cups, a tea towel, and wooden spoons"
+            "a coffee mug, small plant, and woven placemat out of focus"
+        ],
+        'tools': [
+            "a toolbox, work gloves, and safety glasses in the background blurred",
+            "pegboard with tools, a shop rag, and small parts organizer out of focus",
+            "concrete floor texture, storage shelves blurred in background"
         ],
         'tech': [
             "a coffee mug, small plant, and notebook blurred slightly",
-            "a pen holder, coaster, and desk organizer out of focus",
-            "a desk lamp edge, mousepad, and small succulent in the background"
+            "a pen holder, coaster, and desk organizer out of focus"
         ],
         'fitness': [
             "a water bottle, folded towel on a shelf, and yoga block",
-            "resistance bands placed naturally, a plant, and woven basket",
-            "a foam roller edge, towel, and motivational frame blurred"
+            "resistance bands placed naturally, a plant, and woven basket"
         ],
         'home': [
             "a small plant, candle, and stack of books out of focus",
-            "a decorative tray, vase, and cozy throw blanket edge",
-            "framed photo, small lamp, and ceramic dish blurred slightly"
+            "a decorative tray, vase, and cozy throw blanket edge"
         ],
         'general': [
             "a small plant, folded cloth, and decorative items blurred in the background",
-            "a candle, ceramic dish, and natural texture elements out of focus",
-            "subtle decor items placed naturally and blurred slightly"
+            "a candle, ceramic dish, and natural texture elements out of focus"
         ]
     }
     
-    # Scene/setting templates by category - matches user's successful prompt style
-    scene_templates = {
-        'beauty': [
-            "a bright bathroom counter scene shot from a few feet back, the {product} centered on the counter, soft daylight coming from the side, subtle realistic background items like {bg_items}, open space around the product, plenty of empty space above for text, no people, clean and modern setting with natural textures, neutral tones, realistic shadows, overall bright and realistic",
-            "a realistic product photo of the {product} standing upright on a clean bathroom counter a few feet back, soft natural lighting coming from a window, subtle background items like {bg_items}, plenty of empty space above the product for text, neutral aesthetic bathroom setting, no people, overall bright and realistic",
-            "a clean bathroom vanity scene a few feet back, the {product} placed naturally on the marble counter, warm natural light from a window, subtle background items like {bg_items}, open space for realism, no people, calm and minimal decor, realistic lighting and shadows, crisp product details"
-        ],
-        'hair': [
-            "a bright bathroom counter scene shot from a few feet back, the {product} standing upright on the counter, soft natural lighting from a window, subtle background items like {bg_items}, plenty of open space around the product, no people, clean modern bathroom setting, overall bright and realistic",
-            "a realistic product photo of the {product} on a modern bathroom vanity a few feet back, soft diffused natural light, subtle background items like {bg_items}, open space above for text, neutral aesthetic, no people, realistic and clean"
-        ],
-        'kitchen': [
-            "a bright kitchen counter scene from a few feet back, the {product} arranged neatly on a modern kitchen island, soft daylight, subtle background elements like {bg_items}, lots of open space around the product, clean and cheerful kitchen setting, no people, realistic shadows, overall bright and inviting",
-            "a realistic product photo showing the {product} on a warm wooden kitchen counter a few feet back, morning light from a window, subtle background items like {bg_items}, open counter space around the product, clean and realistic environment, no people, extra open area above for caption text"
-        ],
-        'tech': [
-            "a clean modern desk scene from a few feet back, the {product} centered on the workspace, soft ambient lighting, subtle background items like {bg_items}, plenty of open space around the product, no people, minimal and productive setting, realistic lighting, overall clean and modern",
-            "a realistic product photo of the {product} on a minimalist desk a few feet back, natural daylight from a window, subtle background items like {bg_items}, open space above for text, no people, overall bright and professional"
-        ],
-        'fitness': [
-            "a realistic home wellness corner with soft natural lighting, the {product} centered on a clean wood floor a few feet back, subtle background items like {bg_items}, plenty of open space around the product, no people, calm and minimal decor, neutral tones, realistic shadows, crisp product details",
-            "a bright fitness space from a few feet back, the {product} placed naturally on the floor, soft daylight, subtle background items like {bg_items}, open space for realism, no people, clean and energetic setting"
-        ],
-        'home': [
-            "a cozy living room scene from a few feet back, the {product} on a coffee table, soft afternoon light, subtle background items like {bg_items}, plenty of open space around the product, no people, warm and inviting setting, realistic lighting and shadows",
-            "a realistic product photo of the {product} in a modern living space a few feet back, natural window light, subtle background items like {bg_items}, open space above for text, no people, overall bright and lifestyle"
-        ],
-        'general': [
-            "a bright realistic scene from a few feet back, the {product} centered on a clean light surface, soft natural lighting from the side, subtle background items like {bg_items}, plenty of open space around the product and above for text, no people, clean and modern setting, realistic shadows, overall bright and professional",
-            "a realistic product photo of the {product} on a neutral surface a few feet back, soft diffused daylight, subtle background items like {bg_items}, open space for realism, no people, clean aesthetic, crisp product details"
-        ]
-    }
+    # SMALL PRODUCTS - closer camera, product fills more of frame, text must be readable
+    # beauty, hair, tech small accessories
+    small_product_templates = [
+        "a realistic product photo of the {product} on a clean bathroom counter, shot at a comfortable distance where the product fills about 50-60 percent of the frame width, soft natural lighting from a window, product text and labels are sharp and clearly readable, subtle background items like {bg_items}, good amount of empty space ABOVE the product for text overlays, no people, clean modern setting, overall bright and realistic",
+        "a bright bathroom scene with the {product} prominently displayed on a marble counter, the product is the clear hero of the shot filling a good portion of the frame, all product text is crisp and legible, soft daylight from the side, subtle background items like {bg_items}, plenty of breathing room above the product, no people, neutral aesthetic, overall bright and professional"
+    ]
     
-    # Get random selections
-    items_list = background_items.get(category, background_items['general'])
-    templates_list = scene_templates.get(category, scene_templates['general'])
+    # FASHION - flat lay overhead, product centered with room around it
+    fashion_templates = [
+        "a realistic flat lay photo of the {product} laid neatly on a clean beige or cream colored surface, shot from above, the clothing is centered and fills about 50 percent of the frame, soft natural lighting from a window, subtle background items like {bg_items}, good amount of empty space above and around the product for text overlays, no people, clean minimal aesthetic, overall bright and lifestyle",
+        "a wide overhead flat lay shot of the {product} laid flat on a light wooden floor or neutral surface, natural soft daylight, the product is well-lit and centered with breathing room around it, subtle background items like {bg_items}, plenty of space above the product, no people, clean modern aesthetic"
+    ]
     
-    bg_items = random.choice(items_list)
-    template = random.choice(templates_list)
+    # MEDIUM PRODUCTS - kitchen, home, tech
+    medium_product_templates = [
+        "a realistic product photo of the {product} on a modern kitchen counter a few feet back, soft daylight from a window, the product is clearly visible and centered, product details are sharp, subtle background items like {bg_items}, plenty of empty space above the product for text, no people, clean and inviting setting, overall bright and realistic",
+        "a bright lifestyle scene with the {product} displayed on a clean surface, shot at a natural distance, soft natural lighting, the product is the clear focus with readable details, subtle background items like {bg_items}, good amount of space above for captions, no people, modern aesthetic, overall bright and professional"
+    ]
+    
+    # LARGE PRODUCTS - tools, fitness equipment - can be farther back
+    large_product_templates = [
+        "a realistic workshop or garage scene from several feet back, the {product} positioned on a clean concrete floor or sturdy surface, natural daylight from a window or open garage door, product shown at realistic scale with space around it, subtle background items like {bg_items}, plenty of room above the product, industrial but clean setting, no people, professional atmosphere",
+        "a bright workshop photo of the {product} in a clean garage or work area, the product appears at realistic size in the space with room to breathe, natural lighting, subtle background items like {bg_items}, lots of open space above and around, no people, professional and functional setting"
+    ]
+    
+    # FITNESS - moderate distance for equipment
+    fitness_templates = [
+        "a realistic home wellness scene with soft natural lighting, the {product} centered on a clean floor, shot at a natural distance where the product is clearly visible, subtle background items like {bg_items}, plenty of open space above the product for text, no people, calm and minimal decor, neutral tones, overall bright and motivating",
+        "a bright fitness space with the {product} placed naturally, the product is well-lit and the focus of the shot, soft daylight, subtle background items like {bg_items}, lots of open space above for captions, no people, clean and energetic setting"
+    ]
+    
+    # Get appropriate templates based on product category
+    bg_items = random.choice(background_items.get(category, background_items['general']))
+    
+    if category in ['beauty', 'hair']:
+        template = random.choice(small_product_templates)
+    elif category == 'fashion':
+        template = random.choice(fashion_templates)
+    elif category == 'tools':
+        template = random.choice(large_product_templates)
+    elif category == 'fitness':
+        template = random.choice(fitness_templates)
+    else:
+        template = random.choice(medium_product_templates)
     
     # Build prompt by filling in the template
     prompt = template.format(product=product_name, bg_items=bg_items)
@@ -2455,14 +2467,14 @@ def generate_ai_image(product_id):
         prompt = get_scene_prompt(product.product_name or 'product', category)
         
         # Use the REAL Nano Banana Pro models:
-        # - gemini-3-pro-image-preview = Nano Banana Pro (BEST quality, 4K, sharp text) - PRIMARY
+        # - gemini-3-pro-image-preview = Nano Banana Pro (BEST quality, 2K/4K, sharp text) - PRIMARY
         # - gemini-2.5-flash-image = Nano Banana (fast fallback)
         models_to_try = [
             "gemini-3-pro-image-preview",   # Nano Banana Pro - BEST QUALITY, try first!
             "gemini-2.5-flash-image",       # Nano Banana - fallback if Pro fails
         ]
         
-        # Build payload with aspect ratio support (supported in gemini-2.5-flash-image)
+        # Basic payload without resolution config (for fallback model)
         payload = {
             "contents": [
                 {
@@ -2485,8 +2497,9 @@ def generate_ai_image(product_id):
             }
         }
         
-        # Payload with aspect ratio for models that support it
-        payload_with_aspect = {
+        # Payload with aspect ratio AND 2K resolution for Nano Banana Pro
+        # Supports: "1K", "2K", "4K" - using 2K for sharp text while keeping reasonable speed
+        payload_with_config = {
             "contents": [
                 {
                     "role": "user",
@@ -2506,7 +2519,8 @@ def generate_ai_image(product_id):
             "generationConfig": {
                 "responseModalities": ["TEXT", "IMAGE"],
                 "imageConfig": {
-                    "aspectRatio": "9:16"
+                    "aspectRatio": "9:16",
+                    "imageSize": "2K"
                 }
             }
         }
@@ -2517,9 +2531,9 @@ def generate_ai_image(product_id):
         for model_name in models_to_try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
             
-            # Try with aspect ratio first, fall back to without if needed
-            # gemini-2.5-flash-image definitely supports it, Pro might too
-            current_payload = payload_with_aspect
+            # Use full config (aspect ratio + 2K resolution) for Nano Banana Pro
+            # Use basic payload for fallback model
+            current_payload = payload_with_config if "3-pro" in model_name else payload
             
             try:
                 response = requests.post(
