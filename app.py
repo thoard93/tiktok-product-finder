@@ -2260,8 +2260,243 @@ def lookup_product():
         }), 500
 
 # =============================================================================
-# DEBUG ENDPOINT
+# AI IMAGE GENERATION - Gemini API (Nano Banana Pro)
 # =============================================================================
+
+import base64
+
+# Gemini API Configuration
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+def get_product_category(product_name):
+    """Determine product category from name for better prompts"""
+    name_lower = product_name.lower()
+    
+    categories = {
+        'beauty': ['serum', 'cream', 'lotion', 'skincare', 'makeup', 'mascara', 'lipstick', 'foundation', 'moisturizer', 'cleanser', 'toner', 'sunscreen', 'face', 'skin'],
+        'hair': ['shampoo', 'conditioner', 'hair', 'brush', 'comb', 'dryer', 'straightener', 'curler'],
+        'fashion': ['dress', 'shirt', 'pants', 'jeans', 'jacket', 'coat', 'sweater', 'hoodie', 'shoes', 'sneakers', 'boots', 'heels', 'bag', 'purse', 'handbag', 'wallet', 'belt', 'scarf', 'hat', 'sunglasses', 'jewelry', 'necklace', 'bracelet', 'ring', 'earring', 'watch'],
+        'kitchen': ['pan', 'pot', 'knife', 'cutting', 'blender', 'mixer', 'cooker', 'fryer', 'toaster', 'kettle', 'coffee', 'mug', 'plate', 'bowl', 'utensil', 'spatula', 'spoon', 'fork', 'container', 'storage', 'bottle', 'cup', 'glass'],
+        'home': ['pillow', 'blanket', 'curtain', 'rug', 'lamp', 'light', 'candle', 'vase', 'frame', 'mirror', 'clock', 'organizer', 'basket', 'shelf', 'holder'],
+        'tech': ['phone', 'case', 'charger', 'cable', 'earbuds', 'headphones', 'speaker', 'mouse', 'keyboard', 'stand', 'mount', 'tripod', 'camera', 'ring light'],
+        'fitness': ['yoga', 'mat', 'dumbbell', 'weight', 'band', 'resistance', 'gym', 'workout', 'protein', 'shaker', 'bottle', 'fitness', 'exercise'],
+        'baby': ['baby', 'infant', 'toddler', 'diaper', 'bottle', 'pacifier', 'stroller', 'carrier'],
+        'pet': ['dog', 'cat', 'pet', 'collar', 'leash', 'bowl', 'toy', 'bed', 'treat'],
+        'outdoor': ['camping', 'tent', 'backpack', 'hiking', 'fishing', 'grill', 'cooler', 'chair', 'umbrella'],
+        'tools': ['tool', 'drill', 'hammer', 'screwdriver', 'wrench', 'tape', 'measure', 'level'],
+        'car': ['car', 'auto', 'vehicle', 'seat', 'steering', 'dash', 'mount', 'freshener'],
+        'health': ['vitamin', 'supplement', 'medicine', 'pill', 'thermometer', 'massager', 'heating', 'ice'],
+        'cleaning': ['cleaner', 'mop', 'broom', 'vacuum', 'sponge', 'brush', 'detergent', 'spray'],
+    }
+    
+    for category, keywords in categories.items():
+        if any(keyword in name_lower for keyword in keywords):
+            return category
+    return 'general'
+
+
+def get_scene_prompt(product_name, category):
+    """Generate a lifestyle scene prompt based on product category"""
+    
+    scenes = {
+        'beauty': "on a clean white marble bathroom counter, soft natural window light from the side, a small succulent plant and cotton pads nearby, steam from a recent shower in the background, spa-like atmosphere",
+        'hair': "on a modern bathroom vanity with warm lighting, a hairbrush and towel nearby, mirror reflection visible, clean minimalist aesthetic",
+        'fashion': "laid flat on a light wooden surface, styled with complementary accessories, soft diffused natural light, minimal background with subtle texture",
+        'kitchen': "on a warm wooden kitchen countertop, fresh ingredients and herbs nearby, morning sunlight streaming through a window, cozy home cooking atmosphere",
+        'home': "in a cozy living room setting, soft afternoon light, comfortable sofa and plants in the background, warm and inviting atmosphere",
+        'tech': "on a clean modern desk setup, laptop and coffee cup nearby, soft LED ambient lighting, productive workspace vibes",
+        'fitness': "on a yoga mat in a bright home gym, water bottle and towel nearby, natural light from large windows, energetic morning atmosphere",
+        'baby': "on a soft white nursery blanket, pastel colored toys nearby, gentle diffused light, warm and safe nursery setting",
+        'pet': "on a cozy living room floor, happy pet nearby, warm afternoon sunlight, comfortable home environment",
+        'outdoor': "on a rustic wooden picnic table, trees and nature in the soft-focus background, golden hour sunlight, adventure-ready atmosphere",
+        'tools': "on a clean wooden workbench, organized tools in the background, warm workshop lighting, craftsman aesthetic",
+        'car': "inside a modern car interior, dashboard visible, clean leather seats, professional automotive photography style",
+        'health': "on a clean white nightstand, glass of water and book nearby, soft bedroom lighting, wellness and self-care atmosphere",
+        'cleaning': "on a bright kitchen counter, sparkling clean surfaces nearby, natural daylight, fresh and organized home",
+        'general': "on a clean light-colored surface, complementary lifestyle items nearby, soft natural lighting from the side, open airy background with subtle depth"
+    }
+    
+    base_scene = scenes.get(category, scenes['general'])
+    
+    prompt = f"""Create a professional lifestyle product photograph of the following product: {product_name}
+
+SCENE: {base_scene}
+
+CRITICAL CAMERA REQUIREMENTS:
+- Camera positioned 3-4 feet back from the product
+- Product takes up only 30-40% of the frame
+- Wide open background with depth and breathing room
+- Product is clearly the hero but NOT filling the entire frame
+- Lifestyle context items are smaller and secondary to the main product
+
+STYLE:
+- Professional e-commerce photography quality
+- Photorealistic, not AI-looking
+- Magazine advertisement quality
+- Natural, believable scene that could be in someone's actual home
+- 4K resolution, sharp focus on product with subtle background blur
+
+The image should look like it was taken by a professional photographer for a premium brand's marketing campaign."""
+
+    return prompt
+
+
+@app.route('/api/generate-image/<product_id>', methods=['POST'])
+@login_required
+def generate_ai_image(product_id):
+    """
+    Generate an AI lifestyle image for a product using Gemini API (Nano Banana Pro)
+    
+    The generated image will:
+    - Use the product's existing image as reference
+    - Place it in a natural lifestyle setting
+    - Camera a few feet back with open background
+    - Add complementary items for realism
+    """
+    if not GEMINI_API_KEY:
+        return jsonify({
+            'success': False, 
+            'error': 'Gemini API key not configured. Please add GEMINI_API_KEY to environment variables.'
+        }), 500
+    
+    try:
+        # Get product info
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        # Get the product image URL
+        image_url = product.cached_image_url or product.image_url
+        if not image_url:
+            return jsonify({'success': False, 'error': 'No product image available'}), 400
+        
+        # Download the product image and convert to base64
+        try:
+            # If it's a proxy URL, fetch through our proxy
+            if image_url.startswith('/api/image-proxy'):
+                # Extract the actual URL from the proxy
+                from urllib.parse import parse_qs, urlparse
+                parsed = urlparse(image_url)
+                actual_url = parse_qs(parsed.query).get('url', [None])[0]
+                if actual_url:
+                    image_url = actual_url
+            
+            img_response = requests.get(image_url, timeout=30, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+            if img_response.status_code != 200:
+                return jsonify({'success': False, 'error': f'Failed to download product image: {img_response.status_code}'}), 400
+            
+            image_data = base64.b64encode(img_response.content).decode('utf-8')
+            
+            # Determine image mime type
+            content_type = img_response.headers.get('Content-Type', 'image/jpeg')
+            if 'png' in content_type:
+                mime_type = 'image/png'
+            elif 'webp' in content_type:
+                mime_type = 'image/webp'
+            else:
+                mime_type = 'image/jpeg'
+                
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Failed to fetch product image: {str(e)}'}), 400
+        
+        # Determine product category and generate prompt
+        category = get_product_category(product.product_name or '')
+        prompt = get_scene_prompt(product.product_name or 'product', category)
+        
+        # Call Gemini API
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_API_KEY}"
+        
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": mime_type,
+                                "data": image_data
+                            }
+                        },
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseModalities": ["image", "text"],
+                "responseMimeType": "image/jpeg"
+            }
+        }
+        
+        response = requests.post(
+            gemini_url,
+            json=payload,
+            headers={'Content-Type': 'application/json'},
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            error_detail = response.text[:500] if response.text else 'No details'
+            return jsonify({
+                'success': False, 
+                'error': f'Gemini API error: {response.status_code}',
+                'detail': error_detail
+            }), 500
+        
+        result = response.json()
+        
+        # Extract the generated image from response
+        generated_image = None
+        if 'candidates' in result and len(result['candidates']) > 0:
+            candidate = result['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                for part in candidate['content']['parts']:
+                    if 'inlineData' in part:
+                        generated_image = part['inlineData']['data']
+                        break
+        
+        if not generated_image:
+            # Try alternative response structure
+            if 'candidates' in result:
+                return jsonify({
+                    'success': False,
+                    'error': 'No image generated - model may not support image output',
+                    'debug': str(result)[:500]
+                }), 500
+            return jsonify({
+                'success': False, 
+                'error': 'Failed to generate image - unexpected response format',
+                'debug': str(result)[:500]
+            }), 500
+        
+        # Log the generation
+        user = get_current_user()
+        if user:
+            log_activity(user.id, 'ai_image_generated', {
+                'product_id': product_id,
+                'product_name': product.product_name[:50] if product.product_name else '',
+                'category': category
+            })
+        
+        return jsonify({
+            'success': True,
+            'image': f"data:image/jpeg;base64,{generated_image}",
+            'product_name': product.product_name,
+            'category': category,
+            'prompt_used': prompt[:200] + '...'
+        })
+        
+    except requests.Timeout:
+        return jsonify({'success': False, 'error': 'Gemini API timeout - please try again'}), 504
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 
 @app.route('/api/debug', methods=['GET'])
 def debug_api():
