@@ -1960,6 +1960,29 @@ def extract_product_id(input_str):
     return None
 
 
+def resolve_tiktok_share_link(share_url):
+    """
+    Resolve TikTok share links (like /t/XXXXXX) by following redirects.
+    Returns the final URL after redirects.
+    """
+    try:
+        # Follow redirects to get final URL
+        response = requests.head(share_url, allow_redirects=True, timeout=10)
+        return response.url
+    except:
+        try:
+            # Fallback: try GET request
+            response = requests.get(share_url, allow_redirects=True, timeout=10)
+            return response.url
+        except:
+            return None
+
+
+def is_tiktok_share_link(url):
+    """Check if URL is a TikTok shortened share link"""
+    return bool(re.search(r'tiktok\.com/t/[A-Za-z0-9]+', url))
+
+
 @app.route('/api/lookup', methods=['GET', 'POST'])
 @login_required
 def lookup_product():
@@ -1983,13 +2006,27 @@ def lookup_product():
     if not input_url:
         return jsonify({'success': False, 'error': 'Please provide a TikTok product URL or ID'}), 400
     
+    # Check if it's a TikTok share link (/t/XXXXX format) and resolve it
+    resolved_url = input_url
+    if is_tiktok_share_link(input_url):
+        print(f"Resolving TikTok share link: {input_url}")
+        resolved_url = resolve_tiktok_share_link(input_url)
+        if not resolved_url:
+            return jsonify({
+                'success': False, 
+                'error': 'Could not resolve TikTok share link. Please try copying the full product URL instead.',
+                'hint': 'Open the product in TikTok, tap Share, then copy the link from your browser'
+            }), 400
+        print(f"Resolved to: {resolved_url}")
+    
     # Extract product ID
-    product_id = extract_product_id(input_url)
+    product_id = extract_product_id(resolved_url)
     if not product_id:
         return jsonify({
             'success': False, 
             'error': 'Could not extract product ID from input',
-            'hint': 'Try pasting a TikTok product URL or just the product ID number'
+            'hint': 'Try pasting a TikTok product URL or just the product ID number',
+            'resolved_url': resolved_url if resolved_url != input_url else None
         }), 400
     
     try:
