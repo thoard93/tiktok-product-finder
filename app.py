@@ -1916,6 +1916,256 @@ def refresh_product_data(product_id):
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
 
+
+# =============================================================================
+# PRODUCT LOOKUP - Search any TikTok product by URL or ID
+# =============================================================================
+
+import re
+
+def extract_product_id(input_str):
+    """
+    Extract product ID from various TikTok URL formats or raw ID.
+    
+    Supported formats:
+    - https://www.tiktok.com/view/product/1729436251038
+    - https://www.tiktok.com/shop/product/1729436251038
+    - https://shop.tiktok.com/view/product/1729436251038
+    - https://affiliate.tiktok.com/product/1729436251038
+    - 1729436251038 (raw ID)
+    """
+    if not input_str:
+        return None
+    
+    input_str = input_str.strip()
+    
+    # If it's just digits, return as-is
+    if input_str.isdigit():
+        return input_str
+    
+    # Try to extract from URL patterns
+    patterns = [
+        r'tiktok\.com/view/product/(\d+)',
+        r'tiktok\.com/shop/product/(\d+)',
+        r'tiktok\.com/product/(\d+)',
+        r'product/(\d+)',
+        r'/(\d{10,25})',  # Fallback: any 10-25 digit number in URL
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, input_str)
+        if match:
+            return match.group(1)
+    
+    return None
+
+
+@app.route('/api/lookup', methods=['GET', 'POST'])
+@login_required
+def lookup_product():
+    """
+    Look up any TikTok product by URL or ID.
+    Fetches real-time stats from EchoTik without requiring it to be in our database.
+    
+    GET/POST params:
+        - url: TikTok product URL or product ID
+        - save: 'true' to save to database (default: false)
+    """
+    # Accept both GET and POST
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        input_url = data.get('url', '')
+        save_to_db = data.get('save', False)
+    else:
+        input_url = request.args.get('url', '')
+        save_to_db = request.args.get('save', 'false').lower() == 'true'
+    
+    if not input_url:
+        return jsonify({'success': False, 'error': 'Please provide a TikTok product URL or ID'}), 400
+    
+    # Extract product ID
+    product_id = extract_product_id(input_url)
+    if not product_id:
+        return jsonify({
+            'success': False, 
+            'error': 'Could not extract product ID from input',
+            'hint': 'Try pasting a TikTok product URL or just the product ID number'
+        }), 400
+    
+    try:
+        # Check if we already have this product in our database
+        existing = Product.query.get(product_id)
+        
+        # Call EchoTik product detail API
+        response = requests.get(
+            f"{BASE_URL}/product/detail",
+            params={'product_ids': product_id},
+            auth=get_auth(),
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False, 
+                'error': f'EchoTik API returned status {response.status_code}'
+            }), 500
+        
+        data = response.json()
+        
+        if data.get('code') != 0:
+            return jsonify({
+                'success': False, 
+                'error': f'EchoTik API error: {data.get("msg", "Unknown error")}'
+            }), 500
+        
+        if not data.get('data') or len(data['data']) == 0:
+            return jsonify({
+                'success': False, 
+                'error': 'Product not found in EchoTik database',
+                'product_id': product_id
+            }), 404
+        
+        p = data['data'][0]
+        
+        # Parse the product data
+        product_data = {
+            'product_id': product_id,
+            'product_name': p.get('product_name', ''),
+            'seller_id': p.get('seller_id', ''),
+            'seller_name': p.get('seller_name', ''),
+            
+            # Sales data
+            'sales': int(p.get('total_sale_cnt', 0) or 0),
+            'sales_7d': int(p.get('total_sale_7d_cnt', 0) or 0),
+            'sales_30d': int(p.get('total_sale_30d_cnt', 0) or 0),
+            'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+            'gmv_7d': float(p.get('total_sale_gmv_7d_amt', 0) or 0),
+            'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+            
+            # Commission
+            'commission_rate': float(p.get('product_commission_rate', 0) or 0),
+            'price': float(p.get('spu_avg_price', 0) or 0),
+            
+            # Competition stats (the key metrics!)
+            'influencer_count': int(p.get('total_ifl_cnt', 0) or 0),
+            'video_count': int(p.get('total_video_cnt', 0) or 0),
+            'video_7d': int(p.get('total_video_7d_cnt', 0) or 0),
+            'video_30d': int(p.get('total_video_30d_cnt', 0) or 0),
+            'live_count': int(p.get('total_live_cnt', 0) or 0),
+            'views_count': int(p.get('total_views_cnt', 0) or 0),
+            
+            # Ratings
+            'product_rating': float(p.get('product_rating', 0) or 0),
+            'review_count': int(p.get('review_count', 0) or 0),
+            
+            # Image
+            'image_url': parse_cover_url(p.get('cover_url', '')),
+            
+            # Links
+            'tiktok_url': f'https://www.tiktok.com/view/product/{product_id}',
+            'echotik_url': f'https://echotik.live/products/{product_id}',
+            
+            # Meta
+            'in_database': existing is not None,
+            'is_favorite': existing.is_favorite if existing else False,
+        }
+        
+        # Calculate competition level
+        inf = product_data['influencer_count']
+        if inf <= 10:
+            product_data['competition_level'] = 'untapped'
+            product_data['competition_label'] = '🔥 Untapped (1-10)'
+        elif inf <= 30:
+            product_data['competition_level'] = 'low'
+            product_data['competition_label'] = '💎 Low Competition (11-30)'
+        elif inf <= 60:
+            product_data['competition_level'] = 'medium'
+            product_data['competition_label'] = '📊 Medium (31-60)'
+        elif inf <= 100:
+            product_data['competition_level'] = 'good'
+            product_data['competition_label'] = '✅ Good (61-100)'
+        else:
+            product_data['competition_level'] = 'high'
+            product_data['competition_label'] = '⚠️ High Competition (100+)'
+        
+        # Save to database if requested
+        saved = False
+        if save_to_db and not existing:
+            try:
+                new_product = Product(
+                    product_id=product_id,
+                    product_name=product_data['product_name'],
+                    seller_id=product_data['seller_id'],
+                    seller_name=product_data['seller_name'],
+                    gmv=product_data['gmv'],
+                    gmv_30d=product_data['gmv_30d'],
+                    sales=product_data['sales'],
+                    sales_7d=product_data['sales_7d'],
+                    sales_30d=product_data['sales_30d'],
+                    influencer_count=product_data['influencer_count'],
+                    commission_rate=product_data['commission_rate'],
+                    price=product_data['price'],
+                    image_url=product_data['image_url'],
+                    video_count=product_data['video_count'],
+                    video_7d=product_data['video_7d'],
+                    video_30d=product_data['video_30d'],
+                    live_count=product_data['live_count'],
+                    views_count=product_data['views_count'],
+                    product_rating=product_data['product_rating'],
+                    review_count=product_data['review_count'],
+                    scan_type='lookup'
+                )
+                db.session.add(new_product)
+                db.session.commit()
+                saved = True
+                product_data['in_database'] = True
+            except Exception as e:
+                db.session.rollback()
+                print(f"Failed to save product: {e}")
+        elif save_to_db and existing:
+            # Update existing product with fresh data
+            existing.sales = product_data['sales']
+            existing.sales_7d = product_data['sales_7d']
+            existing.sales_30d = product_data['sales_30d']
+            existing.gmv = product_data['gmv']
+            existing.gmv_30d = product_data['gmv_30d']
+            existing.influencer_count = product_data['influencer_count']
+            existing.commission_rate = product_data['commission_rate']
+            existing.video_count = product_data['video_count']
+            existing.video_7d = product_data['video_7d']
+            existing.video_30d = product_data['video_30d']
+            existing.live_count = product_data['live_count']
+            existing.views_count = product_data['views_count']
+            existing.last_updated = datetime.utcnow()
+            db.session.commit()
+            saved = True
+        
+        # Log the lookup
+        user = get_current_user()
+        if user:
+            log_activity(user.id, 'product_lookup', {
+                'product_id': product_id,
+                'product_name': product_data['product_name'][:50],
+                'saved': saved
+            })
+        
+        return jsonify({
+            'success': True,
+            'product': product_data,
+            'saved': saved,
+            'message': 'Product saved to database!' if saved else None
+        })
+        
+    except requests.Timeout:
+        return jsonify({'success': False, 'error': 'EchoTik API timeout - please try again'}), 504
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
 # =============================================================================
 # DEBUG ENDPOINT
 # =============================================================================
