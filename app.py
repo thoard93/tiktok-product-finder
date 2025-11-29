@@ -2356,42 +2356,41 @@ def get_scene_prompt(product_name, category):
         ]
     }
     
-    # SMALL PRODUCTS - closer camera, product fills more of frame, text must be readable
-    # beauty, hair, tech small accessories
+    # SMALL PRODUCTS - beauty, hair - moderate distance, readable text, NO floating banners
     small_product_templates = [
-        "a realistic product photo of the {product} on a clean bathroom counter, shot at a comfortable distance where the product fills about 50-60 percent of the frame width, soft natural lighting from a window, product text and labels are sharp and clearly readable, subtle background items like {bg_items}, good amount of empty space ABOVE the product for text overlays, no people, clean modern setting, overall bright and realistic",
-        "a bright bathroom scene with the {product} prominently displayed on a marble counter, the product is the clear hero of the shot filling a good portion of the frame, all product text is crisp and legible, soft daylight from the side, subtle background items like {bg_items}, plenty of breathing room above the product, no people, neutral aesthetic, overall bright and professional"
+        "a realistic product photo of the {product} on a clean bathroom counter, shot from a few feet back where the product fills about 40 percent of the frame width, soft natural lighting from a window, product text and labels are sharp and clearly readable, subtle background items like {bg_items}, good amount of empty space ABOVE the product for text overlays, no people, no floating text or banners or signs, clean modern setting, overall bright and realistic",
+        "a bright bathroom scene with the {product} displayed on a marble counter, shot from a comfortable distance with the product as the clear hero, all product text is crisp and legible, soft daylight from the side, subtle background items like {bg_items}, plenty of breathing room above the product, no people, no floating banners or overlay text, neutral aesthetic, overall bright and professional"
     ]
     
     # FASHION - flat lay overhead, product centered with room around it
     fashion_templates = [
-        "a realistic flat lay photo of the {product} laid neatly on a clean beige or cream colored surface, shot from above, the clothing is centered and fills about 50 percent of the frame, soft natural lighting from a window, subtle background items like {bg_items}, good amount of empty space above and around the product for text overlays, no people, clean minimal aesthetic, overall bright and lifestyle",
-        "a wide overhead flat lay shot of the {product} laid flat on a light wooden floor or neutral surface, natural soft daylight, the product is well-lit and centered with breathing room around it, subtle background items like {bg_items}, plenty of space above the product, no people, clean modern aesthetic"
+        "a realistic flat lay photo of the {product} laid neatly on a clean beige or cream colored surface, shot from above, the clothing is centered and fills about 50 percent of the frame, soft natural lighting from a window, subtle background items like {bg_items}, good amount of empty space above and around the product for text overlays, no people, no floating text or banners or signs, clean minimal aesthetic, overall bright and lifestyle",
+        "a wide overhead flat lay shot of the {product} laid flat on a light wooden floor or neutral surface, natural soft daylight, the product is well-lit and centered with breathing room around it, subtle background items like {bg_items}, plenty of space above the product, no people, no floating banners or text overlays, clean modern aesthetic"
     ]
     
     # MEDIUM PRODUCTS - kitchen, home, tech
     medium_product_templates = [
-        "a realistic product photo of the {product} on a modern kitchen counter a few feet back, soft daylight from a window, the product is clearly visible and centered, product details are sharp, subtle background items like {bg_items}, plenty of empty space above the product for text, no people, clean and inviting setting, overall bright and realistic",
-        "a bright lifestyle scene with the {product} displayed on a clean surface, shot at a natural distance, soft natural lighting, the product is the clear focus with readable details, subtle background items like {bg_items}, good amount of space above for captions, no people, modern aesthetic, overall bright and professional"
+        "a realistic product photo of the {product} on a modern kitchen counter a few feet back, soft daylight from a window, the product is clearly visible and centered, product details are sharp, subtle background items like {bg_items}, plenty of empty space above the product for text, no people, no floating text or banners or signs, clean and inviting setting, overall bright and realistic",
+        "a bright lifestyle scene with the {product} displayed on a clean surface, shot at a natural distance, soft natural lighting, the product is the clear focus with readable details, subtle background items like {bg_items}, good amount of space above for captions, no people, no floating banners or overlay text, modern aesthetic, overall bright and professional"
     ]
     
     # LARGE PRODUCTS - tools, fitness equipment - show UPRIGHT and ASSEMBLED
     large_product_templates = [
-        "a realistic photo of the {product} standing upright in its normal position in a clean garage or workshop, the product is fully assembled and ready to use, natural daylight from a window or open garage door, shot from a few feet back showing the full product, subtle background items like {bg_items}, clean concrete floor, plenty of room above the product, no people, professional atmosphere",
-        "a bright outdoor or garage scene with the {product} standing upright on concrete or pavement, the product is fully assembled in its normal upright position, natural daylight, shot from a comfortable distance to show the whole product, subtle background elements, space above for text overlays, no people, realistic and practical setting",
-        "a realistic lifestyle photo showing the {product} fully assembled and standing upright in a backyard or garage setting, natural lighting, the product is shown in its normal use position as if ready to be used, room around the product for context, plenty of open space above, no people, clean and functional environment"
+        "a realistic photo of the {product} standing upright in its normal position in a clean garage or workshop, the product is fully assembled and ready to use, natural daylight from a window or open garage door, shot from a few feet back showing the full product, subtle background items like {bg_items}, clean concrete floor, plenty of room above the product, no people, no floating text or banners or signs, professional atmosphere",
+        "a bright outdoor or garage scene with the {product} standing upright on concrete or pavement, the product is fully assembled in its normal upright position, natural daylight, shot from a comfortable distance to show the whole product, subtle background elements, space above for text overlays, no people, no floating banners, realistic and practical setting",
+        "a realistic lifestyle photo showing the {product} fully assembled and standing upright in a backyard or garage setting, natural lighting, the product is shown in its normal use position as if ready to be used, room around the product for context, plenty of open space above, no people, no floating text or signs, clean and functional environment"
     ]
     
     # OUTDOOR PRODUCTS - firewood carts, garden equipment, patio items
     outdoor_templates = [
-        "a realistic outdoor photo of the {product} standing upright on a patio or backyard, the product is fully assembled in its normal position, natural daylight, green grass or wooden deck visible, shot from a few feet back to show the full product, space above for text, no people, inviting outdoor setting",
-        "a bright backyard scene with the {product} fully assembled and standing upright near a house or garage, natural sunlight, the product looks ready to use in its normal position, subtle outdoor elements in background, plenty of room above the product, no people, realistic lifestyle photo"
+        "a realistic outdoor photo of the {product} standing upright on a patio or backyard, the product is fully assembled in its normal position, natural daylight, green grass or wooden deck visible, shot from a few feet back to show the full product, space above for text, no people, no floating text or banners or signs, inviting outdoor setting",
+        "a bright backyard scene with the {product} fully assembled and standing upright near a house or garage, natural sunlight, the product looks ready to use in its normal position, subtle outdoor elements in background, plenty of room above the product, no people, no floating banners, realistic lifestyle photo"
     ]
     
     # FITNESS - moderate distance for equipment
     fitness_templates = [
-        "a realistic home wellness scene with soft natural lighting, the {product} centered on a clean floor, shot at a natural distance where the product is clearly visible, subtle background items like {bg_items}, plenty of open space above the product for text, no people, calm and minimal decor, neutral tones, overall bright and motivating",
-        "a bright fitness space with the {product} placed naturally, the product is well-lit and the focus of the shot, soft daylight, subtle background items like {bg_items}, lots of open space above for captions, no people, clean and energetic setting"
+        "a realistic home wellness scene with soft natural lighting, the {product} centered on a clean floor, shot at a natural distance where the product is clearly visible, subtle background items like {bg_items}, plenty of open space above the product for text, no people, no floating text or banners or signs, calm and minimal decor, neutral tones, overall bright and motivating",
+        "a bright fitness space with the {product} placed naturally, the product is well-lit and the focus of the shot, soft daylight, subtle background items like {bg_items}, lots of open space above for captions, no people, no floating banners, clean and energetic setting"
     ]
     
     # Get appropriate templates based on product category
@@ -2426,7 +2425,7 @@ def generate_ai_image(product_id):
     Generate an AI lifestyle image for a product using Gemini API (Nano Banana Pro)
     
     The generated image will:
-    - Use the product's existing image as reference
+    - Use the product's existing image as reference (or cropped version if provided)
     - Place it in a natural lifestyle setting
     - Camera a few feet back with open background
     - Add complementary items for realism
@@ -2443,41 +2442,60 @@ def generate_ai_image(product_id):
         if not product:
             return jsonify({'success': False, 'error': 'Product not found'}), 404
         
-        # Get the product image URL
-        image_url = product.cached_image_url or product.image_url
-        if not image_url:
-            return jsonify({'success': False, 'error': 'No product image available'}), 400
+        # Check if a cropped image was provided in the request
+        request_data = request.get_json() or {}
+        cropped_image_data = request_data.get('cropped_image')
         
-        # Download the product image and convert to base64
-        try:
-            # If it's a proxy URL, fetch through our proxy
-            if image_url.startswith('/api/image-proxy'):
-                # Extract the actual URL from the proxy
-                from urllib.parse import parse_qs, urlparse
-                parsed = urlparse(image_url)
-                actual_url = parse_qs(parsed.query).get('url', [None])[0]
-                if actual_url:
-                    image_url = actual_url
-            
-            img_response = requests.get(image_url, timeout=30, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            })
-            if img_response.status_code != 200:
-                return jsonify({'success': False, 'error': f'Failed to download product image: {img_response.status_code}'}), 400
-            
-            image_data = base64.b64encode(img_response.content).decode('utf-8')
-            
-            # Determine image mime type
-            content_type = img_response.headers.get('Content-Type', 'image/jpeg')
-            if 'png' in content_type:
-                mime_type = 'image/png'
-            elif 'webp' in content_type:
-                mime_type = 'image/webp'
+        if cropped_image_data:
+            # Use the cropped image provided by the frontend
+            # Remove data URL prefix if present (e.g., "data:image/png;base64,")
+            if ',' in cropped_image_data:
+                header, image_data = cropped_image_data.split(',', 1)
+                if 'png' in header:
+                    mime_type = 'image/png'
+                elif 'webp' in header:
+                    mime_type = 'image/webp'
+                else:
+                    mime_type = 'image/jpeg'
             else:
+                image_data = cropped_image_data
                 mime_type = 'image/jpeg'
+        else:
+            # Fall back to fetching the original product image
+            image_url = product.cached_image_url or product.image_url
+            if not image_url:
+                return jsonify({'success': False, 'error': 'No product image available'}), 400
+            
+            # Download the product image and convert to base64
+            try:
+                # If it's a proxy URL, fetch through our proxy
+                if image_url.startswith('/api/image-proxy'):
+                    # Extract the actual URL from the proxy
+                    from urllib.parse import parse_qs, urlparse
+                    parsed = urlparse(image_url)
+                    actual_url = parse_qs(parsed.query).get('url', [None])[0]
+                    if actual_url:
+                        image_url = actual_url
                 
-        except Exception as e:
-            return jsonify({'success': False, 'error': f'Failed to fetch product image: {str(e)}'}), 400
+                img_response = requests.get(image_url, timeout=30, headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+                if img_response.status_code != 200:
+                    return jsonify({'success': False, 'error': f'Failed to download product image: {img_response.status_code}'}), 400
+                
+                image_data = base64.b64encode(img_response.content).decode('utf-8')
+                
+                # Determine image mime type
+                content_type = img_response.headers.get('Content-Type', 'image/jpeg')
+                if 'png' in content_type:
+                    mime_type = 'image/png'
+                elif 'webp' in content_type:
+                    mime_type = 'image/webp'
+                else:
+                    mime_type = 'image/jpeg'
+                    
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Failed to fetch product image: {str(e)}'}), 400
         
         # Determine product category and generate prompt
         category = get_product_category(product.product_name or '')
