@@ -1697,10 +1697,18 @@
                 return;
             }
             
-            // Show loading
+            // Show loading - with special message for share links
             document.getElementById('lookup-results').style.display = 'none';
             document.getElementById('lookup-error').style.display = 'none';
             document.getElementById('lookup-loading').style.display = 'block';
+            
+            // Check if it's a share link
+            const isShareLink = input.includes('/t/') || input.includes('vm.tiktok');
+            if (isShareLink) {
+                document.querySelector('#lookup-loading p').textContent = 'Resolving share link...';
+            } else {
+                document.querySelector('#lookup-loading p').textContent = 'Looking up product...';
+            }
             
             try {
                 const url = `/api/lookup?url=${encodeURIComponent(input)}${saveToDb ? '&save=true' : ''}`;
