@@ -261,6 +261,7 @@
                             <a href="${tiktokSearchUrl}" target="_blank" class="btn btn-secondary" style="background:#333;margin-top:8px;">🔍 Search Product Name</a>
                             <a href="${echotikUrl}" target="_blank" class="btn btn-outline">📊 View on EchoTik</a>
                             <button class="btn btn-outline" onclick="fetchLiveData('${p.product_id}')">🔄 Refresh Data</button>
+                            <button class="btn btn-outline" style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;color:#fff;" onclick="generateAIImage('${p.product_id}')">🎨 Generate AI Image</button>
                             <button class="btn btn-outline" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="markUnavailable('${p.product_id}')">❌ Mark Unavailable</button>
                         </div>
                         ${p.product_status && p.product_status !== 'active' ? `
@@ -535,6 +536,239 @@ document.addEventListener('DOMContentLoaded', function() {
         iconEl.textContent = getProductIcon(titleEl.textContent);
     }
 });
+
+// AI Image Generation
+async function generateAIImage(productId) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('ai-image-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ai-image-modal';
+        modal.innerHTML = `
+            <div class="ai-modal-overlay" onclick="closeAIModal()">
+                <div class="ai-modal-content" onclick="event.stopPropagation()">
+                    <div class="ai-modal-header">
+                        <h3>🎨 AI Image Generator</h3>
+                        <button class="ai-modal-close" onclick="closeAIModal()">✕</button>
+                    </div>
+                    <div class="ai-modal-body" id="ai-modal-body">
+                        <div class="ai-loading">
+                            <div class="ai-spinner"></div>
+                            <p>Generating lifestyle image...</p>
+                            <p class="ai-hint">This may take 10-30 seconds</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Add modal styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .ai-modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                padding: 20px;
+            }
+            .ai-modal-content {
+                background: #1a1a25;
+                border-radius: 16px;
+                max-width: 800px;
+                width: 100%;
+                max-height: 90vh;
+                overflow: hidden;
+                border: 1px solid #2a2a3a;
+            }
+            .ai-modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 1rem 1.5rem;
+                border-bottom: 1px solid #2a2a3a;
+                background: linear-gradient(135deg, #667eea22, #764ba222);
+            }
+            .ai-modal-header h3 {
+                margin: 0;
+                font-size: 1.25rem;
+            }
+            .ai-modal-close {
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 1.5rem;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+            }
+            .ai-modal-close:hover { color: #fff; }
+            .ai-modal-body {
+                padding: 1.5rem;
+                overflow-y: auto;
+                max-height: calc(90vh - 80px);
+            }
+            .ai-loading {
+                text-align: center;
+                padding: 3rem;
+            }
+            .ai-spinner {
+                width: 60px;
+                height: 60px;
+                border: 4px solid #2a2a3a;
+                border-top-color: #667eea;
+                border-radius: 50%;
+                animation: ai-spin 1s linear infinite;
+                margin: 0 auto 1rem;
+            }
+            @keyframes ai-spin {
+                to { transform: rotate(360deg); }
+            }
+            .ai-hint {
+                color: #666;
+                font-size: 0.85rem;
+                margin-top: 0.5rem;
+            }
+            .ai-result {
+                text-align: center;
+            }
+            .ai-result img {
+                max-width: 100%;
+                border-radius: 12px;
+                margin-bottom: 1rem;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            }
+            .ai-result-actions {
+                display: flex;
+                gap: 1rem;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .ai-btn {
+                padding: 0.75rem 1.5rem;
+                border-radius: 8px;
+                font-weight: 500;
+                cursor: pointer;
+                text-decoration: none;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-family: inherit;
+                font-size: 1rem;
+                transition: all 0.2s;
+            }
+            .ai-btn-primary {
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                color: white;
+                border: none;
+            }
+            .ai-btn-primary:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            }
+            .ai-btn-secondary {
+                background: #2a2a3a;
+                color: white;
+                border: 1px solid #3a3a4a;
+            }
+            .ai-btn-secondary:hover {
+                background: #3a3a4a;
+            }
+            .ai-error {
+                background: rgba(255, 100, 100, 0.1);
+                border: 1px solid #ff6b6b;
+                border-radius: 12px;
+                padding: 1.5rem;
+                text-align: center;
+            }
+            .ai-error h4 {
+                color: #ff6b6b;
+                margin-bottom: 0.5rem;
+            }
+            .ai-category {
+                display: inline-block;
+                background: rgba(102, 126, 234, 0.2);
+                color: #667eea;
+                padding: 0.25rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                margin-bottom: 1rem;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    modal.style.display = 'block';
+    document.getElementById('ai-modal-body').innerHTML = `
+        <div class="ai-loading">
+            <div class="ai-spinner"></div>
+            <p>Generating lifestyle image...</p>
+            <p class="ai-hint">Camera positioned back, open background, natural setting</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`/api/generate-image/${productId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('ai-modal-body').innerHTML = `
+                <div class="ai-result">
+                    <span class="ai-category">📁 Category: ${data.category}</span>
+                    <img src="${data.image}" alt="AI Generated - ${data.product_name}">
+                    <div class="ai-result-actions">
+                        <a href="${data.image}" download="ai-product-${productId}.jpg" class="ai-btn ai-btn-primary">
+                            💾 Download Image
+                        </a>
+                        <button class="ai-btn ai-btn-secondary" onclick="generateAIImage('${productId}')">
+                            🔄 Generate Another
+                        </button>
+                        <button class="ai-btn ai-btn-secondary" onclick="closeAIModal()">
+                            ✕ Close
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            document.getElementById('ai-modal-body').innerHTML = `
+                <div class="ai-error">
+                    <h4>⚠️ Generation Failed</h4>
+                    <p>${data.error || 'Unknown error occurred'}</p>
+                    ${data.detail ? `<p style="font-size:0.8rem;color:#888;margin-top:1rem;">${data.detail.substring(0, 200)}</p>` : ''}
+                    <button class="ai-btn ai-btn-secondary" style="margin-top:1rem;" onclick="generateAIImage('${productId}')">
+                        🔄 Try Again
+                    </button>
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('ai-modal-body').innerHTML = `
+            <div class="ai-error">
+                <h4>⚠️ Connection Error</h4>
+                <p>${error.message}</p>
+                <button class="ai-btn ai-btn-secondary" style="margin-top:1rem;" onclick="generateAIImage('${productId}')">
+                    🔄 Try Again
+                </button>
+            </div>
+        `;
+    }
+}
+
+function closeAIModal() {
+    const modal = document.getElementById('ai-image-modal');
+    if (modal) modal.style.display = 'none';
+}
 </script>
 
 </body>
