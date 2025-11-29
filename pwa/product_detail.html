@@ -765,17 +765,20 @@ async function generateAIImage(productId) {
     
     modal.style.display = 'block';
     
-    // Get product image URL
-    const productImg = document.querySelector('.product-image img, .product-img, img[src*="tiktok"], img[src*="image-proxy"]');
+    // Get product image URL - the img tag has class 'product-image' directly
+    const productImg = document.querySelector('img.product-image, .product-image-section img, img[src*="image-proxy"], img[src*="tiktok"]');
     currentProductImageUrl = productImg ? productImg.src : null;
     
     if (!currentProductImageUrl) {
+        // Fallback: skip crop and generate directly using backend image fetch
         document.getElementById('ai-modal-body').innerHTML = `
-            <div class="ai-error">
-                <h4>⚠️ No Image Found</h4>
-                <p>Could not find product image to crop.</p>
+            <div class="ai-loading">
+                <div class="ai-spinner"></div>
+                <p>Generating lifestyle image...</p>
+                <p class="ai-hint">Using product image from database</p>
             </div>
         `;
+        await callGenerateAPI(currentProductId, null);
         return;
     }
     
