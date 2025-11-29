@@ -768,8 +768,8 @@
             </select>
         </div>
         
-        <!-- Scan Settings -->
-        <div class="scan-settings">
+        <!-- Scan Settings (Admin/Dev Only) -->
+        <div class="scan-settings" id="scan-settings-section" style="display: none;">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
                 <h4>⚙️ Scan Settings</h4>
                 <span class="toggle">▼</span>
@@ -963,7 +963,8 @@
     <div class="bottom-nav">
         <button class="nav-btn tools" onclick="openModal()">🛠️</button>
         <button class="nav-btn secondary" style="flex: 0.8;" onclick="openLookupModal()">🔎 Lookup</button>
-        <button class="nav-btn primary" id="scan-btn" onclick="startScan()">🔍 Scan</button>
+        <button class="nav-btn secondary" onclick="loadProducts()">↻ Refresh</button>
+        <button class="nav-btn primary" id="scan-btn" onclick="startScan()" style="display: none;">🔍 Scan</button>
     </div>
     
     <!-- Scroll to Top Button -->
@@ -1119,6 +1120,12 @@
                     
                     if (currentUser.is_admin) {
                         document.getElementById('admin-link').style.display = 'inline';
+                    }
+                    
+                    // Show scan controls for admin or dev users only
+                    if (currentUser.is_admin || currentUser.is_dev_user) {
+                        document.getElementById('scan-settings-section').style.display = 'block';
+                        document.getElementById('scan-btn').style.display = 'flex';
                     }
                 }
             } catch (err) {
