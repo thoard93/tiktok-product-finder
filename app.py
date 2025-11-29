@@ -2272,21 +2272,24 @@ def get_product_category(product_name):
     """Determine product category from name for better prompts"""
     name_lower = product_name.lower()
     
+    # IMPORTANT: Order matters! More specific categories should be checked first
+    # Outdoor first to catch firewood carts, garden items before tools catches them
+    # Tools second to catch Vevor hydraulic lifts, etc.
     categories = {
-        'beauty': ['serum', 'cream', 'lotion', 'skincare', 'makeup', 'mascara', 'lipstick', 'foundation', 'moisturizer', 'cleanser', 'toner', 'sunscreen', 'face', 'skin', 'eye cream', 'anti-aging'],
-        'hair': ['shampoo', 'conditioner', 'hair', 'brush', 'comb', 'dryer', 'straightener', 'curler'],
-        'fashion': ['dress', 'shirt', 'pants', 'jeans', 'jacket', 'coat', 'sweater', 'hoodie', 'shoes', 'sneakers', 'boots', 'heels', 'bag', 'purse', 'handbag', 'wallet', 'belt', 'scarf', 'hat', 'sunglasses', 'jewelry', 'necklace', 'bracelet', 'ring', 'earring', 'watch', 'clothing', 'apparel', 'top', 'blouse', 'skirt', 'shorts'],
-        'kitchen': ['pan', 'pot', 'knife', 'cutting', 'blender', 'mixer', 'cooker', 'fryer', 'toaster', 'kettle', 'coffee', 'mug', 'plate', 'bowl', 'utensil', 'spatula', 'spoon', 'fork', 'container', 'storage', 'cup', 'glass', 'drink mix', 'sodastream'],
-        'home': ['pillow', 'pillowcase', 'blanket', 'curtain', 'rug', 'lamp', 'candle', 'vase', 'frame', 'mirror', 'clock', 'organizer', 'basket', 'shelf', 'holder', 'bedding', 'sheets', 'duvet'],
-        'tech': ['phone', 'case', 'charger', 'cable', 'earbuds', 'headphones', 'speaker', 'mouse', 'keyboard', 'stand', 'mount', 'tripod', 'camera', 'ring light', 'laptop', 'tablet'],
-        'fitness': ['yoga', 'mat', 'dumbbell', 'weight', 'band', 'resistance', 'gym', 'workout', 'protein', 'shaker', 'fitness', 'exercise', 'vibration plate', 'treadmill'],
-        'baby': ['baby', 'infant', 'toddler', 'diaper', 'pacifier', 'stroller', 'carrier', 'nursery'],
-        'pet': ['dog', 'cat', 'pet', 'collar', 'leash', 'toy', 'bed', 'treat'],
-        'outdoor': ['camping', 'tent', 'backpack', 'hiking', 'fishing', 'grill', 'cooler', 'umbrella', 'garden', 'patio'],
-        'tools': ['tool', 'drill', 'hammer', 'screwdriver', 'wrench', 'tape', 'measure', 'level', 'lift', 'hydraulic', 'cart', 'jack', 'compressor', 'welder', 'saw', 'sander', 'grinder', 'workbench', 'vevor', 'scaffold', 'ladder', 'dolly', 'hoist', 'clamp', 'vise', 'industrial', 'mechanic', 'garage', 'workshop'],
-        'car': ['car', 'auto', 'vehicle', 'seat', 'steering', 'dash', 'freshener', 'automotive'],
-        'health': ['vitamin', 'supplement', 'medicine', 'pill', 'thermometer', 'massager', 'heating', 'ice pack'],
+        'outdoor': ['firewood', 'log cart', 'garden', 'patio', 'lawn', 'grill', 'bbq', 'camping', 'tent', 'backpack', 'hiking', 'fishing', 'cooler', 'umbrella', 'outdoor furniture', 'fire pit', 'fireplace carrier'],
+        'tools': ['tool', 'drill', 'hammer', 'screwdriver', 'wrench', 'tape measure', 'level', 'lift', 'hydraulic', 'jack', 'compressor', 'welder', 'saw', 'sander', 'grinder', 'workbench', 'vevor', 'scaffold', 'ladder', 'dolly', 'hoist', 'clamp', 'vise', 'industrial', 'mechanic', 'garage', 'workshop', 'hauler', 'mover', 'rack storage', 'steel', 'heavy duty', 'capacity', 'scissor', 'table cart', 'pallet'],
+        'beauty': ['serum', 'cream', 'lotion', 'skincare', 'makeup', 'mascara', 'lipstick', 'foundation', 'moisturizer', 'cleanser', 'toner', 'sunscreen', 'face', 'skin', 'eye cream', 'anti-aging', 'melaxin', 'cemenrete'],
+        'hair': ['shampoo', 'conditioner', 'hair oil', 'hair mask', 'brush', 'comb', 'dryer', 'straightener', 'curler', 'hair growth'],
+        'fashion': ['dress', 'shirt', 'pants', 'jeans', 'jacket', 'coat', 'sweater', 'hoodie', 'shoes', 'sneakers', 'boots', 'heels', 'bag', 'purse', 'handbag', 'wallet', 'belt', 'scarf', 'hat', 'sunglasses', 'jewelry', 'necklace', 'bracelet', 'earring', 'watch', 'clothing', 'apparel', 'blouse', 'skirt', 'shorts', 'girlfriend jeans', 'boyfriend jeans'],
+        'kitchen': ['pan', 'pot', 'knife', 'cutting board', 'blender', 'mixer', 'cooker', 'fryer', 'toaster', 'kettle', 'coffee', 'mug', 'plate', 'bowl', 'utensil', 'spatula', 'container', 'drink mix', 'sodastream', 'kitchen'],
+        'home': ['pillow', 'pillowcase', 'blanket', 'curtain', 'rug', 'lamp', 'candle', 'vase', 'frame', 'mirror', 'clock', 'organizer', 'basket', 'shelf', 'holder', 'bedding', 'sheets', 'duvet', 'decor'],
+        'tech': ['phone', 'charger', 'cable', 'earbuds', 'headphones', 'speaker', 'mouse', 'keyboard', 'stand', 'mount', 'tripod', 'camera', 'ring light', 'laptop', 'tablet', 'wireless', 'bluetooth'],
+        'fitness': ['yoga', 'dumbbell', 'weight', 'resistance band', 'gym', 'workout', 'protein', 'shaker', 'fitness', 'exercise', 'vibration plate', 'treadmill', 'kettlebell'],
+        'car': ['car', 'auto', 'vehicle', 'seat cover', 'steering', 'dash', 'freshener', 'automotive'],
+        'health': ['vitamin', 'supplement', 'medicine', 'thermometer', 'massager', 'heating pad', 'ice pack'],
         'cleaning': ['cleaner', 'mop', 'broom', 'vacuum', 'sponge', 'detergent', 'spray'],
+        'pet': ['dog', 'cat', 'pet', 'collar', 'leash', 'pet toy', 'pet bed', 'treat'],
+        'baby': ['baby', 'infant', 'toddler', 'diaper', 'pacifier', 'stroller', 'carrier', 'nursery'],
     }
     
     for category, keywords in categories.items():
@@ -2330,6 +2333,11 @@ def get_scene_prompt(product_name, category):
             "pegboard with tools, a shop rag, and small parts organizer out of focus",
             "concrete floor texture, storage shelves blurred in background"
         ],
+        'outdoor': [
+            "green grass, a patio chair, and potted plants blurred in background",
+            "wooden fence, garden tools leaning nearby, natural foliage out of focus",
+            "stacked firewood, outdoor decor, and greenery in the distance"
+        ],
         'tech': [
             "a coffee mug, small plant, and notebook blurred slightly",
             "a pen holder, coaster, and desk organizer out of focus"
@@ -2367,10 +2375,17 @@ def get_scene_prompt(product_name, category):
         "a bright lifestyle scene with the {product} displayed on a clean surface, shot at a natural distance, soft natural lighting, the product is the clear focus with readable details, subtle background items like {bg_items}, good amount of space above for captions, no people, modern aesthetic, overall bright and professional"
     ]
     
-    # LARGE PRODUCTS - tools, fitness equipment - can be farther back
+    # LARGE PRODUCTS - tools, fitness equipment - show UPRIGHT and ASSEMBLED
     large_product_templates = [
-        "a realistic workshop or garage scene from several feet back, the {product} positioned on a clean concrete floor or sturdy surface, natural daylight from a window or open garage door, product shown at realistic scale with space around it, subtle background items like {bg_items}, plenty of room above the product, industrial but clean setting, no people, professional atmosphere",
-        "a bright workshop photo of the {product} in a clean garage or work area, the product appears at realistic size in the space with room to breathe, natural lighting, subtle background items like {bg_items}, lots of open space above and around, no people, professional and functional setting"
+        "a realistic photo of the {product} standing upright in its normal position in a clean garage or workshop, the product is fully assembled and ready to use, natural daylight from a window or open garage door, shot from a few feet back showing the full product, subtle background items like {bg_items}, clean concrete floor, plenty of room above the product, no people, professional atmosphere",
+        "a bright outdoor or garage scene with the {product} standing upright on concrete or pavement, the product is fully assembled in its normal upright position, natural daylight, shot from a comfortable distance to show the whole product, subtle background elements, space above for text overlays, no people, realistic and practical setting",
+        "a realistic lifestyle photo showing the {product} fully assembled and standing upright in a backyard or garage setting, natural lighting, the product is shown in its normal use position as if ready to be used, room around the product for context, plenty of open space above, no people, clean and functional environment"
+    ]
+    
+    # OUTDOOR PRODUCTS - firewood carts, garden equipment, patio items
+    outdoor_templates = [
+        "a realistic outdoor photo of the {product} standing upright on a patio or backyard, the product is fully assembled in its normal position, natural daylight, green grass or wooden deck visible, shot from a few feet back to show the full product, space above for text, no people, inviting outdoor setting",
+        "a bright backyard scene with the {product} fully assembled and standing upright near a house or garage, natural sunlight, the product looks ready to use in its normal position, subtle outdoor elements in background, plenty of room above the product, no people, realistic lifestyle photo"
     ]
     
     # FITNESS - moderate distance for equipment
@@ -2388,6 +2403,8 @@ def get_scene_prompt(product_name, category):
         template = random.choice(fashion_templates)
     elif category == 'tools':
         template = random.choice(large_product_templates)
+    elif category == 'outdoor':
+        template = random.choice(outdoor_templates)
     elif category == 'fitness':
         template = random.choice(fitness_templates)
     else:

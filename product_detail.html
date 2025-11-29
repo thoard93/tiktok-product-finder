@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Details - TikTok Shop Finder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --bg-hover: #22222f;
+            --accent: #fe2c55;
+            --tiktok-cyan: #25f4ee;
+            --success: #00d26a;
+            --warning: #ffb800;
+            --text-primary: #ffffff;
+            --text-secondary: #8b8b9e;
+            --border: #2a2a3a;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Space Grotesk', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        
+        .header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 1rem 2rem; position: sticky; top: 0; z-index: 100; }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .back-link { display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); text-decoration: none; }
+        .back-link:hover { color: var(--accent); }
+        .logo { display: flex; align-items: center; gap: 0.75rem; }
+        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #fe2c55 0%, #25f4ee 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+        .logo-text { font-size: 1.25rem; font-weight: 600; }
+        .logo-text span { color: var(--accent); }
+        
+        .main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .product-header { display: grid; grid-template-columns: 400px 1fr; gap: 2rem; margin-bottom: 2rem; }
+        .product-image-section { background: var(--bg-card); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+        .product-image { width: 100%; aspect-ratio: 1; object-fit: cover; }
+        .product-info { display: flex; flex-direction: column; gap: 1.5rem; }
+        .product-title { font-size: 1.75rem; font-weight: 600; line-height: 1.3; }
+        .product-meta { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .meta-badge { background: var(--bg-card); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; }
+        .meta-badge.highlight { border-color: var(--accent); color: var(--accent); }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .main { padding: 1rem; }
+            .product-header { 
+                grid-template-columns: 1fr; 
+                gap: 1rem;
+            }
+            .product-image-section {
+                max-width: 200px;
+                margin: 0 auto;
+            }
+            .product-image {
+                aspect-ratio: 1;
+            }
+            .product-title { font-size: 1.25rem; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+            .stat-card { padding: 0.875rem; }
+            .stat-value { font-size: 1.25rem; }
+            .stat-icon { font-size: 1.25rem; margin-bottom: 0.25rem; }
+            .action-buttons { 
+                flex-wrap: wrap; 
+                gap: 0.5rem;
+            }
+            .btn { 
+                padding: 0.6rem 1rem; 
+                font-size: 0.85rem;
+                flex: 1 1 auto;
+                justify-content: center;
+            }
+            .video-analysis-grid { grid-template-columns: 1fr; gap: 0.75rem; }
+            .video-stat-value { font-size: 1.5rem; }
+            .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .tab { padding: 0.75rem 1rem; font-size: 0.9rem; white-space: nowrap; }
+            .header { padding: 1rem; }
+            .header-content { flex-direction: column; gap: 1rem; align-items: flex-start; }
+        }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; text-align: center; }
+        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stat-value { font-size: 1.75rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; margin-bottom: 0.25rem; }
+        .stat-value.accent { color: var(--accent); }
+        .stat-value.cyan { color: var(--tiktok-cyan); }
+        .stat-value.success { color: var(--success); }
+        .stat-value.warning { color: var(--warning); }
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; }
+        
+        .action-buttons { display: flex; gap: 1rem; margin-top: auto; }
+        .btn { padding: 0.75rem 1.5rem; border-radius: 8px; font-family: inherit; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s; }
+        .btn-primary { background: var(--accent); color: white; border: none; }
+        .btn-primary:hover { background: #ff1744; transform: translateY(-2px); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-primary); }
+        .btn-outline:hover { border-color: var(--accent); background: var(--bg-hover); }
+        
+        .tabs-container { margin-top: 2rem; }
+        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+        .tab { padding: 1rem 1.5rem; background: transparent; border: none; color: var(--text-secondary); font-family: inherit; font-size: 1rem; cursor: pointer; position: relative; }
+        .tab:hover { color: var(--text-primary); }
+        .tab.active { color: var(--accent); }
+        .tab.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .analysis-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .section-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .video-analysis-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .video-stat-card { background: var(--bg-secondary); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .video-stat-period { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem; }
+        .video-stat-value { font-size: 2rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .video-stat-label { font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem; }
+        
+        .competition-meter { margin-top: 1rem; }
+        .meter-label { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
+        .meter-bar { height: 8px; background: var(--bg-secondary); border-radius: 4px; overflow: hidden; }
+        .meter-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .meter-fill.low { background: var(--success); }
+        .meter-fill.medium { background: var(--warning); }
+        .meter-fill.high { background: var(--accent); }
+        
+        .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; color: var(--text-secondary); }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        @media (max-width: 900px) {
+            .product-header { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .video-analysis-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+
+<style>
+.product-detail-image {
+    width: 100%;
+    max-width: 400px;
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    border-radius: 12px;
+    position: relative;
+}
+
+.product-detail-image .product-icon {
+    font-size: 100px;
+    opacity: 0.5;
+    margin-bottom: 10px;
+}
+
+.product-detail-image .view-hint {
+    background: rgba(0,0,0,0.5);
+    color: rgba(255,255,255,0.8);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+</style>
+
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <a href="javascript:void(0)" onclick="goBack()" class="back-link">← Back to Products</a>
+            <div class="logo">
+                <div class="logo-icon">TS</div>
+                <div class="logo-text">TikTok<span>Shop</span> Finder</div>
+            </div>
+        </div>
+    </header>
+    <main class="main">
+        <div id="productContent">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 1rem;">Loading product details...</p>
+            </div>
+        </div>
+    </main>
+    <script>
+        // Smart back navigation - uses history if available, otherwise goes to home
+        function goBack() {
+            // Check if we came from Brand Hunter (has history)
+            if (document.referrer && document.referrer.includes(window.location.origin)) {
+                history.back();
+            } else {
+                window.location.href = '/';
+            }
+        }
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const productId = urlParams.get('id');
+        
+        function formatCurrency(v) { if (!v) return '$0'; if (v >= 1e6) return '$'+(v/1e6).toFixed(1)+'M'; if (v >= 1e3) return '$'+(v/1e3).toFixed(1)+'K'; return '$'+v.toFixed(0); }
+        function formatNumber(v) { if (!v) return '0'; if (v >= 1e6) return (v/1e6).toFixed(1)+'M'; if (v >= 1e3) return (v/1e3).toFixed(1)+'K'; return v.toString(); }
+        function getCompetitionLevel(inf, vid) {
+            const t = (inf||0) + (vid||0)/10;
+            if (t <= 5) return {level:'Low',class:'low',percent:20};
+            if (t <= 20) return {level:'Medium',class:'medium',percent:50};
+            if (t <= 50) return {level:'High',class:'high',percent:75};
+            return {level:'Very High',class:'high',percent:95};
+        }
+        function getImageUrl(cachedUrl, originalUrl) {
+            // Prefer cached signed URL (from batch cover API)
+            if (cachedUrl) return cachedUrl;
+            // Fall back to proxy for original URLs
+            if (!originalUrl) return null;
+            if (originalUrl.includes('ibyteimg.com')||originalUrl.includes('tiktokcdn')||originalUrl.includes('volces.com')) {
+                return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+            }
+            return originalUrl;
+        }
+        
+        function renderProduct(p) {
+            const comp = getCompetitionLevel(p.influencer_count||p.total_influencers, p.video_count);
+            const tiktokUrl = `https://www.tiktok.com/view/product/${p.product_id}`;
+            const tiktokSearchUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(p.product_name || '')}`;
+            const echotikUrl = `https://echotik.live/products/${p.product_id}`;
+            // Fix commission - if decimal, multiply by 100
+            let commissionRate = p.commission_rate || 0;
+            if (commissionRate > 0 && commissionRate < 1) commissionRate = commissionRate * 100;
+            const earnings = p.potential_earnings || (p.gmv * commissionRate / 100);
+            const inf = p.influencer_count || p.total_influencers || 0;
+            const imageUrl = getImageUrl(p.cached_image_url, p.image_url || p.cover_url);
+            
+            document.getElementById('productContent').innerHTML = `
+                <div class="product-header">
+                    <div class="product-image-section">
+                        ${imageUrl ? `
+                            <img class="product-image" src="${imageUrl}" alt="${p.product_name}" 
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            <div class="product-detail-image" style="display:none;">
+                                <span class="product-icon">📦</span>
+                                <span class="view-hint">Image unavailable</span>
+                            </div>
+                        ` : `
+                            <div class="product-detail-image">
+                                <span class="product-icon">📦</span>
+                                <span class="view-hint">No image available</span>
+                            </div>
+                        `}
+                    </div>
+                    <div class="product-info">
+                        <h1 class="product-title">${p.product_name}</h1>
+                        <div class="product-meta">
+                            <span class="meta-badge">🏪 ${p.seller_name||'TikTok Shop'}</span>
+                            <span class="meta-badge" style="background:${commissionRate >= 10 ? '#4ade80' : commissionRate >= 5 ? '#fbbf24' : '#f87171'}; color:#000;">💰 ${commissionRate.toFixed(1)}% Commission</span>
+                            ${p.rating?`<span class="meta-badge">⭐ ${p.rating.toFixed(1)}</span>`:''}
+                            ${p.free_shipping?'<span class="meta-badge highlight">🚚 Free Shipping</span>':''}
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-value accent">${formatCurrency(p.gmv)}</div><div class="stat-label">Total GMV</div></div>
+                            <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">${formatNumber(p.sales)}</div><div class="stat-label">Units Sold</div></div>
+                            <div class="stat-card"><div class="stat-icon">👤</div><div class="stat-value cyan">${formatNumber(p.influencer_count||0)}</div><div class="stat-label">Influencers</div></div>
+                            <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-value success">${formatCurrency(p.price||0)}</div><div class="stat-label">Price</div></div>
+                        </div>
+                        <div class="action-buttons">
+                            <a href="${tiktokUrl}" target="_blank" class="btn btn-primary">🛒 View on TikTok</a>
+                            <a href="${tiktokSearchUrl}" target="_blank" class="btn btn-secondary" style="background:#333;margin-top:8px;">🔍 Search Product Name</a>
+                            <a href="${echotikUrl}" target="_blank" class="btn btn-outline">📊 View on EchoTik</a>
+                            <button class="btn btn-outline" onclick="fetchLiveData('${p.product_id}')">🔄 Refresh Data</button>
+                            <button class="btn btn-outline" style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;color:#fff;" onclick="generateAIImage('${p.product_id}')">🎨 Generate AI Image</button>
+                            <button class="btn btn-outline" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="markUnavailable('${p.product_id}')">❌ Mark Unavailable</button>
+                        </div>
+                        ${p.product_status && p.product_status !== 'active' ? `
+                        <div style="margin-top:1rem;padding:0.75rem 1rem;background:rgba(255,107,107,0.1);border:1px solid #ff6b6b;border-radius:8px;color:#ff6b6b;">
+                            ⚠️ This product is marked as <strong>${p.product_status}</strong>${p.status_note ? ': ' + p.status_note : ''}
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab active" onclick="switchTab('overview')">Overview</button>
+                        <button class="tab" onclick="switchTab('video')">Video Analysis</button>
+                        <button class="tab" onclick="switchTab('competition')">Competition</button>
+                    </div>
+                    <div id="tab-overview" class="tab-content active">
+                        <div class="analysis-section">
+                            <h3 class="section-title">📈 Sales Performance</h3>
+                            <div class="video-analysis-grid">
+                                <div class="video-stat-card"><div class="video-stat-period">Last 7 Days</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatCurrency(p.gmv_7d||0)}</div><div class="video-stat-label">${formatNumber(p.sales_7d||0)} units</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Last 30 Days</div><div class="video-stat-value" style="color:var(--success)">${formatCurrency(p.gmv_30d||0)}</div><div class="video-stat-label">${formatNumber(p.sales_30d||0)} units</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">All Time</div><div class="video-stat-value" style="color:var(--accent)">${formatCurrency(p.gmv||0)}</div><div class="video-stat-label">${formatNumber(p.sales||0)} units</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="tab-video" class="tab-content">
+                        <div class="analysis-section">
+                            <h3 class="section-title">🎬 Video Activity</h3>
+                            ${(p.video_7d || p.video_30d || p.video_count) ? `
+                            <div class="video-analysis-grid">
+                                <div class="video-stat-card"><div class="video-stat-period">Last 7 Days</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatNumber(p.video_7d||0)}</div><div class="video-stat-label">New Videos</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Last 30 Days</div><div class="video-stat-value" style="color:var(--success)">${formatNumber(p.video_30d||0)}</div><div class="video-stat-label">New Videos</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Total</div><div class="video-stat-value" style="color:var(--accent)">${formatNumber(p.video_count||0)}</div><div class="video-stat-label">All Videos</div></div>
+                            </div>
+                            <div class="video-analysis-grid" style="margin-top:1rem;">
+                                <div class="video-stat-card"><div class="video-stat-period">Live Streams</div><div class="video-stat-value" style="color:var(--warning)">${formatNumber(p.live_count||0)}</div><div class="video-stat-label">Total</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Views</div><div class="video-stat-value" style="color:var(--tiktok-cyan)">${formatNumber(p.views_count||0)}</div><div class="video-stat-label">Total</div></div>
+                                <div class="video-stat-card"><div class="video-stat-period">Reviews</div><div class="video-stat-value" style="color:var(--success)">${formatNumber(p.review_count||0)}</div><div class="video-stat-label">Total</div></div>
+                            </div>
+                            ` : `
+                            <p style="color:var(--text-secondary);padding:1rem;background:var(--bg-secondary);border-radius:8px;">
+                                📊 Video data not loaded yet.<br>
+                                <span style="font-size:0.85rem;">Click "Refresh Data" to fetch video stats from EchoTik.</span>
+                            </p>
+                            `}
+                        </div>
+                    </div>
+                    <div id="tab-competition" class="tab-content">
+                        <div class="analysis-section">
+                            <h3 class="section-title">🎯 Competition Analysis</h3>
+                            <div class="stats-grid" style="margin-bottom:1.5rem;">
+                                <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-value cyan">${formatNumber(inf)}</div><div class="stat-label">Influencers</div></div>
+                                <div class="stat-card"><div class="stat-icon">🎬</div><div class="stat-value">${formatNumber(p.video_count||0)}</div><div class="stat-label">Videos</div></div>
+                                <div class="stat-card"><div class="stat-icon">📺</div><div class="stat-value">${formatNumber(p.live_count||0)}</div><div class="stat-label">Livestreams</div></div>
+                                <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-value ${comp.class}">${comp.level}</div><div class="stat-label">Competition</div></div>
+                            </div>
+                            <div class="competition-meter">
+                                <div class="meter-label"><span>Competition Level</span><span>${comp.level}</span></div>
+                                <div class="meter-bar"><div class="meter-fill ${comp.class}" style="width:${comp.percent}%"></div></div>
+                            </div>
+                            <div style="margin-top:1.5rem;padding:1rem;background:var(--bg-secondary);border-radius:8px;">
+                                <h4 style="margin-bottom:0.75rem;">💡 Competition Insight</h4>
+                                ${getInsight(inf,p.gmv)}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+        
+        function getInsight(inf,gmv) {
+            const g = formatCurrency(gmv);
+            if (inf<=3) return `<p style="color:var(--success)">🏆 <strong>Untapped!</strong> Only ${inf} influencers. ${g} proven sales - move fast!</p>`;
+            if (inf<=10) return `<p style="color:var(--tiktok-cyan)">✅ <strong>Low Competition.</strong> ${inf} influencers, ${g} GMV. Good opportunity.</p>`;
+            if (inf<=30) return `<p style="color:var(--warning)">⚡ <strong>Medium Competition.</strong> ${inf} influencers. Need quality content to stand out.</p>`;
+            if (inf<=50) return `<p style="color:var(--accent)">⚠️ <strong>High Competition.</strong> ${inf} influencers. Find a unique angle.</p>`;
+            return `<p style="color:var(--accent)">❌ <strong>Saturated.</strong> ${inf}+ influencers. Consider alternatives.</p>`;
+        }
+        
+        function switchTab(t) {
+            document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
+            document.querySelector(`[onclick="switchTab('${t}')"]`).classList.add('active');
+            document.getElementById(`tab-${t}`).classList.add('active');
+        }
+        
+        async function markUnavailable(pid) {
+            const status = prompt('Why is this product unavailable?\n\n1. removed (deleted by seller)\n2. out_of_stock\n\nEnter status:', 'removed');
+            if (!status) return;
+            
+            const note = prompt('Add a note (optional):', 'Found unavailable on TikTok Shop');
+            
+            try {
+                const r = await fetch(`/api/mark-unavailable/${pid}?status=${encodeURIComponent(status)}&note=${encodeURIComponent(note||'')}`);
+                const d = await r.json();
+                if (d.success) {
+                    alert(`Product marked as ${status}. It will be hidden from the main list.`);
+                    location.reload();
+                } else {
+                    alert('Failed: ' + (d.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        async function fetchLiveData(pid) {
+            const btn = event.target;
+            btn.textContent = '⏳ Loading...';
+            btn.disabled = true;
+            try {
+                const r = await fetch(`/api/refresh-product/${pid}`, { method: 'POST' });
+                const d = await r.json();
+                if (d.success) {
+                    showToast('✅ Data refreshed!');
+                    location.reload();
+                } else {
+                    showToast('Failed: '+(d.error||'Unknown error'), true);
+                }
+            } catch(e) { 
+                showToast('Error: '+e.message, true);
+            }
+            btn.textContent = '🔄 Refresh Data';
+            btn.disabled = false;
+        }
+        
+        function showToast(msg, isError) {
+            const t = document.createElement('div');
+            t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:8px;z-index:1000;color:#fff;background:'+(isError?'#e94560':'#333');
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+        
+        async function loadProduct() {
+            if (!productId) {
+                document.getElementById('productContent').innerHTML = '<div class="loading"><h2>No product ID</h2><p><a href="/" style="color:var(--accent)">Back to dashboard</a></p></div>';
+                return;
+            }
+            try {
+                const r = await fetch(`/api/product/${productId}`);
+                const d = await r.json();
+                if (d.success && d.product) {
+                    renderProduct(d.product);
+                    document.title = d.product.product_name + ' - TikTok Shop Finder';
+                } else throw new Error(d.error||'Product not found');
+            } catch(e) {
+                document.getElementById('productContent').innerHTML = `<div class="loading"><h2>Error</h2><p>${e.message}</p><p><a href="/" style="color:var(--accent)">Back</a></p></div>`;
+            }
+        }
+        loadProduct();
+    </script>
+
+<script>
+// Update video counts display after refresh
+function updateVideoDisplay(data) {
+    // Update 7 day counts
+    const video7dEl = document.querySelector('[data-video-7d]');
+    if (video7dEl) video7dEl.textContent = data.video_7d || 0;
+    
+    const live7dEl = document.querySelector('[data-live-7d]');
+    if (live7dEl) live7dEl.textContent = data.live_7d || 0;
+    
+    // Update 30 day counts
+    const video30dEl = document.querySelector('[data-video-30d]');
+    if (video30dEl) video30dEl.textContent = data.video_30d || 0;
+    
+    const live30dEl = document.querySelector('[data-live-30d]');
+    if (live30dEl) live30dEl.textContent = data.live_30d || 0;
+    
+    // Update totals
+    const videoTotalEl = document.querySelector('[data-video-total]');
+    if (videoTotalEl) videoTotalEl.textContent = data.video_count || 0;
+    
+    const liveTotalEl = document.querySelector('[data-live-total]');
+    if (liveTotalEl) liveTotalEl.textContent = data.live_count || 0;
+    
+    // Update influencer count
+    const iflEl = document.querySelector('[data-influencer-count]');
+    if (iflEl) iflEl.textContent = data.influencer_count || data.total_influencers || 0;
+    
+    // Update seller name
+    const sellerEl = document.querySelector('[data-seller-name]');
+    if (sellerEl && data.seller_name) sellerEl.textContent = data.seller_name;
+    
+    // Update image
+    const imgEl = document.querySelector('.product-image');
+    if (imgEl && data.cover_url) {
+        imgEl.src = '/api/image-proxy?url=' + encodeURIComponent(data.cover_url);
+    }
+}
+
+// Override refresh button click
+document.addEventListener('DOMContentLoaded', function() {
+    const refreshBtn = document.querySelector('[onclick*="refresh"]') || 
+                       document.querySelector('button:contains("Refresh")') ||
+                       document.getElementById('refresh-btn');
+    
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const productId = window.location.search.split('id=')[1];
+            if (!productId) return;
+            
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = '⏳ Refreshing...';
+            
+            fetch('/api/product/' + productId + '/refresh')
+                .then(r => r.json())
+                .then(result => {
+                    if (result.success && result.data) {
+                        updateVideoDisplay(result.data);
+                        alert('✅ Data refreshed from EchoTik!');
+                        // Reload to show all updates
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + (result.error || 'Unknown error'));
+                    }
+                })
+                .catch(err => {
+                    alert('Error refreshing: ' + err.message);
+                })
+                .finally(() => {
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = '🔄 Refresh Data';
+                });
+        });
+    }
+});
+</script>
+
+
+<script>
+function getProductIcon(name) {
+    const n = (name || '').toLowerCase();
+    if (n.includes('hair') || n.includes('wig')) return '💇';
+    if (n.includes('brush') || n.includes('comb')) return '💆';
+    if (n.includes('bag') || n.includes('purse') || n.includes('handbag')) return '👜';
+    if (n.includes('shoe') || n.includes('sneaker') || n.includes('boot')) return '👟';
+    if (n.includes('dress') || n.includes('cloth') || n.includes('shirt') || n.includes('tee')) return '👗';
+    if (n.includes('watch')) return '⌚';
+    if (n.includes('phone') || n.includes('case') || n.includes('charger')) return '📱';
+    if (n.includes('jewelry') || n.includes('necklace') || n.includes('ring') || n.includes('earring')) return '💍';
+    if (n.includes('makeup') || n.includes('cosmetic') || n.includes('lipstick') || n.includes('mascara')) return '💄';
+    if (n.includes('skin') || n.includes('cream') || n.includes('serum') || n.includes('lotion')) return '🧴';
+    if (n.includes('toy') || n.includes('game')) return '🎮';
+    if (n.includes('book')) return '📚';
+    if (n.includes('food') || n.includes('snack') || n.includes('noodle') || n.includes('soup') || n.includes('pho')) return '🍜';
+    if (n.includes('drink') || n.includes('coffee') || n.includes('tea')) return '☕';
+    if (n.includes('fitness') || n.includes('gym') || n.includes('workout') || n.includes('weight')) return '💪';
+    if (n.includes('baby') || n.includes('kid')) return '👶';
+    if (n.includes('pet') || n.includes('dog') || n.includes('cat')) return '🐕';
+    if (n.includes('car') || n.includes('auto') || n.includes('vehicle') || n.includes('diesel') || n.includes('heater')) return '🚗';
+    if (n.includes('garden') || n.includes('plant')) return '🌱';
+    if (n.includes('kitchen') || n.includes('cook')) return '🍳';
+    if (n.includes('tool') || n.includes('drill')) return '🔧';
+    if (n.includes('lamp') || n.includes('light') || n.includes('led')) return '💡';
+    if (n.includes('bed') || n.includes('pillow') || n.includes('mattress')) return '🛏️';
+    if (n.includes('crystal') || n.includes('stone') || n.includes('gem')) return '💎';
+    if (n.includes('wash') || n.includes('machine') || n.includes('laundry')) return '🧺';
+    if (n.includes('camera') || n.includes('gimbal') || n.includes('stabilizer') || n.includes('tripod')) return '📷';
+    if (n.includes('headphone') || n.includes('earphone') || n.includes('speaker') || n.includes('audio')) return '🎧';
+    if (n.includes('glasses') || n.includes('sunglass')) return '🕶️';
+    if (n.includes('wallet') || n.includes('card holder')) return '👛';
+    return '📦';
+}
+
+// Set icon on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const iconEl = document.querySelector('.product-icon');
+    const titleEl = document.querySelector('h1, .product-title, [class*="title"]');
+    if (iconEl && titleEl) {
+        iconEl.textContent = getProductIcon(titleEl.textContent);
+    }
+});
+
+// AI Image Generation
+async function generateAIImage(productId) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('ai-image-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ai-image-modal';
+        modal.innerHTML = `
+            <div class="ai-modal-overlay" onclick="closeAIModal()">
+                <div class="ai-modal-content" onclick="event.stopPropagation()">
+                    <div class="ai-modal-header">
+                        <h3>🎨 AI Image Generator</h3>
+                        <button class="ai-modal-close" onclick="closeAIModal()">✕</button>
+                    </div>
+                    <div class="ai-modal-body" id="ai-modal-body">
+                        <div class="ai-loading">
+                            <div class="ai-spinner"></div>
+                            <p>Generating lifestyle image...</p>
+                            <p class="ai-hint">This may take 10-30 seconds</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Add modal styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .ai-modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.95);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                padding: 10px;
+            }
+            .ai-modal-content {
+                background: #1a1a25;
+                border-radius: 16px;
+                max-width: 380px;
+                width: 95%;
+                max-height: 95vh;
+                overflow: hidden;
+                border: 1px solid #2a2a3a;
+                display: flex;
+                flex-direction: column;
+            }
+            .ai-modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.75rem 1rem;
+                border-bottom: 1px solid #2a2a3a;
+                background: linear-gradient(135deg, #667eea22, #764ba222);
+                flex-shrink: 0;
+            }
+            .ai-modal-header h3 {
+                margin: 0;
+                font-size: 1.1rem;
+            }
+            .ai-modal-close {
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 1.5rem;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+            }
+            .ai-modal-close:hover { color: #fff; }
+            .ai-modal-body {
+                padding: 0.75rem;
+                overflow-y: auto;
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+            }
+            .ai-loading {
+                text-align: center;
+                padding: 3rem;
+            }
+            .ai-spinner {
+                width: 60px;
+                height: 60px;
+                border: 4px solid #2a2a3a;
+                border-top-color: #667eea;
+                border-radius: 50%;
+                animation: ai-spin 1s linear infinite;
+                margin: 0 auto 1rem;
+            }
+            @keyframes ai-spin {
+                to { transform: rotate(360deg); }
+            }
+            .ai-hint {
+                color: #666;
+                font-size: 0.85rem;
+                margin-top: 0.5rem;
+            }
+            .ai-result {
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .ai-category {
+                display: inline-block;
+                background: #2a2a3a;
+                padding: 0.25rem 0.75rem;
+                border-radius: 12px;
+                font-size: 0.75rem;
+                color: #888;
+                margin-bottom: 0.5rem;
+            }
+            .ai-result img {
+                max-width: 100%;
+                max-height: 70vh;
+                width: auto;
+                height: auto;
+                border-radius: 8px;
+                margin-bottom: 0.75rem;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                object-fit: contain;
+                display: block;
+            }
+            .ai-result-actions {
+                display: flex;
+                gap: 0.5rem;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .ai-btn {
+                padding: 0.5rem 1rem;
+                border-radius: 8px;
+                font-weight: 500;
+                cursor: pointer;
+                text-decoration: none;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-family: inherit;
+                font-size: 0.85rem;
+                transition: all 0.2s;
+            }
+            .ai-btn-primary {
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                color: white;
+                border: none;
+            }
+            .ai-btn-primary:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            }
+            .ai-btn-secondary {
+                background: #2a2a3a;
+                color: white;
+                border: 1px solid #3a3a4a;
+            }
+            .ai-btn-secondary:hover {
+                background: #3a3a4a;
+            }
+            .ai-error {
+                background: rgba(255, 100, 100, 0.1);
+                border: 1px solid #ff6b6b;
+                border-radius: 12px;
+                padding: 1.5rem;
+                text-align: center;
+            }
+            .ai-error h4 {
+                color: #ff6b6b;
+                margin-bottom: 0.5rem;
+            }
+            .ai-category {
+                display: inline-block;
+                background: rgba(102, 126, 234, 0.2);
+                color: #667eea;
+                padding: 0.25rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                margin-bottom: 1rem;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    modal.style.display = 'block';
+    document.getElementById('ai-modal-body').innerHTML = `
+        <div class="ai-loading">
+            <div class="ai-spinner"></div>
+            <p>Generating lifestyle image...</p>
+            <p class="ai-hint">Camera positioned back, open background, natural setting</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`/api/generate-image/${productId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('ai-modal-body').innerHTML = `
+                <div class="ai-result">
+                    <span class="ai-category">📁 Category: ${data.category}</span>
+                    <img src="${data.image}" alt="AI Generated - ${data.product_name}">
+                    <div class="ai-result-actions">
+                        <a href="${data.image}" download="ai-product-${productId}.jpg" class="ai-btn ai-btn-primary">
+                            💾 Download Image
+                        </a>
+                        <button class="ai-btn ai-btn-secondary" onclick="generateAIImage('${productId}')">
+                            🔄 Generate Another
+                        </button>
+                        <button class="ai-btn ai-btn-secondary" onclick="closeAIModal()">
+                            ✕ Close
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            document.getElementById('ai-modal-body').innerHTML = `
+                <div class="ai-error">
+                    <h4>⚠️ Generation Failed</h4>
+                    <p>${data.error || 'Unknown error occurred'}</p>
+                    ${data.detail ? `<p style="font-size:0.8rem;color:#888;margin-top:1rem;">${data.detail.substring(0, 200)}</p>` : ''}
+                    <button class="ai-btn ai-btn-secondary" style="margin-top:1rem;" onclick="generateAIImage('${productId}')">
+                        🔄 Try Again
+                    </button>
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('ai-modal-body').innerHTML = `
+            <div class="ai-error">
+                <h4>⚠️ Connection Error</h4>
+                <p>${error.message}</p>
+                <button class="ai-btn ai-btn-secondary" style="margin-top:1rem;" onclick="generateAIImage('${productId}')">
+                    🔄 Try Again
+                </button>
+            </div>
+        `;
+    }
+}
+
+function closeAIModal() {
+    const modal = document.getElementById('ai-image-modal');
+    if (modal) modal.style.display = 'none';
+}
+</script>
+
+</body>
+</html>
