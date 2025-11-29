@@ -1,287 +1,270 @@
+"""
+Brand Hunter - Automated Daily Scanner
+Runs as a Render Cron Job
+
+Schedule: Daily at 1:00 AM UTC (after EchoTik updates at UTC 0)
+         = 8:00 PM EST / 7:00 PM CST
+
+What it does:
+1. Deep scans top 10-20 brands
+2. Scans pages 150-200 (deep into catalog for hidden gems)
+3. Filters for products with ≤100 influencers
+4. Sends Telegram notification with results
+"""
+
 import requests
-from datetime import datetime, timedelta
-import json
 import os
-import sys
-from app import app, db, ProductScan, Product
+import time
+from datetime import datetime
 
-# EchoTik API Configuration
-API_BASE_URL = "https://open.echotik.live/api/v2"
-API_USERNAME = os.environ.get('ECHOTIK_USERNAME')
-API_PASSWORD = os.environ.get('ECHOTIK_PASSWORD')
-print(f"DEBUG: API_USERNAME is set: {bool(API_USERNAME)}")
-print(f"DEBUG: API_PASSWORD is set: {bool(API_PASSWORD)}")
-print(f"DEBUG: Using region: {REGION}")
-# Scanner Settings (from environment or defaults)
-REGION = os.environ.get('SCAN_REGION', 'US')
-PAGES_TO_SCAN = int(os.environ.get('PAGES_TO_SCAN', '20'))
-MIN_SALES = int(os.environ.get('MIN_SALES', '10'))
-MAX_INFLUENCERS = int(os.environ.get('MAX_INFLUENCERS', '500'))
-MIN_GMV = int(os.environ.get('MIN_GMV', '100'))
-MIN_COMMISSION = float(os.environ.get('MIN_COMMISSION', '0.10'))
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 
-# Scoring weights
-SALES_WEIGHT = 0.3
-GMV_WEIGHT = 0.2
-COMPETITION_WEIGHT = 0.4
-COMMISSION_WEIGHT = 0.1
+# Your Brand Hunter app URL
+APP_URL = os.environ.get('APP_URL', 'https://tiktok-product-finder.onrender.com')
 
-def get_product_rankings(date_str, rank_type=1, sort_by=1, page_num=1):
-    """Get product rankings from a specific page"""
-    url = f"{API_BASE_URL}/product/ranklist"
+# Telegram notifications
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '8265804607:AAEnAPrz_KfTKH2xWp4AK-qA4pvdkUjEmo8')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '7379075068')
+
+# Scan parameters
+START_BRAND_RANK = 1      # Start from top brand
+NUM_BRANDS = 15           # Scan top 15 brands (middle ground between 10-20)
+START_PAGE = 150          # Start from page 150
+END_PAGE = 200            # End at page 200
+MAX_INFLUENCERS = 100     # Only products with ≤100 influencers
+
+# Dev passkey for authentication (set in Render environment)
+DEV_PASSKEY = os.environ.get('DEV_PASSKEY', '')
+
+# =============================================================================
+# TELEGRAM NOTIFICATION
+# =============================================================================
+
+def send_telegram(message):
+    """Send notification to Telegram"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram not configured, skipping notification")
+        return False
     
-    params = {
-        'date': date_str,
-        'region': REGION,
-        'rank_type': rank_type,
-        'product_rank_field': sort_by,
-        'page_num': page_num,
-        'page_size': 10
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        response = requests.post(url, json={
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': message,
+            'parse_mode': 'HTML'
+        }, timeout=10)
+        
+        if response.status_code == 200:
+            print("Telegram notification sent!")
+            return True
+        else:
+            print(f"Telegram error: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"Telegram exception: {e}")
+        return False
+
+# =============================================================================
+# AUTHENTICATION
+# =============================================================================
+
+def get_session():
+    """Create authenticated session"""
+    session = requests.Session()
+    
+    if DEV_PASSKEY:
+        # Login with dev passkey
+        try:
+            response = session.post(
+                f"{APP_URL}/auth/passkey",
+                json={'passkey': DEV_PASSKEY},
+                timeout=30
+            )
+            if response.status_code == 200:
+                print("✅ Authenticated with dev passkey")
+            else:
+                print(f"⚠️ Auth failed: {response.status_code}")
+        except Exception as e:
+            print(f"⚠️ Auth exception: {e}")
+    
+    return session
+
+# =============================================================================
+# SCANNING
+# =============================================================================
+
+def run_deep_scan(session):
+    """
+    Run deep scan across multiple brands
+    Uses the scan-pages endpoint for each brand
+    """
+    results = {
+        'brands_scanned': 0,
+        'products_found': 0,
+        'products_saved': 0,
+        'errors': 0,
+        'brand_details': []
     }
     
+    print(f"\n🔍 Starting Deep Scan")
+    print(f"   Brands: {START_BRAND_RANK} to {START_BRAND_RANK + NUM_BRANDS - 1}")
+    print(f"   Pages: {START_PAGE} to {END_PAGE}")
+    print(f"   Max Influencers: {MAX_INFLUENCERS}")
+    print("-" * 50)
+    
+    # First, get the list of top brands
     try:
-        response = requests.get(url, params=params, auth=(API_USERNAME, API_PASSWORD))
+        brands_response = session.get(
+            f"{APP_URL}/api/top-brands",
+            params={'start_rank': START_BRAND_RANK, 'count': NUM_BRANDS},
+            timeout=60
+        )
         
-        if response.status_code == 200:
-            data = response.json()
-            if 'code' in data and data['code'] != 0:
-                return None
-            return data
-        else:
-            return None
-    except Exception as e:
-        print(f"Error fetching page {page_num}: {e}")
-        return None
-
-def get_product_details(product_ids):
-    """Get detailed product information"""
-    url = f"{API_BASE_URL}/product/detail"
-    params_str = ','.join(product_ids)
-    
-    try:
-        full_url = f"{url}?product_ids={params_str}"
-        response = requests.get(full_url, auth=(API_USERNAME, API_PASSWORD))
+        if brands_response.status_code != 200:
+            print(f"❌ Failed to get brands: {brands_response.status_code}")
+            results['errors'] += 1
+            return results
         
-        if response.status_code == 200:
-            data = response.json()
-            if 'code' in data and data['code'] != 0:
-                return None
-            return data
-        else:
-            return None
+        brands_data = brands_response.json()
+        brands = brands_data.get('brands', [])
+        
+        if not brands:
+            print("❌ No brands returned")
+            results['errors'] += 1
+            return results
+        
+        print(f"📊 Got {len(brands)} brands to scan\n")
+        
     except Exception as e:
-        print(f"Error fetching details: {e}")
-        return None
+        print(f"❌ Exception getting brands: {e}")
+        results['errors'] += 1
+        return results
+    
+    # Scan each brand
+    for i, brand in enumerate(brands):
+        seller_id = brand.get('seller_id', '')
+        seller_name = brand.get('seller_name', 'Unknown')
+        
+        print(f"[{i+1}/{len(brands)}] Scanning: {seller_name[:30]}...")
+        
+        brand_found = 0
+        brand_saved = 0
+        
+        # Scan in chunks of 10 pages to avoid timeout
+        for page_start in range(START_PAGE, END_PAGE + 1, 10):
+            page_end = min(page_start + 9, END_PAGE)
+            
+            try:
+                scan_url = f"{APP_URL}/api/scan-pages/{seller_id}"
+                params = {
+                    'start': page_start,
+                    'end': page_end,
+                    'max_influencers': MAX_INFLUENCERS,
+                    'min_sales': 0,
+                    'seller_name': seller_name
+                }
+                
+                response = session.get(scan_url, params=params, timeout=120)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    found = data.get('products_found', 0)
+                    saved = data.get('products_saved', 0)
+                    brand_found += found
+                    brand_saved += saved
+                    
+                    if found > 0:
+                        print(f"   Pages {page_start}-{page_end}: Found {found}, Saved {saved}")
+                elif response.status_code == 423:
+                    print(f"   ⚠️ Scan locked - someone else is scanning")
+                    results['errors'] += 1
+                    break
+                else:
+                    print(f"   ⚠️ Pages {page_start}-{page_end}: Error {response.status_code}")
+                    
+                # Small delay between chunks
+                time.sleep(0.5)
+                
+            except Exception as e:
+                print(f"   ❌ Pages {page_start}-{page_end}: {str(e)[:50]}")
+                results['errors'] += 1
+        
+        results['brands_scanned'] += 1
+        results['products_found'] += brand_found
+        results['products_saved'] += brand_saved
+        results['brand_details'].append({
+            'name': seller_name,
+            'found': brand_found,
+            'saved': brand_saved
+        })
+        
+        print(f"   ✅ {seller_name[:20]}: {brand_found} found, {brand_saved} saved\n")
+        
+        # Delay between brands
+        time.sleep(1)
+    
+    return results
 
-def calculate_opportunity_score(product, detail):
-    """Calculate opportunity score (0-100)"""
-    sales = product.get('total_sale_cnt', 0)
-    gmv = product.get('total_sale_gmv_amt', 0)
-    total_influencers = detail.get('total_ifl_cnt', 1)
-    commission = detail.get('product_commission_rate', 0)
+# =============================================================================
+# MAIN
+# =============================================================================
+
+def main():
+    start_time = datetime.utcnow()
+    print("=" * 60)
+    print(f"🚀 Brand Hunter Daily Scanner")
+    print(f"   Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    print("=" * 60)
     
-    sales_score = min(sales / 10, 100)
-    gmv_score = min(gmv / 1000, 100)
-    competition_score = max(0, 100 - (total_influencers / MAX_INFLUENCERS * 100))
-    commission_score = commission * 100
+    # Send start notification
+    send_telegram(f"🔍 <b>Daily Scan Started</b>\n\n"
+                  f"Scanning top {NUM_BRANDS} brands\n"
+                  f"Pages {START_PAGE}-{END_PAGE}\n"
+                  f"Max {MAX_INFLUENCERS} influencers")
     
-    final_score = (
-        sales_score * SALES_WEIGHT +
-        gmv_score * GMV_WEIGHT +
-        competition_score * COMPETITION_WEIGHT +
-        commission_score * COMMISSION_WEIGHT
+    # Get authenticated session
+    session = get_session()
+    
+    # Run the deep scan
+    results = run_deep_scan(session)
+    
+    # Calculate duration
+    end_time = datetime.utcnow()
+    duration = (end_time - start_time).total_seconds() / 60
+    
+    # Print summary
+    print("=" * 60)
+    print("📊 SCAN COMPLETE")
+    print(f"   Duration: {duration:.1f} minutes")
+    print(f"   Brands Scanned: {results['brands_scanned']}")
+    print(f"   Products Found: {results['products_found']}")
+    print(f"   Products Saved: {results['products_saved']}")
+    print(f"   Errors: {results['errors']}")
+    print("=" * 60)
+    
+    # Build Telegram summary
+    top_brands = sorted(results['brand_details'], key=lambda x: x['saved'], reverse=True)[:5]
+    top_brands_text = "\n".join([
+        f"  • {b['name'][:25]}: {b['saved']} new" 
+        for b in top_brands if b['saved'] > 0
+    ]) or "  No new products found"
+    
+    telegram_msg = (
+        f"✅ <b>Daily Scan Complete</b>\n\n"
+        f"⏱ Duration: {duration:.1f} min\n"
+        f"🏪 Brands: {results['brands_scanned']}\n"
+        f"📦 Found: {results['products_found']}\n"
+        f"💾 Saved: {results['products_saved']}\n"
+        f"⚠️ Errors: {results['errors']}\n\n"
+        f"<b>Top Brands:</b>\n{top_brands_text}\n\n"
+        f"🔗 <a href='{APP_URL}'>View Products</a>"
     )
     
-    return round(final_score, 2)
-
-def get_cover_url(detail):
-    """Extract first cover image URL"""
-    cover_url_list = detail.get('cover_url', [])
-    if cover_url_list and isinstance(cover_url_list, list) and len(cover_url_list) > 0:
-        return cover_url_list[0].get('url', '')
-    return ''
-
-def get_brand_name(detail):
-    """Extract brand/shop name from seller_id or product name"""
-    # Try to get shop name - this might need seller detail API call
-    # For now, extract from product name or return placeholder
-    product_name = detail.get('product_name', '')
+    send_telegram(telegram_msg)
     
-    # Simple heuristic: first word is often the brand
-    words = product_name.split()
-    if words:
-        return words[0]
-    return 'Unknown'
-
-def run_daily_scan():
-    """Main scanning function"""
-    print(f"\n{'='*80}")
-    print(f"Starting daily scan at {datetime.utcnow()}")
-    print(f"Region: {REGION}, Pages: {PAGES_TO_SCAN}")
-    print(f"{'='*80}\n")
-    
-    if not API_USERNAME or not API_PASSWORD:
-        print("ERROR: ECHOTIK_USERNAME and ECHOTIK_PASSWORD environment variables must be set!")
-        return
-    
-    # Use 3 days ago instead of yesterday for more reliable data
-    # EchoTik data has a 2-3 day processing delay
-    target_date = (datetime.utcnow() - timedelta(days=3)).strftime('%Y-%m-%d')
-    
-    # Create scan record
-    with app.app_context():
-        scan = ProductScan(
-            scan_date=datetime.utcnow().date(),
-            region=REGION,
-            total_products_scanned=0,
-            total_qualified=0
-        )
-        db.session.add(scan)
-        db.session.commit()
-        scan_id = scan.id
-    
-    # Step 1: Collect products from multiple pages
-    all_products = []
-    product_ids_to_detail = []
-    
-    print("Scanning pages...")
-    for page in range(1, PAGES_TO_SCAN + 1):
-        print(f"  Page {page}/{PAGES_TO_SCAN}...", end=" ")
-        
-        data = get_product_rankings(target_date, rank_type=1, sort_by=1, page_num=page)
-        
-        if not data or 'data' not in data or not data['data']:
-            print("❌ No more data")
-            break
-        
-        page_products = data['data']
-        print(f"✅ Got {len(page_products)} products")
-        
-        for product in page_products:
-            sales = product.get('total_sale_cnt', 0)
-            gmv = product.get('total_sale_gmv_amt', 0)
-            
-            if sales >= MIN_SALES and gmv >= MIN_GMV:
-                all_products.append(product)
-                product_ids_to_detail.append(product.get('product_id'))
-    
-    total_scanned = len(all_products)
-    print(f"\nCollected {total_scanned} products that meet basic criteria")
-    
-    if not product_ids_to_detail:
-        print("No products found!")
-        with app.app_context():
-            scan = ProductScan.query.get(scan_id)
-            scan.total_products_scanned = 0
-            scan.total_qualified = 0
-            db.session.commit()
-        return
-    
-    # Step 2: Get detailed info in batches
-    print("\nFetching detailed product info...")
-    all_details = []
-    batch_size = 10
-    
-    for i in range(0, len(product_ids_to_detail), batch_size):
-        batch = product_ids_to_detail[i:i+batch_size]
-        print(f"  Batch {i//batch_size + 1}: {len(batch)} products...", end=" ")
-        
-        details = get_product_details(batch)
-        if details and 'data' in details:
-            all_details.extend(details['data'])
-            print("✅")
-        else:
-            print("❌")
-    
-    print(f"Got details for {len(all_details)} products")
-    
-    # Create product map
-    details_map = {d.get('product_id'): d for d in all_details}
-    products_map = {p.get('product_id'): p for p in all_products}
-    
-    # Step 3: Score and filter products
-    opportunities = []
-    
-    print("\nScoring and filtering products...")
-    for product_id, detail in details_map.items():
-        product = products_map.get(product_id)
-        if not product:
-            continue
-        
-        total_influencers = detail.get('total_ifl_cnt', 0)
-        commission = detail.get('product_commission_rate', 0)
-        off_mark = detail.get('off_mark', 0)
-        
-        # Filter by influencers
-        if total_influencers > MAX_INFLUENCERS:
-            continue
-        
-        # Filter by availability
-        if off_mark == 1:
-            continue
-        
-        # Filter by commission
-        if commission < MIN_COMMISSION:
-            continue
-        
-        # Calculate score
-        score = calculate_opportunity_score(product, detail)
-        
-        sales = product.get('total_sale_cnt', 0)
-        gmv = product.get('total_sale_gmv_amt', 0)
-        potential_earnings = gmv * commission
-        
-        opportunities.append({
-            'score': score,
-            'product_id': product_id,
-            'product_name': detail.get('product_name'),
-            'brand_name': get_brand_name(detail),
-            'cover_url': get_cover_url(detail),
-            'sales': sales,
-            'gmv': gmv,
-            'total_influencers': total_influencers,
-            'commission_rate': commission,
-            'avg_price': detail.get('spu_avg_price', 0),
-            'potential_earnings': potential_earnings,
-            'competition_level': 'Low' if total_influencers < 100 else 'Medium' if total_influencers < 300 else 'High'
-        })
-    
-    # Sort by score
-    opportunities.sort(key=lambda x: x['score'], reverse=True)
-    
-    print(f"Found {len(opportunities)} qualified products")
-    
-    # Step 4: Save top 5 to database
-    with app.app_context():
-        scan = ProductScan.query.get(scan_id)
-        scan.total_products_scanned = total_scanned
-        scan.total_qualified = len(opportunities)
-        
-        for rank, opp in enumerate(opportunities[:5], 1):
-            product = Product(
-                scan_id=scan_id,
-                product_id=opp['product_id'],
-                product_name=opp['product_name'],
-                brand_name=opp['brand_name'],
-                cover_url=opp['cover_url'],
-                sales=opp['sales'],
-                gmv=opp['gmv'],
-                total_influencers=opp['total_influencers'],
-                commission_rate=opp['commission_rate'],
-                avg_price=opp['avg_price'],
-                potential_earnings=opp['potential_earnings'],
-                opportunity_score=opp['score'],
-                competition_level=opp['competition_level'],
-                rank=rank
-            )
-            db.session.add(product)
-        
-        db.session.commit()
-        print(f"\n✅ Saved top 5 products to database")
-    
-    print(f"\n{'='*80}")
-    print(f"Scan completed at {datetime.utcnow()}")
-    print(f"{'='*80}\n")
+    print("\n✅ Daily scan finished!")
 
 if __name__ == '__main__':
-    run_daily_scan()
+    main()
