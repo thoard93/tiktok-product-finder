@@ -2064,12 +2064,51 @@ def lookup_product():
         
         p = data['data'][0]
         
+        # Debug: print all keys returned by EchoTik (remove after debugging)
+        print(f"EchoTik product detail keys: {list(p.keys())}")
+        
+        # Try multiple field names for seller (EchoTik may use different names)
+        seller_name = (
+            p.get('seller_name') or 
+            p.get('shop_name') or 
+            p.get('store_name') or 
+            p.get('brand_name') or
+            p.get('seller', {}).get('name') if isinstance(p.get('seller'), dict) else None or
+            ''
+        )
+        
+        # If we have this product in database with seller info, use that
+        if not seller_name and existing and existing.seller_name:
+            seller_name = existing.seller_name
+        
+        seller_id = p.get('seller_id') or p.get('shop_id') or p.get('store_id') or ''
+        if not seller_id and existing and existing.seller_id:
+            seller_id = existing.seller_id
+        
+        # If we have seller_id but no seller_name, try to fetch it from seller detail API
+        if seller_id and not seller_name:
+            try:
+                seller_response = requests.get(
+                    f"{BASE_URL}/seller/detail",
+                    params={'seller_id': seller_id},
+                    auth=get_auth(),
+                    timeout=15
+                )
+                if seller_response.status_code == 200:
+                    seller_data = seller_response.json()
+                    if seller_data.get('code') == 0 and seller_data.get('data'):
+                        seller_info = seller_data['data'][0] if isinstance(seller_data['data'], list) else seller_data['data']
+                        seller_name = seller_info.get('seller_name') or seller_info.get('shop_name') or ''
+                        print(f"Fetched seller name from seller/detail: {seller_name}")
+            except Exception as e:
+                print(f"Failed to fetch seller details: {e}")
+        
         # Parse the product data
         product_data = {
             'product_id': product_id,
             'product_name': p.get('product_name', ''),
-            'seller_id': p.get('seller_id', ''),
-            'seller_name': p.get('seller_name', ''),
+            'seller_id': seller_id,
+            'seller_name': seller_name,
             
             # Sales data
             'sales': int(p.get('total_sale_cnt', 0) or 0),
@@ -2186,12 +2225,29 @@ def lookup_product():
                 'saved': saved
             })
         
-        return jsonify({
+        # Include debug info if requested
+        debug = request.args.get('debug', 'false').lower() == 'true'
+        response_data = {
             'success': True,
             'product': product_data,
             'saved': saved,
             'message': 'Product saved to database!' if saved else None
-        })
+        }
+        
+        if debug:
+            response_data['debug'] = {
+                'raw_keys': list(p.keys()),
+                'seller_fields': {
+                    'seller_name': p.get('seller_name'),
+                    'shop_name': p.get('shop_name'),
+                    'store_name': p.get('store_name'),
+                    'brand_name': p.get('brand_name'),
+                    'seller_id': p.get('seller_id'),
+                    'shop_id': p.get('shop_id'),
+                }
+            }
+        
+        return jsonify(response_data)
         
     except requests.Timeout:
         return jsonify({'success': False, 'error': 'EchoTik API timeout - please try again'}), 504

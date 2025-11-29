@@ -1733,7 +1733,7 @@
                         ${p.image_url ? `<img src="${p.image_url}" style="width: 80px; height: 80px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
                         <div style="flex: 1; min-width: 0;">
                             <div style="font-weight: 600; margin-bottom: 5px; font-size: 0.9rem; line-height: 1.3;">${p.product_name || 'Unknown Product'}</div>
-                            <div style="color: #888; font-size: 0.75rem; margin-bottom: 8px;">🏪 ${p.seller_name || 'Unknown'}</div>
+                            ${p.seller_name ? `<div style="color: #888; font-size: 0.75rem; margin-bottom: 8px;">🏪 ${p.seller_name}</div>` : ''}
                             
                             <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
                                 <span style="background: ${p.competition_level === 'untapped' ? '#e94560' : p.competition_level === 'low' ? '#f97316' : p.competition_level === 'medium' ? '#3b82f6' : '#888'}; padding: 3px 8px; border-radius: 12px; font-size: 0.7rem;">
