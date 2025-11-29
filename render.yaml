@@ -1,16 +1,10 @@
-# Render deployment configuration
+# render.yaml - Render deployment configuration
 services:
   - type: web
-    name: tiktokshop-finder
+    name: brand-hunter
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --workers 3 --threads 2 --timeout 120
     envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: ECHOTIK_USERNAME
-        sync: false
-      - key: ECHOTIK_PASSWORD
-        sync: false
       - key: PYTHON_VERSION
         value: 3.11.0
