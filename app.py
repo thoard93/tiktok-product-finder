@@ -2524,10 +2524,7 @@ def generate_ai_image(product_id):
                 }
             ],
             "generationConfig": {
-                "responseModalities": ["TEXT", "IMAGE"],
-                "imageConfig": {
-                    "aspectRatio": "9:16"
-                }
+                "responseModalities": ["TEXT", "IMAGE"]
             }
         }
         
