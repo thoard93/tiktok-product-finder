@@ -2296,47 +2296,141 @@ def get_product_category(product_name):
 
 
 def get_scene_prompt(product_name, category):
-    """Generate a lifestyle scene prompt based on product category"""
+    """Generate a RANDOMIZED lifestyle scene prompt based on product category"""
+    import random
     
-    scenes = {
-        'beauty': "on a clean white marble bathroom counter, soft natural window light from the side, a small succulent plant and cotton pads nearby, steam from a recent shower in the background, spa-like atmosphere",
-        'hair': "on a modern bathroom vanity with warm lighting, a hairbrush and towel nearby, mirror reflection visible, clean minimalist aesthetic",
-        'fashion': "laid flat on a light wooden surface, styled with complementary accessories, soft diffused natural light, minimal background with subtle texture",
-        'kitchen': "on a warm wooden kitchen countertop, fresh ingredients and herbs nearby, morning sunlight streaming through a window, cozy home cooking atmosphere",
-        'home': "in a cozy living room setting, soft afternoon light, comfortable sofa and plants in the background, warm and inviting atmosphere",
-        'tech': "on a clean modern desk setup, laptop and coffee cup nearby, soft LED ambient lighting, productive workspace vibes",
-        'fitness': "on a yoga mat in a bright home gym, water bottle and towel nearby, natural light from large windows, energetic morning atmosphere",
-        'baby': "on a soft white nursery blanket, pastel colored toys nearby, gentle diffused light, warm and safe nursery setting",
-        'pet': "on a cozy living room floor, happy pet nearby, warm afternoon sunlight, comfortable home environment",
-        'outdoor': "on a rustic wooden picnic table, trees and nature in the soft-focus background, golden hour sunlight, adventure-ready atmosphere",
-        'tools': "on a clean wooden workbench, organized tools in the background, warm workshop lighting, craftsman aesthetic",
-        'car': "inside a modern car interior, dashboard visible, clean leather seats, professional automotive photography style",
-        'health': "on a clean white nightstand, glass of water and book nearby, soft bedroom lighting, wellness and self-care atmosphere",
-        'cleaning': "on a bright kitchen counter, sparkling clean surfaces nearby, natural daylight, fresh and organized home",
-        'general': "on a clean light-colored surface, complementary lifestyle items nearby, soft natural lighting from the side, open airy background with subtle depth"
+    # Multiple scene options per category - randomly selected
+    scene_options = {
+        'beauty': [
+            "on a clean white marble bathroom counter, soft natural window light from the side, a small succulent plant nearby",
+            "on a glass vanity shelf, morning golden hour light, elegant minimalist bathroom setting",
+            "on a wooden bathroom tray, soft diffused daylight, spa-like peaceful atmosphere",
+            "on a rose gold makeup organizer, warm ambient lighting, luxurious feminine space",
+            "next to a white ceramic sink, bright natural light, fresh clean aesthetic"
+        ],
+        'hair': [
+            "on a modern bathroom vanity with warm lighting, a folded towel nearby",
+            "on a sleek marble countertop, soft ring light glow, professional salon vibes",
+            "next to a round mirror, natural daylight streaming in, airy bathroom space",
+            "on a wooden shelf, warm pendant lighting above, cozy home bathroom"
+        ],
+        'fashion': [
+            "laid flat on a light wooden surface, soft diffused natural light, minimal clean background",
+            "on crisp white bedding, bright window light, lifestyle bedroom setting",
+            "on a marble coffee table, afternoon sun rays, modern living room",
+            "draped on a velvet chair, golden hour lighting, elegant interior space",
+            "on a linen tablecloth, soft shadow play, minimalist aesthetic"
+        ],
+        'kitchen': [
+            "on a warm wooden kitchen countertop, a few fresh herbs nearby, morning sunlight streaming through a window",
+            "on a white marble island, copper accents nearby, bright modern kitchen",
+            "next to a cutting board, warm afternoon light, cozy cooking atmosphere",
+            "on a butcher block counter, steam rising softly, homey kitchen scene",
+            "near a window sill with plants, golden morning rays, farmhouse kitchen vibes"
+        ],
+        'home': [
+            "in a cozy living room setting, soft afternoon light, blurred comfortable furniture in background",
+            "on a coffee table, warm lamp glow, evening relaxation mood",
+            "on a bookshelf, natural daylight, modern apartment aesthetic",
+            "next to houseplants, bright window light, bohemian living space",
+            "on a side table, soft golden hour rays, scandinavian interior design"
+        ],
+        'tech': [
+            "on a clean modern desk, soft LED ambient lighting, minimal productive workspace",
+            "next to a laptop, cool blue hour light, professional home office",
+            "on a wooden desk surface, warm desk lamp glow, creative workspace",
+            "on a glass table, natural daylight, sleek modern setup",
+            "next to a coffee mug, morning light, startup office vibes"
+        ],
+        'fitness': [
+            "on a yoga mat in a bright room, water bottle nearby, natural light from large windows",
+            "on gym flooring, energetic morning light, home workout space",
+            "next to dumbbells, bright motivational lighting, fitness corner",
+            "on a workout bench, natural daylight, garage gym setting",
+            "near a mirror, dynamic lighting, personal training studio vibes"
+        ],
+        'general': [
+            "on a clean light-colored surface, soft natural lighting from the side, open airy background",
+            "on a white desk, bright diffused daylight, minimal modern space",
+            "on a wooden table, warm afternoon glow, lifestyle setting",
+            "on marble surface, soft shadow details, elegant product display",
+            "on linen fabric, golden hour warmth, artisanal aesthetic"
+        ]
     }
     
-    base_scene = scenes.get(category, scenes['general'])
+    # Random lighting variations
+    lighting_styles = [
+        "soft natural window light",
+        "warm golden hour sunlight",
+        "bright diffused daylight",
+        "gentle morning rays",
+        "cozy afternoon glow",
+        "soft ambient lighting",
+        "clean bright illumination",
+        "warm inviting light"
+    ]
     
-    prompt = f"""Create a professional lifestyle product photograph of the following product: {product_name}
+    # Random camera angle variations
+    camera_angles = [
+        "shot from slightly above at a 30-degree angle",
+        "captured at eye level straight on",
+        "photographed from a gentle 45-degree angle",
+        "taken from a low angle looking slightly up",
+        "shot with a subtle dutch angle for dynamism"
+    ]
+    
+    # Random mood/style variations
+    style_moods = [
+        "clean and minimal aesthetic",
+        "warm and inviting atmosphere", 
+        "fresh and modern feel",
+        "cozy and comfortable vibe",
+        "elegant and sophisticated look",
+        "bright and energetic mood",
+        "calm and peaceful setting",
+        "luxurious premium quality"
+    ]
+    
+    # Get random selections
+    scenes = scene_options.get(category, scene_options['general'])
+    base_scene = random.choice(scenes)
+    lighting = random.choice(lighting_styles)
+    angle = random.choice(camera_angles)
+    mood = random.choice(style_moods)
+    
+    prompt = f"""Create a professional lifestyle product photograph of this exact product: {product_name}
 
 SCENE: {base_scene}
+LIGHTING: {lighting}
+CAMERA: {angle}
+MOOD: {mood}
 
-CRITICAL CAMERA REQUIREMENTS:
+CRITICAL REQUIREMENTS:
+- VERTICAL 9:16 portrait orientation for TikTok/social media
 - Camera positioned 3-4 feet back from the product
-- Product takes up only 30-40% of the frame
+- Product takes up about 40% of the frame, centered
 - Wide open background with depth and breathing room
-- Product is clearly the hero but NOT filling the entire frame
-- Lifestyle context items are smaller and secondary to the main product
+- Keep ALL TEXT AND LOGOS on the product SHARP and READABLE - this is critical
+- The product must look EXACTLY like the reference image - same colors, same design, same text
+
+ABSOLUTELY DO NOT INCLUDE:
+- NO floating signs, banners, or text overlays
+- NO makeup swatches, color swatches, or product samples
+- NO disembodied hands or body parts
+- NO price tags or promotional graphics
+- NO watermarks or logos other than what's on the product
+- NO random floating objects
+- Keep the scene CLEAN and SIMPLE
 
 STYLE:
 - Professional e-commerce photography quality
-- Photorealistic, not AI-looking
+- Photorealistic, natural looking
 - Magazine advertisement quality
-- Natural, believable scene that could be in someone's actual home
-- 4K resolution, sharp focus on product with subtle background blur
+- Natural believable scene in someone's actual home
+- Sharp focus on product, gentle background blur
+- {mood}
 
-The image should look like it was taken by a professional photographer for a premium brand's marketing campaign."""
+Make this image UNIQUE and ORIGINAL - vary the composition creatively while keeping the product as the hero."""
 
     return prompt
 
@@ -2405,8 +2499,12 @@ def generate_ai_image(product_id):
         category = get_product_category(product.product_name or '')
         prompt = get_scene_prompt(product.product_name or 'product', category)
         
-        # Call Gemini API - using gemini-2.0-flash-exp for image generation
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_API_KEY}"
+        # Try multiple Gemini models for image generation
+        # gemini-2.0-flash-exp-image-generation is Nano Banana Pro equivalent
+        models_to_try = [
+            "gemini-2.0-flash-exp-image-generation",
+            "gemini-2.0-flash-exp"
+        ]
         
         payload = {
             "contents": [
@@ -2426,22 +2524,43 @@ def generate_ai_image(product_id):
                 }
             ],
             "generationConfig": {
-                "responseModalities": ["TEXT", "IMAGE"]
+                "responseModalities": ["TEXT", "IMAGE"],
+                "imageConfig": {
+                    "aspectRatio": "9:16"
+                }
             }
         }
         
-        response = requests.post(
-            gemini_url,
-            json=payload,
-            headers={'Content-Type': 'application/json'},
-            timeout=90  # Longer timeout for image generation
-        )
+        response = None
+        last_error = None
         
-        if response.status_code != 200:
-            error_detail = response.text[:500] if response.text else 'No details'
+        for model_name in models_to_try:
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+            
+            try:
+                response = requests.post(
+                    gemini_url,
+                    json=payload,
+                    headers={'Content-Type': 'application/json'},
+                    timeout=90
+                )
+                
+                if response.status_code == 200:
+                    print(f"AI Image: Success with model {model_name}")
+                    break
+                else:
+                    last_error = f"{model_name}: {response.status_code} - {response.text[:200]}"
+                    print(f"AI Image: Failed with {model_name}, trying next...")
+            except Exception as e:
+                last_error = f"{model_name}: {str(e)}"
+                print(f"AI Image: Exception with {model_name}: {e}")
+                continue
+        
+        if not response or response.status_code != 200:
+            error_detail = last_error or 'All models failed'
             return jsonify({
                 'success': False, 
-                'error': f'Gemini API error: {response.status_code}',
+                'error': f'Gemini API error',
                 'detail': error_detail
             }), 500
         
