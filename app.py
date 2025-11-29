@@ -2405,16 +2405,17 @@ def generate_ai_image(product_id):
         category = get_product_category(product.product_name or '')
         prompt = get_scene_prompt(product.product_name or 'product', category)
         
-        # Call Gemini API
+        # Call Gemini API - using gemini-2.0-flash-exp for image generation
         gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_API_KEY}"
         
         payload = {
             "contents": [
                 {
+                    "role": "user",
                     "parts": [
                         {
-                            "inline_data": {
-                                "mime_type": mime_type,
+                            "inlineData": {
+                                "mimeType": mime_type,
                                 "data": image_data
                             }
                         },
@@ -2425,8 +2426,7 @@ def generate_ai_image(product_id):
                 }
             ],
             "generationConfig": {
-                "responseModalities": ["image", "text"],
-                "responseMimeType": "image/jpeg"
+                "responseModalities": ["TEXT", "IMAGE"]
             }
         }
         
@@ -2434,7 +2434,7 @@ def generate_ai_image(product_id):
             gemini_url,
             json=payload,
             headers={'Content-Type': 'application/json'},
-            timeout=60
+            timeout=90  # Longer timeout for image generation
         )
         
         if response.status_code != 200:
@@ -2449,12 +2449,14 @@ def generate_ai_image(product_id):
         
         # Extract the generated image from response
         generated_image = None
+        generated_mime = 'image/png'  # Default
         if 'candidates' in result and len(result['candidates']) > 0:
             candidate = result['candidates'][0]
             if 'content' in candidate and 'parts' in candidate['content']:
                 for part in candidate['content']['parts']:
                     if 'inlineData' in part:
                         generated_image = part['inlineData']['data']
+                        generated_mime = part['inlineData'].get('mimeType', 'image/png')
                         break
         
         if not generated_image:
@@ -2482,7 +2484,7 @@ def generate_ai_image(product_id):
         
         return jsonify({
             'success': True,
-            'image': f"data:image/jpeg;base64,{generated_image}",
+            'image': f"data:{generated_mime};base64,{generated_image}",
             'product_name': product.product_name,
             'category': category,
             'prompt_used': prompt[:200] + '...'
