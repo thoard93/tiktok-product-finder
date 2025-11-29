@@ -2398,39 +2398,51 @@ def get_scene_prompt(product_name, category):
     angle = random.choice(camera_angles)
     mood = random.choice(style_moods)
     
-    prompt = f"""Create a professional lifestyle product photograph of this exact product: {product_name}
+    prompt = f"""EDIT this product image to place it in a lifestyle scene. Keep the product EXACTLY as shown in the reference - do not regenerate or modify the product itself.
 
-SCENE: {base_scene}
-LIGHTING: {lighting}
-CAMERA: {angle}
-MOOD: {mood}
+PRODUCT: {product_name}
 
-CRITICAL REQUIREMENTS:
-- VERTICAL 9:16 portrait orientation for TikTok/social media
-- Camera positioned 3-4 feet back from the product
-- Product takes up about 40% of the frame, centered
-- Wide open background with depth and breathing room
-- Keep ALL TEXT AND LOGOS on the product SHARP and READABLE - this is critical
-- The product must look EXACTLY like the reference image - same colors, same design, same text
+SCENE PLACEMENT: {base_scene}
+LIGHTING STYLE: {lighting}  
+CAMERA ANGLE: {angle}
+OVERALL MOOD: {mood}
 
-ABSOLUTELY DO NOT INCLUDE:
-- NO floating signs, banners, or text overlays
-- NO makeup swatches, color swatches, or product samples
-- NO disembodied hands or body parts
-- NO price tags or promotional graphics
-- NO watermarks or logos other than what's on the product
-- NO random floating objects
-- Keep the scene CLEAN and SIMPLE
+=== MOST CRITICAL - READ CAREFULLY ===
 
-STYLE:
-- Professional e-commerce photography quality
-- Photorealistic, natural looking
-- Magazine advertisement quality
-- Natural believable scene in someone's actual home
-- Sharp focus on product, gentle background blur
+1. PRESERVE THE PRODUCT EXACTLY:
+   - Use the EXACT product from the reference image - same shape, same colors, same packaging
+   - ALL text, logos, and labels on the product must remain SHARP, CLEAR, and PERFECTLY READABLE
+   - Do NOT regenerate or reimagine the product - just place it in a new scene
+   - The product should look like a real photo, not AI-generated
+
+2. CAMERA DISTANCE - VERY IMPORTANT:
+   - Position camera 4-5 FEET BACK from the product
+   - Product should only fill 30-40% of the frame - NOT close up!
+   - Leave LOTS of empty space around the product
+   - Wide shot with breathing room, not a macro/close-up
+   - Imagine you're taking the photo from across a room
+
+3. IMAGE FORMAT:
+   - VERTICAL 9:16 portrait orientation (TikTok format)
+   - Product centered but small in frame
+   - Lots of background visible above and below the product
+
+=== DO NOT INCLUDE ===
+- NO close-up shots - keep the camera FAR BACK
+- NO floating objects, signs, or overlays
+- NO swatches, samples, or promotional elements  
+- NO hands or body parts
+- NO text other than what's ON the product
+- NO blurry or illegible product text
+- Keep background SIMPLE and CLEAN
+
+=== STYLE ===
+- Professional lifestyle photography
+- Photorealistic and natural
 - {mood}
+- Sharp product focus, soft background blur
 
-Make this image UNIQUE and ORIGINAL - vary the composition creatively while keeping the product as the hero."""
+Remember: This is an EDIT of the reference image to add a background scene - NOT a complete regeneration. The product itself should be IDENTICAL to what was provided."""
 
     return prompt
 
@@ -2499,13 +2511,15 @@ def generate_ai_image(product_id):
         category = get_product_category(product.product_name or '')
         prompt = get_scene_prompt(product.product_name or 'product', category)
         
-        # Try multiple Gemini models for image generation
-        # gemini-2.0-flash-exp-image-generation is Nano Banana Pro equivalent
+        # Use the REAL Nano Banana Pro models:
+        # - gemini-3-pro-image-preview = Nano Banana Pro (BEST quality, 4K, sharp text) - PRIMARY
+        # - gemini-2.5-flash-image = Nano Banana (fast fallback)
         models_to_try = [
-            "gemini-2.0-flash-exp-image-generation",
-            "gemini-2.0-flash-exp"
+            "gemini-3-pro-image-preview",   # Nano Banana Pro - BEST QUALITY, try first!
+            "gemini-2.5-flash-image",       # Nano Banana - fallback if Pro fails
         ]
         
+        # Build payload with aspect ratio support (supported in gemini-2.5-flash-image)
         payload = {
             "contents": [
                 {
@@ -2528,25 +2542,64 @@ def generate_ai_image(product_id):
             }
         }
         
+        # Payload with aspect ratio for models that support it
+        payload_with_aspect = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": image_data
+                            }
+                        },
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"],
+                "imageConfig": {
+                    "aspectRatio": "9:16"
+                }
+            }
+        }
+        
         response = None
         last_error = None
         
         for model_name in models_to_try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
             
+            # Try with aspect ratio first, fall back to without if needed
+            # gemini-2.5-flash-image definitely supports it, Pro might too
+            current_payload = payload_with_aspect
+            
             try:
                 response = requests.post(
                     gemini_url,
-                    json=payload,
+                    json=current_payload,
                     headers={'Content-Type': 'application/json'},
-                    timeout=90
+                    timeout=120  # Longer timeout for high-quality generation
                 )
                 
                 if response.status_code == 200:
-                    print(f"AI Image: Success with model {model_name}")
-                    break
+                    result_check = response.json()
+                    # Verify we got an image back
+                    if 'candidates' in result_check and len(result_check['candidates']) > 0:
+                        candidate = result_check['candidates'][0]
+                        if 'content' in candidate and 'parts' in candidate['content']:
+                            has_image = any('inlineData' in part for part in candidate['content']['parts'])
+                            if has_image:
+                                print(f"AI Image: Success with model {model_name}")
+                                break
+                    last_error = f"{model_name}: No image in response"
+                    print(f"AI Image: {model_name} returned no image, trying next...")
                 else:
-                    last_error = f"{model_name}: {response.status_code} - {response.text[:200]}"
+                    last_error = f"{model_name}: {response.status_code} - {response.text[:300]}"
                     print(f"AI Image: Failed with {model_name}, trying next...")
             except Exception as e:
                 last_error = f"{model_name}: {str(e)}"
