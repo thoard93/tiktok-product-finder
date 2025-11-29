@@ -2296,153 +2296,96 @@ def get_product_category(product_name):
 
 
 def get_scene_prompt(product_name, category):
-    """Generate a RANDOMIZED lifestyle scene prompt based on product category"""
+    """Generate a RANDOMIZED lifestyle scene prompt based on product category - simple flowing style like user's successful prompts"""
     import random
     
-    # Multiple scene options per category - randomly selected
-    scene_options = {
+    # Background items by category - realistic and subtle, blurred/out of focus
+    background_items = {
         'beauty': [
-            "on a clean white marble bathroom counter, soft natural window light from the side, a small succulent plant nearby",
-            "on a glass vanity shelf, morning golden hour light, elegant minimalist bathroom setting",
-            "on a wooden bathroom tray, soft diffused daylight, spa-like peaceful atmosphere",
-            "on a rose gold makeup organizer, warm ambient lighting, luxurious feminine space",
-            "next to a white ceramic sink, bright natural light, fresh clean aesthetic"
+            "folded towels, a candle, a small plant and skincare bottles placed around but out of focus",
+            "a soap dispenser, rolled face towel, and a small succulent",
+            "cotton pads in a jar, a small mirror, and a ceramic dish",
+            "a ceramic tray, small vase with dried flowers, and folded washcloths",
+            "a glass jar, small candle, and a jade roller blurred slightly"
         ],
         'hair': [
-            "on a modern bathroom vanity with warm lighting, a folded towel nearby",
-            "on a sleek marble countertop, soft ring light glow, professional salon vibes",
-            "next to a round mirror, natural daylight streaming in, airy bathroom space",
-            "on a wooden shelf, warm pendant lighting above, cozy home bathroom"
-        ],
-        'fashion': [
-            "laid flat on a light wooden surface, soft diffused natural light, minimal clean background",
-            "on crisp white bedding, bright window light, lifestyle bedroom setting",
-            "on a marble coffee table, afternoon sun rays, modern living room",
-            "draped on a velvet chair, golden hour lighting, elegant interior space",
-            "on a linen tablecloth, soft shadow play, minimalist aesthetic"
+            "a hairbrush, folded towel, and small potted plant blurred in the background",
+            "a round mirror, hair clips in a dish, and a ceramic container",
+            "a wooden brush, cotton towel, and decorative bottle out of focus"
         ],
         'kitchen': [
-            "on a warm wooden kitchen countertop, a few fresh herbs nearby, morning sunlight streaming through a window",
-            "on a white marble island, copper accents nearby, bright modern kitchen",
-            "next to a cutting board, warm afternoon light, cozy cooking atmosphere",
-            "on a butcher block counter, steam rising softly, homey kitchen scene",
-            "near a window sill with plants, golden morning rays, farmhouse kitchen vibes"
-        ],
-        'home': [
-            "in a cozy living room setting, soft afternoon light, blurred comfortable furniture in background",
-            "on a coffee table, warm lamp glow, evening relaxation mood",
-            "on a bookshelf, natural daylight, modern apartment aesthetic",
-            "next to houseplants, bright window light, bohemian living space",
-            "on a side table, soft golden hour rays, scandinavian interior design"
+            "a fruit bowl, cookbook stand, and ceramic utensil holder blurred in the background",
+            "fresh herbs in a pot, wooden cutting board, and linen napkin",
+            "a coffee mug, small plant, and woven placemat out of focus",
+            "copper measuring cups, a tea towel, and wooden spoons"
         ],
         'tech': [
-            "on a clean modern desk, soft LED ambient lighting, minimal productive workspace",
-            "next to a laptop, cool blue hour light, professional home office",
-            "on a wooden desk surface, warm desk lamp glow, creative workspace",
-            "on a glass table, natural daylight, sleek modern setup",
-            "next to a coffee mug, morning light, startup office vibes"
+            "a coffee mug, small plant, and notebook blurred slightly",
+            "a pen holder, coaster, and desk organizer out of focus",
+            "a desk lamp edge, mousepad, and small succulent in the background"
         ],
         'fitness': [
-            "on a yoga mat in a bright room, water bottle nearby, natural light from large windows",
-            "on gym flooring, energetic morning light, home workout space",
-            "next to dumbbells, bright motivational lighting, fitness corner",
-            "on a workout bench, natural daylight, garage gym setting",
-            "near a mirror, dynamic lighting, personal training studio vibes"
+            "a water bottle, folded towel on a shelf, and yoga block",
+            "resistance bands placed naturally, a plant, and woven basket",
+            "a foam roller edge, towel, and motivational frame blurred"
+        ],
+        'home': [
+            "a small plant, candle, and stack of books out of focus",
+            "a decorative tray, vase, and cozy throw blanket edge",
+            "framed photo, small lamp, and ceramic dish blurred slightly"
         ],
         'general': [
-            "on a clean light-colored surface, soft natural lighting from the side, open airy background",
-            "on a white desk, bright diffused daylight, minimal modern space",
-            "on a wooden table, warm afternoon glow, lifestyle setting",
-            "on marble surface, soft shadow details, elegant product display",
-            "on linen fabric, golden hour warmth, artisanal aesthetic"
+            "a small plant, folded cloth, and decorative items blurred in the background",
+            "a candle, ceramic dish, and natural texture elements out of focus",
+            "subtle decor items placed naturally and blurred slightly"
         ]
     }
     
-    # Random lighting variations
-    lighting_styles = [
-        "soft natural window light",
-        "warm golden hour sunlight",
-        "bright diffused daylight",
-        "gentle morning rays",
-        "cozy afternoon glow",
-        "soft ambient lighting",
-        "clean bright illumination",
-        "warm inviting light"
-    ]
-    
-    # Random camera angle variations
-    camera_angles = [
-        "shot from slightly above at a 30-degree angle",
-        "captured at eye level straight on",
-        "photographed from a gentle 45-degree angle",
-        "taken from a low angle looking slightly up",
-        "shot with a subtle dutch angle for dynamism"
-    ]
-    
-    # Random mood/style variations
-    style_moods = [
-        "clean and minimal aesthetic",
-        "warm and inviting atmosphere", 
-        "fresh and modern feel",
-        "cozy and comfortable vibe",
-        "elegant and sophisticated look",
-        "bright and energetic mood",
-        "calm and peaceful setting",
-        "luxurious premium quality"
-    ]
+    # Scene/setting templates by category - matches user's successful prompt style
+    scene_templates = {
+        'beauty': [
+            "a bright bathroom counter scene shot from a few feet back, the {product} centered on the counter, soft daylight coming from the side, subtle realistic background items like {bg_items}, open space around the product, plenty of empty space above for text, no people, clean and modern setting with natural textures, neutral tones, realistic shadows, overall bright and realistic",
+            "a realistic product photo of the {product} standing upright on a clean bathroom counter a few feet back, soft natural lighting coming from a window, subtle background items like {bg_items}, plenty of empty space above the product for text, neutral aesthetic bathroom setting, no people, overall bright and realistic",
+            "a clean bathroom vanity scene a few feet back, the {product} placed naturally on the marble counter, warm natural light from a window, subtle background items like {bg_items}, open space for realism, no people, calm and minimal decor, realistic lighting and shadows, crisp product details"
+        ],
+        'hair': [
+            "a bright bathroom counter scene shot from a few feet back, the {product} standing upright on the counter, soft natural lighting from a window, subtle background items like {bg_items}, plenty of open space around the product, no people, clean modern bathroom setting, overall bright and realistic",
+            "a realistic product photo of the {product} on a modern bathroom vanity a few feet back, soft diffused natural light, subtle background items like {bg_items}, open space above for text, neutral aesthetic, no people, realistic and clean"
+        ],
+        'kitchen': [
+            "a bright kitchen counter scene from a few feet back, the {product} arranged neatly on a modern kitchen island, soft daylight, subtle background elements like {bg_items}, lots of open space around the product, clean and cheerful kitchen setting, no people, realistic shadows, overall bright and inviting",
+            "a realistic product photo showing the {product} on a warm wooden kitchen counter a few feet back, morning light from a window, subtle background items like {bg_items}, open counter space around the product, clean and realistic environment, no people, extra open area above for caption text"
+        ],
+        'tech': [
+            "a clean modern desk scene from a few feet back, the {product} centered on the workspace, soft ambient lighting, subtle background items like {bg_items}, plenty of open space around the product, no people, minimal and productive setting, realistic lighting, overall clean and modern",
+            "a realistic product photo of the {product} on a minimalist desk a few feet back, natural daylight from a window, subtle background items like {bg_items}, open space above for text, no people, overall bright and professional"
+        ],
+        'fitness': [
+            "a realistic home wellness corner with soft natural lighting, the {product} centered on a clean wood floor a few feet back, subtle background items like {bg_items}, plenty of open space around the product, no people, calm and minimal decor, neutral tones, realistic shadows, crisp product details",
+            "a bright fitness space from a few feet back, the {product} placed naturally on the floor, soft daylight, subtle background items like {bg_items}, open space for realism, no people, clean and energetic setting"
+        ],
+        'home': [
+            "a cozy living room scene from a few feet back, the {product} on a coffee table, soft afternoon light, subtle background items like {bg_items}, plenty of open space around the product, no people, warm and inviting setting, realistic lighting and shadows",
+            "a realistic product photo of the {product} in a modern living space a few feet back, natural window light, subtle background items like {bg_items}, open space above for text, no people, overall bright and lifestyle"
+        ],
+        'general': [
+            "a bright realistic scene from a few feet back, the {product} centered on a clean light surface, soft natural lighting from the side, subtle background items like {bg_items}, plenty of open space around the product and above for text, no people, clean and modern setting, realistic shadows, overall bright and professional",
+            "a realistic product photo of the {product} on a neutral surface a few feet back, soft diffused daylight, subtle background items like {bg_items}, open space for realism, no people, clean aesthetic, crisp product details"
+        ]
+    }
     
     # Get random selections
-    scenes = scene_options.get(category, scene_options['general'])
-    base_scene = random.choice(scenes)
-    lighting = random.choice(lighting_styles)
-    angle = random.choice(camera_angles)
-    mood = random.choice(style_moods)
+    items_list = background_items.get(category, background_items['general'])
+    templates_list = scene_templates.get(category, scene_templates['general'])
     
-    prompt = f"""EDIT this product image to place it in a lifestyle scene. Keep the product EXACTLY as shown in the reference - do not regenerate or modify the product itself.
-
-PRODUCT: {product_name}
-
-SCENE PLACEMENT: {base_scene}
-LIGHTING STYLE: {lighting}  
-CAMERA ANGLE: {angle}
-OVERALL MOOD: {mood}
-
-=== MOST CRITICAL - READ CAREFULLY ===
-
-1. PRESERVE THE PRODUCT EXACTLY:
-   - Use the EXACT product from the reference image - same shape, same colors, same packaging
-   - ALL text, logos, and labels on the product must remain SHARP, CLEAR, and PERFECTLY READABLE
-   - Do NOT regenerate or reimagine the product - just place it in a new scene
-   - The product should look like a real photo, not AI-generated
-
-2. CAMERA DISTANCE - VERY IMPORTANT:
-   - Position camera 4-5 FEET BACK from the product
-   - Product should only fill 30-40% of the frame - NOT close up!
-   - Leave LOTS of empty space around the product
-   - Wide shot with breathing room, not a macro/close-up
-   - Imagine you're taking the photo from across a room
-
-3. IMAGE FORMAT:
-   - VERTICAL 9:16 portrait orientation (TikTok format)
-   - Product centered but small in frame
-   - Lots of background visible above and below the product
-
-=== DO NOT INCLUDE ===
-- NO close-up shots - keep the camera FAR BACK
-- NO floating objects, signs, or overlays
-- NO swatches, samples, or promotional elements  
-- NO hands or body parts
-- NO text other than what's ON the product
-- NO blurry or illegible product text
-- Keep background SIMPLE and CLEAN
-
-=== STYLE ===
-- Professional lifestyle photography
-- Photorealistic and natural
-- {mood}
-- Sharp product focus, soft background blur
-
-Remember: This is an EDIT of the reference image to add a background scene - NOT a complete regeneration. The product itself should be IDENTICAL to what was provided."""
+    bg_items = random.choice(items_list)
+    template = random.choice(templates_list)
+    
+    # Build prompt by filling in the template
+    prompt = template.format(product=product_name, bg_items=bg_items)
+    
+    # Add vertical format at the end
+    prompt += ", vertical 9:16 portrait format"
 
     return prompt
 
