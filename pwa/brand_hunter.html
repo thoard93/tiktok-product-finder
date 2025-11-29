@@ -918,10 +918,51 @@
         </div>
     </div>
     
+    <!-- Product Lookup Modal -->
+    <div class="modal-overlay" id="lookup-modal">
+        <div class="modal" style="max-width: 500px;">
+            <h3>🔍 Product Lookup</h3>
+            <p style="color: #888; font-size: 0.85rem; margin-bottom: 15px;">
+                Paste any TikTok Shop product URL or ID to see its stats
+            </p>
+            <input type="text" id="lookup-input" class="search-input" style="width: 100%; margin-bottom: 10px;" 
+                   placeholder="Paste TikTok product URL or ID..." 
+                   onkeyup="if(event.key==='Enter')lookupProduct()">
+            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                <button class="nav-btn primary" style="flex:1; padding: 12px;" onclick="lookupProduct()">
+                    🔍 Look Up
+                </button>
+                <button class="nav-btn secondary" style="flex:1; padding: 12px;" onclick="lookupProduct(true)">
+                    💾 Look Up & Save
+                </button>
+            </div>
+            
+            <!-- Lookup Results -->
+            <div id="lookup-results" style="display: none;">
+                <div id="lookup-product-card" style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 15px; margin-bottom: 10px;">
+                    <!-- Product info will be inserted here -->
+                </div>
+            </div>
+            
+            <!-- Lookup Loading -->
+            <div id="lookup-loading" style="display: none; text-align: center; padding: 20px;">
+                <div style="font-size: 2rem; margin-bottom: 10px;">⏳</div>
+                <p style="color: #888;">Looking up product...</p>
+            </div>
+            
+            <!-- Lookup Error -->
+            <div id="lookup-error" style="display: none; background: rgba(233, 69, 96, 0.2); border: 1px solid #e94560; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+                <p style="color: #e94560;" id="lookup-error-text">Error message</p>
+            </div>
+            
+            <button class="modal-close" onclick="closeLookupModal()">Close</button>
+        </div>
+    </div>
+    
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
         <button class="nav-btn tools" onclick="openModal()">🛠️</button>
-        <button class="nav-btn secondary" onclick="loadProducts()">↻ Refresh</button>
+        <button class="nav-btn secondary" style="flex: 0.8;" onclick="openLookupModal()">🔎 Lookup</button>
         <button class="nav-btn primary" id="scan-btn" onclick="startScan()">🔍 Scan</button>
     </div>
     
@@ -1629,6 +1670,141 @@
         
         function closeModal() {
             document.getElementById('tools-modal').classList.remove('show');
+        }
+        
+        // Product Lookup functions
+        function openLookupModal() {
+            document.getElementById('lookup-modal').classList.add('show');
+            document.getElementById('lookup-input').focus();
+            // Reset state
+            document.getElementById('lookup-results').style.display = 'none';
+            document.getElementById('lookup-loading').style.display = 'none';
+            document.getElementById('lookup-error').style.display = 'none';
+        }
+        
+        function closeLookupModal() {
+            document.getElementById('lookup-modal').classList.remove('show');
+            document.getElementById('lookup-input').value = '';
+            document.getElementById('lookup-results').style.display = 'none';
+            document.getElementById('lookup-loading').style.display = 'none';
+            document.getElementById('lookup-error').style.display = 'none';
+        }
+        
+        async function lookupProduct(saveToDb = false) {
+            const input = document.getElementById('lookup-input').value.trim();
+            if (!input) {
+                showToast('Please enter a TikTok product URL or ID', true);
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('lookup-results').style.display = 'none';
+            document.getElementById('lookup-error').style.display = 'none';
+            document.getElementById('lookup-loading').style.display = 'block';
+            
+            try {
+                const url = `/api/lookup?url=${encodeURIComponent(input)}${saveToDb ? '&save=true' : ''}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                document.getElementById('lookup-loading').style.display = 'none';
+                
+                if (!data.success) {
+                    document.getElementById('lookup-error').style.display = 'block';
+                    document.getElementById('lookup-error-text').textContent = data.error || 'Product not found';
+                    return;
+                }
+                
+                // Show results
+                const p = data.product;
+                let commission = p.commission_rate || 0;
+                if (commission > 0 && commission < 1) commission = commission * 100;
+                
+                const cardHtml = `
+                    <div style="display: flex; gap: 15px; align-items: flex-start;">
+                        ${p.image_url ? `<img src="${p.image_url}" style="width: 80px; height: 80px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px; font-size: 0.9rem; line-height: 1.3;">${p.product_name || 'Unknown Product'}</div>
+                            <div style="color: #888; font-size: 0.75rem; margin-bottom: 8px;">🏪 ${p.seller_name || 'Unknown'}</div>
+                            
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+                                <span style="background: ${p.competition_level === 'untapped' ? '#e94560' : p.competition_level === 'low' ? '#f97316' : p.competition_level === 'medium' ? '#3b82f6' : '#888'}; padding: 3px 8px; border-radius: 12px; font-size: 0.7rem;">
+                                    ${p.competition_label}
+                                </span>
+                                <span style="background: ${commission >= 10 ? '#4ade80' : commission >= 5 ? '#fbbf24' : '#f87171'}; color: #000; padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">
+                                    ${commission.toFixed(1)}% Commission
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #25f4ee;">${p.influencer_count || 0}</div>
+                            <div style="font-size: 0.65rem; color: #888;">Influencers</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #fe2c55;">${p.video_count || 0}</div>
+                            <div style="font-size: 0.65rem; color: #888;">Videos</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #4ade80;">${(p.sales_7d || 0).toLocaleString()}</div>
+                            <div style="font-size: 0.65rem; color: #888;">7-Day Sales</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.1rem; font-weight: 700;">${p.live_count || 0}</div>
+                            <div style="font-size: 0.65rem; color: #888;">Lives</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.1rem; font-weight: 700;">$${(p.price || 0).toFixed(2)}</div>
+                            <div style="font-size: 0.65rem; color: #888;">Price</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.1rem; font-weight: 700;">${(p.sales || 0).toLocaleString()}</div>
+                            <div style="font-size: 0.65rem; color: #888;">Total Sales</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <a href="${p.tiktok_url}" target="_blank" style="flex: 1; padding: 10px; background: #fe2c55; color: #fff; text-align: center; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 600;">
+                            🛒 TikTok Shop
+                        </a>
+                        <a href="${p.echotik_url}" target="_blank" style="flex: 1; padding: 10px; background: rgba(255,255,255,0.1); color: #fff; text-align: center; border-radius: 8px; text-decoration: none; font-size: 0.85rem;">
+                            📊 EchoTik
+                        </a>
+                    </div>
+                    
+                    ${p.in_database ? `
+                        <div style="margin-top: 10px; padding: 8px; background: rgba(74, 222, 128, 0.1); border: 1px solid #4ade80; border-radius: 6px; font-size: 0.75rem; color: #4ade80; text-align: center;">
+                            ✅ This product is in your database
+                        </div>
+                    ` : (saveToDb && data.saved ? `
+                        <div style="margin-top: 10px; padding: 8px; background: rgba(74, 222, 128, 0.1); border: 1px solid #4ade80; border-radius: 6px; font-size: 0.75rem; color: #4ade80; text-align: center;">
+                            ✅ Product saved to database!
+                        </div>
+                    ` : `
+                        <button onclick="lookupProduct(true)" style="width: 100%; margin-top: 10px; padding: 10px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; color: #3b82f6; font-size: 0.85rem; cursor: pointer;">
+                            💾 Save to Database
+                        </button>
+                    `)}
+                `;
+                
+                document.getElementById('lookup-product-card').innerHTML = cardHtml;
+                document.getElementById('lookup-results').style.display = 'block';
+                
+                if (data.saved) {
+                    showToast('✅ Product saved to database!', false, 'success');
+                    loadProducts(); // Refresh the product list
+                }
+                
+            } catch (err) {
+                document.getElementById('lookup-loading').style.display = 'none';
+                document.getElementById('lookup-error').style.display = 'block';
+                document.getElementById('lookup-error-text').textContent = 'Failed to look up product: ' + err.message;
+            }
         }
         
         async function refreshImages(force = false) {
