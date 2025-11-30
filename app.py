@@ -29,8 +29,6 @@ import json
 import hashlib
 import secrets
 import jwt  # For Kling AI authentication
-import base64
-from io import BytesIO
 
 app = Flask(__name__, static_folder='pwa')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///products.db')
@@ -73,19 +71,19 @@ BASE_URL = "https://open.echotik.live/api/v3/echotik"
 ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
 ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
 
-# Telegram Bot Config (for alerts)
+# Telegram Alerts Config
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
 
-# Kling AI Config (Official API - for video generation)
+# Kling AI Video Generation Config
 KLING_ACCESS_KEY = os.environ.get('KLING_ACCESS_KEY', '')
 KLING_SECRET_KEY = os.environ.get('KLING_SECRET_KEY', '')
-KLING_API_BASE_URL = "https://api-singapore.klingai.com"  # Singapore endpoint
+KLING_API_BASE_URL = "https://api-singapore.klingai.com"
 
-# Gemini AI Config (for image generation)
+# Gemini AI Image Generation Config
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
-# Default video prompt for all products (Kling AI)
+# Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
 
 # =============================================================================
@@ -222,25 +220,11 @@ class Product(db.Model):
     
     # User features
     is_favorite = db.Column(db.Boolean, default=False)
+    product_status = db.Column(db.String(50), default='active')  # active, removed, out_of_stock, likely_oos
+    status_note = db.Column(db.String(255))  # Optional note about status
     
-    # Trending & Alert Detection
-    prev_sales_7d = db.Column(db.Integer, default=0)      # Previous 7d sales for velocity calc
-    prev_sales_30d = db.Column(db.Integer, default=0)     # Previous 30d sales
-    sales_velocity = db.Column(db.Float, default=0)       # % change in sales (positive = trending up)
-    product_status = db.Column(db.String(20), default='active')  # active, likely_oos, out_of_stock, removed
-    status_changed_at = db.Column(db.DateTime)            # When status last changed
-    is_hidden_gem = db.Column(db.Boolean, default=False)  # Meets hidden gem criteria
-    
-    # AI Generated Content
-    ai_image_url = db.Column(db.Text)                     # Generated AI lifestyle image URL
-    ai_video_url = db.Column(db.Text)                     # Generated AI video URL  
-    ai_video_task_id = db.Column(db.String(100))          # Kling AI task ID for polling
-    ai_video_status = db.Column(db.String(20))            # pending, processing, completed, failed
-    
-    # Alert tracking
-    last_alert_sent = db.Column(db.DateTime)              # Prevent duplicate alerts
-    gem_alert_sent = db.Column(db.Boolean, default=False) # Hidden gem alert sent
-    stock_alert_sent = db.Column(db.Boolean, default=False) # Back in stock alert sent
+    # For out-of-stock detection - track previous 7d sales to detect sudden drops
+    prev_sales_7d = db.Column(db.Integer, default=0)
     
     scan_type = db.Column(db.String(50), default='brand_hunter')
     first_seen = db.Column(db.DateTime, default=datetime.utcnow)
@@ -270,12 +254,8 @@ class Product(db.Model):
             'product_rating': self.product_rating,
             'review_count': self.review_count,
             'is_favorite': self.is_favorite,
-            'sales_velocity': self.sales_velocity,
-            'product_status': self.product_status,
-            'is_hidden_gem': self.is_hidden_gem,
-            'ai_image_url': self.ai_image_url,
-            'ai_video_url': self.ai_video_url,
-            'ai_video_status': self.ai_video_status,
+            'product_status': self.product_status or 'active',
+            'status_note': self.status_note,
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
@@ -548,6 +528,71 @@ def admin_kick_user(user_id):
         db.session.commit()
         return jsonify({'success': True})
     return jsonify({'error': 'User not found'}), 404
+
+@app.route('/api/admin/migrate')
+@login_required
+@admin_required
+def admin_migrate():
+    """
+    Run database migrations to add new columns.
+    Hit this endpoint once after deploying new code.
+    """
+    results = []
+    
+    try:
+        # Check if we're using PostgreSQL or SQLite
+        is_postgres = 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']
+        
+        if is_postgres:
+            # PostgreSQL - use ALTER TABLE with IF NOT EXISTS
+            migrations = [
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS product_status VARCHAR(50) DEFAULT 'active'",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS status_note VARCHAR(255)",
+            ]
+            
+            for sql in migrations:
+                try:
+                    db.session.execute(db.text(sql))
+                    results.append(f"✅ {sql[:50]}...")
+                except Exception as e:
+                    results.append(f"⚠️ {sql[:30]}... - {str(e)[:50]}")
+            
+            db.session.commit()
+        else:
+            # SQLite - try to add columns, ignore if they exist
+            try:
+                db.session.execute(db.text("ALTER TABLE products ADD COLUMN product_status VARCHAR(50) DEFAULT 'active'"))
+                results.append("✅ Added product_status column")
+            except Exception as e:
+                if 'duplicate column' in str(e).lower():
+                    results.append("ℹ️ product_status column already exists")
+                else:
+                    results.append(f"⚠️ product_status: {str(e)[:50]}")
+            
+            try:
+                db.session.execute(db.text("ALTER TABLE products ADD COLUMN status_note VARCHAR(255)"))
+                results.append("✅ Added status_note column")
+            except Exception as e:
+                if 'duplicate column' in str(e).lower():
+                    results.append("ℹ️ status_note column already exists")
+                else:
+                    results.append(f"⚠️ status_note: {str(e)[:50]}")
+            
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Migration completed',
+            'results': results
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'results': results
+        }), 500
 
 @app.route('/api/log-activity', methods=['POST'])
 @login_required
@@ -1396,11 +1441,34 @@ def get_products():
     # Favorites only
     favorites_only = request.args.get('favorites', 'false').lower() == 'true'
     
-    # Build query
-    query = Product.query.filter(
-        Product.influencer_count >= min_influencers,
-        Product.influencer_count <= max_influencers
-    )
+    # Show out-of-stock products (default: hide them)
+    show_oos = request.args.get('show_oos', 'false').lower() == 'true'
+    
+    # Show ONLY out-of-stock products
+    oos_only = request.args.get('oos_only', 'false').lower() == 'true'
+    
+    # Build query - exclude unavailable products by default
+    if oos_only:
+        # Show only likely OOS products
+        query = Product.query.filter(
+            Product.influencer_count >= min_influencers,
+            Product.influencer_count <= max_influencers,
+            Product.product_status == 'likely_oos'
+        )
+    elif show_oos:
+        # Show all including OOS
+        query = Product.query.filter(
+            Product.influencer_count >= min_influencers,
+            Product.influencer_count <= max_influencers,
+            db.or_(Product.product_status == None, Product.product_status.in_(['active', 'likely_oos']))
+        )
+    else:
+        # Default: hide OOS products
+        query = Product.query.filter(
+            Product.influencer_count >= min_influencers,
+            Product.influencer_count <= max_influencers,
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        )
     
     # Apply date filter
     now = datetime.utcnow()
@@ -1425,13 +1493,19 @@ def get_products():
     
     products = query.order_by(Product.sales_7d.desc()).limit(limit).all()
     
+    # Count OOS products for UI
+    oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
+    
     return jsonify({
         'products': [p.to_dict() for p in products],
         'total': len(products),
+        'oos_count': oos_count,
         'filters': {
             'date': date_filter,
             'brand': brand_search,
-            'favorites_only': favorites_only
+            'favorites_only': favorites_only,
+            'show_oos': show_oos,
+            'oos_only': oos_only
         }
     })
 
@@ -1487,6 +1561,10 @@ def get_product_detail(product_id):
             # Favorites
             'is_favorite': product.is_favorite or False,
             
+            # Status
+            'product_status': product.product_status or 'active',
+            'status_note': product.status_note,
+            
             # Media - use cached URL for instant loading
             'image_url': image_url,
             'cached_image_url': image_url,
@@ -1498,6 +1576,9 @@ def get_product_detail(product_id):
             # Timestamps
             'first_seen': product.first_seen.isoformat() if product.first_seen else None,
             'last_updated': product.last_updated.isoformat() if product.last_updated else None,
+            
+            # User permissions (for showing/hiding features)
+            'is_admin': session.get('is_admin', False),
         }
         
         return jsonify({'success': True, 'product': data})
@@ -1505,6 +1586,48 @@ def get_product_detail(product_id):
     except Exception as e:
         import traceback
         return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/mark-unavailable/<product_id>')
+@login_required
+def mark_unavailable(product_id):
+    """Mark a product as unavailable (removed or out of stock)"""
+    try:
+        status = request.args.get('status', 'removed')
+        note = request.args.get('note', '')
+        
+        # Validate status
+        if status not in ['removed', 'out_of_stock', 'active']:
+            return jsonify({'success': False, 'error': 'Invalid status'}), 400
+        
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        product.product_status = status
+        product.status_note = note
+        product.last_updated = datetime.utcnow()
+        db.session.commit()
+        
+        # Log the activity
+        user = get_current_user()
+        if user:
+            log_activity(user.id, 'mark_unavailable', {
+                'product_id': product_id,
+                'status': status,
+                'note': note
+            })
+        
+        return jsonify({
+            'success': True,
+            'product_id': product_id,
+            'status': status,
+            'message': f'Product marked as {status}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/stats', methods=['GET'])
@@ -1843,9 +1966,991 @@ def refresh_product_data(product_id):
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
 
+
+@app.route('/api/refresh-all-products', methods=['POST'])
+def refresh_all_products():
+    """
+    Batch refresh ALL active products from EchoTik API.
+    
+    This endpoint is designed to be called by a daily cron job.
+    It refreshes products in batches to avoid API rate limits.
+    
+    Query params:
+    - batch_size: Number of products per API call (default 20, max 50)
+    - delay: Seconds to wait between batches (default 1)
+    - passkey: Dev passkey for authentication (required)
+    """
+    # Check authentication - require dev passkey for this sensitive endpoint
+    passkey = request.args.get('passkey') or request.json.get('passkey') if request.is_json else None
+    dev_passkey = os.environ.get('DEV_PASSKEY', '')
+    
+    if not dev_passkey or passkey != dev_passkey:
+        return jsonify({'success': False, 'error': 'Invalid or missing passkey'}), 403
+    
+    batch_size = min(int(request.args.get('batch_size', 20)), 50)  # Max 50 per batch
+    delay = float(request.args.get('delay', 1))  # Seconds between batches
+    
+    try:
+        # Get all active products
+        products = Product.query.filter(
+            (Product.product_status == 'active') | (Product.product_status == None)
+        ).all()
+        
+        total_products = len(products)
+        updated = 0
+        failed = 0
+        errors = []
+        
+        print(f"🔄 Starting batch refresh of {total_products} products...")
+        
+        # Process in batches
+        for i in range(0, total_products, batch_size):
+            batch = products[i:i + batch_size]
+            product_ids = [p.product_id for p in batch]
+            
+            try:
+                # Call EchoTik API with multiple product IDs
+                response = requests.get(
+                    f"{BASE_URL}/product/detail",
+                    params={'product_ids': ','.join(product_ids)},
+                    auth=get_auth(),
+                    timeout=60
+                )
+                
+                if response.status_code != 200:
+                    errors.append(f"Batch {i//batch_size + 1}: API returned {response.status_code}")
+                    failed += len(batch)
+                    continue
+                
+                data = response.json()
+                if data.get('code') != 0:
+                    errors.append(f"Batch {i//batch_size + 1}: API error code {data.get('code')}")
+                    failed += len(batch)
+                    continue
+                
+                api_products = {str(p.get('product_id')): p for p in data.get('data', [])}
+                
+                # Update each product in this batch
+                for product in batch:
+                    p = api_products.get(str(product.product_id))
+                    if p:
+                        # Store previous 7d sales for OOS detection
+                        old_sales_7d = product.sales_7d or 0
+                        
+                        # Update all stats
+                        new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                        new_sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                        
+                        product.prev_sales_7d = old_sales_7d
+                        product.sales = int(p.get('total_sale_cnt', 0) or 0)
+                        product.sales_7d = new_sales_7d
+                        product.sales_30d = new_sales_30d
+                        product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
+                        product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
+                        product.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                        product.commission_rate = float(p.get('product_commission_rate', 0) or 0)
+                        product.price = float(p.get('spu_avg_price', 0) or 0)
+                        product.video_count = int(p.get('total_video_cnt', 0) or 0)
+                        product.video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
+                        product.video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
+                        product.live_count = int(p.get('total_live_cnt', 0) or 0)
+                        product.views_count = int(p.get('total_views_cnt', 0) or 0)
+                        product.product_rating = float(p.get('product_rating', 0) or 0)
+                        product.review_count = int(p.get('review_count', 0) or 0)
+                        product.last_updated = datetime.utcnow()
+                        
+                        # === OUT-OF-STOCK DETECTION ===
+                        # Logic: If product was selling well but suddenly dropped to 0, it's likely OOS
+                        # Conditions for "likely out of stock":
+                        #   1. Current 7d sales = 0
+                        #   2. AND (previous 7d sales > 20 OR 30d sales > 50)
+                        #   3. AND product is currently active (not already marked)
+                        if new_sales_7d == 0 and (old_sales_7d > 20 or new_sales_30d > 50):
+                            if product.product_status == 'active' or product.product_status is None:
+                                product.product_status = 'likely_oos'
+                                product.status_note = f'Auto-detected: was selling {old_sales_7d}/7d, now 0'
+                        
+                        # If product is marked likely_oos but starts selling again, restore to active
+                        elif new_sales_7d > 0 and product.product_status == 'likely_oos':
+                            product.product_status = 'active'
+                            product.status_note = f'Back in stock: now selling {new_sales_7d}/7d'
+                        
+                        updated += 1
+                    else:
+                        # Product not found in API - might be removed from TikTok
+                        failed += 1
+                
+                db.session.commit()
+                
+                print(f"   Batch {i//batch_size + 1}/{(total_products + batch_size - 1)//batch_size}: {len(batch)} products processed")
+                
+                # Rate limiting delay between batches
+                if i + batch_size < total_products:
+                    time.sleep(delay)
+                    
+            except Exception as e:
+                errors.append(f"Batch {i//batch_size + 1}: {str(e)}")
+                failed += len(batch)
+                db.session.rollback()
+        
+        result = {
+            'success': True,
+            'message': f'Batch refresh complete',
+            'total_products': total_products,
+            'updated': updated,
+            'failed': failed,
+            'errors': errors[:10] if errors else []  # Limit error list
+        }
+        
+        print(f"✅ Batch refresh complete: {updated} updated, {failed} failed")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        return jsonify({
+            'success': False, 
+            'error': str(e), 
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/detect-oos', methods=['POST'])
+def detect_out_of_stock():
+    """
+    Run out-of-stock detection on all existing products.
+    This is a one-time scan that marks products as 'likely_oos' based on sales patterns.
+    
+    Logic: If 7d sales = 0 AND 30d sales > 50, product is likely out of stock.
+    (A product that was selling 50+/month shouldn't suddenly have 0 sales in a week)
+    
+    Query params:
+    - passkey: Dev passkey for authentication (required)
+    - threshold: Minimum 30d sales to consider (default: 50)
+    """
+    # Check authentication
+    passkey = request.args.get('passkey') or (request.json.get('passkey') if request.is_json else None)
+    dev_passkey = os.environ.get('DEV_PASSKEY', '')
+    
+    if not dev_passkey or passkey != dev_passkey:
+        return jsonify({'success': False, 'error': 'Invalid or missing passkey'}), 403
+    
+    threshold = int(request.args.get('threshold', 50))
+    
+    try:
+        # Find products that appear to be out of stock
+        # Criteria: 7d sales = 0, but 30d sales > threshold (was selling, now stopped)
+        candidates = Product.query.filter(
+            Product.sales_7d == 0,
+            Product.sales_30d > threshold,
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        ).all()
+        
+        marked_count = 0
+        marked_products = []
+        
+        for product in candidates:
+            product.product_status = 'likely_oos'
+            product.status_note = f'Auto-detected: 0 sales in 7d but {product.sales_30d} in 30d'
+            marked_count += 1
+            marked_products.append({
+                'product_id': product.product_id,
+                'product_name': product.product_name[:50] if product.product_name else 'Unknown',
+                'sales_30d': product.sales_30d
+            })
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'OOS detection complete',
+            'threshold': threshold,
+            'candidates_found': len(candidates),
+            'marked_as_oos': marked_count,
+            'products': marked_products[:20]  # Show first 20
+        })
+        
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/oos-stats', methods=['GET'])
+def get_oos_stats():
+    """Get out-of-stock statistics"""
+    try:
+        total_products = Product.query.count()
+        active_products = Product.query.filter(
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        ).count()
+        likely_oos = Product.query.filter(Product.product_status == 'likely_oos').count()
+        manually_oos = Product.query.filter(Product.product_status == 'out_of_stock').count()
+        removed = Product.query.filter(Product.product_status == 'removed').count()
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_products': total_products,
+                'active': active_products,
+                'likely_oos': likely_oos,
+                'manually_oos': manually_oos,
+                'removed': removed
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # =============================================================================
-# DEBUG ENDPOINT
+# PRODUCT LOOKUP - Search any TikTok product by URL or ID
 # =============================================================================
+
+import re
+
+def extract_product_id(input_str):
+    """
+    Extract product ID from various TikTok URL formats or raw ID.
+    
+    Supported formats:
+    - https://www.tiktok.com/view/product/1729436251038
+    - https://www.tiktok.com/shop/product/1729436251038
+    - https://shop.tiktok.com/view/product/1729436251038
+    - https://affiliate.tiktok.com/product/1729436251038
+    - 1729436251038 (raw ID)
+    """
+    if not input_str:
+        return None
+    
+    input_str = input_str.strip()
+    
+    # If it's just digits, return as-is
+    if input_str.isdigit():
+        return input_str
+    
+    # Try to extract from URL patterns
+    patterns = [
+        r'tiktok\.com/view/product/(\d+)',
+        r'tiktok\.com/shop/product/(\d+)',
+        r'tiktok\.com/product/(\d+)',
+        r'product/(\d+)',
+        r'/(\d{10,25})',  # Fallback: any 10-25 digit number in URL
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, input_str)
+        if match:
+            return match.group(1)
+    
+    return None
+
+
+def resolve_tiktok_share_link(share_url):
+    """
+    Resolve TikTok share links (like /t/XXXXXX) by following redirects.
+    Returns the final URL after redirects.
+    """
+    try:
+        # Follow redirects to get final URL
+        response = requests.head(share_url, allow_redirects=True, timeout=10)
+        return response.url
+    except:
+        try:
+            # Fallback: try GET request
+            response = requests.get(share_url, allow_redirects=True, timeout=10)
+            return response.url
+        except:
+            return None
+
+
+def is_tiktok_share_link(url):
+    """Check if URL is a TikTok shortened share link"""
+    return bool(re.search(r'tiktok\.com/t/[A-Za-z0-9]+', url))
+
+
+@app.route('/api/lookup', methods=['GET', 'POST'])
+@login_required
+def lookup_product():
+    """
+    Look up any TikTok product by URL or ID.
+    Fetches real-time stats from EchoTik without requiring it to be in our database.
+    
+    GET/POST params:
+        - url: TikTok product URL or product ID
+        - save: 'true' to save to database (default: false)
+    """
+    # Accept both GET and POST
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        input_url = data.get('url', '')
+        save_to_db = data.get('save', False)
+    else:
+        input_url = request.args.get('url', '')
+        save_to_db = request.args.get('save', 'false').lower() == 'true'
+    
+    if not input_url:
+        return jsonify({'success': False, 'error': 'Please provide a TikTok product URL or ID'}), 400
+    
+    # Check if it's a TikTok share link (/t/XXXXX format) and resolve it
+    resolved_url = input_url
+    if is_tiktok_share_link(input_url):
+        print(f"Resolving TikTok share link: {input_url}")
+        resolved_url = resolve_tiktok_share_link(input_url)
+        if not resolved_url:
+            return jsonify({
+                'success': False, 
+                'error': 'Could not resolve TikTok share link. Please try copying the full product URL instead.',
+                'hint': 'Open the product in TikTok, tap Share, then copy the link from your browser'
+            }), 400
+        print(f"Resolved to: {resolved_url}")
+    
+    # Extract product ID
+    product_id = extract_product_id(resolved_url)
+    if not product_id:
+        return jsonify({
+            'success': False, 
+            'error': 'Could not extract product ID from input',
+            'hint': 'Try pasting a TikTok product URL or just the product ID number',
+            'resolved_url': resolved_url if resolved_url != input_url else None
+        }), 400
+    
+    try:
+        # Check if we already have this product in our database
+        existing = Product.query.get(product_id)
+        
+        # Call EchoTik product detail API
+        response = requests.get(
+            f"{BASE_URL}/product/detail",
+            params={'product_ids': product_id},
+            auth=get_auth(),
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False, 
+                'error': f'EchoTik API returned status {response.status_code}'
+            }), 500
+        
+        data = response.json()
+        
+        if data.get('code') != 0:
+            return jsonify({
+                'success': False, 
+                'error': f'EchoTik API error: {data.get("msg", "Unknown error")}'
+            }), 500
+        
+        if not data.get('data') or len(data['data']) == 0:
+            return jsonify({
+                'success': False, 
+                'error': 'Product not found in EchoTik database',
+                'product_id': product_id
+            }), 404
+        
+        p = data['data'][0]
+        
+        # Debug: print all keys returned by EchoTik (remove after debugging)
+        print(f"EchoTik product detail keys: {list(p.keys())}")
+        
+        # Try multiple field names for seller (EchoTik may use different names)
+        seller_name = (
+            p.get('seller_name') or 
+            p.get('shop_name') or 
+            p.get('store_name') or 
+            p.get('brand_name') or
+            p.get('seller', {}).get('name') if isinstance(p.get('seller'), dict) else None or
+            ''
+        )
+        
+        # If we have this product in database with seller info, use that
+        if not seller_name and existing and existing.seller_name:
+            seller_name = existing.seller_name
+        
+        seller_id = p.get('seller_id') or p.get('shop_id') or p.get('store_id') or ''
+        if not seller_id and existing and existing.seller_id:
+            seller_id = existing.seller_id
+        
+        # If we have seller_id but no seller_name, try to fetch it from seller detail API
+        if seller_id and not seller_name:
+            try:
+                seller_response = requests.get(
+                    f"{BASE_URL}/seller/detail",
+                    params={'seller_id': seller_id},
+                    auth=get_auth(),
+                    timeout=15
+                )
+                if seller_response.status_code == 200:
+                    seller_data = seller_response.json()
+                    if seller_data.get('code') == 0 and seller_data.get('data'):
+                        seller_info = seller_data['data'][0] if isinstance(seller_data['data'], list) else seller_data['data']
+                        seller_name = seller_info.get('seller_name') or seller_info.get('shop_name') or ''
+                        print(f"Fetched seller name from seller/detail: {seller_name}")
+            except Exception as e:
+                print(f"Failed to fetch seller details: {e}")
+        
+        # Parse the product data
+        product_data = {
+            'product_id': product_id,
+            'product_name': p.get('product_name', ''),
+            'seller_id': seller_id,
+            'seller_name': seller_name,
+            
+            # Sales data
+            'sales': int(p.get('total_sale_cnt', 0) or 0),
+            'sales_7d': int(p.get('total_sale_7d_cnt', 0) or 0),
+            'sales_30d': int(p.get('total_sale_30d_cnt', 0) or 0),
+            'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+            'gmv_7d': float(p.get('total_sale_gmv_7d_amt', 0) or 0),
+            'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+            
+            # Commission
+            'commission_rate': float(p.get('product_commission_rate', 0) or 0),
+            'price': float(p.get('spu_avg_price', 0) or 0),
+            
+            # Competition stats (the key metrics!)
+            'influencer_count': int(p.get('total_ifl_cnt', 0) or 0),
+            'video_count': int(p.get('total_video_cnt', 0) or 0),
+            'video_7d': int(p.get('total_video_7d_cnt', 0) or 0),
+            'video_30d': int(p.get('total_video_30d_cnt', 0) or 0),
+            'live_count': int(p.get('total_live_cnt', 0) or 0),
+            'views_count': int(p.get('total_views_cnt', 0) or 0),
+            
+            # Ratings
+            'product_rating': float(p.get('product_rating', 0) or 0),
+            'review_count': int(p.get('review_count', 0) or 0),
+            
+            # Image
+            'image_url': parse_cover_url(p.get('cover_url', '')),
+            
+            # Links
+            'tiktok_url': f'https://www.tiktok.com/view/product/{product_id}',
+            'echotik_url': f'https://echotik.live/products/{product_id}',
+            
+            # Meta
+            'in_database': existing is not None,
+            'is_favorite': existing.is_favorite if existing else False,
+        }
+        
+        # Calculate competition level
+        inf = product_data['influencer_count']
+        if inf <= 10:
+            product_data['competition_level'] = 'untapped'
+            product_data['competition_label'] = '🔥 Untapped (1-10)'
+        elif inf <= 30:
+            product_data['competition_level'] = 'low'
+            product_data['competition_label'] = '💎 Low Competition (11-30)'
+        elif inf <= 60:
+            product_data['competition_level'] = 'medium'
+            product_data['competition_label'] = '📊 Medium (31-60)'
+        elif inf <= 100:
+            product_data['competition_level'] = 'good'
+            product_data['competition_label'] = '✅ Good (61-100)'
+        else:
+            product_data['competition_level'] = 'high'
+            product_data['competition_label'] = '⚠️ High Competition (100+)'
+        
+        # Save to database if requested
+        saved = False
+        if save_to_db and not existing:
+            try:
+                new_product = Product(
+                    product_id=product_id,
+                    product_name=product_data['product_name'],
+                    seller_id=product_data['seller_id'],
+                    seller_name=product_data['seller_name'],
+                    gmv=product_data['gmv'],
+                    gmv_30d=product_data['gmv_30d'],
+                    sales=product_data['sales'],
+                    sales_7d=product_data['sales_7d'],
+                    sales_30d=product_data['sales_30d'],
+                    influencer_count=product_data['influencer_count'],
+                    commission_rate=product_data['commission_rate'],
+                    price=product_data['price'],
+                    image_url=product_data['image_url'],
+                    video_count=product_data['video_count'],
+                    video_7d=product_data['video_7d'],
+                    video_30d=product_data['video_30d'],
+                    live_count=product_data['live_count'],
+                    views_count=product_data['views_count'],
+                    product_rating=product_data['product_rating'],
+                    review_count=product_data['review_count'],
+                    scan_type='lookup'
+                )
+                db.session.add(new_product)
+                db.session.commit()
+                saved = True
+                product_data['in_database'] = True
+            except Exception as e:
+                db.session.rollback()
+                print(f"Failed to save product: {e}")
+        elif save_to_db and existing:
+            # Update existing product with fresh data
+            existing.sales = product_data['sales']
+            existing.sales_7d = product_data['sales_7d']
+            existing.sales_30d = product_data['sales_30d']
+            existing.gmv = product_data['gmv']
+            existing.gmv_30d = product_data['gmv_30d']
+            existing.influencer_count = product_data['influencer_count']
+            existing.commission_rate = product_data['commission_rate']
+            existing.video_count = product_data['video_count']
+            existing.video_7d = product_data['video_7d']
+            existing.video_30d = product_data['video_30d']
+            existing.live_count = product_data['live_count']
+            existing.views_count = product_data['views_count']
+            existing.last_updated = datetime.utcnow()
+            db.session.commit()
+            saved = True
+        
+        # Log the lookup
+        user = get_current_user()
+        if user:
+            log_activity(user.id, 'product_lookup', {
+                'product_id': product_id,
+                'product_name': product_data['product_name'][:50],
+                'saved': saved
+            })
+        
+        # Include debug info if requested
+        debug = request.args.get('debug', 'false').lower() == 'true'
+        response_data = {
+            'success': True,
+            'product': product_data,
+            'saved': saved,
+            'message': 'Product saved to database!' if saved else None
+        }
+        
+        if debug:
+            response_data['debug'] = {
+                'raw_keys': list(p.keys()),
+                'seller_fields': {
+                    'seller_name': p.get('seller_name'),
+                    'shop_name': p.get('shop_name'),
+                    'store_name': p.get('store_name'),
+                    'brand_name': p.get('brand_name'),
+                    'seller_id': p.get('seller_id'),
+                    'shop_id': p.get('shop_id'),
+                }
+            }
+        
+        return jsonify(response_data)
+        
+    except requests.Timeout:
+        return jsonify({'success': False, 'error': 'EchoTik API timeout - please try again'}), 504
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+# =============================================================================
+# AI IMAGE GENERATION - Gemini API (Nano Banana Pro)
+# =============================================================================
+
+import base64
+
+# Gemini API Configuration
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+def get_product_category(product_name):
+    """Determine product category from name for better prompts"""
+    name_lower = product_name.lower()
+    
+    # IMPORTANT: Order matters! More specific categories should be checked first
+    # Outdoor first to catch firewood carts, garden items before tools catches them
+    # Tools second to catch Vevor hydraulic lifts, etc.
+    categories = {
+        'outdoor': ['firewood', 'log cart', 'garden', 'patio', 'lawn', 'grill', 'bbq', 'camping', 'tent', 'backpack', 'hiking', 'fishing', 'cooler', 'umbrella', 'outdoor furniture', 'fire pit', 'fireplace carrier'],
+        'tools': ['tool', 'drill', 'hammer', 'screwdriver', 'wrench', 'tape measure', 'level', 'lift', 'hydraulic', 'jack', 'compressor', 'welder', 'saw', 'sander', 'grinder', 'workbench', 'vevor', 'scaffold', 'ladder', 'dolly', 'hoist', 'clamp', 'vise', 'industrial', 'mechanic', 'garage', 'workshop', 'hauler', 'mover', 'rack storage', 'steel', 'heavy duty', 'capacity', 'scissor', 'table cart', 'pallet'],
+        'beauty': ['serum', 'cream', 'lotion', 'skincare', 'makeup', 'mascara', 'lipstick', 'foundation', 'moisturizer', 'cleanser', 'toner', 'sunscreen', 'face', 'skin', 'eye cream', 'anti-aging', 'melaxin', 'cemenrete'],
+        'hair': ['shampoo', 'conditioner', 'hair oil', 'hair mask', 'brush', 'comb', 'dryer', 'straightener', 'curler', 'hair growth'],
+        'fashion': ['dress', 'shirt', 'pants', 'jeans', 'jacket', 'coat', 'sweater', 'hoodie', 'shoes', 'sneakers', 'boots', 'heels', 'bag', 'purse', 'handbag', 'wallet', 'belt', 'scarf', 'hat', 'sunglasses', 'jewelry', 'necklace', 'bracelet', 'earring', 'watch', 'clothing', 'apparel', 'blouse', 'skirt', 'shorts', 'girlfriend jeans', 'boyfriend jeans'],
+        'kitchen': ['pan', 'pot', 'knife', 'cutting board', 'blender', 'mixer', 'cooker', 'fryer', 'toaster', 'kettle', 'coffee', 'mug', 'plate', 'bowl', 'utensil', 'spatula', 'container', 'drink mix', 'sodastream', 'kitchen'],
+        'home': ['pillow', 'pillowcase', 'blanket', 'curtain', 'rug', 'lamp', 'candle', 'vase', 'frame', 'mirror', 'clock', 'organizer', 'basket', 'shelf', 'holder', 'bedding', 'sheets', 'duvet', 'decor'],
+        'tech': ['phone', 'charger', 'cable', 'earbuds', 'headphones', 'speaker', 'mouse', 'keyboard', 'stand', 'mount', 'tripod', 'camera', 'ring light', 'laptop', 'tablet', 'wireless', 'bluetooth'],
+        'fitness': ['yoga', 'dumbbell', 'weight', 'resistance band', 'gym', 'workout', 'protein', 'shaker', 'fitness', 'exercise', 'vibration plate', 'treadmill', 'kettlebell'],
+        'car': ['car', 'auto', 'vehicle', 'seat cover', 'steering', 'dash', 'freshener', 'automotive'],
+        'health': ['vitamin', 'supplement', 'medicine', 'thermometer', 'massager', 'heating pad', 'ice pack'],
+        'cleaning': ['cleaner', 'mop', 'broom', 'vacuum', 'sponge', 'detergent', 'spray'],
+        'pet': ['dog', 'cat', 'pet', 'collar', 'leash', 'pet toy', 'pet bed', 'treat'],
+        'baby': ['baby', 'infant', 'toddler', 'diaper', 'pacifier', 'stroller', 'carrier', 'nursery'],
+    }
+    
+    for category, keywords in categories.items():
+        if any(keyword in name_lower for keyword in keywords):
+            return category
+    return 'general'
+
+
+def get_scene_prompt(product_name, category):
+    """Generate a RANDOMIZED lifestyle scene prompt based on product category
+    
+    IMPORTANT: Small products (beauty, hair) should be CLOSER to camera with readable text
+    Large products (tools, fitness) can be farther back
+    All images need room above product for video push effect
+    """
+    import random
+    
+    # Background items by category - realistic and subtle, blurred/out of focus
+    background_items = {
+        'beauty': [
+            "folded towels, a candle, and a small plant placed around but out of focus",
+            "a soap dispenser, rolled face towel, and a small succulent",
+            "cotton pads in a jar, a small mirror, and a ceramic dish",
+            "a ceramic tray, small vase with dried flowers, and folded washcloths"
+        ],
+        'hair': [
+            "a hairbrush, folded towel, and small potted plant blurred in the background",
+            "a round mirror, hair clips in a dish, and a ceramic container"
+        ],
+        'fashion': [
+            "a ceramic vase, stack of magazines, and a coffee cup in the corner blurred",
+            "a small plant, decorative tray, and sunglasses placed nearby out of focus"
+        ],
+        'kitchen': [
+            "a fruit bowl, cookbook stand, and ceramic utensil holder blurred in the background",
+            "fresh herbs in a pot, wooden cutting board, and linen napkin",
+            "a coffee mug, small plant, and woven placemat out of focus"
+        ],
+        'tools': [
+            "a toolbox, work gloves, and safety glasses in the background blurred",
+            "pegboard with tools, a shop rag, and small parts organizer out of focus",
+            "concrete floor texture, storage shelves blurred in background"
+        ],
+        'outdoor': [
+            "green grass, a patio chair, and potted plants blurred in background",
+            "wooden fence, garden tools leaning nearby, natural foliage out of focus",
+            "stacked firewood, outdoor decor, and greenery in the distance"
+        ],
+        'tech': [
+            "a coffee mug, small plant, and notebook blurred slightly",
+            "a pen holder, coaster, and desk organizer out of focus"
+        ],
+        'fitness': [
+            "a water bottle, folded towel on a shelf, and yoga block",
+            "resistance bands placed naturally, a plant, and woven basket"
+        ],
+        'home': [
+            "a small plant, candle, and stack of books out of focus",
+            "a decorative tray, vase, and cozy throw blanket edge"
+        ],
+        'general': [
+            "a small plant, folded cloth, and decorative items blurred in the background",
+            "a candle, ceramic dish, and natural texture elements out of focus"
+        ]
+    }
+    
+    # SMALL PRODUCTS - beauty, hair - moderate distance, readable text, NO floating banners
+    # CRITICAL: Tell AI to NOT add any text/titles/labels to the image
+    small_product_templates = [
+        "a realistic product photo of the {product} on a clean bathroom counter, shot from a few feet back where the product fills about 40 percent of the frame width, soft natural lighting from a window, subtle background items like {bg_items}, good amount of empty space ABOVE the product, no people, do NOT add any text titles labels or captions to this image, clean modern setting, overall bright and realistic",
+        "a bright bathroom scene with the {product} displayed on a marble counter, shot from a comfortable distance with the product as the clear hero, soft daylight from the side, subtle background items like {bg_items}, plenty of breathing room above the product, no people, do NOT overlay any text or titles or product names on the image, neutral aesthetic, overall bright and professional"
+    ]
+    
+    # FASHION - flat lay overhead, product centered with room around it
+    fashion_templates = [
+        "a realistic flat lay photo of the {product} laid neatly on a clean beige or cream colored surface, shot from above, the clothing is centered and fills about 50 percent of the frame, soft natural lighting from a window, subtle background items like {bg_items}, good amount of empty space above and around the product, no people, do NOT add any text titles labels or captions to this image, clean minimal aesthetic, overall bright and lifestyle",
+        "a wide overhead flat lay shot of the {product} laid flat on a light wooden floor or neutral surface, natural soft daylight, the product is well-lit and centered with breathing room around it, subtle background items like {bg_items}, plenty of space above the product, no people, do NOT overlay any text or product names, clean modern aesthetic"
+    ]
+    
+    # MEDIUM PRODUCTS - kitchen, home, tech
+    medium_product_templates = [
+        "a realistic product photo of the {product} on a modern kitchen counter a few feet back, soft daylight from a window, the product is clearly visible and centered, product details are sharp, subtle background items like {bg_items}, plenty of empty space above the product, no people, do NOT add any text titles labels or captions to this image, clean and inviting setting, overall bright and realistic",
+        "a bright lifestyle scene with the {product} displayed on a clean surface, shot at a natural distance, soft natural lighting, the product is the clear focus with readable details, subtle background items like {bg_items}, good amount of space above, no people, do NOT overlay any text or product names on the image, modern aesthetic, overall bright and professional"
+    ]
+    
+    # LARGE PRODUCTS - tools, fitness equipment - show UPRIGHT and ASSEMBLED
+    large_product_templates = [
+        "a realistic photo of the {product} standing upright in its normal position in a clean garage or workshop, the product is fully assembled and ready to use, natural daylight from a window or open garage door, shot from a few feet back showing the full product, subtle background items like {bg_items}, clean concrete floor, plenty of room above the product, no people, do NOT add any text titles labels or captions to this image, professional atmosphere",
+        "a bright outdoor or garage scene with the {product} standing upright on concrete or pavement, the product is fully assembled in its normal upright position, natural daylight, shot from a comfortable distance to show the whole product, subtle background elements, space above, no people, do NOT overlay any text or product names on the image, realistic and practical setting",
+        "a realistic lifestyle photo showing the {product} fully assembled and standing upright in a backyard or garage setting, natural lighting, the product is shown in its normal use position as if ready to be used, room around the product for context, plenty of open space above, no people, do NOT add any text or titles to this image, clean and functional environment"
+    ]
+    
+    # OUTDOOR PRODUCTS - firewood carts, garden equipment, patio items
+    outdoor_templates = [
+        "a realistic outdoor photo of the {product} standing upright on a patio or backyard, the product is fully assembled in its normal position, natural daylight, green grass or wooden deck visible, shot from a few feet back to show the full product, space above, no people, do NOT add any text titles labels or captions to this image, inviting outdoor setting",
+        "a bright backyard scene with the {product} fully assembled and standing upright near a house or garage, natural sunlight, the product looks ready to use in its normal position, subtle outdoor elements in background, plenty of room above the product, no people, do NOT overlay any text or product names, realistic lifestyle photo"
+    ]
+    
+    # FITNESS - moderate distance for equipment
+    fitness_templates = [
+        "a realistic home wellness scene with soft natural lighting, the {product} centered on a clean floor, shot at a natural distance where the product is clearly visible, subtle background items like {bg_items}, plenty of open space above the product, no people, do NOT add any text titles labels or captions to this image, calm and minimal decor, neutral tones, overall bright and motivating",
+        "a bright fitness space with the {product} placed naturally, the product is well-lit and the focus of the shot, soft daylight, subtle background items like {bg_items}, lots of open space above, no people, do NOT overlay any text or product names on the image, clean and energetic setting"
+    ]
+    
+    # Get appropriate templates based on product category
+    bg_items = random.choice(background_items.get(category, background_items['general']))
+    
+    if category in ['beauty', 'hair']:
+        template = random.choice(small_product_templates)
+    elif category == 'fashion':
+        template = random.choice(fashion_templates)
+    elif category == 'tools':
+        template = random.choice(large_product_templates)
+    elif category == 'outdoor':
+        template = random.choice(outdoor_templates)
+    elif category == 'fitness':
+        template = random.choice(fitness_templates)
+    else:
+        template = random.choice(medium_product_templates)
+    
+    # Build prompt by filling in the template
+    prompt = template.format(product=product_name, bg_items=bg_items)
+    
+    # Add vertical format at the end
+    prompt += ", vertical 9:16 portrait format"
+
+    return prompt
+
+
+@app.route('/api/generate-image/<product_id>', methods=['POST'])
+@login_required
+def generate_ai_image(product_id):
+    """
+    Generate an AI lifestyle image for a product using Gemini API (Nano Banana Pro)
+    
+    The generated image will:
+    - Use the product's existing image as reference (or cropped version if provided)
+    - Place it in a natural lifestyle setting
+    - Camera a few feet back with open background
+    - Add complementary items for realism
+    """
+    if not GEMINI_API_KEY:
+        return jsonify({
+            'success': False, 
+            'error': 'Gemini API key not configured. Please add GEMINI_API_KEY to environment variables.'
+        }), 500
+    
+    try:
+        # Get product info
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        # Check if a cropped image was provided in the request
+        request_data = request.get_json() or {}
+        cropped_image_data = request_data.get('cropped_image')
+        
+        if cropped_image_data:
+            # Use the cropped image provided by the frontend
+            # Remove data URL prefix if present (e.g., "data:image/png;base64,")
+            if ',' in cropped_image_data:
+                header, image_data = cropped_image_data.split(',', 1)
+                if 'png' in header:
+                    mime_type = 'image/png'
+                elif 'webp' in header:
+                    mime_type = 'image/webp'
+                else:
+                    mime_type = 'image/jpeg'
+            else:
+                image_data = cropped_image_data
+                mime_type = 'image/jpeg'
+        else:
+            # Fall back to fetching the original product image
+            image_url = product.cached_image_url or product.image_url
+            if not image_url:
+                return jsonify({'success': False, 'error': 'No product image available'}), 400
+            
+            # Download the product image and convert to base64
+            try:
+                # If it's a proxy URL, fetch through our proxy
+                if image_url.startswith('/api/image-proxy'):
+                    # Extract the actual URL from the proxy
+                    from urllib.parse import parse_qs, urlparse
+                    parsed = urlparse(image_url)
+                    actual_url = parse_qs(parsed.query).get('url', [None])[0]
+                    if actual_url:
+                        image_url = actual_url
+                
+                img_response = requests.get(image_url, timeout=30, headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+                if img_response.status_code != 200:
+                    return jsonify({'success': False, 'error': f'Failed to download product image: {img_response.status_code}'}), 400
+                
+                image_data = base64.b64encode(img_response.content).decode('utf-8')
+                
+                # Determine image mime type
+                content_type = img_response.headers.get('Content-Type', 'image/jpeg')
+                if 'png' in content_type:
+                    mime_type = 'image/png'
+                elif 'webp' in content_type:
+                    mime_type = 'image/webp'
+                else:
+                    mime_type = 'image/jpeg'
+                    
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Failed to fetch product image: {str(e)}'}), 400
+        
+        # Determine product category and generate prompt
+        category = get_product_category(product.product_name or '')
+        prompt = get_scene_prompt(product.product_name or 'product', category)
+        
+        # Use the REAL Nano Banana Pro models:
+        # - gemini-3-pro-image-preview = Nano Banana Pro (BEST quality, 2K/4K, sharp text) - PRIMARY
+        # - gemini-2.5-flash-image = Nano Banana (fast fallback)
+        models_to_try = [
+            "gemini-3-pro-image-preview",   # Nano Banana Pro - BEST QUALITY, try first!
+            "gemini-2.5-flash-image",       # Nano Banana - fallback if Pro fails
+        ]
+        
+        # Basic payload without resolution config (for fallback model)
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": image_data
+                            }
+                        },
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"]
+            }
+        }
+        
+        # Payload with aspect ratio AND 2K resolution for Nano Banana Pro
+        # Supports: "1K", "2K", "4K" - using 2K for sharp text while keeping reasonable speed
+        payload_with_config = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": image_data
+                            }
+                        },
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"],
+                "imageConfig": {
+                    "aspectRatio": "9:16",
+                    "imageSize": "2K"
+                }
+            }
+        }
+        
+        response = None
+        last_error = None
+        
+        for model_name in models_to_try:
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+            
+            # Use full config (aspect ratio + 2K resolution) for Nano Banana Pro
+            # Use basic payload for fallback model
+            current_payload = payload_with_config if "3-pro" in model_name else payload
+            
+            try:
+                response = requests.post(
+                    gemini_url,
+                    json=current_payload,
+                    headers={'Content-Type': 'application/json'},
+                    timeout=120  # Longer timeout for high-quality generation
+                )
+                
+                if response.status_code == 200:
+                    result_check = response.json()
+                    # Verify we got an image back
+                    if 'candidates' in result_check and len(result_check['candidates']) > 0:
+                        candidate = result_check['candidates'][0]
+                        if 'content' in candidate and 'parts' in candidate['content']:
+                            has_image = any('inlineData' in part for part in candidate['content']['parts'])
+                            if has_image:
+                                print(f"AI Image: Success with model {model_name}")
+                                break
+                    last_error = f"{model_name}: No image in response"
+                    print(f"AI Image: {model_name} returned no image, trying next...")
+                else:
+                    last_error = f"{model_name}: {response.status_code} - {response.text[:300]}"
+                    print(f"AI Image: Failed with {model_name}, trying next...")
+            except Exception as e:
+                last_error = f"{model_name}: {str(e)}"
+                print(f"AI Image: Exception with {model_name}: {e}")
+                continue
+        
+        if not response or response.status_code != 200:
+            error_detail = last_error or 'All models failed'
+            return jsonify({
+                'success': False, 
+                'error': f'Gemini API error',
+                'detail': error_detail
+            }), 500
+        
+        result = response.json()
+        
+        # Extract the generated image from response
+        generated_image = None
+        generated_mime = 'image/png'  # Default
+        if 'candidates' in result and len(result['candidates']) > 0:
+            candidate = result['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                for part in candidate['content']['parts']:
+                    if 'inlineData' in part:
+                        generated_image = part['inlineData']['data']
+                        generated_mime = part['inlineData'].get('mimeType', 'image/png')
+                        break
+        
+        if not generated_image:
+            # Try alternative response structure
+            if 'candidates' in result:
+                return jsonify({
+                    'success': False,
+                    'error': 'No image generated - model may not support image output',
+                    'debug': str(result)[:500]
+                }), 500
+            return jsonify({
+                'success': False, 
+                'error': 'Failed to generate image - unexpected response format',
+                'debug': str(result)[:500]
+            }), 500
+        
+        # Log the generation
+        user = get_current_user()
+        if user:
+            log_activity(user.id, 'ai_image_generated', {
+                'product_id': product_id,
+                'product_name': product.product_name[:50] if product.product_name else '',
+                'category': category
+            })
+        
+        return jsonify({
+            'success': True,
+            'image': f"data:{generated_mime};base64,{generated_image}",
+            'product_name': product.product_name,
+            'category': category,
+            'prompt_used': prompt[:200] + '...'
+        })
+        
+    except requests.Timeout:
+        return jsonify({'success': False, 'error': 'Gemini API timeout - please try again'}), 504
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 
 @app.route('/api/debug', methods=['GET'])
 def debug_api():
@@ -1939,6 +3044,7 @@ def image_proxy(product_id):
     
     # If direct fetch fails, return 404 (frontend will show placeholder)
     return '', 404
+
 
 # =============================================================================
 # KLING AI VIDEO GENERATION
@@ -2126,41 +3232,6 @@ def send_back_in_stock_alert(product):
 
 
 # =============================================================================
-# TRENDING & HIDDEN GEM DETECTION
-# =============================================================================
-
-def calculate_sales_velocity(current_7d, previous_7d):
-    """Calculate sales velocity as percentage change"""
-    if previous_7d == 0:
-        return 100.0 if current_7d > 0 else 0.0
-    return ((current_7d - previous_7d) / previous_7d) * 100
-
-
-def check_hidden_gem_criteria(product):
-    """Check if product meets hidden gem criteria"""
-    return (
-        product.sales_7d >= 50 and
-        product.influencer_count <= 50 and
-        product.commission_rate >= 10
-    )
-
-
-def detect_out_of_stock(product):
-    """Detect if product is likely out of stock based on sales velocity"""
-    was_oos = product.product_status in ['likely_oos', 'out_of_stock']
-    
-    if was_oos and product.sales_7d > 0:
-        return 'back_in_stock'
-    
-    if product.sales_7d == 0:
-        if (product.prev_sales_7d and product.prev_sales_7d > 20) or \
-           (product.sales_30d and product.sales_30d > 50):
-            return 'likely_oos'
-    
-    return 'active'
-
-
-# =============================================================================
 # AI VIDEO GENERATION ENDPOINTS
 # =============================================================================
 
@@ -2284,17 +3355,19 @@ def api_one_click_video():
     }
     """
     passkey = request.args.get('passkey')
-    if passkey != DEV_PASSKEY:
+    data = request.get_json() or {}
+    
+    # Check auth - accept passkey from query OR body
+    if passkey != DEV_PASSKEY and data.get('passkey') != DEV_PASSKEY:
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Unauthorized'}), 401
         if not user.is_admin:
             return jsonify({'error': 'Admin access required'}), 403
     
-    data = request.get_json() or {}
     product_id = data.get('product_id')
     category = data.get('category', 'default')
-    skip_image = data.get('skip_image', False)  # If true, use existing image
+    skip_image = data.get('skip_image', False)
     
     if not product_id:
         return jsonify({'error': 'product_id required'}), 400
@@ -2406,234 +3479,6 @@ def api_one_click_video():
         })
 
 
-# =============================================================================
-# TRENDING & ALERTS ENDPOINTS
-# =============================================================================
-
-@app.route('/api/trending-products', methods=['GET'])
-def api_trending_products():
-    """Get products with significant sales velocity changes"""
-    min_velocity = float(request.args.get('min_velocity', 20))
-    limit = int(request.args.get('limit', 20))
-    
-    products = Product.query.filter(
-        Product.sales_velocity >= min_velocity,
-        Product.product_status == 'active'
-    ).order_by(
-        Product.sales_velocity.desc()
-    ).limit(limit).all()
-    
-    return jsonify({
-        'success': True,
-        'count': len(products),
-        'products': [p.to_dict() for p in products]
-    })
-
-
-@app.route('/api/hidden-gems', methods=['GET'])
-def api_hidden_gems():
-    """Get products that meet hidden gem criteria"""
-    limit = int(request.args.get('limit', 50))
-    
-    products = Product.query.filter(
-        Product.sales_7d >= 50,
-        Product.influencer_count <= 50,
-        Product.commission_rate >= 10,
-        Product.product_status == 'active'
-    ).order_by(
-        Product.sales_7d.desc()
-    ).limit(limit).all()
-    
-    return jsonify({
-        'success': True,
-        'count': len(products),
-        'products': [p.to_dict() for p in products]
-    })
-
-
-@app.route('/api/detect-trends', methods=['POST'])
-def api_detect_trends():
-    """Run trend detection on all products - should be called by cron"""
-    passkey = request.args.get('passkey')
-    if passkey != DEV_PASSKEY:
-        return jsonify({'error': 'Invalid passkey'}), 401
-    
-    stats = {
-        'products_analyzed': 0,
-        'trending_up': 0,
-        'trending_down': 0,
-        'new_hidden_gems': 0,
-        'back_in_stock': 0,
-        'new_oos': 0,
-        'alerts_sent': 0
-    }
-    
-    products = Product.query.filter(Product.product_status != 'removed').all()
-    
-    for product in products:
-        stats['products_analyzed'] += 1
-        
-        if product.prev_sales_7d is not None:
-            velocity = calculate_sales_velocity(product.sales_7d, product.prev_sales_7d)
-            product.sales_velocity = velocity
-            
-            if velocity >= 20:
-                stats['trending_up'] += 1
-            elif velocity <= -20:
-                stats['trending_down'] += 1
-        
-        is_gem = check_hidden_gem_criteria(product)
-        was_gem = product.is_hidden_gem
-        product.is_hidden_gem = is_gem
-        
-        if is_gem and not was_gem and not product.gem_alert_sent:
-            if send_hidden_gem_alert(product):
-                product.gem_alert_sent = True
-                stats['new_hidden_gems'] += 1
-                stats['alerts_sent'] += 1
-        
-        oos_status = detect_out_of_stock(product)
-        
-        if oos_status == 'back_in_stock':
-            if not product.stock_alert_sent:
-                if send_back_in_stock_alert(product):
-                    product.stock_alert_sent = True
-                    stats['back_in_stock'] += 1
-                    stats['alerts_sent'] += 1
-            product.product_status = 'active'
-            product.status_changed_at = datetime.utcnow()
-        
-        elif oos_status == 'likely_oos' and product.product_status == 'active':
-            product.product_status = 'likely_oos'
-            product.status_changed_at = datetime.utcnow()
-            product.stock_alert_sent = False
-            stats['new_oos'] += 1
-    
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'stats': stats,
-        'message': f"Analyzed {stats['products_analyzed']} products"
-    })
-
-
-@app.route('/api/update-prev-sales', methods=['POST'])
-def api_update_prev_sales():
-    """Store current sales as previous sales - run BEFORE refreshing stats"""
-    passkey = request.args.get('passkey')
-    if passkey != DEV_PASSKEY:
-        return jsonify({'error': 'Invalid passkey'}), 401
-    
-    updated = 0
-    products = Product.query.all()
-    
-    for product in products:
-        product.prev_sales_7d = product.sales_7d
-        product.prev_sales_30d = product.sales_30d
-        updated += 1
-    
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'updated': updated,
-        'message': f'Stored previous sales for {updated} products'
-    })
-
-
-@app.route('/api/oos-products', methods=['GET'])
-def api_oos_products():
-    """Get products marked as out of stock"""
-    products = Product.query.filter(
-        Product.product_status.in_(['likely_oos', 'out_of_stock'])
-    ).order_by(
-        Product.status_changed_at.desc()
-    ).all()
-    
-    return jsonify({
-        'success': True,
-        'count': len(products),
-        'products': [p.to_dict() for p in products]
-    })
-
-
-@app.route('/api/generate-ai-image', methods=['POST'])
-def api_generate_ai_image():
-    """Generate AI lifestyle image for a product using Gemini"""
-    if not GEMINI_API_KEY:
-        return jsonify({'error': 'Gemini API not configured'}), 500
-    
-    passkey = request.args.get('passkey')
-    if passkey != DEV_PASSKEY:
-        user = get_current_user()
-        if not user:
-            return jsonify({'error': 'Unauthorized'}), 401
-        if not user.is_admin:
-            return jsonify({'error': 'Admin access required'}), 403
-    
-    data = request.get_json() or {}
-    product_id = data.get('product_id')
-    category = data.get('category', 'default')
-    
-    if not product_id:
-        return jsonify({'error': 'product_id required'}), 400
-    
-    product = Product.query.get(product_id)
-    if not product:
-        return jsonify({'error': 'Product not found'}), 404
-    
-    category_prompts = {
-        "beauty": f"Professional product photography of {product.product_name[:100]}, elegant beauty product shot, soft lighting, luxury aesthetic, clean background, 9:16 vertical format",
-        "home": f"Lifestyle home product photo of {product.product_name[:100]}, cozy modern home setting, warm natural lighting, 9:16 vertical format",
-        "fitness": f"Dynamic fitness product shot of {product.product_name[:100]}, gym or outdoor setting, energetic lighting, 9:16 vertical format",
-        "tech": f"Sleek technology product photo of {product.product_name[:100]}, modern minimalist setup, cool lighting, 9:16 vertical format",
-        "fashion": f"Fashion product photography of {product.product_name[:100]}, stylish lifestyle shot, natural lighting, 9:16 vertical format",
-        "default": f"Professional product lifestyle photography of {product.product_name[:100]}, clean modern aesthetic, soft studio lighting, 9:16 vertical TikTok format"
-    }
-    
-    prompt = category_prompts.get(category, category_prompts["default"])
-    
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key={GEMINI_API_KEY}"
-    
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseModalities": ["image", "text"],
-            "imageDimension": "PORTRAIT_9_16"
-        }
-    }
-    
-    try:
-        response = requests.post(url, json=payload, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        
-        candidates = data.get("candidates", [])
-        if candidates:
-            parts = candidates[0].get("content", {}).get("parts", [])
-            for part in parts:
-                if "inlineData" in part:
-                    mime_type = part["inlineData"].get("mimeType", "image/png")
-                    image_data = part["inlineData"].get("data", "")
-                    image_url = f"data:{mime_type};base64,{image_data}"
-                    
-                    product.ai_image_url = image_url
-                    db.session.commit()
-                    
-                    return jsonify({
-                        'success': True,
-                        'product_id': product_id,
-                        'image_url': image_url,
-                        'message': 'AI image generated successfully'
-                    })
-        
-        return jsonify({'error': 'No image generated'}), 500
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
 @app.route('/api/init-db', methods=['POST', 'GET'])
 def init_database():
     """Initialize database tables and add any missing columns"""
@@ -2653,22 +3498,6 @@ def init_database():
             ('product_rating', 'FLOAT DEFAULT 0'),
             ('review_count', 'INTEGER DEFAULT 0'),
             ('is_favorite', 'BOOLEAN DEFAULT FALSE'),
-            # Trending & Alert Detection columns
-            ('prev_sales_7d', 'INTEGER DEFAULT 0'),
-            ('prev_sales_30d', 'INTEGER DEFAULT 0'),
-            ('sales_velocity', 'FLOAT DEFAULT 0'),
-            ('product_status', "VARCHAR(20) DEFAULT 'active'"),
-            ('status_changed_at', 'TIMESTAMP'),
-            ('is_hidden_gem', 'BOOLEAN DEFAULT FALSE'),
-            # AI Generated Content columns
-            ('ai_image_url', 'TEXT'),
-            ('ai_video_url', 'TEXT'),
-            ('ai_video_task_id', 'VARCHAR(100)'),
-            ('ai_video_status', 'VARCHAR(20)'),
-            # Alert tracking columns
-            ('last_alert_sent', 'TIMESTAMP'),
-            ('gem_alert_sent', 'BOOLEAN DEFAULT FALSE'),
-            ('stock_alert_sent', 'BOOLEAN DEFAULT FALSE'),
         ]
         
         added = []

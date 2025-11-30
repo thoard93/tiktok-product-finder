@@ -1,36 +1,48 @@
-# render.yaml - Render deployment configuration
 services:
+  # Main Web Service
   - type: web
-    name: brand-hunter
-    env: python
+    name: tiktok-product-finder
+    runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --workers 3 --threads 2 --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tiktok-db
+          property: connectionString
 
-# Cron Jobs for automated tasks
-crons:
-  # Refresh ALL product stats daily (sales, influencers, videos, etc.)
-  # Runs at 2:00 AM UTC (after EchoTik updates at ~midnight UTC)
-  # = 9:00 PM EST / 8:00 PM CST
-  - name: stats-refresher
-    env: python
-    schedule: "0 2 * * *"
-    buildCommand: pip install -r requirements.txt
-    startCommand: python stats_refresher.py
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-
-  # Scan for NEW products from top brands
-  # Runs at 1:00 AM UTC (before stats refresh)
-  # = 8:00 PM EST / 7:00 PM CST
-  - name: daily-scanner
-    env: python
-    schedule: "0 1 * * *"
+  # Daily Scanner - Finds NEW products from top brands
+  - type: cron
+    name: daily-scanner
+    runtime: python
+    schedule: "0 1 * * *"  # 1:00 AM UTC daily
     buildCommand: pip install -r requirements.txt
     startCommand: python daily_scanner.py
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tiktok-db
+          property: connectionString
+
+  # Stats Refresher - Updates ALL existing product stats
+  - type: cron
+    name: stats-refresher
+    runtime: python
+    schedule: "0 2 * * *"  # 2:00 AM UTC daily
+    buildCommand: pip install -r requirements.txt
+    startCommand: python stats_refresher.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tiktok-db
+          property: connectionString
+
+databases:
+  - name: tiktok-db
+    plan: free
