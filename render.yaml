@@ -8,3 +8,29 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+
+# Cron Jobs for automated tasks
+crons:
+  # Refresh ALL product stats daily (sales, influencers, videos, etc.)
+  # Runs at 2:00 AM UTC (after EchoTik updates at ~midnight UTC)
+  # = 9:00 PM EST / 8:00 PM CST
+  - name: stats-refresher
+    env: python
+    schedule: "0 2 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python stats_refresher.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+  # Scan for NEW products from top brands
+  # Runs at 1:00 AM UTC (before stats refresh)
+  # = 8:00 PM EST / 7:00 PM CST
+  - name: daily-scanner
+    env: python
+    schedule: "0 1 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python daily_scanner.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
