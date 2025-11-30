@@ -1871,144 +1871,123 @@ def refresh_images():
     The batch API doesn't work reliably with EchoTik.
     
     Parameters:
-        batch: Number of products to process (default 50)
-        continuous: If 'true', keeps looping until all images are done (max 10 iterations)
+        batch: Number of products to process (default 50, max 100)
         force: If true, refresh ALL products regardless of current cache status
+    
+    NOTE: Continuous mode removed to prevent server blocking.
+    Frontend should call this endpoint multiple times for large refreshes.
     """
     try:
-        batch_size = request.args.get('batch', 50, type=int)
+        batch_size = min(request.args.get('batch', 50, type=int), 100)
         force = request.args.get('force', 'false').lower() == 'true'
-        continuous = request.args.get('continuous', 'false').lower() == 'true'
-        max_iterations = min(int(request.args.get('max_iterations', 10)), 20)
         
-        total_updated = 0
-        iteration = 0
-        
-        while True:
-            iteration += 1
-            
-            if force:
-                products = Product.query.filter(
-                    Product.image_url.isnot(None),
-                    Product.image_url != ''
-                ).limit(batch_size).all()
-            else:
-                # Products missing images - prioritize those with no cached_image_url
-                products = Product.query.filter(
-                    db.or_(
-                        # Has image_url but no cache
-                        db.and_(
-                            Product.image_url.isnot(None),
-                            Product.image_url != '',
-                            db.or_(
-                                Product.cached_image_url.is_(None),
-                                Product.cached_image_url == ''
-                            )
-                        ),
-                        # No image_url at all
+        if force:
+            products = Product.query.filter(
+                Product.image_url.isnot(None),
+                Product.image_url != ''
+            ).limit(batch_size).all()
+        else:
+            # Products missing images - prioritize those with no cached_image_url
+            products = Product.query.filter(
+                db.or_(
+                    # Has image_url but no cache
+                    db.and_(
+                        Product.image_url.isnot(None),
+                        Product.image_url != '',
                         db.or_(
-                            Product.image_url.is_(None),
-                            Product.image_url == ''
+                            Product.cached_image_url.is_(None),
+                            Product.cached_image_url == ''
                         )
+                    ),
+                    # No image_url at all
+                    db.or_(
+                        Product.image_url.is_(None),
+                        Product.image_url == ''
                     )
-                ).limit(batch_size).all()
-            
-            if not products:
-                break  # No more products to process
-            
-            updated_this_batch = 0
-            
-            for product in products:
-                try:
-                    # If product already has image_url, just get signed URL
-                    if product.image_url:
-                        parsed_url = parse_cover_url(product.image_url)
-                        if parsed_url:
-                            signed_urls = get_cached_image_urls([parsed_url])
-                            if signed_urls.get(parsed_url):
-                                product.cached_image_url = signed_urls[parsed_url]
-                                product.image_cached_at = datetime.utcnow()
-                                updated_this_batch += 1
-                        time.sleep(0.1)
-                        continue
-                    
-                    # No image_url - fetch from single-product API
-                    response = requests.get(
-                        f"{BASE_URL}/product/detail",
-                        params={'product_id': product.product_id},
-                        auth=get_auth(),
-                        timeout=30
-                    )
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get('code') == 0 and data.get('data'):
-                            p = data['data'] if isinstance(data['data'], dict) else data['data'][0] if data['data'] else {}
-                            
-                            cover_url = p.get('cover_url', '')
-                            if cover_url:
-                                parsed_url = parse_cover_url(cover_url)
-                                if parsed_url:
-                                    product.image_url = parsed_url
-                                    signed_urls = get_cached_image_urls([parsed_url])
-                                    if signed_urls.get(parsed_url):
-                                        product.cached_image_url = signed_urls[parsed_url]
-                                        product.image_cached_at = datetime.utcnow()
-                                        updated_this_batch += 1
-                            
-                            # BONUS: Also update commission and sales if they're 0
-                            if (product.commission_rate or 0) == 0:
-                                new_commission = float(p.get('product_commission_rate', 0) or 0)
-                                if new_commission > 0:
-                                    product.commission_rate = new_commission
-                            
-                            if (product.sales_7d or 0) <= 2:
-                                new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
-                                if new_sales_7d > 0:
-                                    product.sales_7d = new_sales_7d
-                                    product.sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
-                                    product.sales = int(p.get('total_sale_cnt', 0) or 0)
-                    
-                    time.sleep(0.3)  # Rate limiting for single-product calls
-                    
-                except Exception as e:
-                    print(f"Error refreshing image for {product.product_id}: {e}")
-                    continue
-            
-            db.session.commit()
-            total_updated += updated_this_batch
-            
-            print(f"🖼️ Image refresh iteration {iteration}: {updated_this_batch} updated, {total_updated} total")
-            
-            # Break conditions
-            if not continuous:
-                break
-            if iteration >= max_iterations:
-                break
-            if updated_this_batch == 0:
-                break
+                )
+            ).limit(batch_size).all()
         
-        # Count remaining
-        remaining = Product.query.filter(
-            db.or_(
-                Product.cached_image_url.is_(None),
-                Product.cached_image_url == ''
-            )
-        ).count()
+        if not products:
+            remaining = 0
+        else:
+            remaining = Product.query.filter(
+                db.or_(
+                    Product.cached_image_url.is_(None),
+                    Product.cached_image_url == ''
+                )
+            ).count() - len(products)
+        
+        updated = 0
+        
+        for product in products:
+            try:
+                # If product already has image_url, just get signed URL
+                if product.image_url:
+                    parsed_url = parse_cover_url(product.image_url)
+                    if parsed_url:
+                        signed_urls = get_cached_image_urls([parsed_url])
+                        if signed_urls.get(parsed_url):
+                            product.cached_image_url = signed_urls[parsed_url]
+                            product.image_cached_at = datetime.utcnow()
+                            updated += 1
+                    time.sleep(0.1)
+                    continue
+                
+                # No image_url - fetch from single-product API
+                response = requests.get(
+                    f"{BASE_URL}/product/detail",
+                    params={'product_id': product.product_id},
+                    auth=get_auth(),
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('code') == 0 and data.get('data'):
+                        p = data['data'] if isinstance(data['data'], dict) else data['data'][0] if data['data'] else {}
+                        
+                        cover_url = p.get('cover_url', '')
+                        if cover_url:
+                            parsed_url = parse_cover_url(cover_url)
+                            if parsed_url:
+                                product.image_url = parsed_url
+                                signed_urls = get_cached_image_urls([parsed_url])
+                                if signed_urls.get(parsed_url):
+                                    product.cached_image_url = signed_urls[parsed_url]
+                                    product.image_cached_at = datetime.utcnow()
+                                    updated += 1
+                        
+                        # BONUS: Also update commission and sales if they're 0
+                        if (product.commission_rate or 0) == 0:
+                            new_commission = float(p.get('product_commission_rate', 0) or 0)
+                            if new_commission > 0:
+                                product.commission_rate = new_commission
+                        
+                        if (product.sales_7d or 0) <= 2:
+                            new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                            if new_sales_7d > 0:
+                                product.sales_7d = new_sales_7d
+                                product.sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                                product.sales = int(p.get('total_sale_cnt', 0) or 0)
+                
+                time.sleep(0.2)  # Rate limiting
+                
+            except Exception as e:
+                print(f"Error refreshing image for {product.product_id}: {e}")
+                continue
+        
+        db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': f'Updated {total_updated} images in {iteration} iteration(s)',
-            'updated': total_updated,
-            'iterations': iteration,
-            'remaining': remaining,
-            'continuous': continuous
+            'updated': updated,
+            'processed': len(products),
+            'remaining': max(0, remaining)
         })
         
     except Exception as e:
-        import traceback
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/deep-refresh', methods=['GET', 'POST'])
