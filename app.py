@@ -1427,10 +1427,18 @@ def list_top_brands():
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    """Get all saved products with filtering options"""
+    """Get all saved products with filtering and pagination options"""
     min_influencers = request.args.get('min_influencers', 1, type=int)
     max_influencers = request.args.get('max_influencers', 500, type=int)
-    limit = request.args.get('limit', 500, type=int)
+    
+    # Pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    per_page = min(per_page, 100)  # Cap at 100 per page
+    
+    # Sort options
+    sort_by = request.args.get('sort', 'sales_7d')
+    sort_order = request.args.get('order', 'desc')
     
     # Date filter: today, yesterday, 7days, all
     date_filter = request.args.get('date', 'all')
@@ -1446,6 +1454,12 @@ def get_products():
     
     # Show ONLY out-of-stock products
     oos_only = request.args.get('oos_only', 'false').lower() == 'true'
+    
+    # Hidden gems filter
+    gems_only = request.args.get('gems_only', 'false').lower() == 'true'
+    
+    # Trending filter
+    trending_only = request.args.get('trending_only', 'false').lower() == 'true'
     
     # Build query - exclude unavailable products by default
     if oos_only:
@@ -1491,21 +1505,75 @@ def get_products():
     if favorites_only:
         query = query.filter(Product.is_favorite == True)
     
-    products = query.order_by(Product.sales_7d.desc()).limit(limit).all()
+    # Apply hidden gems filter (high sales, low influencers, good commission)
+    if gems_only:
+        query = query.filter(
+            Product.sales_7d >= 50,
+            Product.influencer_count <= 50,
+            Product.commission_rate >= 10
+        )
+    
+    # Apply trending filter (positive sales velocity)
+    if trending_only:
+        query = query.filter(Product.sales_velocity >= 20)
+    
+    # Get total count before pagination
+    total_count = query.count()
+    
+    # Apply sorting
+    sort_column = getattr(Product, sort_by, Product.sales_7d)
+    if sort_order == 'asc':
+        query = query.order_by(sort_column.asc())
+    else:
+        query = query.order_by(sort_column.desc())
+    
+    # Apply pagination
+    total_pages = (total_count + per_page - 1) // per_page
+    offset = (page - 1) * per_page
+    products = query.offset(offset).limit(per_page).all()
     
     # Count OOS products for UI
     oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
     
+    # Count gems
+    gems_count = Product.query.filter(
+        Product.sales_7d >= 50,
+        Product.influencer_count <= 50,
+        Product.commission_rate >= 10,
+        db.or_(Product.product_status == None, Product.product_status == 'active')
+    ).count()
+    
+    # Count trending
+    trending_count = Product.query.filter(
+        Product.sales_velocity >= 20,
+        db.or_(Product.product_status == None, Product.product_status == 'active')
+    ).count()
+    
     return jsonify({
         'products': [p.to_dict() for p in products],
-        'total': len(products),
-        'oos_count': oos_count,
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total_count': total_count,
+            'total_pages': total_pages,
+            'has_next': page < total_pages,
+            'has_prev': page > 1
+        },
+        'counts': {
+            'oos': oos_count,
+            'gems': gems_count,
+            'trending': trending_count
+        },
         'filters': {
             'date': date_filter,
             'brand': brand_search,
             'favorites_only': favorites_only,
             'show_oos': show_oos,
-            'oos_only': oos_only
+            'oos_only': oos_only,
+            'gems_only': gems_only,
+            'trending_only': trending_only,
+            'sort_by': sort_by,
+            'sort_order': sort_order
         }
     })
 
