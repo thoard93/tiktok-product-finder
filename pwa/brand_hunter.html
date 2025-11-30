@@ -1134,10 +1134,16 @@
         <div class="modal">
             <h3>🛠️ Tools</h3>
             <button class="modal-btn" onclick="refreshImages(false)">
-                <span class="icon">🖼️</span> Refresh Missing Images
+                <span class="icon">🖼️</span> Refresh Missing Images (50)
             </button>
-            <button class="modal-btn" onclick="refreshImages(true)">
-                <span class="icon">🔄</span> Force Refresh All Images
+            <button class="modal-btn" onclick="continuousImageRefresh()">
+                <span class="icon">🔄</span> Continuous Image Refresh (All)
+            </button>
+            <button class="modal-btn" onclick="deepRefresh(false)">
+                <span class="icon">📊</span> Deep Refresh Data (Fix 0% Commission)
+            </button>
+            <button class="modal-btn" onclick="deepRefresh(true)">
+                <span class="icon">⚡</span> Continuous Deep Refresh (All)
             </button>
             <button class="modal-btn" onclick="cleanupProducts()">
                 <span class="icon">🧹</span> Cleanup (Remove 0% Commission)
@@ -1917,6 +1923,57 @@
             }
         }
         
+        async function continuousImageRefresh() {
+            showToast('🔄 Starting continuous image refresh... This may take a while', false);
+            closeModal();
+            try {
+                const response = await fetch('/api/refresh-images?batch=100&continuous=true&max_iterations=15');
+                const data = await response.json();
+                const remaining = data.remaining || 0;
+                const extraMsg = remaining > 0 ? ` (${remaining} still need images - run again if needed)` : ' - All images done!';
+                showToast(`🖼️ Updated ${data.updated || 0} images in ${data.iterations || 1} iterations${extraMsg}`, false, 'success');
+                loadProducts();
+            } catch (err) {
+                showToast('Failed to refresh images: ' + (err.message || 'Unknown error'), true);
+            }
+        }
+        
+        async function deepRefresh(continuous = false) {
+            const msg = continuous 
+                ? '⚡ Starting continuous deep refresh... This fixes 0% commission and bad sales data. May take several minutes.'
+                : '📊 Deep refreshing data... This fixes 0% commission and bad sales data.';
+            showToast(msg, false);
+            closeModal();
+            try {
+                const url = continuous 
+                    ? '/api/deep-refresh?batch=50&continuous=true&max_iterations=20'
+                    : '/api/deep-refresh?batch=50';
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const stats = [];
+                    if (data.commission_fixed > 0) stats.push(`${data.commission_fixed} commissions fixed`);
+                    if (data.sales_fixed > 0) stats.push(`${data.sales_fixed} sales fixed`);
+                    if (data.images_fixed > 0) stats.push(`${data.images_fixed} images fixed`);
+                    
+                    const remaining = data.remaining || {};
+                    const remainingMsg = remaining.zero_commission > 0 
+                        ? ` (${remaining.zero_commission} still have 0% commission)`
+                        : '';
+                    
+                    const statsMsg = stats.length > 0 ? ` - ${stats.join(', ')}` : '';
+                    showToast(`✅ Deep refresh complete${statsMsg}${remainingMsg}`, false, 'success');
+                    loadProducts();
+                    loadStats();
+                } else {
+                    showToast('Deep refresh failed: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (err) {
+                showToast('Deep refresh failed: ' + (err.message || 'Unknown error'), true);
+            }
+        }
+        
         async function cleanupProducts() {
             if (!confirm('This will remove all products with 0% commission. Continue?')) return;
             closeModal();
@@ -1992,6 +2049,9 @@
                 const response = await fetch('/api/stats');
                 const data = await response.json();
                 
+                const dq = data.data_quality || {};
+                const sf = data.special_filters || {};
+                
                 alert(`📊 Database Stats:\n\n` +
                     `Total Products: ${data.total_products}\n` +
                     `Unique Brands: ${data.unique_brands}\n` +
@@ -1999,7 +2059,16 @@
                     `💎 Low (11-30): ${data.low_competition}\n` +
                     `📊 Medium (31-60): ${data.medium_competition}\n` +
                     `✅ Good (61-100): ${data.good_competition}\n` +
-                    `❤️ Favorites: ${data.favorites || 0}`);
+                    `❤️ Favorites: ${data.favorites || 0}\n\n` +
+                    `--- Special Filters ---\n` +
+                    `💎 Gems: ${sf.gems || 0}\n` +
+                    `📈 Trending: ${sf.trending || 0}\n` +
+                    `⚠️ Out of Stock: ${sf.out_of_stock || 0}\n\n` +
+                    `--- Data Quality ---\n` +
+                    `⚠️ 0% Commission: ${dq.zero_commission || 0}\n` +
+                    `⚠️ Low Sales (≤2): ${dq.low_sales || 0}\n` +
+                    `🖼️ Missing Images: ${dq.missing_images || 0}\n` +
+                    `\n💡 Use "Deep Refresh" to fix 0% commission and low sales data`);
             } catch (err) {
                 showToast('Failed to load stats', true);
             }
