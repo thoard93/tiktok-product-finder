@@ -2656,8 +2656,9 @@ def lookup_product():
             'product_rating': float(p.get('product_rating', 0) or 0),
             'review_count': int(p.get('review_count', 0) or 0),
             
-            # Image
+            # Image - get the raw URL first
             'image_url': parse_cover_url(p.get('cover_url', '')),
+            'cached_image_url': None,  # Will be filled below
             
             # Links
             'tiktok_url': f'https://www.tiktok.com/view/product/{product_id}',
@@ -2667,6 +2668,15 @@ def lookup_product():
             'in_database': existing is not None,
             'is_favorite': existing.is_favorite if existing else False,
         }
+        
+        # Try to get signed/cached image URL
+        if product_data['image_url']:
+            try:
+                signed_urls = get_cached_image_urls([product_data['image_url']])
+                if signed_urls.get(product_data['image_url']):
+                    product_data['cached_image_url'] = signed_urls[product_data['image_url']]
+            except Exception as e:
+                print(f"Failed to get signed image URL: {e}")
         
         # Calculate competition level
         inf = product_data['influencer_count']
@@ -2704,6 +2714,8 @@ def lookup_product():
                     commission_rate=product_data['commission_rate'],
                     price=product_data['price'],
                     image_url=product_data['image_url'],
+                    cached_image_url=product_data.get('cached_image_url'),
+                    image_cached_at=datetime.utcnow() if product_data.get('cached_image_url') else None,
                     video_count=product_data['video_count'],
                     video_7d=product_data['video_7d'],
                     video_30d=product_data['video_30d'],
@@ -2734,6 +2746,11 @@ def lookup_product():
             existing.video_30d = product_data['video_30d']
             existing.live_count = product_data['live_count']
             existing.views_count = product_data['views_count']
+            # Update image if we got a new one
+            if product_data.get('cached_image_url') and not existing.cached_image_url:
+                existing.image_url = product_data['image_url']
+                existing.cached_image_url = product_data['cached_image_url']
+                existing.image_cached_at = datetime.utcnow()
             existing.last_updated = datetime.utcnow()
             db.session.commit()
             saved = True
