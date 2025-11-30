@@ -2089,12 +2089,13 @@
         
         async function deepRefresh(continuous = false, force = false) {
             const msg = force 
-                ? '🔥 Force deep refreshing ALL matching products... This ignores cache and may take a long time.'
+                ? '🔥 Force deep refreshing ALL products... This may take several minutes for 3500+ products.'
                 : continuous 
-                    ? '⚡ Starting continuous deep refresh... This fixes 0% commission and bad sales data. May take several minutes.'
+                    ? '⚡ Starting continuous deep refresh... This fixes 0% commission and bad sales data.'
                     : '📊 Deep refreshing data... This fixes 0% commission and bad sales data.';
             showToast(msg, false);
             closeModal();
+            
             try {
                 let url = continuous 
                     ? '/api/deep-refresh?batch=50&continuous=true&max_iterations=40'
@@ -2108,27 +2109,49 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    const stats = [];
-                    if (data.total_matching > 0) stats.push(`${data.total_matching} need fixing`);
-                    if (data.total_processed > 0) stats.push(`${data.total_processed} processed`);
-                    if (data.commission_fixed > 0) stats.push(`${data.commission_fixed} commissions fixed`);
-                    if (data.sales_fixed > 0) stats.push(`${data.sales_fixed} sales fixed`);
-                    if (data.images_fixed > 0) stats.push(`${data.images_fixed} images fixed`);
+                    // Build detailed stats message
+                    let statsLines = [];
+                    
+                    if (data.total_matching !== undefined) {
+                        statsLines.push(`📊 ${data.total_matching} products matched criteria`);
+                    }
+                    if (data.total_processed > 0) {
+                        statsLines.push(`✓ ${data.total_processed} processed in ${data.iterations || 1} iterations`);
+                    }
+                    if (data.commission_fixed > 0) {
+                        statsLines.push(`💰 ${data.commission_fixed} commissions fixed`);
+                    }
+                    if (data.sales_fixed > 0) {
+                        statsLines.push(`📈 ${data.sales_fixed} sales fixed`);
+                    }
+                    if (data.images_fixed > 0) {
+                        statsLines.push(`🖼️ ${data.images_fixed} images fixed`);
+                    }
+                    if (data.api_errors > 0) {
+                        statsLines.push(`⚠️ ${data.api_errors} API errors (products may not exist)`);
+                    }
                     
                     const remaining = data.remaining || {};
-                    const remainingMsg = remaining.zero_commission > 0 
-                        ? ` (${remaining.zero_commission} still have 0% - API has no data for these)`
-                        : '';
+                    if (remaining.zero_commission > 0) {
+                        statsLines.push(`⏳ ${remaining.zero_commission} still have 0% commission`);
+                    }
                     
-                    const statsMsg = stats.length > 0 ? stats.join(', ') : 'No products to process';
-                    showToast(`✅ Deep refresh: ${statsMsg}${remainingMsg}`, false, 'success');
+                    // Show summary in alert for visibility
+                    const summary = statsLines.length > 0 ? statsLines.join('\n') : 'No products to process';
+                    alert('Deep Refresh Complete!\n\n' + summary);
+                    
+                    showToast(`✅ Deep refresh complete!`, false, 'success');
                     loadProducts();
                     loadStats();
                 } else {
                     showToast('Deep refresh failed: ' + (data.error || 'Unknown error'), true);
+                    if (data.traceback) {
+                        console.error('Deep refresh error:', data.traceback);
+                    }
                 }
             } catch (err) {
                 showToast('Deep refresh failed: ' + (err.message || 'Unknown error'), true);
+                console.error('Deep refresh error:', err);
             }
         }
         
