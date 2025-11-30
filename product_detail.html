@@ -261,7 +261,7 @@
                             <a href="${tiktokSearchUrl}" target="_blank" class="btn btn-secondary" style="background:#333;margin-top:8px;">🔍 Search Product Name</a>
                             <a href="${echotikUrl}" target="_blank" class="btn btn-outline">📊 View on EchoTik</a>
                             <button class="btn btn-outline" onclick="fetchLiveData('${p.product_id}')">🔄 Refresh Data</button>
-                            <button class="btn btn-outline" style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;color:#fff;" onclick="generateAIImage('${p.product_id}')">🎨 Generate AI Image</button>
+                            ${p.is_admin ? `<button class="btn btn-outline" style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;color:#fff;" onclick="generateAIImage('${p.product_id}')">🎨 Generate AI Image</button>` : ''}
                             <button class="btn btn-outline" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="markUnavailable('${p.product_id}')">❌ Mark Unavailable</button>
                         </div>
                         ${p.product_status && p.product_status !== 'active' ? `
@@ -537,8 +537,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// AI Image Generation
+// AI Image Generation with Crop Support
+let currentCropper = null;
+let currentProductId = null;
+let currentProductImageUrl = null;
+
 async function generateAIImage(productId) {
+    currentProductId = productId;
+    
     // Create modal if it doesn't exist
     let modal = document.getElementById('ai-image-modal');
     if (!modal) {
@@ -552,16 +558,22 @@ async function generateAIImage(productId) {
                         <button class="ai-modal-close" onclick="closeAIModal()">✕</button>
                     </div>
                     <div class="ai-modal-body" id="ai-modal-body">
-                        <div class="ai-loading">
-                            <div class="ai-spinner"></div>
-                            <p>Generating lifestyle image...</p>
-                            <p class="ai-hint">This may take 10-30 seconds</p>
-                        </div>
                     </div>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
+        
+        // Add Cropper.js CSS
+        const cropperCSS = document.createElement('link');
+        cropperCSS.rel = 'stylesheet';
+        cropperCSS.href = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css';
+        document.head.appendChild(cropperCSS);
+        
+        // Add Cropper.js script
+        const cropperScript = document.createElement('script');
+        cropperScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js';
+        document.head.appendChild(cropperScript);
         
         // Add modal styles
         const style = document.createElement('style');
@@ -723,23 +735,166 @@ async function generateAIImage(productId) {
                 font-size: 0.8rem;
                 margin-bottom: 1rem;
             }
+            .ai-crop-container {
+                width: 100%;
+                max-height: 45vh;
+                margin-bottom: 1rem;
+                background: #111;
+                border-radius: 8px;
+                overflow: hidden;
+                touch-action: none;
+            }
+            .ai-crop-container img {
+                max-width: 100%;
+                max-height: 45vh;
+                display: block;
+            }
+            .ai-crop-hint {
+                color: #888;
+                font-size: 0.85rem;
+                margin-bottom: 1rem;
+                text-align: center;
+            }
+            .ai-step-buttons {
+                display: flex;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
         `;
         document.head.appendChild(style);
     }
     
     modal.style.display = 'block';
+    
+    // Get product image URL - the img tag has class 'product-image' directly
+    const productImg = document.querySelector('img.product-image, .product-image-section img, img[src*="image-proxy"], img[src*="tiktok"]');
+    currentProductImageUrl = productImg ? productImg.src : null;
+    
+    if (!currentProductImageUrl) {
+        // Fallback: skip crop and generate directly using backend image fetch
+        document.getElementById('ai-modal-body').innerHTML = `
+            <div class="ai-loading">
+                <div class="ai-spinner"></div>
+                <p>Generating lifestyle image...</p>
+                <p class="ai-hint">Using product image from database</p>
+            </div>
+        `;
+        await callGenerateAPI(currentProductId, null);
+        return;
+    }
+    
+    // Show crop interface - crop is OPTIONAL, full image works great too
+    document.getElementById('ai-modal-body').innerHTML = `
+        <p class="ai-crop-hint">✂️ Optional: Drag to crop the product, or use full image</p>
+        <div class="ai-crop-container" id="crop-container">
+            <img id="crop-image" src="${currentProductImageUrl}" crossorigin="anonymous">
+        </div>
+        <div class="ai-step-buttons">
+            <button class="ai-btn ai-btn-primary" onclick="generateWithoutCrop()">
+                🚀 Generate Image
+            </button>
+            <button class="ai-btn ai-btn-secondary" onclick="generateWithCrop()">
+                ✂️ Use Cropped Area
+            </button>
+            <button class="ai-btn ai-btn-secondary" onclick="closeAIModal()">
+                ✕ Cancel
+            </button>
+        </div>
+    `;
+    
+    // Initialize Cropper after a short delay to ensure image is loaded
+    setTimeout(() => {
+        const cropImage = document.getElementById('crop-image');
+        if (cropImage && typeof Cropper !== 'undefined') {
+            if (currentCropper) {
+                currentCropper.destroy();
+            }
+            currentCropper = new Cropper(cropImage, {
+                viewMode: 2,
+                dragMode: 'crop',
+                aspectRatio: NaN, // Free aspect ratio
+                autoCropArea: 0.9,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: true,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
+                background: true,
+                responsive: true,
+                checkOrientation: false,
+                modal: true,
+                minContainerWidth: 200,
+                minContainerHeight: 200
+            });
+        }
+    }, 500);
+}
+
+async function generateWithCrop() {
+    let croppedImageData = null;
+    
+    if (currentCropper) {
+        // Get cropped canvas
+        const canvas = currentCropper.getCroppedCanvas({
+            maxWidth: 1024,
+            maxHeight: 1024,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high'
+        });
+        
+        if (canvas) {
+            croppedImageData = canvas.toDataURL('image/jpeg', 0.9);
+        }
+        
+        // Destroy cropper
+        currentCropper.destroy();
+        currentCropper = null;
+    }
+    
+    // Show loading state
     document.getElementById('ai-modal-body').innerHTML = `
         <div class="ai-loading">
             <div class="ai-spinner"></div>
             <p>Generating lifestyle image...</p>
-            <p class="ai-hint">Camera positioned back, open background, natural setting</p>
+            <p class="ai-hint">Using cropped product reference</p>
         </div>
     `;
     
+    await callGenerateAPI(currentProductId, croppedImageData);
+}
+
+async function generateWithoutCrop() {
+    if (currentCropper) {
+        currentCropper.destroy();
+        currentCropper = null;
+    }
+    
+    // Show loading state
+    document.getElementById('ai-modal-body').innerHTML = `
+        <div class="ai-loading">
+            <div class="ai-spinner"></div>
+            <p>Generating lifestyle image...</p>
+            <p class="ai-hint">Using full product image</p>
+        </div>
+    `;
+    
+    await callGenerateAPI(currentProductId, null);
+}
+
+async function callGenerateAPI(productId, croppedImageData) {
     try {
+        const requestBody = {};
+        if (croppedImageData) {
+            requestBody.cropped_image = croppedImageData;
+        }
+        
         const response = await fetch(`/api/generate-image/${productId}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
         });
         
         const data = await response.json();
