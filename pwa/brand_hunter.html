@@ -1139,11 +1139,14 @@
             <button class="modal-btn" onclick="continuousImageRefresh()">
                 <span class="icon">🔄</span> Continuous Image Refresh (All)
             </button>
-            <button class="modal-btn" onclick="deepRefresh(false)">
-                <span class="icon">📊</span> Deep Refresh Data (Fix 0% Commission)
+            <button class="modal-btn" onclick="deepRefresh(false, false)">
+                <span class="icon">📊</span> Deep Refresh Data (50 products)
             </button>
-            <button class="modal-btn" onclick="deepRefresh(true)">
-                <span class="icon">⚡</span> Continuous Deep Refresh (All)
+            <button class="modal-btn" onclick="deepRefresh(true, false)">
+                <span class="icon">⚡</span> Continuous Deep Refresh
+            </button>
+            <button class="modal-btn" onclick="deepRefresh(true, true)" style="background:#e67e22;">
+                <span class="icon">🔥</span> Force Deep Refresh (Ignore Cache)
             </button>
             <button class="modal-btn" onclick="cleanupNonPromotable()">
                 <span class="icon">🚫</span> Remove Non-Promotable (Live Only, etc.)
@@ -1164,8 +1167,28 @@
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
         <button class="nav-btn tools" id="tools-btn" onclick="openModal()">🛠️</button>
+        <button class="nav-btn secondary" onclick="openLookupModal()">🔎 Lookup</button>
         <button class="nav-btn secondary" onclick="loadProducts()">↻ Refresh</button>
         <button class="nav-btn primary" id="scan-btn" onclick="startScan()">🔍 Scan</button>
+    </div>
+    
+    <!-- Product Lookup Modal -->
+    <div class="modal-overlay" id="lookup-modal">
+        <div class="modal">
+            <h3>🔎 Product Lookup</h3>
+            <p style="color:#888; font-size:0.85rem; margin-bottom:15px;">Paste a TikTok product URL or product ID to look it up</p>
+            <input type="text" id="lookup-input" class="modal-input" placeholder="https://www.tiktok.com/view/product/... or product ID" style="width:100%; padding:12px; border-radius:8px; border:1px solid #444; background:#1a1a2e; color:#fff; margin-bottom:15px;">
+            <div style="display:flex; gap:10px;">
+                <button class="modal-btn" onclick="lookupProduct(false)" style="flex:1;">
+                    <span class="icon">👁️</span> Preview Only
+                </button>
+                <button class="modal-btn" onclick="lookupProduct(true)" style="flex:1; background:#27ae60;">
+                    <span class="icon">💾</span> Save to Database
+                </button>
+            </div>
+            <div id="lookup-result" style="margin-top:15px; display:none;"></div>
+            <button class="modal-close" onclick="closeLookupModal()">Close</button>
+        </div>
     </div>
     
     <!-- Toast -->
@@ -1407,7 +1430,24 @@
         }
         
         function updateCountsFromServer(counts) {
-            // These are shown in the date filter pills
+            // Update influencer filter pill counts
+            if (counts.all !== undefined) {
+                document.getElementById('count-all').textContent = counts.all;
+            }
+            if (counts.untapped !== undefined) {
+                document.getElementById('count-untapped').textContent = counts.untapped;
+            }
+            if (counts.low !== undefined) {
+                document.getElementById('count-low').textContent = counts.low;
+            }
+            if (counts.medium !== undefined) {
+                document.getElementById('count-medium').textContent = counts.medium;
+            }
+            if (counts.good !== undefined) {
+                document.getElementById('count-good').textContent = counts.good;
+            }
+            
+            // Update date filter pill counts (gems, trending, oos)
             if (counts.gems !== undefined) {
                 const gemsBtn = document.querySelector('[onclick*="gems"]');
                 if (gemsBtn) {
@@ -1896,6 +1936,79 @@
             document.getElementById('tools-modal').classList.remove('show');
         }
         
+        function openLookupModal() {
+            document.getElementById('lookup-modal').classList.add('show');
+            document.getElementById('lookup-input').value = '';
+            document.getElementById('lookup-result').style.display = 'none';
+            document.getElementById('lookup-input').focus();
+        }
+        
+        function closeLookupModal() {
+            document.getElementById('lookup-modal').classList.remove('show');
+        }
+        
+        async function lookupProduct(save = false) {
+            const input = document.getElementById('lookup-input').value.trim();
+            if (!input) {
+                showToast('Please enter a product URL or ID', true);
+                return;
+            }
+            
+            showToast('🔎 Looking up product...', false);
+            
+            try {
+                const url = `/api/lookup?url=${encodeURIComponent(input)}&save=${save}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    showToast('❌ ' + (data.error || 'Product not found'), true);
+                    return;
+                }
+                
+                const p = data.product;
+                const resultDiv = document.getElementById('lookup-result');
+                
+                // Format commission
+                let commission = p.commission_rate || 0;
+                if (commission > 0 && commission < 1) commission = commission * 100;
+                
+                resultDiv.innerHTML = `
+                    <div style="background:#1a1a2e; padding:15px; border-radius:8px; text-align:left;">
+                        <div style="display:flex; gap:15px; align-items:flex-start;">
+                            <img src="${p.image_url || '/static/placeholder.png'}" style="width:80px; height:80px; object-fit:cover; border-radius:8px; background:#333;">
+                            <div style="flex:1;">
+                                <div style="font-weight:bold; margin-bottom:5px;">${p.product_name || 'Unknown'}</div>
+                                <div style="font-size:0.85rem; color:#888;">${p.seller_name || 'Unknown seller'}</div>
+                                <div style="margin-top:8px; display:flex; gap:10px; flex-wrap:wrap;">
+                                    <span style="background:${commission >= 10 ? '#27ae60' : '#e74c3c'}; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${commission.toFixed(1)}%</span>
+                                    <span style="background:#3498db; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${p.influencer_count || 0} influencers</span>
+                                    <span style="background:#9b59b6; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${(p.sales_7d || 0).toLocaleString()}/7d</span>
+                                    <span style="background:#f39c12; padding:3px 8px; border-radius:4px; font-size:0.8rem;">$${(p.price || 0).toFixed(2)}</span>
+                                </div>
+                                <div style="margin-top:8px; font-size:0.8rem; color:#888;">${p.competition_label || ''}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:10px; display:flex; gap:10px;">
+                            <a href="${p.tiktok_url || '#'}" target="_blank" style="flex:1; text-align:center; background:#e94560; color:#fff; padding:8px; border-radius:6px; text-decoration:none;">View on TikTok</a>
+                            ${data.saved ? '<span style="flex:1; text-align:center; background:#27ae60; color:#fff; padding:8px; border-radius:6px;">✓ Saved!</span>' : ''}
+                        </div>
+                    </div>
+                `;
+                resultDiv.style.display = 'block';
+                
+                if (data.saved) {
+                    showToast('✅ Product saved to database!', false, 'success');
+                    loadProducts();
+                } else {
+                    showToast('✅ Product found!', false, 'success');
+                }
+                
+            } catch (err) {
+                showToast('❌ Lookup failed: ' + (err.message || 'Unknown error'), true);
+            }
+        }
+        
         async function refreshImages(force = false) {
             const msg = force ? '🔄 Force refreshing all images...' : '🖼️ Refreshing missing images...';
             showToast(msg, false);
@@ -1945,21 +2058,29 @@
             }
         }
         
-        async function deepRefresh(continuous = false) {
-            const msg = continuous 
-                ? '⚡ Starting continuous deep refresh... This fixes 0% commission and bad sales data. May take several minutes.'
-                : '📊 Deep refreshing data... This fixes 0% commission and bad sales data.';
+        async function deepRefresh(continuous = false, force = false) {
+            const msg = force 
+                ? '🔥 Force deep refreshing ALL matching products... This ignores cache and may take a long time.'
+                : continuous 
+                    ? '⚡ Starting continuous deep refresh... This fixes 0% commission and bad sales data. May take several minutes.'
+                    : '📊 Deep refreshing data... This fixes 0% commission and bad sales data.';
             showToast(msg, false);
             closeModal();
             try {
-                const url = continuous 
-                    ? '/api/deep-refresh?batch=50&continuous=true&max_iterations=30'
+                let url = continuous 
+                    ? '/api/deep-refresh?batch=50&continuous=true&max_iterations=40'
                     : '/api/deep-refresh?batch=50';
+                
+                if (force) {
+                    url += '&force=true';
+                }
+                
                 const response = await fetch(url);
                 const data = await response.json();
                 
                 if (data.success) {
                     const stats = [];
+                    if (data.total_matching > 0) stats.push(`${data.total_matching} need fixing`);
                     if (data.total_processed > 0) stats.push(`${data.total_processed} processed`);
                     if (data.commission_fixed > 0) stats.push(`${data.commission_fixed} commissions fixed`);
                     if (data.sales_fixed > 0) stats.push(`${data.sales_fixed} sales fixed`);
