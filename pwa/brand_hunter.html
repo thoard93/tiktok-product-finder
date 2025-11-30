@@ -2039,11 +2039,11 @@
         }
         
         async function refreshImages(force = false) {
-            const msg = force ? '🔄 Force refreshing all images...' : '🖼️ Refreshing missing images...';
+            const msg = force ? '🔄 Force refreshing all images...' : '🖼️ Refreshing missing images (50 at a time)...';
             showToast(msg, false);
             closeModal();
             try {
-                const url = force ? '/api/refresh-images?force=true&batch=100' : '/api/refresh-images?batch=100';
+                const url = force ? '/api/refresh-images?force=true&batch=50' : '/api/refresh-images?batch=50';
                 const response = await fetch(url);
                 const data = await response.json();
                 const remaining = data.remaining || 0;
@@ -2059,7 +2059,7 @@
             // Keep refreshing until no more images need updating (or max 5 batches)
             for (let i = 0; i < 5; i++) {
                 try {
-                    const response = await fetch('/api/refresh-images?batch=100');
+                    const response = await fetch('/api/refresh-images?batch=50');
                     const data = await response.json();
                     if (!data.remaining || data.remaining === 0 || data.updated === 0) {
                         break; // All done
@@ -2073,17 +2073,55 @@
         }
         
         async function continuousImageRefresh() {
-            showToast('🔄 Starting continuous image refresh... This may take a while', false);
+            showToast('🔄 Starting image refresh... Processing in batches of 50', false);
             closeModal();
+            
+            let totalUpdated = 0;
+            let iteration = 0;
+            const maxIterations = 20; // Max 1000 images (20 * 50)
+            
             try {
-                const response = await fetch('/api/refresh-images?batch=100&continuous=true&max_iterations=15');
-                const data = await response.json();
-                const remaining = data.remaining || 0;
-                const extraMsg = remaining > 0 ? ` (${remaining} still need images - run again if needed)` : ' - All images done!';
-                showToast(`🖼️ Updated ${data.updated || 0} images in ${data.iterations || 1} iterations${extraMsg}`, false, 'success');
+                while (iteration < maxIterations) {
+                    iteration++;
+                    
+                    const response = await fetch('/api/refresh-images?batch=50');
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        showToast('❌ Image refresh failed: ' + (data.error || 'Unknown error'), true);
+                        break;
+                    }
+                    
+                    totalUpdated += (data.updated || 0);
+                    const remaining = data.remaining || 0;
+                    
+                    // Update toast with progress
+                    showToast(`🖼️ Batch ${iteration}: ${totalUpdated} images updated, ${remaining} remaining...`, false);
+                    
+                    // Stop conditions
+                    if (remaining === 0) {
+                        showToast(`✅ All images refreshed! ${totalUpdated} total updated`, false, 'success');
+                        break;
+                    }
+                    if (data.updated === 0 && data.processed === 0) {
+                        showToast(`✅ Image refresh complete! ${totalUpdated} updated, ${remaining} have no source image`, false, 'success');
+                        break;
+                    }
+                    
+                    // Small delay to keep UI responsive
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                
+                if (iteration >= maxIterations) {
+                    const response = await fetch('/api/refresh-images?batch=1');
+                    const remaining = (await response.json()).remaining || 0;
+                    showToast(`⏸️ Paused after ${maxIterations} batches. ${totalUpdated} updated, ${remaining} remaining. Click again to continue.`, false, 'success');
+                }
+                
                 loadProducts();
+                
             } catch (err) {
-                showToast('Failed to refresh images: ' + (err.message || 'Unknown error'), true);
+                showToast('❌ Image refresh failed: ' + (err.message || 'Unknown error'), true);
             }
         }
         
