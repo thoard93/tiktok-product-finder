@@ -3479,6 +3479,229 @@ def api_one_click_video():
         })
 
 
+# =============================================================================
+# TRENDING, HIDDEN GEMS, OOS ENDPOINTS
+# =============================================================================
+
+@app.route('/api/trending-products', methods=['GET'])
+def api_trending_products():
+    """Get products with significant sales velocity changes"""
+    min_velocity = float(request.args.get('min_velocity', 20))
+    limit = int(request.args.get('limit', 100))
+    
+    products = Product.query.filter(
+        Product.sales_velocity >= min_velocity,
+        db.or_(Product.product_status == 'active', Product.product_status == None)
+    ).order_by(
+        Product.sales_velocity.desc()
+    ).limit(limit).all()
+    
+    return jsonify({
+        'success': True,
+        'count': len(products),
+        'products': [p.to_dict() for p in products]
+    })
+
+
+@app.route('/api/hidden-gems', methods=['GET'])
+def api_hidden_gems():
+    """Get products that meet hidden gem criteria: high sales, low influencers, good commission"""
+    limit = int(request.args.get('limit', 100))
+    min_sales = int(request.args.get('min_sales', 50))
+    max_influencers = int(request.args.get('max_influencers', 50))
+    min_commission = float(request.args.get('min_commission', 10))
+    
+    products = Product.query.filter(
+        Product.sales_7d >= min_sales,
+        Product.influencer_count <= max_influencers,
+        Product.commission_rate >= min_commission,
+        db.or_(Product.product_status == 'active', Product.product_status == None)
+    ).order_by(
+        Product.sales_7d.desc()
+    ).limit(limit).all()
+    
+    return jsonify({
+        'success': True,
+        'count': len(products),
+        'products': [p.to_dict() for p in products]
+    })
+
+
+@app.route('/api/oos-products', methods=['GET'])
+def api_oos_products():
+    """Get products that are likely out of stock"""
+    limit = int(request.args.get('limit', 100))
+    
+    products = Product.query.filter(
+        db.or_(
+            Product.product_status == 'likely_oos',
+            Product.product_status == 'out_of_stock'
+        )
+    ).order_by(
+        Product.sales_30d.desc()
+    ).limit(limit).all()
+    
+    return jsonify({
+        'success': True,
+        'count': len(products),
+        'products': [p.to_dict() for p in products]
+    })
+
+
+@app.route('/api/refresh-all-products', methods=['GET', 'POST'])
+def refresh_all_products():
+    """
+    Batch refresh ALL active products from EchoTik API.
+    Requires passkey authentication.
+    """
+    passkey = request.args.get('passkey') or (request.json.get('passkey') if request.is_json else None)
+    dev_passkey = os.environ.get('DEV_PASSKEY', '')
+    
+    if not dev_passkey or passkey != dev_passkey:
+        return jsonify({'success': False, 'error': 'Invalid or missing passkey'}), 403
+    
+    batch_size = min(int(request.args.get('batch_size', 20)), 50)
+    delay = float(request.args.get('delay', 1))
+    
+    try:
+        products = Product.query.filter(
+            db.or_(Product.product_status == 'active', Product.product_status == None)
+        ).all()
+        
+        total_products = len(products)
+        updated = 0
+        failed = 0
+        errors = []
+        
+        print(f"🔄 Starting batch refresh of {total_products} products...")
+        
+        for i in range(0, total_products, batch_size):
+            batch = products[i:i + batch_size]
+            product_ids = [p.product_id for p in batch]
+            
+            try:
+                response = requests.get(
+                    f"{BASE_URL}/product/detail",
+                    params={'product_ids': ','.join(product_ids)},
+                    auth=get_auth(),
+                    timeout=60
+                )
+                
+                if response.status_code != 200:
+                    errors.append(f"Batch {i//batch_size + 1}: API returned {response.status_code}")
+                    failed += len(batch)
+                    continue
+                
+                data = response.json()
+                if data.get('code') != 0:
+                    errors.append(f"Batch {i//batch_size + 1}: API error code {data.get('code')}")
+                    failed += len(batch)
+                    continue
+                
+                api_products = {str(p.get('product_id')): p for p in data.get('data', [])}
+                
+                for product in batch:
+                    p = api_products.get(str(product.product_id))
+                    if p:
+                        old_sales_7d = product.sales_7d or 0
+                        new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                        new_sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                        
+                        product.prev_sales_7d = old_sales_7d
+                        product.sales = int(p.get('total_sale_cnt', 0) or 0)
+                        product.sales_7d = new_sales_7d
+                        product.sales_30d = new_sales_30d
+                        product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
+                        product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
+                        product.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                        product.commission_rate = float(p.get('product_commission_rate', 0) or 0)
+                        product.price = float(p.get('spu_avg_price', 0) or 0)
+                        product.last_updated = datetime.utcnow()
+                        
+                        # Calculate velocity
+                        if old_sales_7d > 0:
+                            product.sales_velocity = ((new_sales_7d - old_sales_7d) / old_sales_7d) * 100
+                        
+                        # OOS detection
+                        if new_sales_7d == 0 and (old_sales_7d > 20 or new_sales_30d > 50):
+                            if product.product_status in ['active', None]:
+                                product.product_status = 'likely_oos'
+                        elif new_sales_7d > 0 and product.product_status == 'likely_oos':
+                            product.product_status = 'active'
+                        
+                        updated += 1
+                    else:
+                        failed += 1
+                
+                db.session.commit()
+                time.sleep(delay)
+                    
+            except Exception as e:
+                errors.append(f"Batch {i//batch_size + 1}: {str(e)}")
+                failed += len(batch)
+                db.session.rollback()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Batch refresh complete',
+            'total_products': total_products,
+            'updated': updated,
+            'failed': failed,
+            'errors': errors[:10]
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/detect-oos', methods=['GET', 'POST'])
+def detect_out_of_stock():
+    """Run out-of-stock detection on all existing products."""
+    passkey = request.args.get('passkey') or (request.json.get('passkey') if request.is_json else None)
+    dev_passkey = os.environ.get('DEV_PASSKEY', '')
+    
+    if not dev_passkey or passkey != dev_passkey:
+        return jsonify({'success': False, 'error': 'Invalid or missing passkey'}), 403
+    
+    threshold = int(request.args.get('threshold', 50))
+    
+    try:
+        candidates = Product.query.filter(
+            Product.sales_7d == 0,
+            Product.sales_30d > threshold,
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        ).all()
+        
+        marked_count = 0
+        marked_products = []
+        
+        for product in candidates:
+            product.product_status = 'likely_oos'
+            product.status_note = f'Auto-detected: 0 sales in 7d but {product.sales_30d} in 30d'
+            marked_count += 1
+            marked_products.append({
+                'product_id': product.product_id,
+                'product_name': product.product_name[:50] if product.product_name else 'Unknown',
+                'sales_30d': product.sales_30d
+            })
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'OOS detection complete',
+            'threshold': threshold,
+            'candidates_found': len(candidates),
+            'marked_as_oos': marked_count,
+            'products': marked_products[:20]
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/init-db', methods=['POST', 'GET'])
 def init_database():
     """Initialize database tables and add any missing columns"""
