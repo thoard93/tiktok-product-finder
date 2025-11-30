@@ -3338,7 +3338,7 @@ def api_oos_products():
 def refresh_all_products():
     """
     Batch refresh ALL active products from EchoTik API.
-    Requires passkey authentication.
+    Calls API one product at a time to avoid errors.
     """
     passkey = request.args.get('passkey') or (request.json.get('passkey') if request.is_json else None)
     dev_passkey = os.environ.get('DEV_PASSKEY', '')
@@ -3346,94 +3346,114 @@ def refresh_all_products():
     if not dev_passkey or passkey != dev_passkey:
         return jsonify({'success': False, 'error': 'Invalid or missing passkey'}), 403
     
-    batch_size = min(int(request.args.get('batch_size', 20)), 50)
-    delay = float(request.args.get('delay', 1))
+    # Limit how many products to refresh per call (to avoid timeout)
+    limit = min(int(request.args.get('limit', 100)), 500)
+    offset = int(request.args.get('offset', 0))
+    delay = float(request.args.get('delay', 0.5))
     
     try:
         products = Product.query.filter(
             db.or_(Product.product_status == 'active', Product.product_status == None)
-        ).all()
+        ).order_by(Product.last_updated.asc()).offset(offset).limit(limit).all()
         
         total_products = len(products)
         updated = 0
         failed = 0
         errors = []
         
-        print(f"🔄 Starting batch refresh of {total_products} products...")
+        print(f"🔄 Refreshing {total_products} products (offset={offset}, limit={limit})...")
         
-        for i in range(0, total_products, batch_size):
-            batch = products[i:i + batch_size]
-            product_ids = [p.product_id for p in batch]
-            
+        for i, product in enumerate(products):
             try:
+                # Call EchoTik API for single product
                 response = requests.get(
                     f"{BASE_URL}/product/detail",
-                    params={'product_ids': ','.join(product_ids)},
+                    params={'product_id': product.product_id},
                     auth=get_auth(),
-                    timeout=60
+                    timeout=30
                 )
                 
                 if response.status_code != 200:
-                    errors.append(f"Batch {i//batch_size + 1}: API returned {response.status_code}")
-                    failed += len(batch)
+                    failed += 1
+                    if len(errors) < 5:
+                        errors.append(f"Product {product.product_id}: HTTP {response.status_code}")
                     continue
                 
                 data = response.json()
                 if data.get('code') != 0:
-                    errors.append(f"Batch {i//batch_size + 1}: API error code {data.get('code')}")
-                    failed += len(batch)
+                    failed += 1
+                    if len(errors) < 5:
+                        errors.append(f"Product {product.product_id}: API code {data.get('code')}")
                     continue
                 
-                api_products = {str(p.get('product_id')): p for p in data.get('data', [])}
+                p = data.get('data', {})
+                if not p:
+                    failed += 1
+                    continue
                 
-                for product in batch:
-                    p = api_products.get(str(product.product_id))
-                    if p:
-                        old_sales_7d = product.sales_7d or 0
-                        new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
-                        new_sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
-                        
-                        product.prev_sales_7d = old_sales_7d
-                        product.sales = int(p.get('total_sale_cnt', 0) or 0)
-                        product.sales_7d = new_sales_7d
-                        product.sales_30d = new_sales_30d
-                        product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
-                        product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
-                        product.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
-                        product.commission_rate = float(p.get('product_commission_rate', 0) or 0)
-                        product.price = float(p.get('spu_avg_price', 0) or 0)
-                        product.last_updated = datetime.utcnow()
-                        
-                        # Calculate velocity
-                        if old_sales_7d > 0:
-                            product.sales_velocity = ((new_sales_7d - old_sales_7d) / old_sales_7d) * 100
-                        
-                        # OOS detection
-                        if new_sales_7d == 0 and (old_sales_7d > 20 or new_sales_30d > 50):
-                            if product.product_status in ['active', None]:
-                                product.product_status = 'likely_oos'
-                        elif new_sales_7d > 0 and product.product_status == 'likely_oos':
-                            product.product_status = 'active'
-                        
-                        updated += 1
-                    else:
-                        failed += 1
+                # Store previous values
+                old_sales_7d = product.sales_7d or 0
+                new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                new_sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
                 
-                db.session.commit()
+                # Update product stats
+                product.prev_sales_7d = old_sales_7d
+                product.sales = int(p.get('total_sale_cnt', 0) or 0)
+                product.sales_7d = new_sales_7d
+                product.sales_30d = new_sales_30d
+                product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
+                product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
+                product.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                product.commission_rate = float(p.get('product_commission_rate', 0) or 0)
+                product.price = float(p.get('spu_avg_price', 0) or 0)
+                product.video_count = int(p.get('total_video_cnt', 0) or 0)
+                product.video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
+                product.video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
+                product.last_updated = datetime.utcnow()
+                
+                # Calculate velocity
+                if old_sales_7d > 0:
+                    product.sales_velocity = ((new_sales_7d - old_sales_7d) / old_sales_7d) * 100
+                
+                # OOS detection
+                if new_sales_7d == 0 and (old_sales_7d > 20 or new_sales_30d > 50):
+                    if product.product_status in ['active', None]:
+                        product.product_status = 'likely_oos'
+                elif new_sales_7d > 0 and product.product_status == 'likely_oos':
+                    product.product_status = 'active'
+                
+                # Hidden gem detection
+                if new_sales_7d >= 50 and product.influencer_count <= 50 and product.commission_rate >= 10:
+                    product.is_hidden_gem = True
+                else:
+                    product.is_hidden_gem = False
+                
+                updated += 1
+                
+                # Commit every 10 products
+                if updated % 10 == 0:
+                    db.session.commit()
+                    print(f"   Progress: {updated}/{total_products}")
+                
+                # Rate limiting
                 time.sleep(delay)
                     
             except Exception as e:
-                errors.append(f"Batch {i//batch_size + 1}: {str(e)}")
-                failed += len(batch)
-                db.session.rollback()
+                failed += 1
+                if len(errors) < 5:
+                    errors.append(f"Product {product.product_id}: {str(e)}")
+        
+        db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': f'Batch refresh complete',
+            'message': f'Refresh complete',
             'total_products': total_products,
             'updated': updated,
             'failed': failed,
-            'errors': errors[:10]
+            'offset': offset,
+            'next_offset': offset + limit if updated > 0 else None,
+            'errors': errors
         })
         
     except Exception as e:

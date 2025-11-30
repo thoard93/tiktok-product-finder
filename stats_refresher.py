@@ -5,7 +5,7 @@ Runs at 2:00 AM UTC daily to update ALL existing product stats
 
 This script:
 1. Gets all active products from database
-2. Fetches latest stats from EchoTik API (in batches)
+2. Fetches latest stats from EchoTik API (one product at a time)
 3. Updates sales, influencer counts, etc.
 4. Calculates sales velocity for trending detection
 5. Detects out-of-stock products
@@ -41,8 +41,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
 
 # Settings
-BATCH_SIZE = 20  # Products per API call
-BATCH_DELAY = 1  # Seconds between batches
+API_DELAY = 0.5  # Seconds between API calls
 
 def get_auth():
     return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
@@ -132,24 +131,24 @@ def send_back_in_stock_alert(product):
 """
     return send_telegram_alert(message)
 
-def get_product_details(product_ids):
-    """Get product details from EchoTik API"""
+def get_product_details(product_id):
+    """Get product details from EchoTik API for a single product"""
     try:
         response = requests.get(
             f"{BASE_URL}/product/detail",
-            params={'product_ids': ','.join(product_ids)},
+            params={'product_id': product_id},
             auth=get_auth(),
-            timeout=60
+            timeout=30
         )
         
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == 0:
-                return {str(p.get('product_id')): p for p in data.get('data', [])}
-        return {}
+                return data.get('data', {})
+        return None
     except Exception as e:
-        print(f"Error fetching product details: {e}")
-        return {}
+        print(f"Error fetching product {product_id}: {e}")
+        return None
 
 def calculate_velocity(current, previous):
     """Calculate sales velocity percentage"""
@@ -182,102 +181,100 @@ def run_stats_refresh():
         stats['total_products'] = len(products)
         print(f"   Found {stats['total_products']} products to refresh")
         
-        # Process in batches
-        for i in range(0, len(products), BATCH_SIZE):
-            batch = products[i:i + BATCH_SIZE]
-            product_ids = [p.product_id for p in batch]
+        # Process each product individually
+        for i, product in enumerate(products):
+            # Progress update every 50 products
+            if i > 0 and i % 50 == 0:
+                print(f"   Progress: {i}/{stats['total_products']} ({stats['updated']} updated, {stats['failed']} failed)")
+                db.session.commit()
             
-            print(f"   Processing batch {i//BATCH_SIZE + 1}/{(len(products) + BATCH_SIZE - 1)//BATCH_SIZE}")
+            # Fetch latest data from API (one product at a time)
+            p = get_product_details(product.product_id)
             
-            # Fetch latest data from API
-            api_data = get_product_details(product_ids)
+            if not p:
+                stats['failed'] += 1
+                time.sleep(API_DELAY)
+                continue
             
-            for product in batch:
-                p = api_data.get(str(product.product_id))
+            # Store previous values for velocity calculation
+            old_sales_7d = product.sales_7d or 0
+            old_status = product.product_status
+            
+            # Update all stats
+            new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+            new_sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+            
+            product.prev_sales_7d = old_sales_7d
+            product.sales = int(p.get('total_sale_cnt', 0) or 0)
+            product.sales_7d = new_sales_7d
+            product.sales_30d = new_sales_30d
+            product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
+            product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
+            product.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+            product.commission_rate = float(p.get('product_commission_rate', 0) or 0)
+            product.price = float(p.get('spu_avg_price', 0) or 0)
+            product.video_count = int(p.get('total_video_cnt', 0) or 0)
+            product.video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
+            product.video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
+            product.live_count = int(p.get('total_live_cnt', 0) or 0)
+            product.views_count = int(p.get('total_views_cnt', 0) or 0)
+            product.product_rating = float(p.get('product_rating', 0) or 0)
+            product.review_count = int(p.get('review_count', 0) or 0)
+            product.last_updated = datetime.utcnow()
+            
+            # Calculate sales velocity
+            if old_sales_7d > 0:
+                velocity = calculate_velocity(new_sales_7d, old_sales_7d)
+                product.sales_velocity = velocity
                 
-                if not p:
-                    stats['failed'] += 1
-                    continue
-                
-                # Store previous values for velocity calculation
-                old_sales_7d = product.sales_7d or 0
-                old_status = product.product_status
-                
-                # Update all stats
-                new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
-                new_sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
-                
-                product.prev_sales_7d = old_sales_7d
-                product.sales = int(p.get('total_sale_cnt', 0) or 0)
-                product.sales_7d = new_sales_7d
-                product.sales_30d = new_sales_30d
-                product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
-                product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
-                product.influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
-                product.commission_rate = float(p.get('product_commission_rate', 0) or 0)
-                product.price = float(p.get('spu_avg_price', 0) or 0)
-                product.video_count = int(p.get('total_video_cnt', 0) or 0)
-                product.video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
-                product.video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
-                product.live_count = int(p.get('total_live_cnt', 0) or 0)
-                product.views_count = int(p.get('total_views_cnt', 0) or 0)
-                product.product_rating = float(p.get('product_rating', 0) or 0)
-                product.review_count = int(p.get('review_count', 0) or 0)
-                product.last_updated = datetime.utcnow()
-                
-                # Calculate sales velocity
-                if old_sales_7d > 0:
-                    velocity = calculate_velocity(new_sales_7d, old_sales_7d)
-                    product.sales_velocity = velocity
-                    
-                    if velocity >= 20:
-                        stats['trending_up'] += 1
-                    elif velocity <= -20:
-                        stats['trending_down'] += 1
-                
-                # Out-of-stock detection
-                if new_sales_7d == 0 and (old_sales_7d > 20 or new_sales_30d > 50):
-                    if product.product_status in ['active', None]:
-                        product.product_status = 'likely_oos'
-                        product.status_changed_at = datetime.utcnow()
-                        product.status_note = f'Auto-detected: was selling {old_sales_7d}/7d, now 0'
-                        stats['new_oos'] += 1
-                
-                # Back in stock detection
-                elif new_sales_7d > 0 and old_status == 'likely_oos':
-                    product.product_status = 'active'
+                if velocity >= 20:
+                    stats['trending_up'] += 1
+                elif velocity <= -20:
+                    stats['trending_down'] += 1
+            
+            # Out-of-stock detection
+            if new_sales_7d == 0 and (old_sales_7d > 20 or new_sales_30d > 50):
+                if product.product_status in ['active', None]:
+                    product.product_status = 'likely_oos'
                     product.status_changed_at = datetime.utcnow()
-                    product.status_note = f'Back in stock: now selling {new_sales_7d}/7d'
-                    stats['back_in_stock'] += 1
-                    
-                    # Send alert
-                    if not product.stock_alert_sent:
-                        if send_back_in_stock_alert(product):
-                            product.stock_alert_sent = True
-                            product.last_alert_sent = datetime.utcnow()
-                            stats['alerts_sent'] += 1
+                    product.status_note = f'Auto-detected: was selling {old_sales_7d}/7d, now 0'
+                    stats['new_oos'] += 1
+            
+            # Back in stock detection
+            elif new_sales_7d > 0 and old_status == 'likely_oos':
+                product.product_status = 'active'
+                product.status_changed_at = datetime.utcnow()
+                product.status_note = f'Back in stock: now selling {new_sales_7d}/7d'
+                stats['back_in_stock'] += 1
                 
-                # Hidden gem detection
-                is_gem = (
-                    new_sales_7d >= 50 and
-                    product.influencer_count <= 50 and
-                    product.commission_rate >= 10
-                )
-                
-                was_gem = product.is_hidden_gem
-                product.is_hidden_gem = is_gem
-                
-                if is_gem and not was_gem and not product.gem_alert_sent:
-                    stats['new_gems'] += 1
-                    if send_hidden_gem_alert(product):
-                        product.gem_alert_sent = True
+                # Send alert
+                if not product.stock_alert_sent:
+                    if send_back_in_stock_alert(product):
+                        product.stock_alert_sent = True
                         product.last_alert_sent = datetime.utcnow()
                         stats['alerts_sent'] += 1
-                
-                stats['updated'] += 1
             
-            db.session.commit()
-            time.sleep(BATCH_DELAY)
+            # Hidden gem detection
+            is_gem = (
+                new_sales_7d >= 50 and
+                product.influencer_count <= 50 and
+                product.commission_rate >= 10
+            )
+            
+            was_gem = product.is_hidden_gem
+            product.is_hidden_gem = is_gem
+            
+            if is_gem and not was_gem and not product.gem_alert_sent:
+                stats['new_gems'] += 1
+                if send_hidden_gem_alert(product):
+                    product.gem_alert_sent = True
+                    product.last_alert_sent = datetime.utcnow()
+                    stats['alerts_sent'] += 1
+            
+            stats['updated'] += 1
+            
+            # Rate limiting
+            time.sleep(API_DELAY)
         
         db.session.commit()
     
