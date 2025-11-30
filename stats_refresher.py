@@ -52,36 +52,40 @@ class Product(db.Model):
     product_id = db.Column(db.String(50), primary_key=True)
     product_name = db.Column(db.String(500))
     seller_id = db.Column(db.String(50))
-    seller_name = db.Column(db.String(200))
-    category = db.Column(db.String(100))
-    price = db.Column(db.Float)
-    commission_rate = db.Column(db.Float)
-    sales = db.Column(db.Integer)
-    sales_7d = db.Column(db.Integer)
-    sales_30d = db.Column(db.Integer)
-    prev_sales_7d = db.Column(db.Integer)
-    prev_sales_30d = db.Column(db.Integer)
-    sales_velocity = db.Column(db.Float)
-    gmv = db.Column(db.Float)
-    gmv_30d = db.Column(db.Float)
-    influencer_count = db.Column(db.Integer)
-    video_count = db.Column(db.Integer)
-    video_7d = db.Column(db.Integer)
-    video_30d = db.Column(db.Integer)
-    live_count = db.Column(db.Integer)
-    views_count = db.Column(db.Integer)
-    product_rating = db.Column(db.Float)
-    review_count = db.Column(db.Integer)
+    seller_name = db.Column(db.String(255))
+    gmv = db.Column(db.Float, default=0)
+    gmv_30d = db.Column(db.Float, default=0)
+    sales = db.Column(db.Integer, default=0)
+    sales_7d = db.Column(db.Integer, default=0)
+    sales_30d = db.Column(db.Integer, default=0)
+    influencer_count = db.Column(db.Integer, default=0)
+    commission_rate = db.Column(db.Float, default=0)
+    price = db.Column(db.Float, default=0)
     image_url = db.Column(db.Text)
     cached_image_url = db.Column(db.Text)
-    product_status = db.Column(db.String(20), default='active')
-    status_changed_at = db.Column(db.DateTime)
-    status_note = db.Column(db.Text)
-    is_hidden_gem = db.Column(db.Boolean, default=False)
-    gem_alert_sent = db.Column(db.Boolean, default=False)
-    stock_alert_sent = db.Column(db.Boolean, default=False)
-    last_alert_sent = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    image_cached_at = db.Column(db.DateTime)
+    
+    # Video/Live stats
+    video_count = db.Column(db.Integer, default=0)
+    video_7d = db.Column(db.Integer, default=0)
+    video_30d = db.Column(db.Integer, default=0)
+    live_count = db.Column(db.Integer, default=0)
+    views_count = db.Column(db.Integer, default=0)
+    product_rating = db.Column(db.Float, default=0)
+    review_count = db.Column(db.Integer, default=0)
+    
+    # User features
+    is_favorite = db.Column(db.Boolean, default=False)
+    product_status = db.Column(db.String(50), default='active')
+    status_note = db.Column(db.String(255))
+    
+    # For trending/OOS detection
+    prev_sales_7d = db.Column(db.Integer, default=0)
+    prev_sales_30d = db.Column(db.Integer, default=0)
+    sales_velocity = db.Column(db.Float, default=0)
+    
+    scan_type = db.Column(db.String(50), default='brand_hunter')
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
 
 def send_telegram_alert(message):
@@ -168,8 +172,7 @@ def run_stats_refresh():
         'trending_down': 0,
         'new_gems': 0,
         'new_oos': 0,
-        'back_in_stock': 0,
-        'alerts_sent': 0
+        'back_in_stock': 0
     }
     
     with app.app_context():
@@ -236,40 +239,27 @@ def run_stats_refresh():
             if new_sales_7d == 0 and (old_sales_7d > 20 or new_sales_30d > 50):
                 if product.product_status in ['active', None]:
                     product.product_status = 'likely_oos'
-                    product.status_changed_at = datetime.utcnow()
                     product.status_note = f'Auto-detected: was selling {old_sales_7d}/7d, now 0'
                     stats['new_oos'] += 1
             
             # Back in stock detection
             elif new_sales_7d > 0 and old_status == 'likely_oos':
                 product.product_status = 'active'
-                product.status_changed_at = datetime.utcnow()
                 product.status_note = f'Back in stock: now selling {new_sales_7d}/7d'
                 stats['back_in_stock'] += 1
-                
-                # Send alert
-                if not product.stock_alert_sent:
-                    if send_back_in_stock_alert(product):
-                        product.stock_alert_sent = True
-                        product.last_alert_sent = datetime.utcnow()
-                        stats['alerts_sent'] += 1
+                send_back_in_stock_alert(product)
             
-            # Hidden gem detection
+            # Hidden gem detection (just send alert, don't track state)
             is_gem = (
                 new_sales_7d >= 50 and
                 product.influencer_count <= 50 and
                 product.commission_rate >= 10
             )
             
-            was_gem = product.is_hidden_gem
-            product.is_hidden_gem = is_gem
-            
-            if is_gem and not was_gem and not product.gem_alert_sent:
+            if is_gem:
                 stats['new_gems'] += 1
-                if send_hidden_gem_alert(product):
-                    product.gem_alert_sent = True
-                    product.last_alert_sent = datetime.utcnow()
-                    stats['alerts_sent'] += 1
+                # Optionally send alert (will send every day for gems)
+                # send_hidden_gem_alert(product)
             
             stats['updated'] += 1
             
@@ -278,16 +268,28 @@ def run_stats_refresh():
         
         db.session.commit()
     
+    # Send summary to Telegram
+    summary = f"""📊 Daily Stats Refresh Complete
+
+✅ Updated: {stats['updated']:,} / {stats['total_products']:,}
+❌ Failed: {stats['failed']}
+📈 Trending Up: {stats['trending_up']}
+📉 Trending Down: {stats['trending_down']}
+💎 Hidden Gems: {stats['new_gems']}
+🚫 New OOS: {stats['new_oos']}
+🔙 Back in Stock: {stats['back_in_stock']}"""
+    
+    send_telegram_alert(summary)
+    
     print(f"✅ Stats refresh complete!")
     print(f"   Total products: {stats['total_products']}")
     print(f"   Updated: {stats['updated']}")
     print(f"   Failed: {stats['failed']}")
     print(f"   Trending up (≥20%): {stats['trending_up']}")
     print(f"   Trending down (≤-20%): {stats['trending_down']}")
-    print(f"   New hidden gems: {stats['new_gems']}")
+    print(f"   Hidden gems: {stats['new_gems']}")
     print(f"   New OOS detected: {stats['new_oos']}")
     print(f"   Back in stock: {stats['back_in_stock']}")
-    print(f"   Alerts sent: {stats['alerts_sent']}")
     
     return stats
 
