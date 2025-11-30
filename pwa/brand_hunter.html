@@ -1178,18 +1178,30 @@
             <h3>🔎 Product Lookup</h3>
             <p style="color:#888; font-size:0.85rem; margin-bottom:15px;">Paste a TikTok product URL or product ID to look it up</p>
             <input type="text" id="lookup-input" class="modal-input" placeholder="https://www.tiktok.com/view/product/... or product ID" style="width:100%; padding:12px; border-radius:8px; border:1px solid #444; background:#1a1a2e; color:#fff; margin-bottom:15px;">
-            <div style="display:flex; gap:10px;">
-                <button class="modal-btn" onclick="lookupProduct(false)" style="flex:1;">
+            <div id="lookup-buttons" style="display:flex; gap:10px;">
+                <button class="modal-btn" id="preview-btn" onclick="lookupProduct(false)" style="flex:1;">
                     <span class="icon">👁️</span> Preview Only
                 </button>
-                <button class="modal-btn" onclick="lookupProduct(true)" style="flex:1; background:#27ae60;">
+                <button class="modal-btn" id="save-btn" onclick="lookupProduct(true)" style="flex:1; background:#27ae60;">
                     <span class="icon">💾</span> Save to Database
                 </button>
+            </div>
+            <div id="lookup-loading" style="display:none; text-align:center; padding:20px;">
+                <div style="font-size:2rem; animation: spin 1s linear infinite;">🔄</div>
+                <p style="margin-top:10px; color:#888;">Looking up product...</p>
+                <p style="font-size:0.8rem; color:#666;">Resolving link and fetching data from EchoTik</p>
             </div>
             <div id="lookup-result" style="margin-top:15px; display:none;"></div>
             <button class="modal-close" onclick="closeLookupModal()">Close</button>
         </div>
     </div>
+    
+    <style>
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
     
     <!-- Toast -->
     <div id="toast" class="toast"></div>
@@ -1954,12 +1966,19 @@
                 return;
             }
             
-            showToast('🔎 Looking up product...', false);
+            // Show loading state
+            document.getElementById('lookup-buttons').style.display = 'none';
+            document.getElementById('lookup-loading').style.display = 'block';
+            document.getElementById('lookup-result').style.display = 'none';
             
             try {
                 const url = `/api/lookup?url=${encodeURIComponent(input)}&save=${save}`;
                 const response = await fetch(url);
                 const data = await response.json();
+                
+                // Hide loading
+                document.getElementById('lookup-loading').style.display = 'none';
+                document.getElementById('lookup-buttons').style.display = 'flex';
                 
                 if (!data.success) {
                     showToast('❌ ' + (data.error || 'Product not found'), true);
@@ -1973,14 +1992,21 @@
                 let commission = p.commission_rate || 0;
                 if (commission > 0 && commission < 1) commission = commission * 100;
                 
+                // Get best available image - prefer signed/cached URL
+                const imageUrl = p.cached_image_url || p.image_url || '';
+                const imageStyle = imageUrl 
+                    ? `background-image:url('${imageUrl}'); background-size:cover; background-position:center;`
+                    : 'background:#333; display:flex; align-items:center; justify-content:center;';
+                const imagePlaceholder = imageUrl ? '' : '<span style="font-size:2rem;">📦</span>';
+                
                 resultDiv.innerHTML = `
                     <div style="background:#1a1a2e; padding:15px; border-radius:8px; text-align:left;">
                         <div style="display:flex; gap:15px; align-items:flex-start;">
-                            <img src="${p.image_url || '/static/placeholder.png'}" style="width:80px; height:80px; object-fit:cover; border-radius:8px; background:#333;">
-                            <div style="flex:1;">
-                                <div style="font-weight:bold; margin-bottom:5px;">${p.product_name || 'Unknown'}</div>
+                            <div style="width:80px; height:80px; border-radius:8px; flex-shrink:0; ${imageStyle}">${imagePlaceholder}</div>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:bold; margin-bottom:5px; word-wrap:break-word;">${p.product_name || 'Unknown'}</div>
                                 <div style="font-size:0.85rem; color:#888;">${p.seller_name || 'Unknown seller'}</div>
-                                <div style="margin-top:8px; display:flex; gap:10px; flex-wrap:wrap;">
+                                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
                                     <span style="background:${commission >= 10 ? '#27ae60' : '#e74c3c'}; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${commission.toFixed(1)}%</span>
                                     <span style="background:#3498db; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${p.influencer_count || 0} influencers</span>
                                     <span style="background:#9b59b6; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${(p.sales_7d || 0).toLocaleString()}/7d</span>
@@ -2005,6 +2031,9 @@
                 }
                 
             } catch (err) {
+                // Hide loading on error
+                document.getElementById('lookup-loading').style.display = 'none';
+                document.getElementById('lookup-buttons').style.display = 'flex';
                 showToast('❌ Lookup failed: ' + (err.message || 'Unknown error'), true);
             }
         }
