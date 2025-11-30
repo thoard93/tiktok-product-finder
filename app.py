@@ -1578,6 +1578,43 @@ def get_products():
     except Exception:
         trending_count = 0
     
+    # Get influencer category counts for filter pills
+    # Apply same exclusions as main query (non-promotable products)
+    base_filter = db.and_(
+        ~Product.product_name.ilike('%not for sale%'),
+        ~Product.product_name.ilike('%live only%'),
+        ~Product.product_name.ilike('%sample%not for sale%'),
+        ~Product.product_name.ilike('%display only%'),
+        ~Product.product_name.ilike('%coming soon%'),
+        db.or_(Product.product_status == None, Product.product_status == 'active')
+    )
+    
+    untapped_count = Product.query.filter(
+        base_filter,
+        Product.influencer_count >= 1,
+        Product.influencer_count <= 10
+    ).count()
+    
+    low_count = Product.query.filter(
+        base_filter,
+        Product.influencer_count >= 11,
+        Product.influencer_count <= 30
+    ).count()
+    
+    medium_count = Product.query.filter(
+        base_filter,
+        Product.influencer_count >= 31,
+        Product.influencer_count <= 60
+    ).count()
+    
+    good_count = Product.query.filter(
+        base_filter,
+        Product.influencer_count >= 61,
+        Product.influencer_count <= 100
+    ).count()
+    
+    all_count = untapped_count + low_count + medium_count + good_count
+    
     return jsonify({
         'products': [p.to_dict() for p in products],
         'pagination': {
@@ -1591,7 +1628,12 @@ def get_products():
         'counts': {
             'oos': oos_count,
             'gems': gems_count,
-            'trending': trending_count
+            'trending': trending_count,
+            'all': all_count,
+            'untapped': untapped_count,
+            'low': low_count,
+            'medium': medium_count,
+            'good': good_count
         },
         'filters': {
             'date': date_filter,
@@ -1980,14 +2022,16 @@ def deep_refresh_products():
         batch: Number of products to process (default 50)
         fix_zero_commission: Only fix products with 0% commission (default: true)
         fix_low_sales: Only fix products with sales_7d <= 2 (default: true)
-        continuous: Keep running until done (max 10 iterations)
+        continuous: Keep running until done (max iterations)
+        force: Ignore last_updated check (process all matching products)
     """
     try:
         batch_size = min(int(request.args.get('batch', 50)), 100)
         fix_zero_commission = request.args.get('fix_zero_commission', 'true').lower() == 'true'
         fix_low_sales = request.args.get('fix_low_sales', 'true').lower() == 'true'
         continuous = request.args.get('continuous', 'false').lower() == 'true'
-        max_iterations = min(int(request.args.get('max_iterations', 10)), 20)
+        force_all = request.args.get('force', 'false').lower() == 'true'
+        max_iterations = min(int(request.args.get('max_iterations', 10)), 50)  # Increased max
         
         total_updated = 0
         total_commission_fixed = 0
@@ -1999,28 +2043,36 @@ def deep_refresh_products():
         # Track when we started - only process products not updated since then
         refresh_started = datetime.utcnow()
         
+        # Build base conditions for products needing fixes
+        base_conditions = []
+        if fix_zero_commission:
+            base_conditions.append(db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None)))
+        if fix_low_sales:
+            base_conditions.append(Product.sales_7d <= 2)
+        
+        if not base_conditions:
+            base_conditions.append(Product.product_id.isnot(None))
+        
+        # Count total products matching the criteria (for diagnostics)
+        total_matching = Product.query.filter(db.or_(*base_conditions)).count()
+        
         while True:
             iteration += 1
             
-            # Build query for products needing fixes
-            # IMPORTANT: Exclude products we've already processed this session
-            conditions = []
-            if fix_zero_commission:
-                conditions.append(db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None)))
-            if fix_low_sales:
-                conditions.append(Product.sales_7d <= 2)
-            
-            if not conditions:
-                conditions.append(Product.product_id.isnot(None))  # Process all
-            
-            # Only get products NOT updated during this refresh session
-            products = Product.query.filter(
-                db.or_(*conditions),
-                db.or_(
-                    Product.last_updated.is_(None),
-                    Product.last_updated < refresh_started
-                )
-            ).limit(batch_size).all()
+            # Build query - optionally skip the last_updated check
+            if force_all:
+                products = Product.query.filter(
+                    db.or_(*base_conditions)
+                ).limit(batch_size).all()
+            else:
+                # Only get products NOT updated during this refresh session
+                products = Product.query.filter(
+                    db.or_(*base_conditions),
+                    db.or_(
+                        Product.last_updated.is_(None),
+                        Product.last_updated < refresh_started
+                    )
+                ).limit(batch_size).all()
             
             if not products:
                 break
@@ -2143,6 +2195,7 @@ def deep_refresh_products():
         return jsonify({
             'success': True,
             'message': f'Deep refresh complete',
+            'total_matching': total_matching,
             'total_processed': total_processed,
             'total_updated': total_updated,
             'commission_fixed': total_commission_fixed,
