@@ -1508,18 +1508,25 @@ def get_products():
     if favorites_only:
         query = query.filter(Product.is_favorite == True)
     
-    # Apply hidden gems filter (high sales, low influencers, good commission)
+    # Apply hidden gems filter (high sales, low influencers, decent commission)
+    # Lowered commission to 5% since many products show 0% until deep-refreshed
     if gems_only:
         query = query.filter(
-            Product.sales_7d >= 50,
+            Product.sales_7d >= 30,  # Lowered from 50
             Product.influencer_count <= 50,
-            Product.commission_rate >= 10
+            Product.commission_rate >= 5  # Lowered from 10%
         )
     
-    # Apply trending filter (positive sales velocity) - safely handle if column doesn't exist
+    # Apply trending filter - products with sales growth or high recent sales
     if trending_only:
         try:
-            query = query.filter(Product.sales_velocity >= 20)
+            # Products with positive velocity OR high 7-day sales (as fallback)
+            query = query.filter(
+                db.or_(
+                    Product.sales_velocity >= 10,  # Lowered from 20
+                    Product.sales_7d >= 100  # Fallback: high recent sales = trending
+                )
+            )
         except Exception:
             pass  # Column might not exist yet
     
@@ -1541,18 +1548,21 @@ def get_products():
     # Count OOS products for UI
     oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
     
-    # Count gems
+    # Count gems (using updated criteria)
     gems_count = Product.query.filter(
-        Product.sales_7d >= 50,
+        Product.sales_7d >= 30,
         Product.influencer_count <= 50,
-        Product.commission_rate >= 10,
+        Product.commission_rate >= 5,
         db.or_(Product.product_status == None, Product.product_status == 'active')
     ).count()
     
-    # Count trending - safely handle if sales_velocity column doesn't exist
+    # Count trending - products with velocity or high recent sales
     try:
         trending_count = Product.query.filter(
-            Product.sales_velocity >= 20,
+            db.or_(
+                Product.sales_velocity >= 10,
+                Product.sales_7d >= 100
+            ),
             db.or_(Product.product_status == None, Product.product_status == 'active')
         ).count()
     except Exception:
@@ -1739,6 +1749,41 @@ def get_stats():
     # Get favorites count
     favorites = Product.query.filter(Product.is_favorite == True).count()
     
+    # Data quality metrics
+    zero_commission = Product.query.filter(
+        db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None))
+    ).count()
+    
+    low_sales = Product.query.filter(Product.sales_7d <= 2).count()
+    
+    missing_images = Product.query.filter(
+        db.or_(
+            Product.cached_image_url.is_(None),
+            Product.cached_image_url == ''
+        )
+    ).count()
+    
+    # Gems and trending counts
+    gems_count = Product.query.filter(
+        Product.sales_7d >= 30,
+        Product.influencer_count <= 50,
+        Product.commission_rate >= 5,
+        db.or_(Product.product_status == None, Product.product_status == 'active')
+    ).count()
+    
+    try:
+        trending_count = Product.query.filter(
+            db.or_(
+                Product.sales_velocity >= 10,
+                Product.sales_7d >= 100
+            ),
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        ).count()
+    except:
+        trending_count = 0
+    
+    oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
+    
     return jsonify({
         'total_products': total,
         'unique_brands': brands,
@@ -1752,6 +1797,17 @@ def get_stats():
             'low_11_30': low,
             'medium_31_60': medium,
             'good_61_100': good
+        },
+        'data_quality': {
+            'zero_commission': zero_commission,
+            'low_sales': low_sales,
+            'missing_images': missing_images,
+            'needs_deep_refresh': zero_commission + low_sales
+        },
+        'special_filters': {
+            'gems': gems_count,
+            'trending': trending_count,
+            'out_of_stock': oos_count
         }
     })
 
@@ -1759,119 +1815,126 @@ def get_stats():
 @app.route('/api/refresh-images', methods=['POST', 'GET'])
 def refresh_images():
     """
-    Batch refresh cached image URLs for products.
-    Call this after scanning to get working image URLs.
+    Refresh cached image URLs for products using SINGLE-PRODUCT API calls.
+    The batch API doesn't work reliably with EchoTik.
     
     Parameters:
         batch: Number of products to process (default 50)
+        continuous: If 'true', keeps looping until all images are done (max 10 iterations)
         force: If true, refresh ALL products regardless of current cache status
     """
     try:
         batch_size = request.args.get('batch', 50, type=int)
         force = request.args.get('force', 'false').lower() == 'true'
+        continuous = request.args.get('continuous', 'false').lower() == 'true'
+        max_iterations = min(int(request.args.get('max_iterations', 10)), 20)
         
-        if force:
-            # Force refresh - get products with ANY image_url
-            products = Product.query.filter(
-                Product.image_url.isnot(None),
-                Product.image_url != ''
-            ).limit(batch_size).all()
-        else:
-            # Normal refresh - only products needing images
-            # Include products with empty cached_image_url OR no image_url but have product_id
-            products = Product.query.filter(
-                db.or_(
-                    # Has image_url but no cache
-                    db.and_(
-                        Product.image_url.isnot(None),
-                        Product.image_url != '',
-                        db.or_(
-                            Product.cached_image_url.is_(None),
-                            Product.cached_image_url == ''
-                        )
-                    ),
-                    # No image_url at all - we'll try to fetch from API
+        total_updated = 0
+        iteration = 0
+        
+        while True:
+            iteration += 1
+            
+            if force:
+                products = Product.query.filter(
+                    Product.image_url.isnot(None),
+                    Product.image_url != ''
+                ).limit(batch_size).all()
+            else:
+                # Products missing images - prioritize those with no cached_image_url
+                products = Product.query.filter(
                     db.or_(
-                        Product.image_url.is_(None),
-                        Product.image_url == ''
+                        # Has image_url but no cache
+                        db.and_(
+                            Product.image_url.isnot(None),
+                            Product.image_url != '',
+                            db.or_(
+                                Product.cached_image_url.is_(None),
+                                Product.cached_image_url == ''
+                            )
+                        ),
+                        # No image_url at all
+                        db.or_(
+                            Product.image_url.is_(None),
+                            Product.image_url == ''
+                        )
                     )
-                )
-            ).limit(batch_size).all()
-        
-        if not products:
-            return jsonify({'success': True, 'message': 'No images need refreshing', 'updated': 0})
-        
-        updated = 0
-        
-        # First, handle products WITH image_url - get signed URLs
-        products_with_urls = [p for p in products if p.image_url]
-        
-        for i in range(0, len(products_with_urls), 10):
-            batch = products_with_urls[i:i+10]
+                ).limit(batch_size).all()
             
-            url_to_product = {}
-            for p in batch:
-                parsed_url = parse_cover_url(p.image_url)
-                if parsed_url:
-                    url_to_product[parsed_url] = p
+            if not products:
+                break  # No more products to process
             
-            if url_to_product:
-                signed_urls = get_cached_image_urls(list(url_to_product.keys()))
-                
-                for orig_url, signed_url in signed_urls.items():
-                    if orig_url in url_to_product and signed_url:
-                        product = url_to_product[orig_url]
-                        product.cached_image_url = signed_url
-                        product.image_cached_at = datetime.utcnow()
-                        updated += 1
+            updated_this_batch = 0
             
-            time.sleep(0.2)
-        
-        # Second, handle products WITHOUT image_url - try to get from product detail API
-        products_without_urls = [p for p in products if not p.image_url]
-        
-        for i in range(0, len(products_without_urls), 10):
-            batch = products_without_urls[i:i+10]
-            product_ids = [p.product_id for p in batch]
-            
-            try:
-                # Call product detail API to get images
-                response = requests.post(
-                    f"{BASE_URL}/product/detail",
-                    json={"product_ids": ",".join(product_ids)},
-                    auth=get_auth(),
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('code') == 0:
-                        api_products = data.get('data', [])
-                        
-                        for api_p in api_products:
-                            pid = api_p.get('product_id', '')
-                            cover_url = api_p.get('cover_url', '')
+            for product in products:
+                try:
+                    # If product already has image_url, just get signed URL
+                    if product.image_url:
+                        parsed_url = parse_cover_url(product.image_url)
+                        if parsed_url:
+                            signed_urls = get_cached_image_urls([parsed_url])
+                            if signed_urls.get(parsed_url):
+                                product.cached_image_url = signed_urls[parsed_url]
+                                product.image_cached_at = datetime.utcnow()
+                                updated_this_batch += 1
+                        time.sleep(0.1)
+                        continue
+                    
+                    # No image_url - fetch from single-product API
+                    response = requests.get(
+                        f"{BASE_URL}/product/detail",
+                        params={'product_id': product.product_id},
+                        auth=get_auth(),
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('code') == 0 and data.get('data'):
+                            p = data['data'] if isinstance(data['data'], dict) else data['data'][0] if data['data'] else {}
                             
-                            if pid and cover_url:
-                                # Find matching product
-                                for p in batch:
-                                    if p.product_id == pid:
-                                        parsed_url = parse_cover_url(cover_url)
-                                        if parsed_url:
-                                            p.image_url = parsed_url
-                                            # Get signed URL
-                                            signed = get_cached_image_urls([parsed_url])
-                                            if signed.get(parsed_url):
-                                                p.cached_image_url = signed[parsed_url]
-                                                p.image_cached_at = datetime.utcnow()
-                                                updated += 1
-                                        break
-            except Exception as e:
-                print(f"Error fetching product images: {e}")
+                            cover_url = p.get('cover_url', '')
+                            if cover_url:
+                                parsed_url = parse_cover_url(cover_url)
+                                if parsed_url:
+                                    product.image_url = parsed_url
+                                    signed_urls = get_cached_image_urls([parsed_url])
+                                    if signed_urls.get(parsed_url):
+                                        product.cached_image_url = signed_urls[parsed_url]
+                                        product.image_cached_at = datetime.utcnow()
+                                        updated_this_batch += 1
+                            
+                            # BONUS: Also update commission and sales if they're 0
+                            if (product.commission_rate or 0) == 0:
+                                new_commission = float(p.get('product_commission_rate', 0) or 0)
+                                if new_commission > 0:
+                                    product.commission_rate = new_commission
+                            
+                            if (product.sales_7d or 0) <= 2:
+                                new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                                if new_sales_7d > 0:
+                                    product.sales_7d = new_sales_7d
+                                    product.sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                                    product.sales = int(p.get('total_sale_cnt', 0) or 0)
+                    
+                    time.sleep(0.3)  # Rate limiting for single-product calls
+                    
+                except Exception as e:
+                    print(f"Error refreshing image for {product.product_id}: {e}")
+                    continue
             
-            time.sleep(0.3)
-        
-        db.session.commit()
+            db.session.commit()
+            total_updated += updated_this_batch
+            
+            print(f"🖼️ Image refresh iteration {iteration}: {updated_this_batch} updated, {total_updated} total")
+            
+            # Break conditions
+            if not continuous:
+                break
+            if iteration >= max_iterations:
+                break
+            if updated_this_batch == 0:
+                break
         
         # Count remaining
         remaining = Product.query.filter(
@@ -1883,9 +1946,180 @@ def refresh_images():
         
         return jsonify({
             'success': True,
-            'message': f'Updated {updated} images',
-            'updated': updated,
-            'remaining': remaining
+            'message': f'Updated {total_updated} images in {iteration} iteration(s)',
+            'updated': total_updated,
+            'iterations': iteration,
+            'remaining': remaining,
+            'continuous': continuous
+        })
+        
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/deep-refresh', methods=['GET', 'POST'])
+@login_required
+def deep_refresh_products():
+    """
+    Deep refresh product data using single-product API calls.
+    Fixes 0% commission and bad sales data from bulk scans.
+    
+    Parameters:
+        batch: Number of products to process (default 50)
+        fix_zero_commission: Only fix products with 0% commission (default: true)
+        fix_low_sales: Only fix products with sales_7d <= 2 (default: true)
+        continuous: Keep running until done (max 10 iterations)
+    """
+    try:
+        batch_size = min(int(request.args.get('batch', 50)), 100)
+        fix_zero_commission = request.args.get('fix_zero_commission', 'true').lower() == 'true'
+        fix_low_sales = request.args.get('fix_low_sales', 'true').lower() == 'true'
+        continuous = request.args.get('continuous', 'false').lower() == 'true'
+        max_iterations = min(int(request.args.get('max_iterations', 10)), 20)
+        
+        total_updated = 0
+        total_commission_fixed = 0
+        total_sales_fixed = 0
+        total_images_fixed = 0
+        iteration = 0
+        
+        while True:
+            iteration += 1
+            
+            # Build query for products needing fixes
+            conditions = []
+            if fix_zero_commission:
+                conditions.append(db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None)))
+            if fix_low_sales:
+                conditions.append(Product.sales_7d <= 2)
+            
+            if not conditions:
+                conditions.append(Product.product_id.isnot(None))  # Process all
+            
+            products = Product.query.filter(db.or_(*conditions)).limit(batch_size).all()
+            
+            if not products:
+                break
+            
+            updated_this_batch = 0
+            commission_fixed = 0
+            sales_fixed = 0
+            images_fixed = 0
+            
+            for product in products:
+                try:
+                    response = requests.get(
+                        f"{BASE_URL}/product/detail",
+                        params={'product_id': product.product_id},
+                        auth=get_auth(),
+                        timeout=30
+                    )
+                    
+                    if response.status_code != 200:
+                        continue
+                    
+                    data = response.json()
+                    if data.get('code') != 0 or not data.get('data'):
+                        continue
+                    
+                    p = data['data'] if isinstance(data['data'], dict) else data['data'][0] if data['data'] else {}
+                    
+                    updated = False
+                    
+                    # Fix commission
+                    new_commission = float(p.get('product_commission_rate', 0) or 0)
+                    if new_commission > 0 and (product.commission_rate or 0) == 0:
+                        product.commission_rate = new_commission
+                        commission_fixed += 1
+                        updated = True
+                    elif new_commission > 0:
+                        product.commission_rate = new_commission
+                        updated = True
+                    
+                    # Fix sales
+                    new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                    if new_sales_7d > (product.sales_7d or 0):
+                        product.sales_7d = new_sales_7d
+                        product.sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                        product.sales = int(p.get('total_sale_cnt', 0) or 0)
+                        product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
+                        product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
+                        sales_fixed += 1
+                        updated = True
+                    
+                    # Fix influencer count
+                    new_inf_count = int(p.get('total_ifl_cnt', 0) or 0)
+                    if new_inf_count > 0:
+                        product.influencer_count = new_inf_count
+                        updated = True
+                    
+                    # Fix price
+                    new_price = float(p.get('spu_avg_price', 0) or 0)
+                    if new_price > 0:
+                        product.price = new_price
+                        updated = True
+                    
+                    # Fix image
+                    if not product.cached_image_url:
+                        cover_url = p.get('cover_url', '')
+                        if cover_url:
+                            parsed_url = parse_cover_url(cover_url)
+                            if parsed_url:
+                                product.image_url = parsed_url
+                                signed_urls = get_cached_image_urls([parsed_url])
+                                if signed_urls.get(parsed_url):
+                                    product.cached_image_url = signed_urls[parsed_url]
+                                    product.image_cached_at = datetime.utcnow()
+                                    images_fixed += 1
+                                    updated = True
+                    
+                    if updated:
+                        product.last_updated = datetime.utcnow()
+                        updated_this_batch += 1
+                    
+                    time.sleep(0.4)  # Rate limiting
+                    
+                except Exception as e:
+                    print(f"Error deep refreshing {product.product_id}: {e}")
+                    continue
+            
+            db.session.commit()
+            
+            total_updated += updated_this_batch
+            total_commission_fixed += commission_fixed
+            total_sales_fixed += sales_fixed
+            total_images_fixed += images_fixed
+            
+            print(f"🔄 Deep refresh iteration {iteration}: {updated_this_batch} updated (commission: {commission_fixed}, sales: {sales_fixed}, images: {images_fixed})")
+            
+            # Break conditions
+            if not continuous:
+                break
+            if iteration >= max_iterations:
+                break
+            if updated_this_batch == 0:
+                break
+        
+        # Count remaining problems
+        remaining_zero_commission = Product.query.filter(
+            db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None))
+        ).count()
+        remaining_low_sales = Product.query.filter(Product.sales_7d <= 2).count()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Deep refresh complete',
+            'total_updated': total_updated,
+            'commission_fixed': total_commission_fixed,
+            'sales_fixed': total_sales_fixed,
+            'images_fixed': total_images_fixed,
+            'iterations': iteration,
+            'remaining': {
+                'zero_commission': remaining_zero_commission,
+                'low_sales': remaining_low_sales
+            }
         })
         
     except Exception as e:
