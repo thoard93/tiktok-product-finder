@@ -1201,7 +1201,36 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
+        
+        .legal-footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 20px;
+            margin-bottom: 80px;
+            border-top: 1px solid #333;
+            font-size: 0.85rem;
+        }
+        .legal-footer a {
+            color: #888;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+        .legal-footer a:hover {
+            color: #e94560;
+        }
+        .legal-footer .copyright {
+            color: #666;
+            margin-top: 10px;
+        }
     </style>
+    
+    <!-- Legal Footer -->
+    <div class="legal-footer">
+        <a href="/terms">Terms of Service</a>
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/cookies">Cookie Policy</a>
+        <div class="copyright">© 2025 Brand Hunter. All rights reserved.</div>
+    </div>
     
     <!-- Toast -->
     <div id="toast" class="toast"></div>
@@ -2078,7 +2107,9 @@
             
             let totalUpdated = 0;
             let iteration = 0;
-            const maxIterations = 20; // Max 1000 images (20 * 50)
+            let lastRemaining = -1;
+            let stuckCount = 0;
+            const maxIterations = 20;
             
             try {
                 while (iteration < maxIterations) {
@@ -2096,26 +2127,38 @@
                     const remaining = data.remaining || 0;
                     
                     // Update toast with progress
-                    showToast(`🖼️ Batch ${iteration}: ${totalUpdated} images updated, ${remaining} remaining...`, false);
+                    showToast(`🖼️ Batch ${iteration}: ${totalUpdated} total updated, ${remaining} remaining...`, false);
                     
-                    // Stop conditions
+                    // Stop if no more remaining
                     if (remaining === 0) {
                         showToast(`✅ All images refreshed! ${totalUpdated} total updated`, false, 'success');
                         break;
                     }
-                    if (data.updated === 0 && data.processed === 0) {
-                        showToast(`✅ Image refresh complete! ${totalUpdated} updated, ${remaining} have no source image`, false, 'success');
+                    
+                    // Stop if nothing was updated this batch
+                    if (data.updated === 0) {
+                        showToast(`✅ Image refresh complete! ${totalUpdated} updated. ${remaining} products have no source image available.`, false, 'success');
                         break;
                     }
                     
+                    // Stop if remaining count isn't decreasing (stuck)
+                    if (remaining === lastRemaining) {
+                        stuckCount++;
+                        if (stuckCount >= 3) {
+                            showToast(`⏸️ Stopped - remaining count not decreasing. ${totalUpdated} updated, ${remaining} may have missing source images.`, false, 'success');
+                            break;
+                        }
+                    } else {
+                        stuckCount = 0;
+                    }
+                    lastRemaining = remaining;
+                    
                     // Small delay to keep UI responsive
-                    await new Promise(r => setTimeout(r, 500));
+                    await new Promise(r => setTimeout(r, 300));
                 }
                 
                 if (iteration >= maxIterations) {
-                    const response = await fetch('/api/refresh-images?batch=1');
-                    const remaining = (await response.json()).remaining || 0;
-                    showToast(`⏸️ Paused after ${maxIterations} batches. ${totalUpdated} updated, ${remaining} remaining. Click again to continue.`, false, 'success');
+                    showToast(`⏸️ Paused after ${maxIterations} batches. ${totalUpdated} updated. Click again to continue.`, false, 'success');
                 }
                 
                 loadProducts();
