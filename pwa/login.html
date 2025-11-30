@@ -3,156 +3,159 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brand Hunter - Login</title>
+    <title>Login - Brand Hunter</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAA7AAAAOwBeShxvQAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAKlSURBVFiF7ZY9aBRBGIafubu9XO4nMSQkJoKFYCEIFhYW/hRWgqAgWNgIFhYWgoWFhZ2FhYVgYWEhWFhYCBYWFoKFhYVgYWEhWFgIFhYWgoWF4M/l7jb3s7Ow7O3t7t1dAgr3wrIz8+03z3wz3+zCGtawhjWsIQL4Wy/vBk4AI8A6wAF+Ab+BCeAh8OJvEnABuA/sLJP/DXgEXAIel1lnVUgDECIE9AL3gK/AY+Am8L1UvNJlgVwugZQ2AO8lSZoHfgL3gb6lxteDkMAnYD/QB2SAx8BNoLdU/ApMAgPAfqADWAB+AM+By8DzpfRDFQglLvAe6AdSwCzwELgMPCtYpwvYAAwCXXgv5gfwBLgCvK5VQATRBYwDg0AzsIDXzFeAl0E+rcBW4ADQCtiAAzwFrgKvag0QO4EdwF6gGbCASeAGcAMYKVinAx8zRxzHsRc8zz1u2/ZkpfogngDDQDfQCOSBN8At4FZQeAsgTdO8KEmSkySJkiRdURTpimXZ+WoTSABpIAf8Ao7gOf8ayxqZDzCfZUW/AEZN0/wI5FVV/RWfSC0QQArIAL+BI3jOvwvIFxaWddkN/bxuGIZaT4AYu8rBbz9g+WsIIU7GZVILbAQyeJk/AE7gZT4VlL9Ap2VZpmmab+IJEOWYpmn5FBDiMJfh2vAiEtE0za4nQByJGGE8Fy/TtOxIWBmObbcrJkCMhcg0TbOeAFH4TMzEb0i8pTlB+YNEW5ozNU1T6wkQhSSEcGIkYqfv8wGBzlkGu0bD6wkQB1/Jd7yNJoSQHBRd/uDn/f9GSOi17LCFhL3lqSdAFFJxNSLw/YCvpJZqBD8fEg4Nq/cLojIEn0+oDuAnYAq4K4T4z0sG3wW/+2eEZL0J/APEGa+TL+kxmwAAAABJRU5ErkJggg==">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #fff;
+            color: #e0e0e0;
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
+            padding: 20px;
         }
-        
         .login-container {
-            background: rgba(0,0,0,0.3);
+            background: rgba(255,255,255,0.05);
             border-radius: 20px;
-            padding: 40px;
-            width: 90%;
-            max-width: 400px;
+            padding: 50px;
             text-align: center;
+            max-width: 450px;
+            width: 100%;
         }
-        
         .logo {
-            font-size: 3rem;
+            font-size: 4rem;
             margin-bottom: 10px;
         }
-        
         h1 {
-            font-size: 1.8rem;
-            margin-bottom: 5px;
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 2rem;
         }
-        
-        .subtitle {
+        .tagline {
             color: #888;
-            font-size: 0.9rem;
             margin-bottom: 30px;
+            font-size: 1rem;
         }
-        
-        .error-message {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid #ef4444;
-            color: #ef4444;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 0.85rem;
-        }
-        
         .discord-btn {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 12px;
-            width: 100%;
-            padding: 16px 24px;
-            background: #5865F2;
+            background: linear-gradient(135deg, #5865F2 0%, #7289da 100%);
             color: #fff;
-            border: none;
+            padding: 16px 32px;
             border-radius: 12px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s, background 0.2s;
             text-decoration: none;
-            margin-bottom: 20px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            border: none;
+            cursor: pointer;
         }
-        
         .discord-btn:hover {
-            background: #4752C4;
-            transform: scale(1.02);
+            background: linear-gradient(135deg, #4752c4 0%, #5b6eae 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(88, 101, 242, 0.4);
         }
-        
         .discord-icon {
             width: 24px;
             height: 24px;
         }
-        
         .divider {
             display: flex;
             align-items: center;
-            margin: 20px 0;
+            margin: 25px 0;
             color: #666;
-            font-size: 0.8rem;
         }
-        
-        .divider::before,
-        .divider::after {
+        .divider::before, .divider::after {
             content: '';
             flex: 1;
-            height: 1px;
-            background: rgba(255,255,255,0.1);
+            border-bottom: 1px solid #333;
         }
-        
         .divider span {
             padding: 0 15px;
+            font-size: 0.9rem;
         }
-        
         .passkey-section {
             text-align: left;
         }
-        
         .passkey-section label {
             display: block;
-            font-size: 0.85rem;
             color: #888;
             margin-bottom: 8px;
+            font-size: 0.9rem;
         }
-        
         .passkey-input {
             width: 100%;
-            padding: 14px 16px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
+            padding: 14px;
             border-radius: 10px;
+            border: 1px solid #333;
+            background: rgba(0,0,0,0.3);
             color: #fff;
             font-size: 1rem;
             margin-bottom: 12px;
         }
-        
         .passkey-input:focus {
             outline: none;
-            border-color: #e94560;
+            border-color: #5865F2;
         }
-        
         .passkey-btn {
             width: 100%;
-            padding: 14px 24px;
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-            border: 1px solid rgba(255,255,255,0.2);
+            padding: 14px;
             border-radius: 10px;
-            font-size: 0.95rem;
+            border: none;
+            background: #333;
+            color: #fff;
+            font-size: 1rem;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.3s;
         }
-        
         .passkey-btn:hover {
-            background: rgba(255,255,255,0.2);
+            background: #444;
         }
-        
-        .footer {
-            margin-top: 30px;
-            font-size: 0.75rem;
+        .footer-note {
+            margin-top: 25px;
             color: #666;
+            font-size: 0.85rem;
+            line-height: 1.5;
         }
-        
-        .footer a {
-            color: #e94560;
+        .error-message {
+            background: rgba(231, 76, 60, 0.2);
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+        .legal-footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+        .legal-footer a {
+            color: #666;
             text-decoration: none;
+            margin: 0 10px;
+            font-size: 0.85rem;
+        }
+        .legal-footer a:hover {
+            color: #e94560;
+        }
+        .legal-footer .notice {
+            color: #555;
+            font-size: 0.8rem;
+            margin-top: 12px;
+            line-height: 1.5;
         }
     </style>
 </head>
@@ -160,7 +163,7 @@
     <div class="login-container">
         <div class="logo">🎯</div>
         <h1>Brand Hunter</h1>
-        <p class="subtitle">TikTok Shop Product Research Tool</p>
+        <p class="tagline">TikTok Shop Product Research Tool</p>
         
         <div id="error-container"></div>
         
@@ -174,44 +177,43 @@
         <div class="divider"><span>or</span></div>
         
         <div class="passkey-section">
-            <label for="passkey">Developer Passkey</label>
+            <label>Developer Passkey</label>
             <input type="password" id="passkey" class="passkey-input" placeholder="Enter passkey...">
-            <button class="passkey-btn" onclick="loginWithPasskey()">Login with Passkey</button>
+            <button onclick="loginWithPasskey()" class="passkey-btn">Login with Passkey</button>
         </div>
         
-        <div class="footer">
-            <p>Only members of the Discord server can access this tool.</p>
-            <p style="margin-top:5px;">Questions? Contact the admin.</p>
+        <p class="footer-note">
+            Only members of the Discord server can access this tool.<br>
+            Questions? Contact the admin.
+        </p>
+        
+        <div class="legal-footer">
+            <a href="/terms">Terms of Service</a>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/cookies">Cookie Policy</a>
+            <p class="notice">By logging in, you agree to our Terms of Service and Privacy Policy.</p>
         </div>
     </div>
     
     <script>
         // Check for error in URL
-        const params = new URLSearchParams(window.location.search);
-        const error = params.get('error');
-        
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get('error');
         if (error) {
-            const errorContainer = document.getElementById('error-container');
-            let message = 'Login failed. Please try again.';
-            
-            switch(error) {
-                case 'not_in_server':
-                    message = '⚠️ You must be a member of the Discord server to access this tool.';
-                    break;
-                case 'token_failed':
-                    message = '⚠️ Discord authentication failed. Please try again.';
-                    break;
-                case 'oauth_error':
-                    message = '⚠️ An error occurred during login. Please try again.';
-                    break;
-            }
-            
-            errorContainer.innerHTML = `<div class="error-message">${message}</div>`;
+            const errorMessages = {
+                'no_code': 'Login was cancelled or failed. Please try again.',
+                'token_failed': 'Failed to authenticate with Discord. Please try again.',
+                'user_failed': 'Failed to get your Discord profile. Please try again.',
+                'not_in_server': 'You must be a member of our Discord server to access Brand Hunter.',
+                'oauth_error': 'An error occurred during login. Please try again.',
+                'invalid_passkey': 'Invalid passkey. Please try again.'
+            };
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div class="error-message">${errorMessages[error] || 'An error occurred. Please try again.'}</div>`;
         }
         
         async function loginWithPasskey() {
             const passkey = document.getElementById('passkey').value;
-            
             if (!passkey) {
                 alert('Please enter a passkey');
                 return;
@@ -227,18 +229,20 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    window.location.href = data.redirect || '/';
+                    window.location.href = '/';
                 } else {
-                    alert(data.error || 'Invalid passkey');
+                    window.location.href = '/login?error=invalid_passkey';
                 }
             } catch (err) {
-                alert('Login failed: ' + err.message);
+                alert('Login failed. Please try again.');
             }
         }
         
-        // Allow Enter key for passkey
-        document.getElementById('passkey').addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') loginWithPasskey();
+        // Allow Enter key to submit passkey
+        document.getElementById('passkey').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loginWithPasskey();
+            }
         });
     </script>
 </body>

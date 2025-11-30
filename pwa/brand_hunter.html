@@ -1395,6 +1395,11 @@
             try {
                 currentPage = page;
                 
+                // Show loading state immediately
+                const container = document.getElementById('products-container');
+                container.style.opacity = '0.5';
+                container.style.pointerEvents = 'none';
+                
                 // Build URL with pagination
                 let url = `/api/products?page=${page}&per_page=${perPage}`;
                 
@@ -1461,10 +1466,18 @@
                 renderProducts(allProducts);
                 updatePaginationUI();
                 
+                // Remove loading state
+                container.style.opacity = '1';
+                container.style.pointerEvents = 'auto';
+                
                 // Scroll to top of product grid
                 document.getElementById('products-container').scrollIntoView({ behavior: 'smooth' });
                 
             } catch (err) {
+                // Remove loading state on error too
+                const container = document.getElementById('products-container');
+                container.style.opacity = '1';
+                container.style.pointerEvents = 'auto';
                 showToast('Failed to load products', true);
                 console.error(err);
             }
