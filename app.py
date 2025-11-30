@@ -180,13 +180,22 @@ class ActivityLog(db.Model):
     user = db.relationship('User', backref='activities')
     
     def to_dict(self):
+        # Convert UTC to EST (UTC-5, or UTC-4 during daylight saving)
+        est_time = None
+        if self.created_at:
+            from datetime import timedelta
+            # EST is UTC-5 (or EDT UTC-4 during daylight saving)
+            # Using -5 for standard EST
+            est_time = self.created_at - timedelta(hours=5)
+        
         return {
             'id': self.id,
             'user_id': self.user_id,
             'username': self.user.discord_username if self.user else 'Unknown',
             'action': self.action,
             'details': self.details,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at_est': est_time.strftime('%m/%d/%Y, %I:%M:%S %p') if est_time else None
         }
 
 class Product(db.Model):
@@ -195,16 +204,16 @@ class Product(db.Model):
     
     product_id = db.Column(db.String(50), primary_key=True)
     product_name = db.Column(db.String(500))
-    seller_id = db.Column(db.String(50))
-    seller_name = db.Column(db.String(255))
+    seller_id = db.Column(db.String(50), index=True)
+    seller_name = db.Column(db.String(255), index=True)
     gmv = db.Column(db.Float, default=0)
     gmv_30d = db.Column(db.Float, default=0)
     sales = db.Column(db.Integer, default=0)
-    sales_7d = db.Column(db.Integer, default=0)
+    sales_7d = db.Column(db.Integer, default=0, index=True)
     sales_30d = db.Column(db.Integer, default=0)
-    influencer_count = db.Column(db.Integer, default=0)
-    commission_rate = db.Column(db.Float, default=0)
-    price = db.Column(db.Float, default=0)
+    influencer_count = db.Column(db.Integer, default=0, index=True)
+    commission_rate = db.Column(db.Float, default=0, index=True)
+    price = db.Column(db.Float, default=0, index=True)
     image_url = db.Column(db.Text)
     cached_image_url = db.Column(db.Text)  # Signed URL that works
     image_cached_at = db.Column(db.DateTime)  # When cache was created
@@ -219,8 +228,8 @@ class Product(db.Model):
     review_count = db.Column(db.Integer, default=0)
     
     # User features
-    is_favorite = db.Column(db.Boolean, default=False)
-    product_status = db.Column(db.String(50), default='active')  # active, removed, out_of_stock, likely_oos
+    is_favorite = db.Column(db.Boolean, default=False, index=True)
+    product_status = db.Column(db.String(50), default='active', index=True)  # active, removed, out_of_stock, likely_oos
     status_note = db.Column(db.String(255))  # Optional note about status
     
     # For out-of-stock detection - track previous 7d sales to detect sudden drops
@@ -229,8 +238,26 @@ class Product(db.Model):
     sales_velocity = db.Column(db.Float, default=0)  # Percentage change in sales
     
     scan_type = db.Column(db.String(50), default='brand_hunter')
-    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        # For filtering by influencer range + sorting by sales
+        db.Index('idx_influencer_sales', 'influencer_count', 'sales_7d'),
+        # For filtering by influencer range + sorting by commission
+        db.Index('idx_influencer_commission', 'influencer_count', 'commission_rate'),
+        # For filtering by status + influencer range
+        db.Index('idx_status_influencer', 'product_status', 'influencer_count'),
+        # For filtering by influencer range + sorting by first_seen (newest)
+        db.Index('idx_influencer_firstseen', 'influencer_count', 'first_seen'),
+        # For filtering by influencer range + sorting by price
+        db.Index('idx_influencer_price', 'influencer_count', 'price'),
+        # For favorites filtering
+        db.Index('idx_favorite_sales', 'is_favorite', 'sales_7d'),
+        # For date + influencer filtering
+        db.Index('idx_firstseen_influencer', 'first_seen', 'influencer_count'),
+    )
     
     def to_dict(self):
         return {
@@ -609,6 +636,86 @@ def admin_migrate():
         return jsonify({
             'success': False,
             'error': str(e),
+            'results': results
+        }), 500
+
+@app.route('/api/admin/create-indexes')
+@login_required
+@admin_required
+def admin_create_indexes():
+    """
+    Create database indexes for faster queries.
+    Run this once after deployment or when adding new indexes.
+    """
+    results = []
+    
+    try:
+        # Check if we're using PostgreSQL
+        is_postgres = 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']
+        
+        if not is_postgres:
+            return jsonify({
+                'success': False,
+                'error': 'This endpoint only works with PostgreSQL'
+            }), 400
+        
+        # Define indexes to create
+        indexes = [
+            # Composite indexes for common query patterns
+            ("idx_influencer_sales", "products", "influencer_count, sales_7d DESC"),
+            ("idx_influencer_commission", "products", "influencer_count, commission_rate DESC"),
+            ("idx_status_influencer", "products", "product_status, influencer_count"),
+            ("idx_influencer_firstseen", "products", "influencer_count, first_seen DESC"),
+            ("idx_influencer_price", "products", "influencer_count, price"),
+            ("idx_favorite_sales", "products", "is_favorite, sales_7d DESC"),
+            ("idx_firstseen_influencer", "products", "first_seen DESC, influencer_count"),
+            # Single column indexes (in case they don't exist)
+            ("idx_sales_7d", "products", "sales_7d DESC"),
+            ("idx_commission_rate", "products", "commission_rate DESC"),
+            ("idx_first_seen", "products", "first_seen DESC"),
+            ("idx_last_updated", "products", "last_updated DESC"),
+            ("idx_product_status", "products", "product_status"),
+            ("idx_is_favorite", "products", "is_favorite"),
+            ("idx_seller_name", "products", "seller_name"),
+            # Text search index for product name (for ILIKE queries)
+            ("idx_product_name_lower", "products", "LOWER(product_name) varchar_pattern_ops"),
+        ]
+        
+        for idx_name, table, columns in indexes:
+            try:
+                # Use CREATE INDEX IF NOT EXISTS (PostgreSQL 9.5+)
+                sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({columns})"
+                db.session.execute(db.text(sql))
+                results.append(f"✅ Created {idx_name}")
+            except Exception as e:
+                error_msg = str(e)
+                if 'already exists' in error_msg.lower():
+                    results.append(f"ℹ️ {idx_name} already exists")
+                else:
+                    results.append(f"⚠️ {idx_name}: {error_msg[:60]}")
+        
+        db.session.commit()
+        
+        # Run ANALYZE to update query planner statistics
+        try:
+            db.session.execute(db.text("ANALYZE products"))
+            results.append("✅ Updated query planner statistics (ANALYZE)")
+        except Exception as e:
+            results.append(f"⚠️ ANALYZE: {str(e)[:50]}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Index creation completed',
+            'results': results
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
             'results': results
         }), 500
 
