@@ -2023,7 +2023,7 @@ def deep_refresh_products():
         fix_zero_commission: Only fix products with 0% commission (default: true)
         fix_low_sales: Only fix products with sales_7d <= 2 (default: true)
         continuous: Keep running until done (max iterations)
-        force: Ignore last_updated check (process all matching products)
+        force: Process all matching products using offset pagination
     """
     try:
         batch_size = min(int(request.args.get('batch', 50)), 100)
@@ -2031,14 +2031,16 @@ def deep_refresh_products():
         fix_low_sales = request.args.get('fix_low_sales', 'true').lower() == 'true'
         continuous = request.args.get('continuous', 'false').lower() == 'true'
         force_all = request.args.get('force', 'false').lower() == 'true'
-        max_iterations = min(int(request.args.get('max_iterations', 10)), 50)  # Increased max
+        max_iterations = min(int(request.args.get('max_iterations', 10)), 50)
         
         total_updated = 0
         total_commission_fixed = 0
         total_sales_fixed = 0
         total_images_fixed = 0
         total_processed = 0
+        total_api_errors = 0
         iteration = 0
+        current_offset = 0  # For force mode pagination
         
         # Track when we started - only process products not updated since then
         refresh_started = datetime.utcnow()
@@ -2056,16 +2058,21 @@ def deep_refresh_products():
         # Count total products matching the criteria (for diagnostics)
         total_matching = Product.query.filter(db.or_(*base_conditions)).count()
         
+        print(f"🔄 Deep refresh starting: {total_matching} products match criteria, force={force_all}, continuous={continuous}")
+        
         while True:
             iteration += 1
             
-            # Build query - optionally skip the last_updated check
+            # Build query based on mode
             if force_all:
+                # Force mode: use OFFSET to paginate through all matching products
+                # This ensures we process different products each iteration
                 products = Product.query.filter(
                     db.or_(*base_conditions)
-                ).limit(batch_size).all()
+                ).order_by(Product.product_id).offset(current_offset).limit(batch_size).all()
+                current_offset += batch_size
             else:
-                # Only get products NOT updated during this refresh session
+                # Normal mode: only get products NOT updated during this refresh session
                 products = Product.query.filter(
                     db.or_(*base_conditions),
                     db.or_(
@@ -2075,6 +2082,7 @@ def deep_refresh_products():
                 ).limit(batch_size).all()
             
             if not products:
+                print(f"🔄 No more products to process at iteration {iteration}")
                 break
             
             updated_this_batch = 0
@@ -2082,6 +2090,7 @@ def deep_refresh_products():
             commission_fixed = 0
             sales_fixed = 0
             images_fixed = 0
+            api_errors = 0
             
             for product in products:
                 processed_this_batch += 1
@@ -2097,20 +2106,23 @@ def deep_refresh_products():
                     product.last_updated = datetime.utcnow()
                     
                     if response.status_code != 200:
+                        api_errors += 1
                         continue
                     
                     data = response.json()
                     if data.get('code') != 0 or not data.get('data'):
+                        api_errors += 1
                         continue
                     
                     p = data['data'] if isinstance(data['data'], dict) else data['data'][0] if data['data'] else {}
                     
                     if not p:
+                        api_errors += 1
                         continue
                     
                     data_changed = False
                     
-                    # Fix commission - update even if API returns 0, at least we tried
+                    # Fix commission
                     new_commission = float(p.get('product_commission_rate', 0) or 0)
                     if new_commission > 0 and (product.commission_rate or 0) == 0:
                         product.commission_rate = new_commission
@@ -2164,7 +2176,7 @@ def deep_refresh_products():
                     
                 except Exception as e:
                     print(f"Error deep refreshing {product.product_id}: {e}")
-                    # Still mark as updated so we don't retry
+                    api_errors += 1
                     product.last_updated = datetime.utcnow()
                     continue
             
@@ -2175,15 +2187,18 @@ def deep_refresh_products():
             total_commission_fixed += commission_fixed
             total_sales_fixed += sales_fixed
             total_images_fixed += images_fixed
+            total_api_errors += api_errors
             
-            print(f"🔄 Deep refresh iteration {iteration}: processed {processed_this_batch}, updated {updated_this_batch} (commission: {commission_fixed}, sales: {sales_fixed}, images: {images_fixed})")
+            print(f"🔄 Deep refresh iteration {iteration}: processed {processed_this_batch}, updated {updated_this_batch}, api_errors {api_errors} (commission: {commission_fixed}, sales: {sales_fixed}, images: {images_fixed})")
             
             # Break conditions
             if not continuous:
                 break
             if iteration >= max_iterations:
+                print(f"🔄 Reached max iterations ({max_iterations})")
                 break
-            if processed_this_batch == 0:  # No more products to process
+            if processed_this_batch == 0:
+                print(f"🔄 No products processed this batch")
                 break
         
         # Count remaining problems
@@ -2201,6 +2216,7 @@ def deep_refresh_products():
             'commission_fixed': total_commission_fixed,
             'sales_fixed': total_sales_fixed,
             'images_fixed': total_images_fixed,
+            'api_errors': total_api_errors,
             'iterations': iteration,
             'remaining': {
                 'zero_commission': remaining_zero_commission,
@@ -2211,6 +2227,8 @@ def deep_refresh_products():
     except Exception as e:
         import traceback
         db.session.rollback()
+        print(f"Deep refresh error: {e}")
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 @app.route('/api/clear', methods=['POST'])
