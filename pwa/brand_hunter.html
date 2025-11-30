@@ -939,6 +939,7 @@
             <button class="date-pill" onclick="setDateFilter('7days', this)">Last 7 Days</button>
             <button class="date-pill" onclick="setDateFilter('favorites', this)">❤️ Favorites</button>
             <button class="date-pill gems" onclick="setDateFilter('gems', this)">💎 Gems</button>
+            <button class="date-pill proven" onclick="setDateFilter('proven', this)" style="background:#f59e0b;">🔥 Proven</button>
             <button class="date-pill trending" onclick="setDateFilter('trending', this)">📈 Trending</button>
             <button class="date-pill oos-filter" onclick="setDateFilter('oos', this)">⚠️ OOS</button>
         </div>
@@ -970,6 +971,7 @@
             <span class="sort-label">Sort by:</span>
             <select class="sort-select" id="sort-select" onchange="applySort()">
                 <option value="sales_7d">📈 7-Day Sales</option>
+                <option value="sales_total">📊 Total Sales</option>
                 <option value="commission">💰 Commission %</option>
                 <option value="influencers_asc">👤 Influencers (Low→High)</option>
                 <option value="influencers_desc">👤 Influencers (High→Low)</option>
@@ -1419,6 +1421,8 @@
                     url += '&favorites=true';
                 } else if (currentDateFilter === 'gems') {
                     url += '&gems_only=true';
+                } else if (currentDateFilter === 'proven') {
+                    url += '&proven_only=true';
                 } else if (currentDateFilter === 'trending') {
                     url += '&trending_only=true';
                 } else if (currentDateFilter === 'oos') {
@@ -1437,6 +1441,7 @@
                 let sortOrder = 'desc';
                 switch(currentSort) {
                     case 'sales_7d': sortField = 'sales_7d'; sortOrder = 'desc'; break;
+                    case 'sales_total': sortField = 'sales'; sortOrder = 'desc'; break;
                     case 'commission': sortField = 'commission_rate'; sortOrder = 'desc'; break;
                     case 'influencers_asc': sortField = 'influencer_count'; sortOrder = 'asc'; break;
                     case 'influencers_desc': sortField = 'influencer_count'; sortOrder = 'desc'; break;
@@ -1728,9 +1733,16 @@
                                 <span class="commission-badge ${commissionClass}">${commission}%</span>
                                 <span class="influencer-badge ${badgeClass}">${inf} 👤</span>
                             </div>
-                            <div style="font-size:0.6rem; color:#888; margin-top:4px; display:flex; justify-content:space-between;">
-                                <span>${(p.sales_7d || 0).toLocaleString()}/7d</span>
-                                <span>$${(p.price || 0).toFixed(2)}</span>
+                            <div style="font-size:0.75rem; color:#888; margin-top:4px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span title="7-day sales">${(p.sales_7d || 0).toLocaleString()}/7d</span>
+                                    <span title="30-day sales" style="color:#3b82f6;">${(p.sales_30d || 0).toLocaleString()}/30d</span>
+                                    <span title="All-time sales" style="color:#10b981; font-weight:600;">${(p.sales || 0).toLocaleString()} total</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+                                    <span style="color:#666;">$${(p.price || 0).toFixed(2)}</span>
+                                    ${(p.sales || 0) >= 50 ? '<span style="color:#f59e0b;">🔥 Proven</span>' : ''}
+                                </div>
                             </div>
                         </div>
                     </div>
