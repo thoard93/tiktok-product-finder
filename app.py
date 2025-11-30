@@ -671,6 +671,7 @@ def admin_create_indexes():
             ("idx_firstseen_influencer", "products", "first_seen DESC, influencer_count"),
             # Single column indexes (in case they don't exist)
             ("idx_sales_7d", "products", "sales_7d DESC"),
+            ("idx_sales_total", "products", "sales DESC"),
             ("idx_commission_rate", "products", "commission_rate DESC"),
             ("idx_first_seen", "products", "first_seen DESC"),
             ("idx_last_updated", "products", "last_updated DESC"),
@@ -1586,6 +1587,9 @@ def get_products():
     # Trending filter
     trending_only = request.args.get('trending_only', 'false').lower() == 'true'
     
+    # Proven sellers filter (products with 50+ total sales)
+    proven_only = request.args.get('proven_only', 'false').lower() == 'true'
+    
     # Build query - exclude unavailable products by default
     if oos_only:
         # Show only likely OOS products
@@ -1662,6 +1666,10 @@ def get_products():
         except Exception:
             pass  # Column might not exist yet
     
+    # Apply proven sellers filter - products with significant total sales history
+    if proven_only:
+        query = query.filter(Product.sales >= 50)
+    
     # Get total count before pagination
     total_count = query.count()
     
@@ -1737,6 +1745,12 @@ def get_products():
     
     all_count = untapped_count + low_count + medium_count + good_count
     
+    # Count proven sellers (50+ total sales)
+    proven_count = Product.query.filter(
+        base_filter,
+        Product.sales >= 50
+    ).count()
+    
     return jsonify({
         'products': [p.to_dict() for p in products],
         'pagination': {
@@ -1751,6 +1765,7 @@ def get_products():
             'oos': oos_count,
             'gems': gems_count,
             'trending': trending_count,
+            'proven': proven_count,
             'all': all_count,
             'untapped': untapped_count,
             'low': low_count,
@@ -1765,6 +1780,7 @@ def get_products():
             'oos_only': oos_only,
             'gems_only': gems_only,
             'trending_only': trending_only,
+            'proven_only': proven_only,
             'sort_by': sort_by,
             'sort_order': sort_order
         }
