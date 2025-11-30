@@ -1145,6 +1145,9 @@
             <button class="modal-btn" onclick="deepRefresh(true)">
                 <span class="icon">⚡</span> Continuous Deep Refresh (All)
             </button>
+            <button class="modal-btn" onclick="cleanupNonPromotable()">
+                <span class="icon">🚫</span> Remove Non-Promotable (Live Only, etc.)
+            </button>
             <button class="modal-btn" onclick="cleanupProducts()">
                 <span class="icon">🧹</span> Cleanup (Remove 0% Commission)
             </button>
@@ -1160,7 +1163,7 @@
     
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
-        <button class="nav-btn tools" onclick="openModal()">🛠️</button>
+        <button class="nav-btn tools" id="tools-btn" onclick="openModal()">🛠️</button>
         <button class="nav-btn secondary" onclick="loadProducts()">↻ Refresh</button>
         <button class="nav-btn primary" id="scan-btn" onclick="startScan()">🔍 Scan</button>
     </div>
@@ -1221,10 +1224,14 @@
                         // Show scan settings and button for admin/dev only
                         document.getElementById('scan-settings-container').style.display = 'block';
                         document.getElementById('scan-btn').style.display = 'block';
+                        // Show tools button for admin/dev only
+                        document.getElementById('tools-btn').style.display = 'block';
                     } else {
                         // Hide scan settings and button for regular users
                         document.getElementById('scan-settings-container').style.display = 'none';
                         document.getElementById('scan-btn').style.display = 'none';
+                        // Hide tools button for regular users
+                        document.getElementById('tools-btn').style.display = 'none';
                     }
                 }
             } catch (err) {
@@ -1946,24 +1953,25 @@
             closeModal();
             try {
                 const url = continuous 
-                    ? '/api/deep-refresh?batch=50&continuous=true&max_iterations=20'
+                    ? '/api/deep-refresh?batch=50&continuous=true&max_iterations=30'
                     : '/api/deep-refresh?batch=50';
                 const response = await fetch(url);
                 const data = await response.json();
                 
                 if (data.success) {
                     const stats = [];
+                    if (data.total_processed > 0) stats.push(`${data.total_processed} processed`);
                     if (data.commission_fixed > 0) stats.push(`${data.commission_fixed} commissions fixed`);
                     if (data.sales_fixed > 0) stats.push(`${data.sales_fixed} sales fixed`);
                     if (data.images_fixed > 0) stats.push(`${data.images_fixed} images fixed`);
                     
                     const remaining = data.remaining || {};
                     const remainingMsg = remaining.zero_commission > 0 
-                        ? ` (${remaining.zero_commission} still have 0% commission)`
+                        ? ` (${remaining.zero_commission} still have 0% - API has no data for these)`
                         : '';
                     
-                    const statsMsg = stats.length > 0 ? ` - ${stats.join(', ')}` : '';
-                    showToast(`✅ Deep refresh complete${statsMsg}${remainingMsg}`, false, 'success');
+                    const statsMsg = stats.length > 0 ? stats.join(', ') : 'No products to process';
+                    showToast(`✅ Deep refresh: ${statsMsg}${remainingMsg}`, false, 'success');
                     loadProducts();
                     loadStats();
                 } else {
@@ -1985,6 +1993,27 @@
                 loadStats();
             } catch (err) {
                 showToast('Cleanup failed', true);
+            }
+        }
+        
+        async function cleanupNonPromotable() {
+            if (!confirm('This will remove products with "not for sale", "live only", "display only", etc. in their names. These cannot be promoted as affiliate products. Continue?')) return;
+            closeModal();
+            try {
+                const response = await fetch('/api/cleanup-nonpromtable');
+                const data = await response.json();
+                if (data.success) {
+                    const examples = data.examples && data.examples.length > 0 
+                        ? `\n\nExamples removed:\n- ${data.examples.slice(0, 5).join('\n- ')}`
+                        : '';
+                    showToast(`🚫 Removed ${data.removed || 0} non-promotable products`, false, 'success');
+                    loadProducts();
+                    loadStats();
+                } else {
+                    showToast('Cleanup failed: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (err) {
+                showToast('Cleanup failed: ' + (err.message || 'Unknown error'), true);
             }
         }
         
