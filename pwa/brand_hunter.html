@@ -350,6 +350,173 @@
             font-size: 0.65rem;
         }
         
+        /* Trending & Status Badges */
+        .trending-badge {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.55rem;
+            font-weight: bold;
+            z-index: 10;
+        }
+        
+        .trending-badge.up {
+            background: rgba(34, 197, 94, 0.9);
+            color: #fff;
+        }
+        
+        .trending-badge.down {
+            background: rgba(239, 68, 68, 0.9);
+            color: #fff;
+        }
+        
+        .gem-badge {
+            position: absolute;
+            top: 4px;
+            right: 32px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: bold;
+            background: rgba(168, 85, 247, 0.9);
+            color: #fff;
+            z-index: 10;
+        }
+        
+        .oos-badge {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.55rem;
+            font-weight: bold;
+            background: rgba(255, 87, 87, 0.9);
+            color: #fff;
+            z-index: 10;
+        }
+        
+        .product-card.oos {
+            opacity: 0.6;
+        }
+        
+        /* AI Video Button */
+        .ai-video-btn {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            padding: 4px 8px;
+            font-size: 0.6rem;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 15;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            transition: all 0.2s;
+        }
+        
+        .ai-video-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.5);
+        }
+        
+        .ai-video-btn.processing {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            animation: pulse 1.5s infinite;
+        }
+        
+        .ai-video-btn.completed {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        /* Video Modal */
+        .video-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+        
+        .video-modal video {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 12px;
+        }
+        
+        .video-modal .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .video-modal .download-btn {
+            margin-top: 15px;
+            background: #e94560;
+            border: none;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        /* Special Filter Pills */
+        .date-pill.gems {
+            background: rgba(168, 85, 247, 0.3);
+            border-color: #a855f7;
+        }
+        
+        .date-pill.gems.active {
+            background: #a855f7;
+        }
+        
+        .date-pill.trending {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: #22c55e;
+        }
+        
+        .date-pill.trending.active {
+            background: #22c55e;
+        }
+        
+        .date-pill.oos-filter {
+            background: rgba(255, 87, 87, 0.3);
+            border-color: #ff5757;
+        }
+        
+        .date-pill.oos-filter.active {
+            background: #ff5757;
+        }
+        }
+        
         .influencer-badge.hot { background: #e94560; }
         .influencer-badge.warm { background: #f97316; }
         .influencer-badge.cool { background: #3b82f6; }
@@ -373,86 +540,6 @@
         
         .favorite-btn:hover { background: rgba(0,0,0,0.7); transform: scale(1.1); }
         .favorite-btn.active { background: #e94560; }
-        
-        /* Scroll to Top Button */
-        .scroll-top-btn {
-            position: fixed;
-            bottom: 90px;
-            right: 15px;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: rgba(233, 69, 96, 0.9);
-            border: none;
-            color: #fff;
-            font-size: 18px;
-            cursor: pointer;
-            z-index: 50;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s, transform 0.2s;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-        
-        .scroll-top-btn.show {
-            opacity: 1;
-            visibility: visible;
-        }
-        
-        .scroll-top-btn:active {
-            transform: scale(0.95);
-        }
-        
-        /* Loading Skeleton */
-        .skeleton {
-            background: linear-gradient(90deg, #1a1a2e 25%, #2a2a4e 50%, #1a1a2e 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
-            border-radius: 8px;
-        }
-        
-        @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-        
-        .skeleton-card {
-            background: rgba(255,255,255,0.05);
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        
-        .skeleton-image {
-            width: 100%;
-            aspect-ratio: 1;
-        }
-        
-        .skeleton-text {
-            height: 12px;
-            margin: 8px;
-            border-radius: 4px;
-        }
-        
-        .skeleton-text.short {
-            width: 60%;
-        }
-        
-        /* Product count indicator */
-        .product-count {
-            font-size: 0.75rem;
-            color: #888;
-            padding: 5px 0;
-            text-align: center;
-        }
-        
-        /* Improved touch feedback */
-        .product-card:active {
-            transform: scale(0.98);
-        }
-        
-        .pill:active, .date-pill:active, .nav-btn:active {
-            transform: scale(0.95);
-        }
         
         /* Bottom Nav */
         .bottom-nav {
@@ -730,6 +817,9 @@
             <button class="date-pill" onclick="setDateFilter('yesterday', this)">Yesterday</button>
             <button class="date-pill" onclick="setDateFilter('7days', this)">Last 7 Days</button>
             <button class="date-pill" onclick="setDateFilter('favorites', this)">❤️ Favorites</button>
+            <button class="date-pill gems" onclick="setDateFilter('gems', this)">💎 Gems</button>
+            <button class="date-pill trending" onclick="setDateFilter('trending', this)">📈 Trending</button>
+            <button class="date-pill oos-filter" onclick="setDateFilter('oos', this)">⚠️ OOS</button>
         </div>
         
         <!-- Stats Card -->
@@ -768,8 +858,8 @@
             </select>
         </div>
         
-        <!-- Scan Settings (Admin/Dev Only) -->
-        <div class="scan-settings" id="scan-settings-section" style="display: none;">
+        <!-- Scan Settings -->
+        <div class="scan-settings">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
                 <h4>⚙️ Scan Settings</h4>
                 <span class="toggle">▼</span>
@@ -918,57 +1008,12 @@
         </div>
     </div>
     
-    <!-- Product Lookup Modal -->
-    <div class="modal-overlay" id="lookup-modal">
-        <div class="modal" style="max-width: 500px;">
-            <h3>🔍 Product Lookup</h3>
-            <p style="color: #888; font-size: 0.85rem; margin-bottom: 15px;">
-                Paste any TikTok Shop product URL or ID to see its stats
-            </p>
-            <input type="text" id="lookup-input" class="search-input" style="width: 100%; margin-bottom: 10px;" 
-                   placeholder="Paste TikTok product URL or ID..." 
-                   onkeyup="if(event.key==='Enter')lookupProduct()">
-            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                <button class="nav-btn primary" style="flex:1; padding: 12px;" onclick="lookupProduct()">
-                    🔍 Look Up
-                </button>
-                <button class="nav-btn secondary" style="flex:1; padding: 12px;" onclick="lookupProduct(true)">
-                    💾 Look Up & Save
-                </button>
-            </div>
-            
-            <!-- Lookup Results -->
-            <div id="lookup-results" style="display: none;">
-                <div id="lookup-product-card" style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 15px; margin-bottom: 10px;">
-                    <!-- Product info will be inserted here -->
-                </div>
-            </div>
-            
-            <!-- Lookup Loading -->
-            <div id="lookup-loading" style="display: none; text-align: center; padding: 20px;">
-                <div style="font-size: 2rem; margin-bottom: 10px;">⏳</div>
-                <p style="color: #888;">Looking up product...</p>
-            </div>
-            
-            <!-- Lookup Error -->
-            <div id="lookup-error" style="display: none; background: rgba(233, 69, 96, 0.2); border: 1px solid #e94560; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                <p style="color: #e94560;" id="lookup-error-text">Error message</p>
-            </div>
-            
-            <button class="modal-close" onclick="closeLookupModal()">Close</button>
-        </div>
-    </div>
-    
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
         <button class="nav-btn tools" onclick="openModal()">🛠️</button>
-        <button class="nav-btn secondary" style="flex: 0.8;" onclick="openLookupModal()">🔎 Lookup</button>
         <button class="nav-btn secondary" onclick="loadProducts()">↻ Refresh</button>
-        <button class="nav-btn primary" id="scan-btn" onclick="startScan()" style="display: none;">🔍 Scan</button>
+        <button class="nav-btn primary" id="scan-btn" onclick="startScan()">🔍 Scan</button>
     </div>
-    
-    <!-- Scroll to Top Button -->
-    <button class="scroll-top-btn" id="scroll-top-btn" onclick="scrollToTop()">↑</button>
     
     <!-- Toast -->
     <div id="toast" class="toast"></div>
@@ -984,117 +1029,11 @@
         let knownBrands = [];
         let currentUser = null;
         let userWatermark = '';
-        let scrollPosition = 0;
-        let isLoading = false;
-        
-        // Scroll to top functionality
-        function scrollToTop() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-        
-        // Show/hide scroll-to-top button based on scroll position
-        window.addEventListener('scroll', () => {
-            const btn = document.getElementById('scroll-top-btn');
-            if (window.scrollY > 500) {
-                btn.classList.add('show');
-            } else {
-                btn.classList.remove('show');
-            }
-        });
-        
-        // ========================================
-        // STATE PERSISTENCE (Fix back button issue)
-        // ========================================
-        
-        function saveState() {
-            const state = {
-                filter: currentFilter,
-                dateFilter: currentDateFilter,
-                brandSearch: currentBrandSearch,
-                sort: currentSort,
-                scrollY: window.scrollY,
-                timestamp: Date.now()
-            };
-            sessionStorage.setItem('brandHunterState', JSON.stringify(state));
-        }
-        
-        function restoreState() {
-            try {
-                const saved = sessionStorage.getItem('brandHunterState');
-                if (!saved) return false;
-                
-                const state = JSON.parse(saved);
-                
-                // Only restore if state is less than 30 minutes old
-                if (Date.now() - state.timestamp > 30 * 60 * 1000) {
-                    sessionStorage.removeItem('brandHunterState');
-                    return false;
-                }
-                
-                currentFilter = state.filter || 'all';
-                currentDateFilter = state.dateFilter || 'all';
-                currentBrandSearch = state.brandSearch || '';
-                currentSort = state.sort || 'sales_7d';
-                scrollPosition = state.scrollY || 0;
-                
-                // Update UI to reflect restored state
-                if (currentBrandSearch) {
-                    document.getElementById('brand-search').value = currentBrandSearch;
-                }
-                
-                if (currentSort) {
-                    document.getElementById('sort-select').value = currentSort;
-                }
-                
-                // Update date filter pills
-                document.querySelectorAll('.date-pill').forEach(p => {
-                    p.classList.remove('active');
-                    if (p.getAttribute('onclick')?.includes(`'${currentDateFilter}'`)) {
-                        p.classList.add('active');
-                    }
-                });
-                
-                // Update filter pills (after products load)
-                setTimeout(() => {
-                    document.querySelectorAll('.pill').forEach(p => {
-                        p.classList.remove('active');
-                        if (p.getAttribute('onclick')?.includes(`'${currentFilter}'`)) {
-                            p.classList.add('active');
-                        }
-                    });
-                }, 100);
-                
-                return true;
-            } catch (e) {
-                console.error('Failed to restore state:', e);
-                return false;
-            }
-        }
-        
-        // Save state before navigating away
-        window.addEventListener('beforeunload', saveState);
-        
-        // Also save state when visibility changes (for mobile)
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                saveState();
-            }
-        });
         
         // Load products on page load
         document.addEventListener('DOMContentLoaded', () => {
-            // Restore state first
-            const stateRestored = restoreState();
-            
             loadCurrentUser();
-            loadProducts().then(() => {
-                // Restore scroll position after products load
-                if (stateRestored && scrollPosition > 0) {
-                    setTimeout(() => {
-                        window.scrollTo(0, scrollPosition);
-                    }, 150);
-                }
-            });
+            loadProducts();
             loadStats();
             loadKnownBrands();
             checkScanStatus();
@@ -1118,14 +1057,11 @@
                     document.getElementById('user-name').textContent = currentUser.discord_username || 'User';
                     document.getElementById('user-avatar').textContent = (currentUser.discord_username || 'U')[0].toUpperCase();
                     
+                    // Set global isAdmin flag for video generation access
+                    window.isAdmin = currentUser.is_admin || currentUser.is_dev_user;
+                    
                     if (currentUser.is_admin) {
                         document.getElementById('admin-link').style.display = 'inline';
-                    }
-                    
-                    // Show scan controls for admin or dev users only
-                    if (currentUser.is_admin || currentUser.is_dev_user) {
-                        document.getElementById('scan-settings-section').style.display = 'block';
-                        document.getElementById('scan-btn').style.display = 'flex';
                     }
                 }
             } catch (err) {
@@ -1222,26 +1158,16 @@
         }
         
         async function loadProducts() {
-            if (isLoading) return; // Prevent double-loading
-            isLoading = true;
-            
-            const container = document.getElementById('products-container');
-            
-            // Show loading skeletons (only if no products yet)
-            if (allProducts.length === 0) {
-                container.innerHTML = Array(8).fill('').map(() => `
-                    <div class="skeleton-card">
-                        <div class="skeleton skeleton-image"></div>
-                        <div class="skeleton skeleton-text"></div>
-                        <div class="skeleton skeleton-text short"></div>
-                    </div>
-                `).join('');
-            }
-            
             try {
                 let url = '/api/products?limit=500';
                 if (currentDateFilter === 'favorites') {
                     url = '/api/favorites';
+                } else if (currentDateFilter === 'gems') {
+                    url = '/api/hidden-gems?limit=100';
+                } else if (currentDateFilter === 'trending') {
+                    url = '/api/trending-products?limit=100&min_velocity=10';
+                } else if (currentDateFilter === 'oos') {
+                    url = '/api/oos-products';
                 } else if (currentDateFilter !== 'all') {
                     url += `&date=${currentDateFilter}`;
                 }
@@ -1257,8 +1183,6 @@
                 applySort();
             } catch (err) {
                 showToast('Failed to load products', true);
-            } finally {
-                isLoading = false;
             }
         }
         
@@ -1266,19 +1190,16 @@
             currentDateFilter = filter;
             document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
             btn.classList.add('active');
-            saveState();
             loadProducts();
         }
         
         function applyFilters() {
             currentBrandSearch = document.getElementById('brand-search').value;
-            saveState();
             loadProducts();
         }
         
         function applySort() {
             currentSort = document.getElementById('sort-select').value;
-            saveState();
             
             let sorted = [...allProducts];
             switch(currentSort) {
@@ -1335,8 +1256,6 @@
                 btn.classList.add('active');
             }
             
-            saveState();
-            
             let source = products || allProducts;
             let filtered = source;
             
@@ -1367,10 +1286,7 @@
                 return;
             }
             
-            // Add product count at the top
-            const countHtml = `<div class="product-count" style="grid-column: 1/-1;">Showing ${products.length} product${products.length !== 1 ? 's' : ''}</div>`;
-            
-            const productsHtml = products.map(p => {
+            container.innerHTML = products.map(p => {
                 const inf = p.influencer_count || 0;
                 let badgeClass = '';
                 if (inf <= 10) badgeClass = 'hot';
@@ -1392,23 +1308,53 @@
                 const isFav = p.is_favorite ? 'active' : '';
                 const heartIcon = p.is_favorite ? '❤️' : '🤍';
                 
-                // Get product icon based on name for fallback
-                const productIcon = getProductIcon(p.product_name);
+                // Trending badge
+                let trendingBadge = '';
+                const velocity = p.sales_velocity || 0;
+                if (velocity >= 20) {
+                    trendingBadge = `<span class="trending-badge up">📈 +${Math.round(velocity)}%</span>`;
+                } else if (velocity <= -20) {
+                    trendingBadge = `<span class="trending-badge down">📉 ${Math.round(velocity)}%</span>`;
+                }
+                
+                // Hidden gem badge
+                const gemBadge = p.is_hidden_gem ? '<span class="gem-badge">💎 GEM</span>' : '';
+                
+                // OOS badge
+                let oosBadge = '';
+                let oosClass = '';
+                if (p.product_status === 'likely_oos' || p.product_status === 'out_of_stock') {
+                    oosBadge = '<span class="oos-badge">⚠️ OOS</span>';
+                    oosClass = 'oos';
+                }
+                
+                // AI Video button (admin only)
+                let videoBtn = '';
+                if (window.isAdmin) {
+                    const videoStatus = p.ai_video_status || 'none';
+                    if (videoStatus === 'completed' && p.ai_video_url) {
+                        videoBtn = `<button class="ai-video-btn completed" onclick="event.stopPropagation(); playVideo('${p.ai_video_url}')">▶️ Video</button>`;
+                    } else if (videoStatus === 'processing') {
+                        videoBtn = `<button class="ai-video-btn processing" onclick="event.stopPropagation(); checkVideoStatus('${p.product_id}')">⏳</button>`;
+                    } else {
+                        videoBtn = `<button class="ai-video-btn" onclick="event.stopPropagation(); generateVideo('${p.product_id}')">🎬 AI</button>`;
+                    }
+                }
                 
                 return `
-                    <div class="product-card">
+                    <div class="product-card ${oosClass}">
+                        ${trendingBadge}
+                        ${gemBadge}
+                        ${oosBadge}
+                        ${videoBtn}
                         <button class="favorite-btn ${isFav}" onclick="event.stopPropagation(); toggleFavorite('${p.product_id}', this)">
                             ${heartIcon}
                         </button>
                         <img class="product-image" 
                              src="${p.cached_image_url || p.image_url || ''}" 
-                             loading="lazy"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-                             alt="${(p.product_name || '').substring(0, 50)}"
+                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2240%22>📦</text></svg>'"
+                             alt=""
                              onclick="openProduct('${p.product_id}')">
-                        <div class="product-image-fallback" style="display:none;width:100%;aspect-ratio:1;background:linear-gradient(135deg,#1a1a2e,#0f3460);align-items:center;justify-content:center;font-size:3rem;" onclick="openProduct('${p.product_id}')">
-                            ${productIcon}
-                        </div>
                         <div class="product-info" onclick="openProduct('${p.product_id}')">
                             <div class="product-name">${p.product_name}</div>
                             <div class="product-stats">
@@ -1423,8 +1369,6 @@
                     </div>
                 `;
             }).join('');
-            
-            container.innerHTML = countHtml + productsHtml;
         }
         
         async function toggleFavorite(productId, btn) {
@@ -1679,149 +1623,6 @@
             document.getElementById('tools-modal').classList.remove('show');
         }
         
-        // Product Lookup functions
-        function openLookupModal() {
-            document.getElementById('lookup-modal').classList.add('show');
-            document.getElementById('lookup-input').focus();
-            // Reset state
-            document.getElementById('lookup-results').style.display = 'none';
-            document.getElementById('lookup-loading').style.display = 'none';
-            document.getElementById('lookup-error').style.display = 'none';
-        }
-        
-        function closeLookupModal() {
-            document.getElementById('lookup-modal').classList.remove('show');
-            document.getElementById('lookup-input').value = '';
-            document.getElementById('lookup-results').style.display = 'none';
-            document.getElementById('lookup-loading').style.display = 'none';
-            document.getElementById('lookup-error').style.display = 'none';
-        }
-        
-        async function lookupProduct(saveToDb = false) {
-            const input = document.getElementById('lookup-input').value.trim();
-            if (!input) {
-                showToast('Please enter a TikTok product URL or ID', true);
-                return;
-            }
-            
-            // Show loading - with special message for share links
-            document.getElementById('lookup-results').style.display = 'none';
-            document.getElementById('lookup-error').style.display = 'none';
-            document.getElementById('lookup-loading').style.display = 'block';
-            
-            // Check if it's a share link
-            const isShareLink = input.includes('/t/') || input.includes('vm.tiktok');
-            if (isShareLink) {
-                document.querySelector('#lookup-loading p').textContent = 'Resolving share link...';
-            } else {
-                document.querySelector('#lookup-loading p').textContent = 'Looking up product...';
-            }
-            
-            try {
-                const url = `/api/lookup?url=${encodeURIComponent(input)}${saveToDb ? '&save=true' : ''}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                document.getElementById('lookup-loading').style.display = 'none';
-                
-                if (!data.success) {
-                    document.getElementById('lookup-error').style.display = 'block';
-                    document.getElementById('lookup-error-text').textContent = data.error || 'Product not found';
-                    return;
-                }
-                
-                // Show results
-                const p = data.product;
-                let commission = p.commission_rate || 0;
-                if (commission > 0 && commission < 1) commission = commission * 100;
-                
-                const cardHtml = `
-                    <div style="display: flex; gap: 15px; align-items: flex-start;">
-                        ${p.image_url ? `<img src="${p.image_url}" style="width: 80px; height: 80px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="font-weight: 600; margin-bottom: 5px; font-size: 0.9rem; line-height: 1.3;">${p.product_name || 'Unknown Product'}</div>
-                            ${p.seller_name ? `<div style="color: #888; font-size: 0.75rem; margin-bottom: 8px;">🏪 ${p.seller_name}</div>` : ''}
-                            
-                            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
-                                <span style="background: ${p.competition_level === 'untapped' ? '#e94560' : p.competition_level === 'low' ? '#f97316' : p.competition_level === 'medium' ? '#3b82f6' : '#888'}; padding: 3px 8px; border-radius: 12px; font-size: 0.7rem;">
-                                    ${p.competition_label}
-                                </span>
-                                <span style="background: ${commission >= 10 ? '#4ade80' : commission >= 5 ? '#fbbf24' : '#f87171'}; color: #000; padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">
-                                    ${commission.toFixed(1)}% Commission
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px;">
-                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.1rem; font-weight: 700; color: #25f4ee;">${p.influencer_count || 0}</div>
-                            <div style="font-size: 0.65rem; color: #888;">Influencers</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.1rem; font-weight: 700; color: #fe2c55;">${p.video_count || 0}</div>
-                            <div style="font-size: 0.65rem; color: #888;">Videos</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.1rem; font-weight: 700; color: #4ade80;">${(p.sales_7d || 0).toLocaleString()}</div>
-                            <div style="font-size: 0.65rem; color: #888;">7-Day Sales</div>
-                        </div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px;">
-                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.1rem; font-weight: 700;">${p.live_count || 0}</div>
-                            <div style="font-size: 0.65rem; color: #888;">Lives</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.1rem; font-weight: 700;">$${(p.price || 0).toFixed(2)}</div>
-                            <div style="font-size: 0.65rem; color: #888;">Price</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.1rem; font-weight: 700;">${(p.sales || 0).toLocaleString()}</div>
-                            <div style="font-size: 0.65rem; color: #888;">Total Sales</div>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
-                        <a href="${p.tiktok_url}" target="_blank" style="flex: 1; padding: 10px; background: #fe2c55; color: #fff; text-align: center; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 600;">
-                            🛒 TikTok Shop
-                        </a>
-                        <a href="${p.echotik_url}" target="_blank" style="flex: 1; padding: 10px; background: rgba(255,255,255,0.1); color: #fff; text-align: center; border-radius: 8px; text-decoration: none; font-size: 0.85rem;">
-                            📊 EchoTik
-                        </a>
-                    </div>
-                    
-                    ${p.in_database ? `
-                        <div style="margin-top: 10px; padding: 8px; background: rgba(74, 222, 128, 0.1); border: 1px solid #4ade80; border-radius: 6px; font-size: 0.75rem; color: #4ade80; text-align: center;">
-                            ✅ This product is in your database
-                        </div>
-                    ` : (saveToDb && data.saved ? `
-                        <div style="margin-top: 10px; padding: 8px; background: rgba(74, 222, 128, 0.1); border: 1px solid #4ade80; border-radius: 6px; font-size: 0.75rem; color: #4ade80; text-align: center;">
-                            ✅ Product saved to database!
-                        </div>
-                    ` : `
-                        <button onclick="lookupProduct(true)" style="width: 100%; margin-top: 10px; padding: 10px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; color: #3b82f6; font-size: 0.85rem; cursor: pointer;">
-                            💾 Save to Database
-                        </button>
-                    `)}
-                `;
-                
-                document.getElementById('lookup-product-card').innerHTML = cardHtml;
-                document.getElementById('lookup-results').style.display = 'block';
-                
-                if (data.saved) {
-                    showToast('✅ Product saved to database!', false, 'success');
-                    loadProducts(); // Refresh the product list
-                }
-                
-            } catch (err) {
-                document.getElementById('lookup-loading').style.display = 'none';
-                document.getElementById('lookup-error').style.display = 'block';
-                document.getElementById('lookup-error-text').textContent = 'Failed to look up product: ' + err.message;
-            }
-        }
-        
         async function refreshImages(force = false) {
             const msg = force ? '🔄 Force refreshing all images...' : '🖼️ Refreshing missing images...';
             showToast(msg, false);
@@ -1944,40 +1745,6 @@
             }
         }
         
-        // Get product icon based on product name (for fallback images)
-        function getProductIcon(name) {
-            const n = (name || '').toLowerCase();
-            if (n.includes('hair') || n.includes('wig')) return '💇';
-            if (n.includes('brush') || n.includes('comb')) return '💆';
-            if (n.includes('bag') || n.includes('purse') || n.includes('handbag')) return '👜';
-            if (n.includes('shoe') || n.includes('sneaker') || n.includes('boot')) return '👟';
-            if (n.includes('dress') || n.includes('cloth') || n.includes('shirt') || n.includes('tee')) return '👗';
-            if (n.includes('watch')) return '⌚';
-            if (n.includes('phone') || n.includes('case') || n.includes('charger')) return '📱';
-            if (n.includes('jewelry') || n.includes('necklace') || n.includes('ring') || n.includes('earring')) return '💍';
-            if (n.includes('makeup') || n.includes('cosmetic') || n.includes('lipstick') || n.includes('mascara')) return '💄';
-            if (n.includes('skin') || n.includes('cream') || n.includes('serum') || n.includes('lotion')) return '🧴';
-            if (n.includes('toy') || n.includes('game')) return '🎮';
-            if (n.includes('book')) return '📚';
-            if (n.includes('food') || n.includes('snack') || n.includes('noodle') || n.includes('soup')) return '🍜';
-            if (n.includes('drink') || n.includes('coffee') || n.includes('tea')) return '☕';
-            if (n.includes('fitness') || n.includes('gym') || n.includes('workout') || n.includes('weight')) return '💪';
-            if (n.includes('baby') || n.includes('kid')) return '👶';
-            if (n.includes('pet') || n.includes('dog') || n.includes('cat')) return '🐕';
-            if (n.includes('car') || n.includes('auto') || n.includes('vehicle') || n.includes('heater')) return '🚗';
-            if (n.includes('garden') || n.includes('plant')) return '🌱';
-            if (n.includes('kitchen') || n.includes('cook')) return '🍳';
-            if (n.includes('tool') || n.includes('drill')) return '🔧';
-            if (n.includes('lamp') || n.includes('light') || n.includes('led')) return '💡';
-            if (n.includes('bed') || n.includes('pillow') || n.includes('mattress')) return '🛏️';
-            if (n.includes('crystal') || n.includes('stone') || n.includes('gem')) return '💎';
-            if (n.includes('glasses') || n.includes('sunglass')) return '🕶️';
-            if (n.includes('wallet') || n.includes('card holder')) return '👛';
-            if (n.includes('headphone') || n.includes('earphone') || n.includes('speaker')) return '🎧';
-            if (n.includes('camera') || n.includes('tripod')) return '📷';
-            return '📦';
-        }
-        
         function showToast(message, isError = false, type = '') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
@@ -1985,6 +1752,143 @@
             if (isError) toast.classList.add('error');
             if (type === 'success') toast.classList.add('success');
             setTimeout(() => { toast.className = 'toast'; }, 3000);
+        }
+        
+        // ==========================================
+        // AI VIDEO GENERATION FUNCTIONS
+        // ==========================================
+        
+        async function generateVideo(productId) {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '⏳';
+            btn.classList.add('processing');
+            
+            try {
+                const passkey = localStorage.getItem('devPasskey') || '';
+                const response = await fetch(`/api/one-click-video?passkey=${passkey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ product_id: productId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.video_started) {
+                    showToast('🎬 Video generating...', false, 'success');
+                    // Start polling for status
+                    pollVideoStatus(data.video_task_id, productId, btn);
+                } else if (data.success && data.image_generated) {
+                    showToast('🖼️ Image generated! Video requires Kling AI setup.', false, 'success');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    btn.classList.remove('processing');
+                } else {
+                    showToast(data.error || 'Failed to start generation', true);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    btn.classList.remove('processing');
+                }
+            } catch (error) {
+                console.error('Video generation error:', error);
+                showToast('Failed to generate video', true);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.classList.remove('processing');
+            }
+        }
+        
+        function pollVideoStatus(taskId, productId, btn) {
+            let attempts = 0;
+            const maxAttempts = 60; // 5 minutes (60 * 5 seconds)
+            
+            const check = async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/video-status/${taskId}`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'completed' && data.video_url) {
+                        btn.innerHTML = '▶️ Video';
+                        btn.classList.remove('processing');
+                        btn.classList.add('completed');
+                        btn.disabled = false;
+                        btn.onclick = () => playVideo(data.video_url);
+                        
+                        // Update product in local array
+                        const product = allProducts.find(p => p.product_id === productId);
+                        if (product) {
+                            product.ai_video_url = data.video_url;
+                            product.ai_video_status = 'completed';
+                        }
+                        
+                        showToast('🎉 Video ready!', false, 'success');
+                        return;
+                    } else if (data.status === 'failed') {
+                        btn.innerHTML = '❌';
+                        btn.classList.remove('processing');
+                        btn.disabled = false;
+                        btn.onclick = () => generateVideo(productId);
+                        showToast(data.error || 'Video generation failed', true);
+                        return;
+                    } else if (attempts >= maxAttempts) {
+                        btn.innerHTML = '⏰';
+                        btn.classList.remove('processing');
+                        btn.disabled = false;
+                        showToast('Video taking too long - check back later', true);
+                        return;
+                    }
+                    
+                    // Continue polling
+                    setTimeout(check, 5000);
+                } catch (error) {
+                    console.error('Status check error:', error);
+                    setTimeout(check, 5000);
+                }
+            };
+            
+            setTimeout(check, 5000);
+        }
+        
+        async function checkVideoStatus(productId) {
+            try {
+                const response = await fetch(`/api/product/${productId}/video-status`);
+                const data = await response.json();
+                
+                if (data.status === 'completed' && data.video_url) {
+                    playVideo(data.video_url);
+                } else if (data.status === 'processing') {
+                    showToast('⏳ Video still processing...', false);
+                } else {
+                    showToast(data.error || 'Video not ready', true);
+                }
+            } catch (error) {
+                showToast('Failed to check status', true);
+            }
+        }
+        
+        function playVideo(videoUrl) {
+            event.stopPropagation();
+            
+            const modal = document.createElement('div');
+            modal.className = 'video-modal';
+            modal.innerHTML = `
+                <button class="close-modal" onclick="this.parentElement.remove()">×</button>
+                <video controls autoplay loop playsinline>
+                    <source src="${videoUrl}" type="video/mp4">
+                    Your browser doesn't support video.
+                </video>
+                <a class="download-btn" href="${videoUrl}" download="product_video.mp4" target="_blank">
+                    📥 Download Video
+                </a>
+            `;
+            
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+            
+            document.body.appendChild(modal);
         }
     </script>
 </body>
