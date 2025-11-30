@@ -225,6 +225,8 @@ class Product(db.Model):
     
     # For out-of-stock detection - track previous 7d sales to detect sudden drops
     prev_sales_7d = db.Column(db.Integer, default=0)
+    prev_sales_30d = db.Column(db.Integer, default=0)
+    sales_velocity = db.Column(db.Float, default=0)  # Percentage change in sales
     
     scan_type = db.Column(db.String(50), default='brand_hunter')
     first_seen = db.Column(db.DateTime, default=datetime.utcnow)
@@ -256,6 +258,7 @@ class Product(db.Model):
             'is_favorite': self.is_favorite,
             'product_status': self.product_status or 'active',
             'status_note': self.status_note,
+            'sales_velocity': self.sales_velocity or 0,
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
@@ -1513,9 +1516,12 @@ def get_products():
             Product.commission_rate >= 10
         )
     
-    # Apply trending filter (positive sales velocity)
+    # Apply trending filter (positive sales velocity) - safely handle if column doesn't exist
     if trending_only:
-        query = query.filter(Product.sales_velocity >= 20)
+        try:
+            query = query.filter(Product.sales_velocity >= 20)
+        except Exception:
+            pass  # Column might not exist yet
     
     # Get total count before pagination
     total_count = query.count()
@@ -1543,11 +1549,14 @@ def get_products():
         db.or_(Product.product_status == None, Product.product_status == 'active')
     ).count()
     
-    # Count trending
-    trending_count = Product.query.filter(
-        Product.sales_velocity >= 20,
-        db.or_(Product.product_status == None, Product.product_status == 'active')
-    ).count()
+    # Count trending - safely handle if sales_velocity column doesn't exist
+    try:
+        trending_count = Product.query.filter(
+            Product.sales_velocity >= 20,
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        ).count()
+    except Exception:
+        trending_count = 0
     
     return jsonify({
         'products': [p.to_dict() for p in products],
@@ -3595,6 +3604,20 @@ def init_database():
             ('product_rating', 'FLOAT DEFAULT 0'),
             ('review_count', 'INTEGER DEFAULT 0'),
             ('is_favorite', 'BOOLEAN DEFAULT FALSE'),
+            ('first_seen', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'),
+            ('prev_sales_7d', 'INTEGER DEFAULT 0'),
+            ('prev_sales_30d', 'INTEGER DEFAULT 0'),
+            ('sales_velocity', 'FLOAT DEFAULT 0'),
+            ('status_changed_at', 'TIMESTAMP'),
+            ('is_hidden_gem', 'BOOLEAN DEFAULT FALSE'),
+            ('product_status', 'VARCHAR(50) DEFAULT \'active\''),
+            ('ai_image_url', 'TEXT'),
+            ('ai_video_url', 'TEXT'),
+            ('ai_video_task_id', 'VARCHAR(100)'),
+            ('ai_video_status', 'VARCHAR(50)'),
+            ('last_alert_sent', 'TIMESTAMP'),
+            ('gem_alert_sent', 'TIMESTAMP'),
+            ('stock_alert_sent', 'TIMESTAMP'),
         ]
         
         added = []
