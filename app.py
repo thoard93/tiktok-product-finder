@@ -1487,6 +1487,16 @@ def get_products():
             db.or_(Product.product_status == None, Product.product_status == 'active')
         )
     
+    # ALWAYS exclude non-promotable products (not for sale, live only, etc.)
+    # These cannot be promoted as affiliate products
+    query = query.filter(
+        ~Product.product_name.ilike('%not for sale%'),
+        ~Product.product_name.ilike('%live only%'),
+        ~Product.product_name.ilike('%sample%not for sale%'),
+        ~Product.product_name.ilike('%display only%'),
+        ~Product.product_name.ilike('%coming soon%')
+    )
+    
     # Apply date filter
     now = datetime.utcnow()
     if date_filter == 'today':
@@ -1983,12 +1993,17 @@ def deep_refresh_products():
         total_commission_fixed = 0
         total_sales_fixed = 0
         total_images_fixed = 0
+        total_processed = 0
         iteration = 0
+        
+        # Track when we started - only process products not updated since then
+        refresh_started = datetime.utcnow()
         
         while True:
             iteration += 1
             
             # Build query for products needing fixes
+            # IMPORTANT: Exclude products we've already processed this session
             conditions = []
             if fix_zero_commission:
                 conditions.append(db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None)))
@@ -1998,17 +2013,26 @@ def deep_refresh_products():
             if not conditions:
                 conditions.append(Product.product_id.isnot(None))  # Process all
             
-            products = Product.query.filter(db.or_(*conditions)).limit(batch_size).all()
+            # Only get products NOT updated during this refresh session
+            products = Product.query.filter(
+                db.or_(*conditions),
+                db.or_(
+                    Product.last_updated.is_(None),
+                    Product.last_updated < refresh_started
+                )
+            ).limit(batch_size).all()
             
             if not products:
                 break
             
             updated_this_batch = 0
+            processed_this_batch = 0
             commission_fixed = 0
             sales_fixed = 0
             images_fixed = 0
             
             for product in products:
+                processed_this_batch += 1
                 try:
                     response = requests.get(
                         f"{BASE_URL}/product/detail",
@@ -2016,6 +2040,9 @@ def deep_refresh_products():
                         auth=get_auth(),
                         timeout=30
                     )
+                    
+                    # ALWAYS mark as updated so we don't retry the same product
+                    product.last_updated = datetime.utcnow()
                     
                     if response.status_code != 200:
                         continue
@@ -2026,17 +2053,20 @@ def deep_refresh_products():
                     
                     p = data['data'] if isinstance(data['data'], dict) else data['data'][0] if data['data'] else {}
                     
-                    updated = False
+                    if not p:
+                        continue
                     
-                    # Fix commission
+                    data_changed = False
+                    
+                    # Fix commission - update even if API returns 0, at least we tried
                     new_commission = float(p.get('product_commission_rate', 0) or 0)
                     if new_commission > 0 and (product.commission_rate or 0) == 0:
                         product.commission_rate = new_commission
                         commission_fixed += 1
-                        updated = True
-                    elif new_commission > 0:
+                        data_changed = True
+                    elif new_commission > 0 and new_commission != product.commission_rate:
                         product.commission_rate = new_commission
-                        updated = True
+                        data_changed = True
                     
                     # Fix sales
                     new_sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
@@ -2047,19 +2077,19 @@ def deep_refresh_products():
                         product.gmv = float(p.get('total_sale_gmv_amt', 0) or 0)
                         product.gmv_30d = float(p.get('total_sale_gmv_30d_amt', 0) or 0)
                         sales_fixed += 1
-                        updated = True
+                        data_changed = True
                     
                     # Fix influencer count
                     new_inf_count = int(p.get('total_ifl_cnt', 0) or 0)
                     if new_inf_count > 0:
                         product.influencer_count = new_inf_count
-                        updated = True
+                        data_changed = True
                     
                     # Fix price
                     new_price = float(p.get('spu_avg_price', 0) or 0)
                     if new_price > 0:
                         product.price = new_price
-                        updated = True
+                        data_changed = True
                     
                     # Fix image
                     if not product.cached_image_url:
@@ -2073,33 +2103,35 @@ def deep_refresh_products():
                                     product.cached_image_url = signed_urls[parsed_url]
                                     product.image_cached_at = datetime.utcnow()
                                     images_fixed += 1
-                                    updated = True
+                                    data_changed = True
                     
-                    if updated:
-                        product.last_updated = datetime.utcnow()
+                    if data_changed:
                         updated_this_batch += 1
                     
                     time.sleep(0.4)  # Rate limiting
                     
                 except Exception as e:
                     print(f"Error deep refreshing {product.product_id}: {e}")
+                    # Still mark as updated so we don't retry
+                    product.last_updated = datetime.utcnow()
                     continue
             
             db.session.commit()
             
             total_updated += updated_this_batch
+            total_processed += processed_this_batch
             total_commission_fixed += commission_fixed
             total_sales_fixed += sales_fixed
             total_images_fixed += images_fixed
             
-            print(f"🔄 Deep refresh iteration {iteration}: {updated_this_batch} updated (commission: {commission_fixed}, sales: {sales_fixed}, images: {images_fixed})")
+            print(f"🔄 Deep refresh iteration {iteration}: processed {processed_this_batch}, updated {updated_this_batch} (commission: {commission_fixed}, sales: {sales_fixed}, images: {images_fixed})")
             
             # Break conditions
             if not continuous:
                 break
             if iteration >= max_iterations:
                 break
-            if updated_this_batch == 0:
+            if processed_this_batch == 0:  # No more products to process
                 break
         
         # Count remaining problems
@@ -2111,6 +2143,7 @@ def deep_refresh_products():
         return jsonify({
             'success': True,
             'message': f'Deep refresh complete',
+            'total_processed': total_processed,
             'total_updated': total_updated,
             'commission_fixed': total_commission_fixed,
             'sales_fixed': total_sales_fixed,
@@ -2213,6 +2246,55 @@ def cleanup_products():
             'before': total_before,
             'after': total_after,
             'removed': deleted
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cleanup-nonpromtable', methods=['POST', 'GET'])
+def cleanup_nonpromtable():
+    """
+    Remove products that cannot be promoted as affiliate products:
+    - "not for sale" in name
+    - "live only" in name
+    - "display only" in name
+    - "coming soon" in name
+    - "sample" in name
+    """
+    try:
+        # Count before cleanup
+        total_before = Product.query.count()
+        
+        # Find non-promotable products
+        non_promotable = Product.query.filter(
+            db.or_(
+                Product.product_name.ilike('%not for sale%'),
+                Product.product_name.ilike('%live only%'),
+                Product.product_name.ilike('%display only%'),
+                Product.product_name.ilike('%coming soon%'),
+                Product.product_name.ilike('%sample%not for sale%')
+            )
+        ).all()
+        
+        deleted_count = len(non_promotable)
+        deleted_names = [p.product_name[:50] for p in non_promotable[:10]]  # First 10 for preview
+        
+        # Delete them
+        for p in non_promotable:
+            db.session.delete(p)
+        
+        db.session.commit()
+        
+        total_after = Product.query.count()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Removed {deleted_count} non-promotable products',
+            'before': total_before,
+            'after': total_after,
+            'removed': deleted_count,
+            'examples': deleted_names
         })
     except Exception as e:
         db.session.rollback()
