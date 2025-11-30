@@ -1328,25 +1328,11 @@
                     oosClass = 'oos';
                 }
                 
-                // AI Video button (admin only)
-                let videoBtn = '';
-                if (window.isAdmin) {
-                    const videoStatus = p.ai_video_status || 'none';
-                    if (videoStatus === 'completed' && p.ai_video_url) {
-                        videoBtn = `<button class="ai-video-btn completed" onclick="event.stopPropagation(); playVideo('${p.ai_video_url}')">▶️ Video</button>`;
-                    } else if (videoStatus === 'processing') {
-                        videoBtn = `<button class="ai-video-btn processing" onclick="event.stopPropagation(); checkVideoStatus('${p.product_id}')">⏳</button>`;
-                    } else {
-                        videoBtn = `<button class="ai-video-btn" onclick="event.stopPropagation(); generateVideo('${p.product_id}')">🎬 AI</button>`;
-                    }
-                }
-                
                 return `
                     <div class="product-card ${oosClass}">
                         ${trendingBadge}
                         ${gemBadge}
                         ${oosBadge}
-                        ${videoBtn}
                         <button class="favorite-btn ${isFav}" onclick="event.stopPropagation(); toggleFavorite('${p.product_id}', this)">
                             ${heartIcon}
                         </button>
