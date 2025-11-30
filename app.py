@@ -328,6 +328,21 @@ def login_page():
     """Show login page"""
     return send_from_directory(app.static_folder, 'login.html')
 
+@app.route('/terms')
+def terms_page():
+    """Show Terms of Service"""
+    return send_from_directory(app.static_folder, 'terms.html')
+
+@app.route('/privacy')
+def privacy_page():
+    """Show Privacy Policy"""
+    return send_from_directory(app.static_folder, 'privacy.html')
+
+@app.route('/cookies')
+def cookies_page():
+    """Show Cookie Policy"""
+    return send_from_directory(app.static_folder, 'cookies.html')
+
 @app.route('/auth/discord')
 def discord_login():
     """Redirect to Discord OAuth"""
@@ -1887,37 +1902,32 @@ def refresh_images():
                 Product.image_url != ''
             ).limit(batch_size).all()
         else:
-            # Products missing images - prioritize those with no cached_image_url
+            # Products missing cached images - prioritize those with image_url but no cache
+            # First get products that HAVE image_url but need signing
             products = Product.query.filter(
-                db.or_(
-                    # Has image_url but no cache
-                    db.and_(
-                        Product.image_url.isnot(None),
-                        Product.image_url != '',
-                        db.or_(
-                            Product.cached_image_url.is_(None),
-                            Product.cached_image_url == ''
-                        )
-                    ),
-                    # No image_url at all
-                    db.or_(
-                        Product.image_url.is_(None),
-                        Product.image_url == ''
-                    )
-                )
-            ).limit(batch_size).all()
-        
-        if not products:
-            remaining = 0
-        else:
-            remaining = Product.query.filter(
+                Product.image_url.isnot(None),
+                Product.image_url != '',
                 db.or_(
                     Product.cached_image_url.is_(None),
                     Product.cached_image_url == ''
                 )
-            ).count() - len(products)
+            ).limit(batch_size).all()
+            
+            # If none of those, get products with NO image_url (need API fetch)
+            if not products:
+                products = Product.query.filter(
+                    db.or_(
+                        Product.image_url.is_(None),
+                        Product.image_url == ''
+                    ),
+                    db.or_(
+                        Product.cached_image_url.is_(None),
+                        Product.cached_image_url == ''
+                    )
+                ).limit(batch_size).all()
         
         updated = 0
+        processed = len(products)
         
         for product in products:
             try:
@@ -1978,11 +1988,19 @@ def refresh_images():
         
         db.session.commit()
         
+        # Count remaining AFTER processing
+        remaining = Product.query.filter(
+            db.or_(
+                Product.cached_image_url.is_(None),
+                Product.cached_image_url == ''
+            )
+        ).count()
+        
         return jsonify({
             'success': True,
             'updated': updated,
-            'processed': len(products),
-            'remaining': max(0, remaining)
+            'processed': processed,
+            'remaining': remaining
         })
         
     except Exception as e:
