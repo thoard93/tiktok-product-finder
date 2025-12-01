@@ -1647,10 +1647,12 @@ def get_products():
     # Apply hidden gems filter (high sales, low influencers, decent commission)
     # Lowered commission to 5% since many products show 0% until deep-refreshed
     if gems_only:
+        # Hidden gems: selling well with low competition
+        # Commission is a BONUS, not a requirement (since many products show 0%)
         query = query.filter(
-            Product.sales_7d >= 30,  # Lowered from 50
-            Product.influencer_count <= 50,
-            Product.commission_rate >= 5  # Lowered from 10%
+            Product.sales_7d >= 20,  # Decent weekly sales
+            Product.influencer_count <= 30,  # Low competition
+            Product.influencer_count >= 1  # At least 1 (shows it's promotable)
         )
     
     # Apply trending filter - products with sales growth or high recent sales
@@ -1688,11 +1690,11 @@ def get_products():
     # Count OOS products for UI
     oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
     
-    # Count gems (using updated criteria)
+    # Count gems (products selling well with low competition)
     gems_count = Product.query.filter(
-        Product.sales_7d >= 30,
-        Product.influencer_count <= 50,
-        Product.commission_rate >= 5,
+        Product.sales_7d >= 20,
+        Product.influencer_count <= 30,
+        Product.influencer_count >= 1,
         db.or_(Product.product_status == None, Product.product_status == 'active')
     ).count()
     
@@ -1955,9 +1957,9 @@ def get_stats():
     
     # Gems and trending counts
     gems_count = Product.query.filter(
-        Product.sales_7d >= 30,
-        Product.influencer_count <= 50,
-        Product.commission_rate >= 5,
+        Product.sales_7d >= 20,
+        Product.influencer_count <= 30,
+        Product.influencer_count >= 1,
         db.or_(Product.product_status == None, Product.product_status == 'active')
     ).count()
     
