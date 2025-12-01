@@ -1153,6 +1153,9 @@ def quick_scan():
         pages: Number of pages to scan (default: 10, max 10 to avoid timeout)
         max_influencers: Maximum influencer count (default: 100)
         min_sales: Minimum 7-day sales (default: 0)
+        max_videos: Maximum video count (optional, no limit if not set)
+    
+    Note: Only products with 1+ videos are saved (proven products only)
     """
     user = get_current_user()
     user_id = user.id if user else None
@@ -1173,6 +1176,7 @@ def quick_scan():
         min_influencers = request.args.get('min_influencers', 1, type=int)
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
+        max_videos = request.args.get('max_videos', None, type=int)  # None = no limit
         
         # Get the specific brand
         brand_page = (brand_rank - 1) // 10 + 1
@@ -1227,6 +1231,14 @@ def quick_scan():
                 if sales_7d < min_sales:
                     continue
                 if commission_rate <= 0:
+                    continue
+                
+                # Require at least 1 video (product has been promoted)
+                if video_count < 1:
+                    continue
+                
+                # Video count max filter (if set)
+                if max_videos is not None and video_count > max_videos:
                     continue
                 
                 result['products_found'] += 1
@@ -1313,6 +1325,7 @@ def scan_page_range(seller_id):
         end: Ending page (default: 50)
         max_influencers: Max influencer filter (default: 100)
         min_sales: Min 7-day sales (default: 0)
+        max_videos: Max video count filter (optional)
         seller_name: Optional seller name to use (for brand scan)
     """
     try:
@@ -1321,6 +1334,7 @@ def scan_page_range(seller_id):
         min_influencers = request.args.get('min_influencers', 1, type=int)
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
+        max_videos = request.args.get('max_videos', None, type=int)
         seller_name_param = request.args.get('seller_name', '')
         
         products_scanned = 0
@@ -1383,6 +1397,14 @@ def scan_page_range(seller_id):
                     continue
                 # NOTE: Not filtering 0% commission here - seller/product/list API may not return commission
                 # Use "Refresh Data" on product detail page to get real commission from product detail API
+                
+                # Require at least 1 video (product has been promoted)
+                if video_count < 1:
+                    continue
+                
+                # Video count max filter (if set)
+                if max_videos is not None and video_count > max_videos:
+                    continue
                 
                 products_found += 1
                 image_url = parse_cover_url(p.get('cover_url', ''))
@@ -1584,6 +1606,9 @@ def get_products():
     # Hidden gems filter
     gems_only = request.args.get('gems_only', 'false').lower() == 'true'
     
+    # Untapped filter (low video/influencer ratio)
+    untapped_only = request.args.get('untapped_only', 'false').lower() == 'true'
+    
     # Trending filter
     trending_only = request.args.get('trending_only', 'false').lower() == 'true'
     
@@ -1644,15 +1669,24 @@ def get_products():
     if favorites_only:
         query = query.filter(Product.is_favorite == True)
     
-    # Apply hidden gems filter (high sales, low influencers, decent commission)
-    # Lowered commission to 5% since many products show 0% until deep-refreshed
+    # Apply hidden gems filter (high sales, low influencers)
     if gems_only:
         # Hidden gems: selling well with low competition
-        # Commission is a BONUS, not a requirement (since many products show 0%)
         query = query.filter(
             Product.sales_7d >= 20,  # Decent weekly sales
             Product.influencer_count <= 30,  # Low competition
-            Product.influencer_count >= 1  # At least 1 (shows it's promotable)
+            Product.influencer_count >= 1,  # At least 1 (shows it's promotable)
+            Product.video_count >= 1  # At least 1 video (proven product)
+        )
+    
+    # Apply untapped filter - products with low video/influencer ratio
+    # These are products where influencers added to showcase but didn't make videos
+    if untapped_only:
+        query = query.filter(
+            Product.influencer_count >= 5,  # Has some influencers
+            Product.video_count >= 1,  # At least 1 video (not totally fresh)
+            Product.video_count <= Product.influencer_count * 0.5,  # Less than 0.5 videos per influencer
+            Product.sales_7d >= 10  # At least some sales to show it works
         )
     
     # Apply trending filter - products with sales growth or high recent sales
@@ -1690,11 +1724,12 @@ def get_products():
     # Count OOS products for UI
     oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
     
-    # Count gems (products selling well with low competition)
+    # Count gems (products selling well with low competition, with at least 1 video)
     gems_count = Product.query.filter(
         Product.sales_7d >= 20,
         Product.influencer_count <= 30,
         Product.influencer_count >= 1,
+        Product.video_count >= 1,
         db.or_(Product.product_status == None, Product.product_status == 'active')
     ).count()
     
@@ -1709,6 +1744,18 @@ def get_products():
         ).count()
     except Exception:
         trending_count = 0
+    
+    # Count untapped - products with low video/influencer ratio
+    try:
+        untapped_count = Product.query.filter(
+            Product.influencer_count >= 5,
+            Product.video_count >= 1,
+            Product.video_count <= Product.influencer_count * 0.5,
+            Product.sales_7d >= 10,
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        ).count()
+    except Exception:
+        untapped_count = 0
     
     # Get influencer category counts for filter pills
     # Apply same exclusions as main query (non-promotable products)
@@ -1960,6 +2007,7 @@ def get_stats():
         Product.sales_7d >= 20,
         Product.influencer_count <= 30,
         Product.influencer_count >= 1,
+        Product.video_count >= 1,
         db.or_(Product.product_status == None, Product.product_status == 'active')
     ).count()
     
@@ -1973,6 +2021,18 @@ def get_stats():
         ).count()
     except:
         trending_count = 0
+    
+    # Count untapped - products with low video/influencer ratio
+    try:
+        untapped_count = Product.query.filter(
+            Product.influencer_count >= 5,
+            Product.video_count >= 1,
+            Product.video_count <= Product.influencer_count * 0.5,
+            Product.sales_7d >= 10,
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        ).count()
+    except:
+        untapped_count = 0
     
     oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
     
@@ -1999,6 +2059,7 @@ def get_stats():
         'special_filters': {
             'gems': gems_count,
             'trending': trending_count,
+            'untapped': untapped_count,
             'out_of_stock': oos_count
         }
     })

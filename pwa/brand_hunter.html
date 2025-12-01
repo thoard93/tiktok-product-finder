@@ -939,6 +939,7 @@
             <button class="date-pill" onclick="setDateFilter('7days', this)">Last 7 Days</button>
             <button class="date-pill" onclick="setDateFilter('favorites', this)">❤️ Favorites</button>
             <button class="date-pill gems" onclick="setDateFilter('gems', this)">💎 Gems</button>
+            <button class="date-pill" onclick="setDateFilter('untapped', this)" style="background:#22c55e;">✨ Untapped</button>
             <button class="date-pill proven" onclick="setDateFilter('proven', this)" style="background:#f59e0b;">🔥 Proven</button>
             <button class="date-pill trending" onclick="setDateFilter('trending', this)">📈 Trending</button>
             <button class="date-pill oos-filter" onclick="setDateFilter('oos', this)">⚠️ OOS</button>
@@ -972,12 +973,12 @@
             <select class="sort-select" id="sort-select" onchange="applySort()">
                 <option value="sales_7d">📈 7-Day Sales</option>
                 <option value="sales_total">📊 Total Sales</option>
+                <option value="videos_low">🎬 Videos (Low→High)</option>
+                <option value="videos_high">🎬 Videos (High→Low)</option>
                 <option value="commission">💰 Commission %</option>
                 <option value="influencers_asc">👤 Influencers (Low→High)</option>
                 <option value="influencers_desc">👤 Influencers (High→Low)</option>
                 <option value="newest">🆕 Newest First</option>
-                <option value="price_high">💵 Price (High→Low)</option>
-                <option value="price_low">💵 Price (Low→High)</option>
             </select>
         </div>
         
@@ -1017,8 +1018,12 @@
                         <label>Min 7-day sales:</label>
                         <input type="number" id="min-sales" value="0" min="0">
                     </div>
+                    <div class="setting-row">
+                        <label>Max videos:</label>
+                        <input type="number" id="max-videos" value="" min="1" placeholder="No limit">
+                    </div>
                     <div class="setting-warning">
-                        ⚡ Quick Scan: ~1-2 min for 10 brands × 5 pages. Products are saved automatically.
+                        ⚡ Quick Scan: ~1-2 min for 10 brands × 5 pages. Only saves products with 1+ videos.
                     </div>
                 </div>
                 
@@ -1044,8 +1049,12 @@
                         <label>Max influencers:</label>
                         <input type="number" id="deep-max-influencers" value="50" min="1" max="500">
                     </div>
+                    <div class="setting-row">
+                        <label>Max videos:</label>
+                        <input type="number" id="deep-max-videos" value="" min="1" placeholder="No limit">
+                    </div>
                     <div class="setting-warning">
-                        🔍 Deep Scan: Scans pages 50-100+ where hidden gems hide. Takes longer but finds products others miss!
+                        🔍 Deep Scan: Scans pages 50-100+ where hidden gems hide. Only saves products with 1+ videos.
                     </div>
                 </div>
                 
@@ -1072,8 +1081,12 @@
                         <label>Max influencers:</label>
                         <input type="number" id="brand-max-influencers" value="100" min="1" max="500">
                     </div>
+                    <div class="setting-row">
+                        <label>Max videos:</label>
+                        <input type="number" id="brand-max-videos" value="" min="1" placeholder="No limit">
+                    </div>
                     <div class="setting-warning">
-                        🏷️ Brand Scan: Deep dive into a specific brand. Great for brands like QVC, Tarte, PopMart that have lots of products!
+                        🏷️ Brand Scan: Deep dive into a specific brand. Only saves products with 1+ videos.
                     </div>
                 </div>
             </div>
@@ -1421,6 +1434,8 @@
                     url += '&favorites=true';
                 } else if (currentDateFilter === 'gems') {
                     url += '&gems_only=true';
+                } else if (currentDateFilter === 'untapped') {
+                    url += '&untapped_only=true';
                 } else if (currentDateFilter === 'proven') {
                     url += '&proven_only=true';
                 } else if (currentDateFilter === 'trending') {
@@ -1442,12 +1457,12 @@
                 switch(currentSort) {
                     case 'sales_7d': sortField = 'sales_7d'; sortOrder = 'desc'; break;
                     case 'sales_total': sortField = 'sales'; sortOrder = 'desc'; break;
+                    case 'videos_low': sortField = 'video_count'; sortOrder = 'asc'; break;
+                    case 'videos_high': sortField = 'video_count'; sortOrder = 'desc'; break;
                     case 'commission': sortField = 'commission_rate'; sortOrder = 'desc'; break;
                     case 'influencers_asc': sortField = 'influencer_count'; sortOrder = 'asc'; break;
                     case 'influencers_desc': sortField = 'influencer_count'; sortOrder = 'desc'; break;
                     case 'newest': sortField = 'first_seen'; sortOrder = 'desc'; break;
-                    case 'price_high': sortField = 'price'; sortOrder = 'desc'; break;
-                    case 'price_low': sortField = 'price'; sortOrder = 'asc'; break;
                 }
                 url += `&sort=${sortField}&order=${sortOrder}`;
                 
@@ -1740,8 +1755,18 @@
                                     <span title="All-time sales" style="color:#10b981; font-weight:600;">${(p.sales || 0).toLocaleString()} total</span>
                                 </div>
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-                                    <span style="color:#666;">$${(p.price || 0).toFixed(2)}</span>
-                                    ${(p.sales || 0) >= 50 ? '<span style="color:#f59e0b;">🔥 Proven</span>' : ''}
+                                    <span title="Total videos" style="color:#9b59b6;">🎬 ${(p.video_count || 0).toLocaleString()} vids</span>
+                                    ${(() => {
+                                        const vids = p.video_count || 0;
+                                        const infs = p.influencer_count || 1;
+                                        const ratio = vids / infs;
+                                        if (vids >= 1 && ratio < 0.5 && infs >= 5) {
+                                            return '<span title="Low video/influencer ratio - opportunity!" style="color:#22c55e;">✨ Untapped</span>';
+                                        } else if ((p.sales || 0) >= 50) {
+                                            return '<span style="color:#f59e0b;">🔥 Proven</span>';
+                                        }
+                                        return '';
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -1806,6 +1831,7 @@
             
             const maxInfluencers = document.getElementById('max-influencers').value;
             const minSales = document.getElementById('min-sales').value;
+            const maxVideos = document.getElementById('max-videos').value;
             
             let totalFound = 0, totalSaved = 0, brandsCompleted = 0, errors = 0;
             
@@ -1821,7 +1847,8 @@
                     btn.onclick = () => { scanAborted = true; btn.innerHTML = '⏹️ Stopping...'; };
                     
                     try {
-                        const url = `/api/quick-scan?brand_rank=${brandRank}&pages=${pagesPerBrand}&min_influencers=1&max_influencers=${maxInfluencers}&min_sales=${minSales}`;
+                        let url = `/api/quick-scan?brand_rank=${brandRank}&pages=${pagesPerBrand}&min_influencers=1&max_influencers=${maxInfluencers}&min_sales=${minSales}`;
+                        if (maxVideos) url += `&max_videos=${maxVideos}`;
                         const response = await fetch(url);
                         
                         if (!response.ok) { errors++; continue; }
@@ -1865,6 +1892,7 @@
             let startPage = parseInt(document.getElementById('deep-start-page').value);
             let endPage = parseInt(document.getElementById('deep-end-page').value);
             const maxInfluencers = document.getElementById('deep-max-influencers').value;
+            const maxVideos = document.getElementById('deep-max-videos').value;
             
             // Safety limits
             if (numBrands > 20) {
@@ -1906,7 +1934,8 @@
                         
                         try {
                             // Pass seller_name so products get correct brand
-                            const url = `/api/scan-pages/${brand.seller_id}?start=${page}&end=${chunkEnd}&max_influencers=${maxInfluencers}&min_sales=0&seller_name=${encodeURIComponent(brand.seller_name)}`;
+                            let url = `/api/scan-pages/${brand.seller_id}?start=${page}&end=${chunkEnd}&max_influencers=${maxInfluencers}&min_sales=0&seller_name=${encodeURIComponent(brand.seller_name)}`;
+                            if (maxVideos) url += `&max_videos=${maxVideos}`;
                             const response = await fetch(url);
                             
                             if (!response.ok) continue;
@@ -2370,6 +2399,7 @@
                     `❤️ Favorites: ${data.favorites || 0}\n\n` +
                     `--- Special Filters ---\n` +
                     `💎 Gems: ${sf.gems || 0}\n` +
+                    `✨ Untapped (Low Vids): ${sf.untapped || 0}\n` +
                     `📈 Trending: ${sf.trending || 0}\n` +
                     `⚠️ Out of Stock: ${sf.out_of_stock || 0}\n\n` +
                     `--- Data Quality ---\n` +

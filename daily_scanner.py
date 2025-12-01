@@ -206,11 +206,12 @@ def run_daily_scan():
                 for p in products:
                     inf_count = int(p.get('total_ifl_cnt', 0) or 0)
                     sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                    video_count = int(p.get('total_video_cnt', 0) or 0)
                     
                     stats['products_found'] += 1
                     
-                    # Filter by influencer count and minimum sales
-                    if inf_count >= 1 and inf_count <= MAX_INFLUENCERS and sales_7d >= MIN_SALES:
+                    # Filter by influencer count, minimum sales, and video count
+                    if inf_count >= 1 and inf_count <= MAX_INFLUENCERS and sales_7d >= MIN_SALES and video_count >= 1:
                         if save_product(p, seller_name):
                             stats['products_saved'] += 1
                         else:
