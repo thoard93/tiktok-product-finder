@@ -49,27 +49,40 @@ class Product(db.Model):
     product_id = db.Column(db.String(50), primary_key=True)
     product_name = db.Column(db.String(500))
     seller_id = db.Column(db.String(50))
-    seller_name = db.Column(db.String(200))
-    category = db.Column(db.String(100))
-    price = db.Column(db.Float)
-    commission_rate = db.Column(db.Float)
-    sales = db.Column(db.Integer)
-    sales_7d = db.Column(db.Integer)
-    sales_30d = db.Column(db.Integer)
-    gmv = db.Column(db.Float)
-    gmv_30d = db.Column(db.Float)
-    influencer_count = db.Column(db.Integer)
-    video_count = db.Column(db.Integer)
-    video_7d = db.Column(db.Integer)
-    video_30d = db.Column(db.Integer)
-    live_count = db.Column(db.Integer)
-    views_count = db.Column(db.Integer)
-    product_rating = db.Column(db.Float)
-    review_count = db.Column(db.Integer)
+    seller_name = db.Column(db.String(255))
+    gmv = db.Column(db.Float, default=0)
+    gmv_30d = db.Column(db.Float, default=0)
+    sales = db.Column(db.Integer, default=0)
+    sales_7d = db.Column(db.Integer, default=0)
+    sales_30d = db.Column(db.Integer, default=0)
+    influencer_count = db.Column(db.Integer, default=0)
+    commission_rate = db.Column(db.Float, default=0)
+    price = db.Column(db.Float, default=0)
     image_url = db.Column(db.Text)
     cached_image_url = db.Column(db.Text)
-    product_status = db.Column(db.String(20), default='active')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    image_cached_at = db.Column(db.DateTime)
+    
+    # Video/Live stats
+    video_count = db.Column(db.Integer, default=0)
+    video_7d = db.Column(db.Integer, default=0)
+    video_30d = db.Column(db.Integer, default=0)
+    live_count = db.Column(db.Integer, default=0)
+    views_count = db.Column(db.Integer, default=0)
+    product_rating = db.Column(db.Float, default=0)
+    review_count = db.Column(db.Integer, default=0)
+    
+    # User features
+    is_favorite = db.Column(db.Boolean, default=False)
+    product_status = db.Column(db.String(50), default='active')
+    status_note = db.Column(db.String(255))
+    
+    # For trending/OOS detection
+    prev_sales_7d = db.Column(db.Integer, default=0)
+    prev_sales_30d = db.Column(db.Integer, default=0)
+    sales_velocity = db.Column(db.Float, default=0)
+    
+    scan_type = db.Column(db.String(50), default='brand_hunter')
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
 
 def get_top_brands(start_rank=1, count=20):
@@ -135,7 +148,6 @@ def save_product(p, seller_name):
             product_name=p.get('product_name', '')[:500],
             seller_id=str(p.get('seller_id', '')),
             seller_name=seller_name,
-            category=p.get('first_category_name', ''),
             price=float(p.get('spu_avg_price', 0) or 0),
             commission_rate=float(p.get('product_commission_rate', 0) or 0),
             sales=int(p.get('total_sale_cnt', 0) or 0),
@@ -153,7 +165,8 @@ def save_product(p, seller_name):
             review_count=int(p.get('review_count', 0) or 0),
             image_url=p.get('product_img_url', ''),
             product_status='active',
-            created_at=datetime.utcnow(),
+            scan_type='daily_scan',
+            first_seen=datetime.utcnow(),
             last_updated=datetime.utcnow()
         )
         
