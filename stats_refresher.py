@@ -140,15 +140,18 @@ def get_product_details(product_id):
     try:
         response = requests.get(
             f"{BASE_URL}/product/detail",
-            params={'product_id': product_id},
+            params={'product_ids': product_id},
             auth=get_auth(),
             timeout=30
         )
         
         if response.status_code == 200:
             data = response.json()
-            if data.get('code') == 0:
-                return data.get('data', {})
+            if data.get('code') == 0 and data.get('data'):
+                # API returns a list, get first item
+                products = data.get('data', [])
+                if isinstance(products, list) and len(products) > 0:
+                    return products[0]
         return None
     except Exception as e:
         print(f"Error fetching product {product_id}: {e}")
