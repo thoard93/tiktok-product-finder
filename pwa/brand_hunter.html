@@ -2090,10 +2090,14 @@
                                 <div style="font-weight:bold; margin-bottom:5px; word-wrap:break-word;">${p.product_name || 'Unknown'}</div>
                                 <div style="font-size:0.85rem; color:#888;">${p.seller_name || 'Unknown seller'}</div>
                                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-                                    <span style="background:${commission >= 10 ? '#27ae60' : '#e74c3c'}; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${commission.toFixed(1)}%</span>
-                                    <span style="background:#3498db; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${p.influencer_count || 0} influencers</span>
-                                    <span style="background:#9b59b6; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${(p.sales_7d || 0).toLocaleString()}/7d</span>
-                                    <span style="background:#f39c12; padding:3px 8px; border-radius:4px; font-size:0.8rem;">$${(p.price || 0).toFixed(2)}</span>
+                                    <span style="background:${commission >= 10 ? '#27ae60' : '#e74c3c'}; padding:3px 8px; border-radius:4px; font-size:0.8rem;">💵 ${commission.toFixed(1)}%</span>
+                                    <span style="background:#3498db; padding:3px 8px; border-radius:4px; font-size:0.8rem;">👥 ${p.influencer_count || 0}</span>
+                                    <span style="background:#9b59b6; padding:3px 8px; border-radius:4px; font-size:0.8rem;">🎬 ${(p.video_count || 0).toLocaleString()} videos</span>
+                                </div>
+                                <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
+                                    <span style="background:#e67e22; padding:3px 8px; border-radius:4px; font-size:0.8rem;">📦 ${(p.sales_7d || 0).toLocaleString()} (7d)</span>
+                                    <span style="background:#16a085; padding:3px 8px; border-radius:4px; font-size:0.8rem;">📊 ${(p.sales_30d || 0).toLocaleString()} (30d)</span>
+                                    <span style="background:#f39c12; padding:3px 8px; border-radius:4px; font-size:0.8rem;">💰 $${(p.price || 0).toFixed(2)}</span>
                                 </div>
                                 <div style="margin-top:8px; font-size:0.8rem; color:#888;">${p.competition_label || ''}</div>
                             </div>
