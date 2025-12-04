@@ -1192,7 +1192,7 @@
         <div class="modal">
             <h3>🔎 Product Lookup</h3>
             <p style="color:#888; font-size:0.85rem; margin-bottom:15px;">Paste a TikTok product URL or product ID to look it up</p>
-            <input type="text" id="lookup-input" class="modal-input" placeholder="https://www.tiktok.com/view/product/... or product ID" style="width:100%; padding:12px; border-radius:8px; border:1px solid #444; background:#1a1a2e; color:#fff; margin-bottom:15px;">
+            <input type="text" id="lookup-input" class="modal-input" placeholder="https://www.tiktok.com/shop/pdp/... or product ID" style="width:100%; padding:12px; border-radius:8px; border:1px solid #444; background:#1a1a2e; color:#fff; margin-bottom:15px;">
             <div id="lookup-buttons" style="display:flex; gap:10px;">
                 <button class="modal-btn" id="preview-btn" onclick="lookupProduct(false)" style="flex:1;">
                     <span class="icon">👁️</span> Preview Only
@@ -2355,7 +2355,7 @@
                         p.sales_7d || 0,
                         p.price || 0,
                         p.product_id,
-                        `https://www.tiktok.com/view/product/${p.product_id}`,
+                        `https://www.tiktok.com/shop/pdp/${p.product_id}`,
                         userWatermark  // Watermark in each row for traceability
                     ];
                 });
