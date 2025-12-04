@@ -169,7 +169,7 @@ def create_product_embed(p, title_prefix=""):
     
     embed = Embed(
         title=f"{title_prefix}{product_name}",
-        url=f"https://shop.tiktok.com/view/product/{product_id}",
+        url=f"https://www.tiktok.com/view/product/{product_id}",
         color=color
     )
     
