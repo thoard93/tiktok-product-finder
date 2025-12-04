@@ -111,6 +111,25 @@ def resolve_tiktok_share_link(url):
         except:
             return None
 
+def get_product_from_db(product_id):
+    """Check if product exists in database first"""
+    with app.app_context():
+        product = Product.query.get(product_id)
+        if product:
+            return {
+                'product_id': product.product_id,
+                'product_name': product.product_name,
+                'sales_7d': product.sales_7d,
+                'sales_30d': product.sales_30d,
+                'influencer_count': product.influencer_count,
+                'video_count': product.video_count,
+                'commission_rate': product.commission_rate,
+                'price': product.price,
+                'image_url': product.cached_image_url or product.image_url,
+                'from_database': True
+            }
+        return None
+
 def get_product_from_api(product_id):
     """Fetch product details from EchoTik API"""
     try:
@@ -131,6 +150,18 @@ def get_product_from_api(product_id):
     except Exception as e:
         print(f"Error fetching product {product_id}: {e}")
         return None
+
+def get_product_data(product_id):
+    """Get product - check database first, then API if not found"""
+    # Try database first (no API call!)
+    db_product = get_product_from_db(product_id)
+    if db_product:
+        print(f"✅ Product {product_id} found in database (saved API call)")
+        return db_product
+    
+    # Not in database, call API
+    print(f"🔍 Product {product_id} not in database, calling API...")
+    return get_product_from_api(product_id)
 
 def create_product_embed(p, title_prefix=""):
     """Create a Discord embed for a product"""
@@ -303,8 +334,8 @@ async def on_message(message):
                 await message.reply("❌ Could not find a valid TikTok product ID in your message.", mention_author=False)
                 return
             
-            # Fetch product from API
-            product = get_product_from_api(product_id)
+            # Fetch product (database first, then API)
+            product = get_product_data(product_id)
             
             if not product:
                 await message.add_reaction('❌')
@@ -344,7 +375,7 @@ async def lookup_command(ctx, *, query: str = None):
         await ctx.reply("❌ Could not extract product ID from your input.", mention_author=False)
         return
     
-    product = get_product_from_api(product_id)
+    product = get_product_data(product_id)
     
     if not product:
         await ctx.message.add_reaction('❌')

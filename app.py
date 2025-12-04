@@ -1038,6 +1038,10 @@ def scan_top_brands():
                 'products_saved': 0
             }
             
+            # Collect products for batch image signing
+            products_to_save = []
+            image_urls_to_sign = []
+            
             for page in range(1, pages_per_brand + 1):
                 products = get_seller_products(seller_id, page=page)
                 
@@ -1078,49 +1082,97 @@ def scan_top_brands():
                     
                     brand_result['products_found'] += 1
                     
-                    # Parse image URL
+                    # Parse image URL and collect for batch signing
                     image_url = parse_cover_url(p.get('cover_url', ''))
                     
-                    # Save to database
-                    existing = Product.query.get(product_id)
-                    if existing:
-                        existing.influencer_count = influencer_count
-                        existing.sales = total_sales
-                        existing.sales_30d = sales_30d
-                        existing.sales_7d = sales_7d
-                        existing.commission_rate = commission_rate
-                        existing.video_count = video_count
-                        existing.video_7d = video_7d
-                        existing.video_30d = video_30d
-                        existing.live_count = live_count
-                        existing.views_count = views_count
-                        existing.last_updated = datetime.utcnow()
-                    else:
-                        product = Product(
-                            product_id=product_id,
-                            product_name=p.get('product_name', ''),
-                            seller_id=seller_id,
-                            seller_name=seller_name,
-                            gmv=float(p.get('total_sale_gmv_amt', 0) or 0),
-                            gmv_30d=float(p.get('total_sale_gmv_30d_amt', 0) or 0),
-                            sales=total_sales,
-                            sales_7d=sales_7d,
-                            sales_30d=sales_30d,
-                            influencer_count=influencer_count,
-                            commission_rate=commission_rate,
-                            price=float(p.get('spu_avg_price', 0) or 0),
-                            image_url=image_url,
-                            video_count=video_count,
-                            video_7d=video_7d,
-                            video_30d=video_30d,
-                            live_count=live_count,
-                            views_count=views_count,
-                            scan_type='brand_hunter'
-                        )
-                        db.session.add(product)
-                        brand_result['products_saved'] += 1
+                    # Collect product data for batch processing
+                    products_to_save.append({
+                        'product_id': product_id,
+                        'product_name': p.get('product_name', ''),
+                        'seller_id': seller_id,
+                        'seller_name': seller_name,
+                        'total_sales': total_sales,
+                        'sales_7d': sales_7d,
+                        'sales_30d': sales_30d,
+                        'influencer_count': influencer_count,
+                        'commission_rate': commission_rate,
+                        'video_count': video_count,
+                        'video_7d': video_7d,
+                        'video_30d': video_30d,
+                        'live_count': live_count,
+                        'views_count': views_count,
+                        'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+                        'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+                        'price': float(p.get('spu_avg_price', 0) or 0),
+                        'image_url': image_url
+                    })
+                    
+                    # Collect image URLs for batch signing (max 10 per API call)
+                    if image_url and 'echosell-images' in str(image_url):
+                        image_urls_to_sign.append(image_url)
                 
                 time.sleep(0.1)
+            
+            # Batch sign images (10 URLs per API call to minimize calls)
+            signed_urls = {}
+            if image_urls_to_sign:
+                # Process in batches of 10
+                for i in range(0, len(image_urls_to_sign), 10):
+                    batch = image_urls_to_sign[i:i+10]
+                    batch_signed = get_cached_image_urls(batch)
+                    signed_urls.update(batch_signed)
+                    time.sleep(0.1)  # Rate limiting
+            
+            # Now save products to database with signed images
+            for pdata in products_to_save:
+                product_id = pdata['product_id']
+                image_url = pdata['image_url']
+                cached_url = signed_urls.get(image_url) if image_url else None
+                
+                existing = Product.query.get(product_id)
+                if existing:
+                    existing.influencer_count = pdata['influencer_count']
+                    existing.sales = pdata['total_sales']
+                    existing.sales_30d = pdata['sales_30d']
+                    existing.sales_7d = pdata['sales_7d']
+                    existing.commission_rate = pdata['commission_rate']
+                    existing.video_count = pdata['video_count']
+                    existing.video_7d = pdata['video_7d']
+                    existing.video_30d = pdata['video_30d']
+                    existing.live_count = pdata['live_count']
+                    existing.views_count = pdata['views_count']
+                    existing.last_updated = datetime.utcnow()
+                    # Update image if we got a new signed URL
+                    if cached_url:
+                        existing.image_url = image_url
+                        existing.cached_image_url = cached_url
+                        existing.image_cached_at = datetime.utcnow()
+                else:
+                    product = Product(
+                        product_id=product_id,
+                        product_name=pdata['product_name'],
+                        seller_id=pdata['seller_id'],
+                        seller_name=pdata['seller_name'],
+                        gmv=pdata['gmv'],
+                        gmv_30d=pdata['gmv_30d'],
+                        sales=pdata['total_sales'],
+                        sales_7d=pdata['sales_7d'],
+                        sales_30d=pdata['sales_30d'],
+                        influencer_count=pdata['influencer_count'],
+                        commission_rate=pdata['commission_rate'],
+                        price=pdata['price'],
+                        image_url=image_url,
+                        cached_image_url=cached_url,
+                        image_cached_at=datetime.utcnow() if cached_url else None,
+                        video_count=pdata['video_count'],
+                        video_7d=pdata['video_7d'],
+                        video_30d=pdata['video_30d'],
+                        live_count=pdata['live_count'],
+                        views_count=pdata['views_count'],
+                        scan_type='brand_hunter'
+                    )
+                    db.session.add(product)
+                    brand_result['products_saved'] += 1
             
             # Commit after each brand to avoid losing progress
             db.session.commit()
@@ -2566,6 +2618,75 @@ def cleanup_nonpromtable():
             'after': total_after,
             'removed': deleted_count,
             'examples': deleted_names
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cleanup-zero-videos', methods=['POST', 'GET'])
+@login_required
+def cleanup_zero_videos():
+    """
+    Remove products that have 0 total videos.
+    These products have no TikTok content and are harder to promote.
+    
+    Parameters:
+        confirm: Set to 'true' to actually delete. Otherwise just counts (dry run).
+    """
+    try:
+        confirm = request.args.get('confirm', 'false').lower() == 'true'
+        
+        # Count products with 0 videos
+        total_before = Product.query.count()
+        zero_video_count = Product.query.filter(
+            db.or_(Product.video_count == 0, Product.video_count.is_(None))
+        ).count()
+        
+        # Safety check - don't delete if it would remove more than 80% of products
+        if zero_video_count > total_before * 0.8:
+            return jsonify({
+                'success': False,
+                'error': f'Safety check failed: Would delete {zero_video_count} of {total_before} products ({zero_video_count*100//total_before}%). This seems too high - aborting.',
+                'zero_video_count': zero_video_count,
+                'total_products': total_before
+            }), 400
+        
+        if not confirm:
+            # Dry run - just show what would be deleted
+            # Get some examples
+            examples = Product.query.filter(
+                db.or_(Product.video_count == 0, Product.video_count.is_(None))
+            ).limit(10).all()
+            
+            example_names = [f"{p.product_name[:40]}... (videos: {p.video_count})" for p in examples]
+            
+            return jsonify({
+                'success': True,
+                'dry_run': True,
+                'message': f'Found {zero_video_count} products with 0 videos. Call with ?confirm=true to delete.',
+                'would_delete': zero_video_count,
+                'total_products': total_before,
+                'would_remain': total_before - zero_video_count,
+                'examples': example_names
+            })
+        
+        # Actually delete
+        deleted = Product.query.filter(
+            db.or_(Product.video_count == 0, Product.video_count.is_(None))
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        
+        total_after = Product.query.count()
+        
+        return jsonify({
+            'success': True,
+            'dry_run': False,
+            'message': f'Deleted {deleted} products with 0 videos',
+            'before': total_before,
+            'after': total_after,
+            'removed': deleted
         })
     except Exception as e:
         db.session.rollback()
