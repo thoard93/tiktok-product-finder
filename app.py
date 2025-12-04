@@ -2188,11 +2188,14 @@ def refresh_images():
         
         db.session.commit()
         
-        # Count remaining AFTER processing
+        # Count remaining AFTER processing (including stale images >48 hours old)
+        stale_threshold = datetime.utcnow() - timedelta(hours=48)
         remaining = Product.query.filter(
             db.or_(
                 Product.cached_image_url.is_(None),
-                Product.cached_image_url == ''
+                Product.cached_image_url == '',
+                Product.image_cached_at.is_(None),
+                Product.image_cached_at < stale_threshold
             )
         ).count()
         
