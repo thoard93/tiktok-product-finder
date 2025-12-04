@@ -1169,6 +1169,9 @@
             <button class="modal-btn" onclick="cleanupProducts()">
                 <span class="icon">🧹</span> Cleanup (Remove 0% Commission)
             </button>
+            <button class="modal-btn" onclick="cleanupZeroVideos()" style="background:#9b59b6;">
+                <span class="icon">🎬</span> Remove 0 Video Products
+            </button>
             <button class="modal-btn" onclick="exportFavorites()">
                 <span class="icon">📤</span> Export Favorites to CSV
             </button>
@@ -2319,6 +2322,49 @@
                         ? `\n\nExamples removed:\n- ${data.examples.slice(0, 5).join('\n- ')}`
                         : '';
                     showToast(`🚫 Removed ${data.removed || 0} non-promotable products`, false, 'success');
+                    loadProducts();
+                    loadStats();
+                } else {
+                    showToast('Cleanup failed: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (err) {
+                showToast('Cleanup failed: ' + (err.message || 'Unknown error'), true);
+            }
+        }
+        
+        async function cleanupZeroVideos() {
+            closeModal();
+            try {
+                // First do a dry run to show count
+                const dryRunResponse = await fetch('/api/cleanup-zero-videos');
+                const dryRunData = await dryRunResponse.json();
+                
+                if (!dryRunData.success) {
+                    showToast('❌ ' + (dryRunData.error || 'Failed to check'), true);
+                    return;
+                }
+                
+                const count = dryRunData.would_delete || 0;
+                const remaining = dryRunData.would_remain || 0;
+                
+                if (count === 0) {
+                    showToast('✅ No products with 0 videos found!', false, 'success');
+                    return;
+                }
+                
+                // Show confirmation with count
+                const examples = dryRunData.examples ? '\n\nExamples:\n- ' + dryRunData.examples.slice(0, 5).join('\n- ') : '';
+                if (!confirm(`Found ${count} products with 0 videos.\n\nAfter cleanup: ${remaining} products will remain.${examples}\n\nDelete these ${count} products?`)) {
+                    showToast('Cleanup cancelled', false);
+                    return;
+                }
+                
+                // Actually delete
+                const response = await fetch('/api/cleanup-zero-videos?confirm=true');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(`🎬 Removed ${data.removed || 0} products with 0 videos. ${data.after} products remaining.`, false, 'success');
                     loadProducts();
                     loadStats();
                 } else {
