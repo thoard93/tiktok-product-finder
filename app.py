@@ -1023,7 +1023,7 @@ def scan_top_brands():
         
         for brand in brands:
             seller_id = brand.get('seller_id', '')
-            seller_name = brand.get('seller_name', 'Unknown')
+            seller_name = brand.get('seller_name') or brand.get('shop_name') or 'Unknown'
             
             if not seller_id:
                 continue
@@ -1188,7 +1188,7 @@ def quick_scan():
         
         brand = brands_response[brand_offset]
         seller_id = brand.get('seller_id', '')
-        seller_name = brand.get('seller_name', 'Unknown')
+        seller_name = brand.get('seller_name') or brand.get('shop_name') or 'Unknown'
         
         result = {
             'brand_rank': brand_rank,
@@ -1354,7 +1354,11 @@ def scan_page_range(seller_id):
                 if seller_response.status_code == 200:
                     seller_data = seller_response.json()
                     if seller_data.get('code') == 0 and seller_data.get('data'):
-                        seller_name = seller_data['data'].get('seller_name', '') or seller_data['data'].get('shop_name', '')
+                        # API returns a list, get first item
+                        data = seller_data['data']
+                        if isinstance(data, list) and len(data) > 0:
+                            data = data[0]
+                        seller_name = data.get('seller_name', '') or data.get('shop_name', '')
             except:
                 pass
         
@@ -1995,10 +1999,15 @@ def get_stats():
     
     low_sales = Product.query.filter(Product.sales_7d <= 2).count()
     
+    # Count products with no cached image OR stale cached image (>48 hours old - TikTok CDN URLs expire)
+    stale_threshold = datetime.utcnow() - timedelta(hours=48)
+    
     missing_images = Product.query.filter(
         db.or_(
             Product.cached_image_url.is_(None),
-            Product.cached_image_url == ''
+            Product.cached_image_url == '',
+            Product.image_cached_at.is_(None),
+            Product.image_cached_at < stale_threshold
         )
     ).count()
     
@@ -2088,14 +2097,19 @@ def refresh_images():
                 Product.image_url != ''
             ).limit(batch_size).all()
         else:
-            # Products missing cached images - prioritize those with image_url but no cache
-            # First get products that HAVE image_url but need signing
+            # Calculate stale threshold (48 hours - TikTok CDN URLs expire)
+            stale_threshold = datetime.utcnow() - timedelta(hours=48)
+            
+            # Products missing cached images OR with stale cache
+            # First get products that HAVE image_url but need signing/refreshing
             products = Product.query.filter(
                 Product.image_url.isnot(None),
                 Product.image_url != '',
                 db.or_(
                     Product.cached_image_url.is_(None),
-                    Product.cached_image_url == ''
+                    Product.cached_image_url == '',
+                    Product.image_cached_at.is_(None),
+                    Product.image_cached_at < stale_threshold
                 )
             ).limit(batch_size).all()
             

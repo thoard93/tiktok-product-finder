@@ -196,7 +196,7 @@ def run_daily_scan():
         
         for brand in brands:
             seller_id = brand.get('seller_id')
-            seller_name = brand.get('seller_name', 'Unknown')
+            seller_name = brand.get('seller_name') or brand.get('shop_name') or 'Unknown'
             
             print(f"   Scanning: {seller_name}")
             
