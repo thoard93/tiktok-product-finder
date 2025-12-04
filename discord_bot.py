@@ -82,6 +82,7 @@ def extract_product_id(text):
     """Extract TikTok product ID from URL or text"""
     # Pattern for product ID in URLs
     patterns = [
+        r'shop/pdp/(\d+)',
         r'product/(\d+)',
         r'product_id=(\d+)',
         r'/(\d{15,25})(?:[/?]|$)',  # Direct product ID (15-25 digits)
@@ -169,7 +170,7 @@ def create_product_embed(p, title_prefix=""):
     
     embed = Embed(
         title=f"{title_prefix}{product_name}",
-        url=f"https://www.tiktok.com/view/product/{product_id}",
+        url=f"https://www.tiktok.com/shop/pdp/{product_id}",
         color=color
     )
     

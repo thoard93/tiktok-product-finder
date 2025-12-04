@@ -117,7 +117,7 @@ def send_hidden_gem_alert(product):
 🏷️ Price: ${product.price:.2f}
 🏪 Brand: {product.seller_name}
 
-🔗 <a href="https://www.tiktok.com/view/product/{product.product_id}">View on TikTok Shop</a>
+🔗 <a href="https://www.tiktok.com/shop/pdp/{product.product_id}">View on TikTok Shop</a>
 """
     return send_telegram_alert(message)
 
@@ -131,7 +131,7 @@ def send_back_in_stock_alert(product):
 👥 Influencers: {product.influencer_count}
 💵 Commission: {product.commission_rate:.1f}%
 
-🔗 <a href="https://www.tiktok.com/view/product/{product.product_id}">View on TikTok Shop</a>
+🔗 <a href="https://www.tiktok.com/shop/pdp/{product.product_id}">View on TikTok Shop</a>
 """
     return send_telegram_alert(message)
 

@@ -1896,7 +1896,7 @@ def get_product_detail(product_id):
             'cached_image_url': image_url,
             
             # Links
-            'tiktok_url': f'https://www.tiktok.com/shop/product/{product.product_id}',
+            'tiktok_url': f'https://www.tiktok.com/shop/pdp/{product.product_id}',
             'affiliate_url': f'https://affiliate.tiktok.com/product/{product.product_id}',
             
             # Timestamps
@@ -2651,7 +2651,7 @@ def extract_product_id(input_str):
     Extract product ID from various TikTok URL formats or raw ID.
     
     Supported formats:
-    - https://www.tiktok.com/view/product/1729436251038
+    - https://www.tiktok.com/shop/pdp/1729436251038
     - https://www.tiktok.com/shop/product/1729436251038
     - https://shop.tiktok.com/view/product/1729436251038
     - https://affiliate.tiktok.com/product/1729436251038
@@ -2668,6 +2668,7 @@ def extract_product_id(input_str):
     
     # Try to extract from URL patterns
     patterns = [
+        r'tiktok\.com/shop/pdp/(\d+)',
         r'tiktok\.com/view/product/(\d+)',
         r'tiktok\.com/shop/product/(\d+)',
         r'tiktok\.com/product/(\d+)',
@@ -2862,7 +2863,7 @@ def lookup_product():
             'cached_image_url': None,  # Will be filled below
             
             # Links
-            'tiktok_url': f'https://www.tiktok.com/view/product/{product_id}',
+            'tiktok_url': f'https://www.tiktok.com/shop/pdp/{product_id}',
             'echotik_url': f'https://echotik.live/products/{product_id}',
             
             # Meta
@@ -3658,7 +3659,7 @@ def send_hidden_gem_alert(product):
 
 📊 Low competition = High opportunity!
 
-🔗 <a href="https://www.tiktok.com/view/product/{product.product_id}">View on TikTok Shop</a>
+🔗 <a href="https://www.tiktok.com/shop/pdp/{product.product_id}">View on TikTok Shop</a>
 """
     return send_telegram_alert(message)
 
@@ -3676,7 +3677,7 @@ def send_back_in_stock_alert(product):
 
 ⚡ Was marked OOS, now restocked!
 
-🔗 <a href="https://www.tiktok.com/view/product/{product.product_id}">View on TikTok Shop</a>
+🔗 <a href="https://www.tiktok.com/shop/pdp/{product.product_id}">View on TikTok Shop</a>
 """
     return send_telegram_alert(message)
 
