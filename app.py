@@ -227,6 +227,9 @@ class Product(db.Model):
     product_rating = db.Column(db.Float, default=0)
     review_count = db.Column(db.Integer, default=0)
     
+    # Deal Hunter fields
+    has_free_shipping = db.Column(db.Boolean, default=False, index=True)
+    
     # User features
     is_favorite = db.Column(db.Boolean, default=False, index=True)
     product_status = db.Column(db.String(50), default='active', index=True)  # active, removed, out_of_stock, likely_oos
@@ -282,6 +285,7 @@ class Product(db.Model):
             'views_count': self.views_count,
             'product_rating': self.product_rating,
             'review_count': self.review_count,
+            'has_free_shipping': self.has_free_shipping or False,
             'is_favorite': self.is_favorite,
             'product_status': self.product_status or 'active',
             'status_note': self.status_note,
@@ -593,6 +597,7 @@ def admin_migrate():
             migrations = [
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS product_status VARCHAR(50) DEFAULT 'active'",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS status_note VARCHAR(255)",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS has_free_shipping BOOLEAN DEFAULT FALSE",
             ]
             
             for sql in migrations:
@@ -918,6 +923,58 @@ def debug_seller_products(seller_id):
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+def search_deal_products(page=1, page_size=10, max_videos=30, min_sales_7d=50):
+    """
+    Search for deal products using /product/list API
+    
+    Deal Hunter criteria:
+    - Free shipping (higher conversion for buyers)
+    - Low video count (default <30) = less competition for YOUR videos
+    - Proven sales (default 50+ in 7 days) = product actually sells
+    
+    product_sort_field:
+        1 = total_sale_cnt (Total Sales)
+        2 = total_sale_gmv_amt (Total GMV)
+        3 = spu_avg_price (Avg Price)
+        4 = total_sale_7d_cnt (7-day Sales) <-- USING THIS
+        5 = total_sale_30d_cnt (30-day Sales)
+        6 = total_sale_gmv_7d_amt (7-day GMV)
+        7 = total_sale_gmv_30d_amt (30-day GMV)
+    """
+    try:
+        params = {
+            "page_num": page,
+            "page_size": page_size,
+            "region": "US",
+            "free_shipping": 1,  # Only free shipping products
+            "max_total_video_cnt": max_videos,  # Low video count = less competition
+            "min_total_sale_7d_cnt": min_sales_7d,  # Proven sellers
+            "product_sort_field": 4,  # Sort by 7-day sales
+            "sort_type": 1  # Descending
+        }
+        
+        response = requests.get(
+            f"{BASE_URL}/product/list",
+            params=params,
+            auth=get_auth(),
+            timeout=30
+        )
+        data = response.json()
+        
+        if data.get('code') == 0:
+            return {
+                'products': data.get('data', []),
+                'total': data.get('total', 0),
+                'page': page
+            }
+        print(f"Deal search error: {data}")
+        return {'products': [], 'total': 0, 'page': page}
+    except Exception as e:
+        print(f"Deal search exception: {e}")
+        return {'products': [], 'total': 0, 'page': page}
+
 
 # =============================================================================
 # MAIN SCANNING ENDPOINTS
@@ -1366,6 +1423,214 @@ def quick_scan():
         }), 500
 
 
+@app.route('/api/scan-deals', methods=['GET'])
+@login_required
+def scan_deals():
+    """
+    Deal Hunter - Find products with FREE SHIPPING + PROVEN SALES + LOW VIDEOS
+    
+    These are GOLDEN opportunities:
+    - Free shipping = higher conversion for buyers
+    - Low video count = less competition, your content stands out
+    - Proven sales = product actually sells
+    
+    Parameters:
+        pages: Number of pages to scan (default: 5, max 20)
+        max_videos: Maximum video count (default: 30)
+        min_sales_7d: Minimum 7-day sales (default: 50)
+    """
+    user = get_current_user()
+    user_id = user.id if user else None
+    
+    # Try to acquire scan lock
+    if not acquire_scan_lock(user_id, 'deal_hunter'):
+        status = get_scan_status()
+        locker = User.query.get(status.get('locked_by')) if status.get('locked_by') else None
+        return jsonify({
+            'error': 'Scan in progress',
+            'locked_by': locker.discord_username if locker else 'Unknown',
+            'message': f"Please wait - {locker.discord_username if locker else 'Someone'} is currently scanning"
+        }), 423
+    
+    try:
+        pages = min(request.args.get('pages', 5, type=int), 20)  # Cap at 20 pages
+        max_videos = request.args.get('max_videos', 30, type=int)
+        min_sales_7d = request.args.get('min_sales_7d', 50, type=int)
+        
+        result = {
+            'scan_type': 'deal_hunter',
+            'filters': {
+                'free_shipping': True,
+                'max_videos': max_videos,
+                'min_sales_7d': min_sales_7d
+            },
+            'pages_scanned': 0,
+            'products_scanned': 0,
+            'products_found': 0,
+            'products_saved': 0
+        }
+        
+        # Collect products for batch image signing
+        products_to_save = []
+        image_urls_to_sign = []
+        
+        for page in range(1, pages + 1):
+            search_result = search_deal_products(
+                page=page,
+                page_size=10,  # EchoTik max is 10 per page
+                max_videos=max_videos,
+                min_sales_7d=min_sales_7d
+            )
+            
+            products = search_result.get('products', [])
+            
+            if not products:
+                print(f"  No more deals at page {page}")
+                break
+            
+            result['pages_scanned'] += 1
+            result['products_scanned'] += len(products)
+            
+            for p in products:
+                product_id = p.get('product_id', '')
+                if not product_id:
+                    continue
+                
+                # Get all the data
+                influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+                total_sales = int(p.get('total_sale_cnt', 0) or 0)
+                sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+                sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                commission_rate = float(p.get('product_commission_rate', 0) or 0)
+                video_count = int(p.get('total_video_cnt', 0) or 0)
+                video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
+                video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
+                live_count = int(p.get('total_live_cnt', 0) or 0)
+                views_count = int(p.get('total_views_cnt', 0) or 0)
+                
+                result['products_found'] += 1
+                
+                # Parse image URL
+                image_url = parse_cover_url(p.get('cover_url', ''))
+                
+                # Collect product data
+                products_to_save.append({
+                    'product_id': product_id,
+                    'product_name': p.get('product_name', ''),
+                    'seller_id': p.get('seller_id', ''),
+                    'seller_name': p.get('seller_name') or p.get('shop_name') or 'Unknown',
+                    'total_sales': total_sales,
+                    'sales_7d': sales_7d,
+                    'sales_30d': sales_30d,
+                    'influencer_count': influencer_count,
+                    'commission_rate': commission_rate,
+                    'video_count': video_count,
+                    'video_7d': video_7d,
+                    'video_30d': video_30d,
+                    'live_count': live_count,
+                    'views_count': views_count,
+                    'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+                    'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+                    'price': float(p.get('spu_avg_price', 0) or 0),
+                    'image_url': image_url,
+                    'has_free_shipping': True  # We filtered for this
+                })
+                
+                # Collect image URLs for batch signing
+                if image_url and 'echosell-images' in str(image_url):
+                    image_urls_to_sign.append(image_url)
+            
+            time.sleep(0.2)  # Rate limiting
+        
+        # Batch sign images (10 URLs per API call)
+        signed_urls = {}
+        if image_urls_to_sign:
+            for i in range(0, len(image_urls_to_sign), 10):
+                batch = image_urls_to_sign[i:i+10]
+                batch_signed = get_cached_image_urls(batch)
+                signed_urls.update(batch_signed)
+                time.sleep(0.1)
+        
+        # Save products to database
+        for pdata in products_to_save:
+            product_id = pdata['product_id']
+            image_url = pdata['image_url']
+            cached_url = signed_urls.get(image_url) if image_url else None
+            
+            existing = Product.query.get(product_id)
+            if existing:
+                # Update existing product
+                existing.influencer_count = pdata['influencer_count']
+                existing.sales = pdata['total_sales']
+                existing.sales_30d = pdata['sales_30d']
+                existing.sales_7d = pdata['sales_7d']
+                existing.commission_rate = pdata['commission_rate']
+                existing.video_count = pdata['video_count']
+                existing.video_7d = pdata['video_7d']
+                existing.video_30d = pdata['video_30d']
+                existing.live_count = pdata['live_count']
+                existing.views_count = pdata['views_count']
+                existing.has_free_shipping = True
+                existing.last_updated = datetime.utcnow()
+                if cached_url:
+                    existing.image_url = image_url
+                    existing.cached_image_url = cached_url
+                    existing.image_cached_at = datetime.utcnow()
+            else:
+                # Create new product
+                product = Product(
+                    product_id=product_id,
+                    product_name=pdata['product_name'],
+                    seller_id=pdata['seller_id'],
+                    seller_name=pdata['seller_name'],
+                    gmv=pdata['gmv'],
+                    gmv_30d=pdata['gmv_30d'],
+                    sales=pdata['total_sales'],
+                    sales_7d=pdata['sales_7d'],
+                    sales_30d=pdata['sales_30d'],
+                    influencer_count=pdata['influencer_count'],
+                    commission_rate=pdata['commission_rate'],
+                    price=pdata['price'],
+                    image_url=image_url,
+                    cached_image_url=cached_url,
+                    image_cached_at=datetime.utcnow() if cached_url else None,
+                    video_count=pdata['video_count'],
+                    video_7d=pdata['video_7d'],
+                    video_30d=pdata['video_30d'],
+                    live_count=pdata['live_count'],
+                    views_count=pdata['views_count'],
+                    has_free_shipping=True,
+                    scan_type='deal_hunter'
+                )
+                db.session.add(product)
+                result['products_saved'] += 1
+        
+        db.session.commit()
+        
+        # Log activity
+        log_activity(user_id, 'scan', {
+            'type': 'deal_hunter',
+            'found': result['products_found'],
+            'saved': result['products_saved']
+        })
+        
+        release_scan_lock(user_id)
+        
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+    
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        release_scan_lock(user_id)
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/scan-pages/<seller_id>', methods=['GET'])
 def scan_page_range(seller_id):
     """
@@ -1762,6 +2027,11 @@ def get_products():
     if proven_only:
         query = query.filter(Product.sales >= 50)
     
+    # Apply free shipping filter
+    free_shipping_filter = request.args.get('free_shipping', 'false').lower() == 'true'
+    if free_shipping_filter:
+        query = query.filter(Product.has_free_shipping == True)
+    
     # Get total count before pagination
     total_count = query.count()
     
@@ -1856,6 +2126,12 @@ def get_products():
         Product.sales >= 50
     ).count()
     
+    # Count free shipping products
+    freeship_count = Product.query.filter(
+        base_filter,
+        Product.has_free_shipping == True
+    ).count()
+    
     return jsonify({
         'products': [p.to_dict() for p in products],
         'pagination': {
@@ -1871,6 +2147,7 @@ def get_products():
             'gems': gems_count,
             'trending': trending_count,
             'proven': proven_count,
+            'freeship': freeship_count,
             'all': all_count,
             'untapped': untapped_count,
             'low': low_count,
