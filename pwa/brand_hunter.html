@@ -398,6 +398,19 @@
             z-index: 10;
         }
         
+        .freeship-badge {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.55rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: #000;
+            z-index: 10;
+        }
+        
         .product-card.oos {
             opacity: 0.6;
         }
@@ -994,6 +1007,7 @@
                     <button class="scan-tab active" onclick="setScanTab('quick', this)">⚡ Quick Scan</button>
                     <button class="scan-tab" onclick="setScanTab('deep', this)">🔍 Deep Scan</button>
                     <button class="scan-tab" onclick="setScanTab('brand', this)">🏷️ Brand Scan</button>
+                    <button class="scan-tab" onclick="setScanTab('deals', this)">🎁 Deal Hunter</button>
                 </div>
                 
                 <!-- Quick Scan Panel -->
@@ -1089,6 +1103,31 @@
                         🏷️ Brand Scan: Deep dive into a specific brand. Only saves products with 1+ videos.
                     </div>
                 </div>
+                
+                <!-- Deal Hunter Panel -->
+                <div class="scan-panel" id="panel-deals">
+                    <div class="setting-info" style="background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); color: #000; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                        <strong>🎁 Deal Hunter finds products with:</strong><br>
+                        ✅ Free Shipping (higher buyer conversion)<br>
+                        ✅ Low Video Count (less competition for YOUR videos)<br>
+                        ✅ Proven Sales (product actually sells)
+                    </div>
+                    <div class="setting-row">
+                        <label>Pages to scan:</label>
+                        <input type="number" id="deals-pages" value="5" min="1" max="20">
+                    </div>
+                    <div class="setting-row">
+                        <label>Max videos:</label>
+                        <input type="number" id="deals-max-videos" value="30" min="1" max="100">
+                    </div>
+                    <div class="setting-row">
+                        <label>Min 7-day sales:</label>
+                        <input type="number" id="deals-min-sales" value="50" min="0">
+                    </div>
+                    <div class="setting-warning">
+                        🎁 Deal Hunter: Find free shipping products with low competition. Perfect for new affiliates!
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -1108,6 +1147,9 @@
             </button>
             <button class="pill" onclick="filterProducts('good', this)">
                 ✅ 61-100 <span class="count" id="count-good">0</span>
+            </button>
+            <button class="pill" onclick="filterProducts('freeship', this)" style="background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); color: #000;">
+                🎁 Free Ship <span class="count" id="count-freeship">0</span>
             </button>
         </div>
         
@@ -1430,6 +1472,8 @@
                     url += '&min_influencers=31&max_influencers=60';
                 } else if (currentFilter === 'good') {
                     url += '&min_influencers=61&max_influencers=100';
+                } else if (currentFilter === 'freeship') {
+                    url += '&free_shipping=true';
                 }
                 
                 // Add date filter
@@ -1522,6 +1566,9 @@
             }
             if (counts.good !== undefined) {
                 document.getElementById('count-good').textContent = counts.good;
+            }
+            if (counts.freeship !== undefined) {
+                document.getElementById('count-freeship').textContent = counts.freeship;
             }
             
             // Update date filter pill counts (gems, trending, oos)
@@ -1732,11 +1779,15 @@
                     oosClass = 'oos';
                 }
                 
+                // Free shipping badge
+                const freeShipBadge = p.has_free_shipping ? '<span class="freeship-badge">🎁 FREE SHIP</span>' : '';
+                
                 return `
                     <div class="product-card ${oosClass}">
                         ${trendingBadge}
                         ${gemBadge}
                         ${oosBadge}
+                        ${freeShipBadge}
                         <button class="favorite-btn ${isFav}" onclick="event.stopPropagation(); toggleFavorite('${p.product_id}', this)">
                             ${heartIcon}
                         </button>
@@ -1812,6 +1863,8 @@
                 await runDeepScan(btn, originalText);
             } else if (currentScanTab === 'brand') {
                 await runBrandScan(btn, originalText);
+            } else if (currentScanTab === 'deals') {
+                await runDealScan(btn, originalText);
             }
         }
         
@@ -2019,6 +2072,55 @@
                 
             } catch (err) {
                 showToast('Brand scan failed: ' + err.message, true);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.onclick = startScan;
+            }
+        }
+        
+        async function runDealScan(btn, originalText) {
+            const pages = parseInt(document.getElementById('deals-pages').value) || 5;
+            const maxVideos = parseInt(document.getElementById('deals-max-videos').value) || 30;
+            const minSales = parseInt(document.getElementById('deals-min-sales').value) || 50;
+            
+            try {
+                btn.innerHTML = '🎁 Hunting deals...';
+                btn.onclick = () => { scanAborted = true; btn.innerHTML = '⏹️ Stopping...'; };
+                
+                const url = `/api/scan-deals?pages=${pages}&max_videos=${maxVideos}&min_sales_7d=${minSales}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    const errData = await response.json();
+                    if (response.status === 423) {
+                        showToast(`⏳ ${errData.message}`, true);
+                    } else {
+                        showToast('Deal scan failed: ' + (errData.error || 'Unknown error'), true);
+                    }
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showToast('Deal scan error: ' + data.error, true);
+                    return;
+                }
+                
+                if (data.result) {
+                    const r = data.result;
+                    showToast(`🎁 Deal Hunter: Found ${r.products_found} products, saved ${r.products_saved} new!`, false, 'success');
+                    
+                    // Auto refresh images after scan
+                    showToast('🖼️ Loading images...', false);
+                    await refreshImagesQuiet();
+                    
+                    loadProducts();
+                    loadStats();
+                }
+                
+            } catch (err) {
+                showToast('Deal scan failed: ' + err.message, true);
             } finally {
                 btn.innerHTML = originalText;
                 btn.onclick = startScan;
