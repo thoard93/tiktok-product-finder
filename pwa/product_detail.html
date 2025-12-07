@@ -196,10 +196,11 @@
         function formatCurrency(v) { if (!v) return '$0'; if (v >= 1e6) return '$'+(v/1e6).toFixed(1)+'M'; if (v >= 1e3) return '$'+(v/1e3).toFixed(1)+'K'; return '$'+v.toFixed(0); }
         function formatNumber(v) { if (!v) return '0'; if (v >= 1e6) return (v/1e6).toFixed(1)+'M'; if (v >= 1e3) return (v/1e3).toFixed(1)+'K'; return v.toString(); }
         function getCompetitionLevel(inf, vid) {
-            const t = (inf||0) + (vid||0)/10;
-            if (t <= 5) return {level:'Low',class:'low',percent:20};
-            if (t <= 20) return {level:'Medium',class:'medium',percent:50};
-            if (t <= 50) return {level:'High',class:'high',percent:75};
+            // Competition is now based on VIDEO COUNT (videos you're competing against)
+            const v = vid || 0;
+            if (v <= 10) return {level:'Low',class:'low',percent:20};
+            if (v <= 30) return {level:'Medium',class:'medium',percent:50};
+            if (v <= 60) return {level:'High',class:'high',percent:75};
             return {level:'Very High',class:'high',percent:95};
         }
         function getImageUrl(cachedUrl, originalUrl) {
@@ -312,31 +313,31 @@
                         <div class="analysis-section">
                             <h3 class="section-title">🎯 Competition Analysis</h3>
                             <div class="stats-grid" style="margin-bottom:1.5rem;">
-                                <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-value cyan">${formatNumber(inf)}</div><div class="stat-label">Influencers</div></div>
-                                <div class="stat-card"><div class="stat-icon">🎬</div><div class="stat-value">${formatNumber(p.video_count||0)}</div><div class="stat-label">Videos</div></div>
+                                <div class="stat-card"><div class="stat-icon">🎬</div><div class="stat-value cyan">${formatNumber(p.video_count||0)}</div><div class="stat-label">Videos (Competition)</div></div>
+                                <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-value">${formatNumber(inf)}</div><div class="stat-label">Creators</div></div>
                                 <div class="stat-card"><div class="stat-icon">📺</div><div class="stat-value">${formatNumber(p.live_count||0)}</div><div class="stat-label">Livestreams</div></div>
                                 <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-value ${comp.class}">${comp.level}</div><div class="stat-label">Competition</div></div>
                             </div>
                             <div class="competition-meter">
-                                <div class="meter-label"><span>Competition Level</span><span>${comp.level}</span></div>
+                                <div class="meter-label"><span>Video Competition Level</span><span>${comp.level}</span></div>
                                 <div class="meter-bar"><div class="meter-fill ${comp.class}" style="width:${comp.percent}%"></div></div>
                             </div>
                             <div style="margin-top:1.5rem;padding:1rem;background:var(--bg-secondary);border-radius:8px;">
                                 <h4 style="margin-bottom:0.75rem;">💡 Competition Insight</h4>
-                                ${getInsight(inf,p.gmv)}
+                                ${getInsight(p.video_count||0,p.gmv)}
                             </div>
                         </div>
                     </div>
                 </div>`;
         }
         
-        function getInsight(inf,gmv) {
+        function getInsight(vids,gmv) {
             const g = formatCurrency(gmv);
-            if (inf<=3) return `<p style="color:var(--success)">🏆 <strong>Untapped!</strong> Only ${inf} influencers. ${g} proven sales - move fast!</p>`;
-            if (inf<=10) return `<p style="color:var(--tiktok-cyan)">✅ <strong>Low Competition.</strong> ${inf} influencers, ${g} GMV. Good opportunity.</p>`;
-            if (inf<=30) return `<p style="color:var(--warning)">⚡ <strong>Medium Competition.</strong> ${inf} influencers. Need quality content to stand out.</p>`;
-            if (inf<=50) return `<p style="color:var(--accent)">⚠️ <strong>High Competition.</strong> ${inf} influencers. Find a unique angle.</p>`;
-            return `<p style="color:var(--accent)">❌ <strong>Saturated.</strong> ${inf}+ influencers. Consider alternatives.</p>`;
+            if (vids<=10) return `<p style="color:var(--success)">🏆 <strong>Untapped!</strong> Only ${vids} videos. ${g} proven sales - your content can stand out!</p>`;
+            if (vids<=30) return `<p style="color:var(--tiktok-cyan)">✅ <strong>Low Competition.</strong> ${vids} videos, ${g} GMV. Good opportunity.</p>`;
+            if (vids<=60) return `<p style="color:var(--warning)">⚡ <strong>Medium Competition.</strong> ${vids} videos. Need quality content to stand out.</p>`;
+            if (vids<=100) return `<p style="color:var(--accent)">⚠️ <strong>High Competition.</strong> ${vids} videos. Find a unique angle.</p>`;
+            return `<p style="color:var(--accent)">❌ <strong>Saturated.</strong> ${vids}+ videos competing. Consider alternatives.</p>`;
         }
         
         function switchTab(t) {

@@ -400,7 +400,7 @@
         
         .freeship-badge {
             position: absolute;
-            bottom: 4px;
+            top: 4px;
             left: 4px;
             padding: 2px 6px;
             border-radius: 4px;
@@ -971,11 +971,11 @@
                 </div>
                 <div class="stat-item">
                     <div class="stat-value" id="stat-untapped">0</div>
-                    <div class="stat-label">🔥 Untapped (1-10)</div>
+                    <div class="stat-label">🔥 1-10 vids</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-value" id="stat-low">0</div>
-                    <div class="stat-label">💎 Low (11-30)</div>
+                    <div class="stat-label">💎 11-30 vids</div>
                 </div>
             </div>
         </div>
@@ -989,8 +989,6 @@
                 <option value="videos_low">🎬 Videos (Low→High)</option>
                 <option value="videos_high">🎬 Videos (High→Low)</option>
                 <option value="commission">💰 Commission %</option>
-                <option value="influencers_asc">👤 Influencers (Low→High)</option>
-                <option value="influencers_desc">👤 Influencers (High→Low)</option>
                 <option value="newest">🆕 Newest First</option>
             </select>
         </div>
@@ -1131,22 +1129,22 @@
             </div>
         </div>
         
-        <!-- Influencer Filter Pills -->
+        <!-- Video Competition Filter Pills -->
         <div class="filter-pills">
             <button class="pill active" onclick="filterProducts('all', this)">
                 All <span class="count" id="count-all">0</span>
             </button>
             <button class="pill" onclick="filterProducts('untapped', this)">
-                🔥 1-10 <span class="count" id="count-untapped">0</span>
+                🔥 1-10 vids <span class="count" id="count-untapped">0</span>
             </button>
             <button class="pill" onclick="filterProducts('low', this)">
-                💎 11-30 <span class="count" id="count-low">0</span>
+                💎 11-30 vids <span class="count" id="count-low">0</span>
             </button>
             <button class="pill" onclick="filterProducts('medium', this)">
-                📊 31-60 <span class="count" id="count-medium">0</span>
+                📊 31-60 vids <span class="count" id="count-medium">0</span>
             </button>
             <button class="pill" onclick="filterProducts('good', this)">
-                ✅ 61-100 <span class="count" id="count-good">0</span>
+                ✅ 61-100 vids <span class="count" id="count-good">0</span>
             </button>
             <button class="pill" onclick="filterProducts('freeship', this)" style="background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); color: #000;">
                 🎁 Free Ship <span class="count" id="count-freeship">0</span>
@@ -1463,15 +1461,15 @@
                 // Build URL with pagination
                 let url = `/api/products?page=${page}&per_page=${perPage}`;
                 
-                // Add influencer filter
+                // Add video competition filter
                 if (currentFilter === 'untapped') {
-                    url += '&min_influencers=1&max_influencers=10';
+                    url += '&min_videos=1&max_videos=10';
                 } else if (currentFilter === 'low') {
-                    url += '&min_influencers=11&max_influencers=30';
+                    url += '&min_videos=11&max_videos=30';
                 } else if (currentFilter === 'medium') {
-                    url += '&min_influencers=31&max_influencers=60';
+                    url += '&min_videos=31&max_videos=60';
                 } else if (currentFilter === 'good') {
-                    url += '&min_influencers=61&max_influencers=100';
+                    url += '&min_videos=61&max_videos=100';
                 } else if (currentFilter === 'freeship') {
                     url += '&free_shipping=true';
                 }
@@ -1696,11 +1694,11 @@
             const counts = { all: allProducts.length, untapped: 0, low: 0, medium: 0, good: 0 };
             
             allProducts.forEach(p => {
-                const inf = p.influencer_count || 0;
-                if (inf >= 1 && inf <= 10) counts.untapped++;
-                else if (inf >= 11 && inf <= 30) counts.low++;
-                else if (inf >= 31 && inf <= 60) counts.medium++;
-                else if (inf >= 61 && inf <= 100) counts.good++;
+                const vids = p.video_count || 0;
+                if (vids >= 1 && vids <= 10) counts.untapped++;
+                else if (vids >= 11 && vids <= 30) counts.low++;
+                else if (vids >= 31 && vids <= 60) counts.medium++;
+                else if (vids >= 61 && vids <= 100) counts.good++;
             });
             
             document.getElementById('count-all').textContent = totalCount || counts.all;
@@ -1738,11 +1736,11 @@
             }
             
             container.innerHTML = products.map(p => {
-                const inf = p.influencer_count || 0;
+                const vids = p.video_count || 0;
                 let badgeClass = '';
-                if (inf <= 10) badgeClass = 'hot';
-                else if (inf <= 30) badgeClass = 'warm';
-                else if (inf <= 60) badgeClass = 'cool';
+                if (vids <= 10) badgeClass = 'hot';
+                else if (vids <= 30) badgeClass = 'warm';
+                else if (vids <= 60) badgeClass = 'cool';
                 
                 // Commission rate - API returns as decimal (0.15 = 15%) 
                 let commission = p.commission_rate || 0;
@@ -1759,15 +1757,6 @@
                 const isFav = p.is_favorite ? 'active' : '';
                 const heartIcon = p.is_favorite ? '❤️' : '🤍';
                 
-                // Trending badge
-                let trendingBadge = '';
-                const velocity = p.sales_velocity || 0;
-                if (velocity >= 20) {
-                    trendingBadge = `<span class="trending-badge up">📈 +${Math.round(velocity)}%</span>`;
-                } else if (velocity <= -20) {
-                    trendingBadge = `<span class="trending-badge down">📉 ${Math.round(velocity)}%</span>`;
-                }
-                
                 // Hidden gem badge
                 const gemBadge = p.is_hidden_gem ? '<span class="gem-badge">💎 GEM</span>' : '';
                 
@@ -1779,15 +1768,14 @@
                     oosClass = 'oos';
                 }
                 
-                // Free shipping badge
+                // Free shipping badge (top-left)
                 const freeShipBadge = p.has_free_shipping ? '<span class="freeship-badge">🎁 FREE SHIP</span>' : '';
                 
                 return `
                     <div class="product-card ${oosClass}">
-                        ${trendingBadge}
+                        ${freeShipBadge}
                         ${gemBadge}
                         ${oosBadge}
-                        ${freeShipBadge}
                         <button class="favorite-btn ${isFav}" onclick="event.stopPropagation(); toggleFavorite('${p.product_id}', this)">
                             ${heartIcon}
                         </button>
@@ -1800,7 +1788,7 @@
                             <div class="product-name">${p.product_name}</div>
                             <div class="product-stats">
                                 <span class="commission-badge ${commissionClass}">${commission}%</span>
-                                <span class="influencer-badge ${badgeClass}">${inf} 👤</span>
+                                <span class="influencer-badge ${badgeClass}">${vids} 🎬</span>
                             </div>
                             <div style="font-size:0.75rem; color:#888; margin-top:4px;">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1809,12 +1797,12 @@
                                     <span title="All-time sales" style="color:#10b981; font-weight:600;">${(p.sales || 0).toLocaleString()} total</span>
                                 </div>
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-                                    <span title="Total videos" style="color:#9b59b6;">🎬 ${(p.video_count || 0).toLocaleString()} vids</span>
+                                    <span title="Total influencers" style="color:#9b59b6;">👥 ${(p.influencer_count || 0).toLocaleString()} creators</span>
                                     ${(() => {
-                                        const vids = p.video_count || 0;
+                                        const vidCount = p.video_count || 0;
                                         const infs = p.influencer_count || 1;
-                                        const ratio = vids / infs;
-                                        if (vids >= 1 && ratio < 0.5 && infs >= 5) {
+                                        const ratio = vidCount / infs;
+                                        if (vidCount >= 1 && ratio < 0.5 && infs >= 5) {
                                             return '<span title="Low video/influencer ratio - opportunity!" style="color:#22c55e;">✨ Untapped</span>';
                                         } else if ((p.sales || 0) >= 50) {
                                             return '<span style="color:#f59e0b;">🔥 Proven</span>';
@@ -2544,10 +2532,10 @@
                 alert(`📊 Database Stats:\n\n` +
                     `Total Products: ${data.total_products}\n` +
                     `Unique Brands: ${data.unique_brands}\n` +
-                    `🔥 Untapped (1-10): ${data.untapped}\n` +
-                    `💎 Low (11-30): ${data.low_competition}\n` +
-                    `📊 Medium (31-60): ${data.medium_competition}\n` +
-                    `✅ Good (61-100): ${data.good_competition}\n` +
+                    `🔥 1-10 vids: ${data.untapped}\n` +
+                    `💎 11-30 vids: ${data.low_competition}\n` +
+                    `📊 31-60 vids: ${data.medium_competition}\n` +
+                    `✅ 61-100 vids: ${data.good_competition}\n` +
                     `❤️ Favorites: ${data.favorites || 0}\n\n` +
                     `--- Special Filters ---\n` +
                     `💎 Gems: ${sf.gems || 0}\n` +
