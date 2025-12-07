@@ -229,6 +229,7 @@ class Product(db.Model):
     
     # Deal Hunter fields
     has_free_shipping = db.Column(db.Boolean, default=False, index=True)
+    last_shown_hot = db.Column(db.DateTime)  # Track when product was last shown in Discord hot products
     
     # User features
     is_favorite = db.Column(db.Boolean, default=False, index=True)
@@ -598,6 +599,7 @@ def admin_migrate():
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS product_status VARCHAR(50) DEFAULT 'active'",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS status_note VARCHAR(255)",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS has_free_shipping BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS last_shown_hot TIMESTAMP",
             ]
             
             for sql in migrations:
@@ -1897,8 +1899,13 @@ def list_top_brands():
 @app.route('/api/products', methods=['GET'])
 def get_products():
     """Get all saved products with filtering and pagination options"""
-    min_influencers = request.args.get('min_influencers', 1, type=int)
-    max_influencers = request.args.get('max_influencers', 500, type=int)
+    # Legacy influencer filters (kept for backwards compatibility)
+    min_influencers = request.args.get('min_influencers', 0, type=int)
+    max_influencers = request.args.get('max_influencers', 99999, type=int)
+    
+    # Video-based competition filters (primary)
+    min_videos = request.args.get('min_videos', 0, type=int)
+    max_videos = request.args.get('max_videos', 99999, type=int)
     
     # Pagination parameters
     page = request.args.get('page', 1, type=int)
@@ -1940,22 +1947,22 @@ def get_products():
     if oos_only:
         # Show only likely OOS products
         query = Product.query.filter(
-            Product.influencer_count >= min_influencers,
-            Product.influencer_count <= max_influencers,
+            Product.video_count >= min_videos,
+            Product.video_count <= max_videos,
             Product.product_status == 'likely_oos'
         )
     elif show_oos:
         # Show all including OOS
         query = Product.query.filter(
-            Product.influencer_count >= min_influencers,
-            Product.influencer_count <= max_influencers,
+            Product.video_count >= min_videos,
+            Product.video_count <= max_videos,
             db.or_(Product.product_status == None, Product.product_status.in_(['active', 'likely_oos']))
         )
     else:
         # Default: hide OOS products
         query = Product.query.filter(
-            Product.influencer_count >= min_influencers,
-            Product.influencer_count <= max_influencers,
+            Product.video_count >= min_videos,
+            Product.video_count <= max_videos,
             db.or_(Product.product_status == None, Product.product_status == 'active')
         )
     
@@ -2083,7 +2090,7 @@ def get_products():
     except Exception:
         untapped_count = 0
     
-    # Get influencer category counts for filter pills
+    # Get video competition category counts for filter pills
     # Apply same exclusions as main query (non-promotable products)
     base_filter = db.and_(
         ~Product.product_name.ilike('%not for sale%'),
@@ -2096,26 +2103,26 @@ def get_products():
     
     untapped_count = Product.query.filter(
         base_filter,
-        Product.influencer_count >= 1,
-        Product.influencer_count <= 10
+        Product.video_count >= 1,
+        Product.video_count <= 10
     ).count()
     
     low_count = Product.query.filter(
         base_filter,
-        Product.influencer_count >= 11,
-        Product.influencer_count <= 30
+        Product.video_count >= 11,
+        Product.video_count <= 30
     ).count()
     
     medium_count = Product.query.filter(
         base_filter,
-        Product.influencer_count >= 31,
-        Product.influencer_count <= 60
+        Product.video_count >= 31,
+        Product.video_count <= 60
     ).count()
     
     good_count = Product.query.filter(
         base_filter,
-        Product.influencer_count >= 61,
-        Product.influencer_count <= 100
+        Product.video_count >= 61,
+        Product.video_count <= 100
     ).count()
     
     all_count = untapped_count + low_count + medium_count + good_count
@@ -2294,25 +2301,25 @@ def get_stats():
     """Get scanning statistics"""
     total = Product.query.count()
     
-    # Ranges for 1-100 strategy
+    # Video-based competition ranges
     untapped = Product.query.filter(
-        Product.influencer_count >= 1,
-        Product.influencer_count <= 10
+        Product.video_count >= 1,
+        Product.video_count <= 10
     ).count()
     
     low = Product.query.filter(
-        Product.influencer_count >= 11,
-        Product.influencer_count <= 30
+        Product.video_count >= 11,
+        Product.video_count <= 30
     ).count()
     
     medium = Product.query.filter(
-        Product.influencer_count >= 31,
-        Product.influencer_count <= 60
+        Product.video_count >= 31,
+        Product.video_count <= 60
     ).count()
     
     good = Product.query.filter(
-        Product.influencer_count >= 61,
-        Product.influencer_count <= 100
+        Product.video_count >= 61,
+        Product.video_count <= 100
     ).count()
     
     # Get unique brands

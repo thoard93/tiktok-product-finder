@@ -38,11 +38,11 @@ BASE_URL = "https://open.echotik.live/api/v3/echotik"
 ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
 ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
 
-# Hot Product Criteria
-MIN_SALES_7D = 100
-MIN_VIDEO_COUNT = 5
-MAX_VIDEO_COUNT = 20
-MAX_DAILY_POSTS = 10
+# Hot Product Criteria - Free Shipping Deals
+MIN_SALES_7D = 50  # Lower threshold since we're filtering by free shipping
+MAX_VIDEO_COUNT = 30  # Low competition
+MAX_DAILY_POSTS = 5  # Top 5 daily
+DAYS_BEFORE_REPEAT = 3  # Don't show same product for 3 days
 
 def get_auth():
     return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
@@ -71,6 +71,8 @@ class Product(db.Model):
     views_count = db.Column(db.Integer, default=0)
     product_rating = db.Column(db.Float, default=0)
     product_status = db.Column(db.String(50), default='active')
+    has_free_shipping = db.Column(db.Boolean, default=False)
+    last_shown_hot = db.Column(db.DateTime)  # Track when product was last shown in hot products
     last_updated = db.Column(db.DateTime)
 
 # Discord Bot Setup
@@ -185,19 +187,19 @@ def create_product_embed(p, title_prefix=""):
     if isinstance(image_url, list) and len(image_url) > 0:
         image_url = image_url[0]
     
-    # Determine embed color based on opportunity
-    if influencer_count <= 10:
+    # Determine embed color based on VIDEO COUNT (competition = videos competing with yours)
+    if video_count <= 10:
         color = 0xFF4500  # Orange-red for untapped
-        opportunity = "🔥 UNTAPPED"
-    elif influencer_count <= 30:
+        opportunity = "🔥 UNTAPPED (1-10 vids)"
+    elif video_count <= 30:
         color = 0x00FF00  # Green for low competition
-        opportunity = "💎 LOW COMPETITION"
-    elif influencer_count <= 60:
+        opportunity = "💎 LOW COMPETITION (11-30 vids)"
+    elif video_count <= 60:
         color = 0xFFD700  # Gold for medium
-        opportunity = "📊 MEDIUM"
+        opportunity = "📊 MEDIUM (31-60 vids)"
     else:
         color = 0x808080  # Gray for high
-        opportunity = "⚠️ HIGH COMPETITION"
+        opportunity = "⚠️ HIGH COMPETITION (61+ vids)"
     
     embed = Embed(
         title=f"{title_prefix}{product_name}",
@@ -209,8 +211,8 @@ def create_product_embed(p, title_prefix=""):
     embed.add_field(name="📦 7-Day Sales", value=f"{sales_7d:,}", inline=True)
     embed.add_field(name="📊 30-Day Sales", value=f"{sales_30d:,}", inline=True)
     embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
-    embed.add_field(name="👥 Influencers", value=f"{influencer_count:,}", inline=True)
     embed.add_field(name="🎬 Total Videos", value=f"{video_count:,}", inline=True)
+    embed.add_field(name="👥 Creators", value=f"{influencer_count:,}", inline=True)
     embed.add_field(name="💰 Price", value=f"${price:.2f}", inline=True)
     embed.add_field(name="🎯 Opportunity", value=opportunity, inline=False)
     
@@ -224,16 +226,49 @@ def create_product_embed(p, title_prefix=""):
     return embed
 
 def get_hot_products():
-    """Get hot products from database matching criteria"""
+    """Get hot FREE SHIPPING products from database with variety (no repeats for 3 days)"""
+    from datetime import timedelta
+    
     with app.app_context():
+        # Calculate cutoff date for repeat prevention
+        cutoff_date = datetime.utcnow() - timedelta(days=DAYS_BEFORE_REPEAT)
+        
+        # Query free shipping products with low video count
+        # Exclude products shown in the last 3 days
         products = Product.query.filter(
+            Product.has_free_shipping == True,  # Free shipping only!
             Product.sales_7d >= MIN_SALES_7D,
-            Product.video_count >= MIN_VIDEO_COUNT,
             Product.video_count <= MAX_VIDEO_COUNT,
-            db.or_(Product.product_status == 'active', Product.product_status == None)
+            db.or_(Product.product_status == 'active', Product.product_status == None),
+            db.or_(
+                Product.last_shown_hot == None,  # Never shown
+                Product.last_shown_hot < cutoff_date  # Or shown more than 3 days ago
+            )
         ).order_by(
             Product.sales_7d.desc()
         ).limit(MAX_DAILY_POSTS).all()
+        
+        # If we don't have enough fresh products, fall back to showing any free shipping product
+        if len(products) < MAX_DAILY_POSTS:
+            fallback_products = Product.query.filter(
+                Product.has_free_shipping == True,
+                Product.sales_7d >= MIN_SALES_7D,
+                Product.video_count <= MAX_VIDEO_COUNT,
+                db.or_(Product.product_status == 'active', Product.product_status == None)
+            ).order_by(
+                Product.sales_7d.desc()
+            ).limit(MAX_DAILY_POSTS).all()
+            products = fallback_products
+        
+        # Mark products as shown today
+        for p in products:
+            p.last_shown_hot = datetime.utcnow()
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            print(f"Error updating last_shown_hot: {e}")
+            db.session.rollback()
         
         return [{
             'product_id': p.product_id,
@@ -269,18 +304,18 @@ async def daily_hot_products():
         print(f"Could not find channel {HOT_PRODUCTS_CHANNEL_ID}")
         return
     
-    print(f"🔥 Posting daily hot products at {datetime.utcnow().isoformat()}")
+    print(f"🎁 Posting daily free shipping deals at {datetime.utcnow().isoformat()}")
     
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No hot products matching criteria today. Check back tomorrow!")
+        await channel.send("📭 No free shipping deals matching criteria today. Run a Deal Hunter scan!")
         return
     
     # Send header message
-    await channel.send(f"# 🔥 Daily Hot Products - {datetime.utcnow().strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 100+ weekly sales, 5-20 total videos\n"
-                       f"**Found:** {len(products)} products\n"
+    await channel.send(f"# 🎁 Daily Free Shipping Deals - {datetime.utcnow().strftime('%B %d, %Y')}\n"
+                       f"**Criteria:** Free shipping, 50+ weekly sales, <30 videos (low competition)\n"
+                       f"**Today's Picks:** {len(products)} products\n"
                        f"─────────────────────────────")
     
     # Send each product as an embed
@@ -289,7 +324,7 @@ async def daily_hot_products():
         await channel.send(embed=embed)
         await asyncio.sleep(1)  # Rate limiting
     
-    print(f"   Posted {len(products)} hot products")
+    print(f"   Posted {len(products)} free shipping deals")
 
 @bot.event
 async def on_message(message):
