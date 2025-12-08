@@ -2049,7 +2049,7 @@ def process_apify_results(items):
         # Pattern 3: Use Ad ID if no Product ID found (Fallback)
         # This allows us to save the ad even if it's not directly a Shop product link
         if not pid:
-             ad_id = item.get('ad_id') or item.get('id')
+             ad_id = item.get('ad_id') or item.get('id') or item.get('adId')
              if ad_id:
                  pid = f"ad_{ad_id}" 
             
@@ -2152,9 +2152,16 @@ def scan_apify():
                 
         db.session.commit()
         
+        # DEBUG MESSAGE Construction
+        msg = f"Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new."
+        
+        if items and not products:
+             keys_str = ", ".join(list(items[0].keys())[:10]) # First 10 keys
+             msg += f" [DEBUG: Keys found: {keys_str}]"
+        
         return jsonify({
             'success': True,
-            'message': f"Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new.",
+            'message': msg,
             'products': products,
             'debug_raw_count': len(items)
         })
