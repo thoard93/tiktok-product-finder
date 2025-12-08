@@ -2027,13 +2027,17 @@ def process_apify_results(items):
                  item.get('caption') or 
                  item.get('title') or 
                  item.get('ad_name') or 
-                 item.get('adName') or # From Debug Keys
+                 item.get('adName') or
+                 item.get('description') or # Creative Center
+                 item.get('video_description') or
                  'Unknown Ad Product')
                  
         # Try multiple keys for Advertiser
         advertiser = (item.get('advertiser_name') or 
                       item.get('advertiserName') or 
-                      item.get('paidBy') or # From Debug Keys
+                      item.get('paidBy') or 
+                      item.get('brand_name') or # Creative Center
+                      item.get('brandName') or
                       'Unknown')
         
         # Try to extract ID from URL
