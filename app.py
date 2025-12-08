@@ -2062,11 +2062,11 @@ def scan_apify():
     # 1. Start Actor
     url = f"https://api.apify.com/v2/acts/{APIFY_ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
     
-    # Scraper Engine Input Format
+    # Scraper Engine Input Format (Requires startUrls)
     actor_input = {
-        "query": keyword_string,
+        "startUrls": [{"url": keyword_string}], # Accepts keywords in url field
         "maxPages": max(1, max_results // 12),
-        "country": "US", # US is supported by scraper-engine
+        "country": "US", 
         "period": "LAST_30_DAYS" 
     }
     
