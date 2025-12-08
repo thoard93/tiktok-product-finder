@@ -2266,6 +2266,7 @@ def get_products():
     ).count()
     
     return jsonify({
+        'success': True,
         'products': [p.to_dict() for p in products],
         'pagination': {
             'page': page,
