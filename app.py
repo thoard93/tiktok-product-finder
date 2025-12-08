@@ -2066,7 +2066,7 @@ def scan_apify():
     actor_input = {
         "query": keyword_string,
         "maxPages": max(1, max_results // 12),
-        "country": "US", # Default to US for now
+        "country": "all", # "US" not supported by this actor, using "all"
         "period": "LAST_30_DAYS" # Focus on recent ads
     }
     
