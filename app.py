@@ -2426,105 +2426,128 @@ def mark_unavailable(product_id):
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Get scanning statistics"""
-    total = Product.query.count()
-    
-    # Video-based competition ranges
-    untapped = Product.query.filter(
-        Product.video_count >= 1,
-        Product.video_count <= 10
-    ).count()
-    
-    low = Product.query.filter(
-        Product.video_count >= 11,
-        Product.video_count <= 30
-    ).count()
-    
-    medium = Product.query.filter(
-        Product.video_count >= 31,
-        Product.video_count <= 60
-    ).count()
-    
-    good = Product.query.filter(
-        Product.video_count >= 61,
-        Product.video_count <= 100
-    ).count()
-    
-    # Get unique brands
-    brands = db.session.query(Product.seller_name).distinct().count()
-    
-    # Get favorites count
-    favorites = Product.query.filter(Product.is_favorite == True).count()
-    
-    # Data quality metrics
-    zero_commission = Product.query.filter(
-        db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None))
-    ).count()
-    
-    low_sales = Product.query.filter(Product.sales_7d <= 2).count()
-    
-    # Count products with no cached image OR stale cached image (>48 hours old - TikTok CDN URLs expire)
-    stale_threshold = datetime.utcnow() - timedelta(hours=48)
-    
-    missing_images = Product.query.filter(
-        db.or_(
-            Product.cached_image_url.is_(None),
-            Product.cached_image_url == '',
-            Product.image_cached_at.is_(None),
-            Product.image_cached_at < stale_threshold
-        )
-    ).count()
-    
-    # Gems and trending counts
-    gems_count = Product.query.filter(
-        Product.sales_7d >= 20,
-        Product.influencer_count <= 30,
-        Product.influencer_count >= 1,
-        Product.video_count >= 1,
-        db.or_(Product.product_status == None, Product.product_status == 'active')
-    ).count()
-    
     try:
-        trending_count = Product.query.filter(
-            db.or_(
-                Product.sales_velocity >= 10,
-                Product.sales_7d >= 100
-            ),
-            db.or_(Product.product_status == None, Product.product_status == 'active')
-        ).count()
-    except:
-        trending_count = 0
-    
-    # Count untapped - products with low video/influencer ratio
-    try:
-        untapped_count = Product.query.filter(
-            Product.influencer_count >= 5,
+        total = Product.query.count()
+        
+        # Video-based competition ranges
+        untapped = Product.query.filter(
             Product.video_count >= 1,
-            Product.video_count <= Product.influencer_count * 0.5,
-            Product.sales_7d >= 10,
+            Product.video_count <= 10
+        ).count()
+        
+        low = Product.query.filter(
+            Product.video_count >= 11,
+            Product.video_count <= 30
+        ).count()
+        
+        medium = Product.query.filter(
+            Product.video_count >= 31,
+            Product.video_count <= 60
+        ).count()
+        
+        good = Product.query.filter(
+            Product.video_count >= 61,
+            Product.video_count <= 100
+        ).count()
+        
+        # Get unique brands
+        brands = db.session.query(Product.seller_name).distinct().count()
+        
+        # Get favorites count
+        favorites = Product.query.filter(Product.is_favorite == True).count()
+        
+        # Data quality metrics
+        zero_commission = Product.query.filter(
+            db.or_(Product.commission_rate == 0, Product.commission_rate.is_(None))
+        ).count()
+        
+        low_sales = Product.query.filter(Product.sales_7d <= 2).count()
+        
+        # Count products with no cached image OR stale cached image (>48 hours old - TikTok CDN URLs expire)
+        stale_threshold = datetime.utcnow() - timedelta(hours=48)
+        
+        missing_images = Product.query.filter(
+            db.or_(
+                Product.cached_image_url.is_(None),
+                Product.cached_image_url == '',
+                Product.image_cached_at.is_(None),
+                Product.image_cached_at < stale_threshold
+            )
+        ).count()
+        
+        # Gems and trending counts
+        gems_count = Product.query.filter(
+            Product.sales_7d >= 20,
+            Product.influencer_count <= 30,
+            Product.influencer_count >= 1,
+            Product.video_count >= 1,
             db.or_(Product.product_status == None, Product.product_status == 'active')
         ).count()
-    except:
-        untapped_count = 0
-    
-    try:
-        freeship_count = Product.query.filter(
-            Product.has_free_shipping == True
-        ).count()
-    except:
-        freeship_count = 0
+        
+        try:
+            trending_count = Product.query.filter(
+                db.or_(
+                    Product.sales_velocity >= 10,
+                    Product.sales_7d >= 100
+                ),
+                db.or_(Product.product_status == None, Product.product_status == 'active')
+            ).count()
+        except:
+            trending_count = 0
+        
+        # Count untapped - products with low video/influencer ratio
+        try:
+            untapped_count = Product.query.filter(
+                Product.influencer_count >= 5,
+                Product.video_count >= 1,
+                Product.video_count <= Product.influencer_count * 0.5,
+                Product.sales_7d >= 10,
+                db.or_(Product.product_status == None, Product.product_status == 'active')
+            ).count()
+        except:
+            untapped_count = 0
+        
+        try:
+            freeship_count = Product.query.filter(
+                Product.has_free_shipping == True
+            ).count()
+        except:
+            freeship_count = 0
 
-    return jsonify({
-        'success': True,
-        'stats': {
-            'total_products': total,
-            'unique_brands': brands,
-            'untapped_products': untapped_count,
-            'hidden_gems': gems_count,
-            'high_commission': Product.query.filter(Product.commission_rate >= 15).count(),
-            'freeship': freeship_count,
-            'avg_commission': db.session.query(func.avg(Product.commission_rate)).scalar() or 0
-        }
-    })
+        # Avg commission - handle potential DB errors
+        try:
+            avg_comm = db.session.query(func.avg(Product.commission_rate)).scalar() or 0
+        except:
+            avg_comm = 0
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_products': total,
+                'unique_brands': brands,
+                'untapped_products': untapped_count,
+                'hidden_gems': gems_count,
+                'high_commission': Product.query.filter(Product.commission_rate >= 15).count(),
+                'freeship': freeship_count,
+                'avg_commission': avg_comm
+            }
+        })
+
+    except Exception as e:
+        # Fallback if everything explodes checks
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_products': 0,
+                'unique_brands': 0,
+                'untapped_products': 0,
+                'hidden_gems': 0,
+                'high_commission': 0,
+                'freeship': 0,
+                'avg_commission': 0
+            },
+            'error': str(e)
+        })
 
 
 @app.route('/api/refresh-images', methods=['POST', 'GET'])
