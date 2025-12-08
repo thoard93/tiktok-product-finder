@@ -281,23 +281,13 @@ class Product(db.Model):
         # For filtering by influencer range + sorting by commission
         db.Index('idx_influencer_commission', 'influencer_count', 'commission_rate'),
         # For filtering by status + influencer range
-        db.Index('idx_status_influencer', 'product_status', 'influencer_count'),
-        # For filtering by influencer range + sorting by first_seen (newest)
-        db.Index('idx_influencer_firstseen', 'influencer_count', 'first_seen'),
-        # For filtering by influencer range + sorting by price
-        db.Index('idx_influencer_price', 'influencer_count', 'price'),
-        # For favorites filtering
-        db.Index('idx_favorite_sales', 'is_favorite', 'sales_7d'),
-        # For date + influencer filtering
-        db.Index('idx_firstseen_influencer', 'first_seen', 'influencer_count'),
-    )
-    
     def to_dict(self):
         return {
             'product_id': self.product_id,
             'product_name': self.product_name,
             'seller_id': self.seller_id,
             'seller_name': self.seller_name,
+            'is_ad_driven': (self.sales_7d > 50 and self.influencer_count < 5 and self.video_count < 5),
             'gmv': self.gmv,
             'gmv_30d': self.gmv_30d,
             'sales': self.sales,

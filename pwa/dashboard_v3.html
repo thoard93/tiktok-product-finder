@@ -981,6 +981,9 @@
             <div class="quick-filter" id="qf-freeship" onclick="quickFilter('freeship')">
                 🎁 Free Shipping <span class="count" id="qf-freeship-count">0</span>
             </div>
+            <div class="quick-filter" id="qf-ads" onclick="quickFilter('ads')">
+                ⚡ Ad Winners <span class="count" id="qf-ads-count">0</span>
+            </div>
         </div>
 
         <!-- Time Period Tabs - NEW -->
@@ -1173,6 +1176,9 @@
                 badges += '<span class="badge badge-untapped">UNTAPPED</span>';
             } else if (videoCount <= 20 && videoCount >= 1) {
                 badges += '<span class="badge badge-gem">HIDDEN GEM</span>';
+            }
+            if (product.is_ad_driven) {
+                badges += '<span class="badge" style="background: linear-gradient(135deg, #f59e0b, #ef4444); color: white;">⚡ AD SPEND</span>';
             }
 
             return `
@@ -1426,7 +1432,7 @@
 
         function quickFilter(type) {
             document.querySelectorAll('.quick-filter').forEach(el => el.classList.remove('active'));
-            document.getElementById('qf-' + (type === 'all' ? 'all' : type === 'gems' ? 'gems' : type === 'untapped' ? 'untapped' : type === 'freeship' ? 'freeship' : 'commission')).classList.add('active');
+            document.getElementById('qf-' + (type === 'all' ? 'all' : type === 'gems' ? 'gems' : type === 'untapped' ? 'untapped' : type === 'freeship' ? 'freeship' : type === 'ads' ? 'ads' : 'commission')).classList.add('active');
 
             document.getElementById('minCommission').value = '';
             document.getElementById('competition').value = '';
@@ -1443,6 +1449,8 @@
                 currentFilters.untapped_only = 'true';
             } else if (type === 'freeship') {
                 currentFilters.free_shipping = 'true';
+            } else if (type === 'ads') {
+                currentFilters.likely_ads = 'true';
             }
 
             currentPage = 1;
