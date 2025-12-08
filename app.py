@@ -303,7 +303,7 @@ class Product(db.Model):
             'product_name': self.product_name,
             'seller_id': self.seller_id,
             'seller_name': self.seller_name,
-            'is_ad_driven': (self.sales_7d > 50 and self.influencer_count < 5 and self.video_count < 5),
+            'is_ad_driven': (self.scan_type == 'apify_ad') or (self.sales_7d > 50 and self.influencer_count < 5 and self.video_count < 5),
             'gmv': self.gmv,
             'gmv_30d': self.gmv_30d,
             'sales': self.sales,
