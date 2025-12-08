@@ -139,6 +139,25 @@
             color: var(--tiktok-cyan);
         }
 
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
         .stat-value.success {
             color: var(--success);
         }
@@ -820,6 +839,10 @@
             <div class="logo">
                 <div class="logo-icon">TS</div>
                 <div class="logo-text">TikTok<span>Shop</span> Finder</div>
+            </div>
+            <div class="nav-actions" style="margin-left: 2rem; display: flex; gap: 1rem;">
+                <a href="/pwa/admin.html" class="nav-btn">Admin Dashboard</a>
+                <a href="/pwa/brand_hunter_v2.html" class="nav-btn">Scanner</a>
             </div>
             <div class="stats-bar">
                 <div class="stat-item">
