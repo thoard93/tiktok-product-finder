@@ -1859,6 +1859,35 @@ def scan_page_range(seller_id):
                 if sales_7d < min_sales:
                     continue
                 # NOTE: Not filtering 0% commission here - seller/product/list API may not return commission
+                # Require at least 2 videos (filtered out 0-1 video products per user request)
+                if video_count < 2:
+                    continue
+                
+                # Video count max filter (if set)
+                if max_videos is not None and video_count > max_videos:
+                    continue
+                
+                products_found += 1
+                image_url = parse_cover_url(p.get('cover_url', ''))
+                
+                existing = Product.query.get(product_id)
+                if existing:
+                    # Update existing product
+                    existing.influencer_count = influencer_count
+                    existing.sales = total_sales
+                    existing.sales_7d = sales_7d
+                    existing.sales_30d = sales_30d
+                    existing.commission_rate = commission_rate
+                    existing.video_count = video_count
+                    existing.video_7d = video_7d
+                    existing.video_30d = video_30d
+                    existing.live_count = live_count
+                    existing.views_count = views_count
+                    if seller_name != "Unknown":
+                        existing.seller_name = seller_name
+                    existing.last_updated = datetime.utcnow()
+                else:
+                    product = Product(
                         product_name=p.get('product_name', ''),
                         seller_id=seller_id,
                         seller_name=seller_name,
