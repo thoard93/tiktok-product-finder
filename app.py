@@ -2056,13 +2056,19 @@ def process_apify_results(items):
                  pid = f"ad_{ad_id}" 
             
         if pid:
-            processed.append({
                 'product_id': pid,
                 'title': title[:100], # Trucate
                 'advertiser': advertiser,
                 'likes': item.get('likes', 0),
                 'shares': item.get('shares', 0),
-                'url': url
+                'url': url,
+                'image': (item.get('cover') or 
+                          item.get('video_cover') or 
+                          item.get('thumbnail_url') or 
+                          item.get('thumbnail') or
+                          item.get('poster') or
+                          item.get('imageUrl') or
+                          '')
             })
             
     return processed
@@ -2145,12 +2151,15 @@ def scan_apify():
                     sales=0,
                     influencer_count=0,
                     video_count=1, # It has an ad!
-                    scan_type='apify_ad'
+                    scan_type='apify_ad',
+                    image_url=p.get('image')
                 )
                 db.session.add(new_prod)
                 saved_count += 1
             else:
                 existing.last_updated = datetime.utcnow()
+                if not existing.image_url and p.get('image'):
+                    existing.image_url = p.get('image')
                 
         db.session.commit()
         
@@ -2727,7 +2736,17 @@ def get_stats():
                 'hidden_gems': gems_count,
                 'high_commission': Product.query.filter(Product.commission_rate >= 15).count(),
                 'freeship': freeship_count,
-                'avg_commission': avg_comm
+                'avg_commission': avg_comm,
+                'ad_winners': Product.query.filter(
+                    db.or_(
+                        db.and_(
+                            Product.sales_7d > 50,
+                            Product.influencer_count < 5,
+                            Product.video_count < 5
+                        ),
+                        Product.scan_type == 'apify_ad'
+                    )
+                ).count()
             }
         })
 

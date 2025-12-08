@@ -1337,6 +1337,9 @@
                         document.getElementById('qf-untapped-count').textContent = stats.untapped_products || 0;
                         document.getElementById('qf-freeship-count').textContent = stats.freeship || 0;
                         document.getElementById('qf-commission-count').textContent = stats.high_commission || 0;
+                        if (document.getElementById('qf-ads-count')) {
+                            document.getElementById('qf-ads-count').textContent = stats.ad_winners || 0;
+                        }
                     }
                 }
             } catch (error) {
