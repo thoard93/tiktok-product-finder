@@ -114,7 +114,7 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 # Apify Config (Sponsored Video Scraper)
 APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', '')
-APIFY_ACTOR_ID = "lexis-solutions~tiktok-ads-scraper" # Format: username~actorname
+APIFY_ACTOR_ID = "scraper-engine~tiktok-ads-scraper" # Supports US Ads
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
@@ -2062,12 +2062,12 @@ def scan_apify():
     # 1. Start Actor
     url = f"https://api.apify.com/v2/acts/{APIFY_ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
     
-    # Lexis Solutions Input Format
+    # Scraper Engine Input Format
     actor_input = {
         "query": keyword_string,
         "maxPages": max(1, max_results // 12),
-        "country": "all", # "US" not supported by this actor, using "all"
-        "period": "LAST_30_DAYS" # Focus on recent ads
+        "country": "US", # US is supported by scraper-engine
+        "period": "LAST_30_DAYS" 
     }
     
     try:
@@ -2100,6 +2100,11 @@ def scan_apify():
         products = process_apify_results(items)
         saved_count = 0
         
+        # DEBUG: Log if items found but no products
+        if items and not products:
+            print(f"Apify: Found {len(items)} items but 0 products. First item keys: {items[0].keys() if len(items)>0 else 'None'}")
+
+        
         for p in products:
             pid = p['product_id']
             existing = Product.query.get(pid)
@@ -2124,8 +2129,9 @@ def scan_apify():
         
         return jsonify({
             'success': True,
-            'message': f"Ad Scan Complete. Found {len(products)} ads, Saved {saved_count} new products.",
-            'products': products
+            'message': f"Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new.",
+            'products': products,
+            'debug_raw_count': len(items)
         })
         
     except Exception as e:
