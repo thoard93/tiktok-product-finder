@@ -2099,8 +2099,8 @@ def scan_apify():
     
     # SWITCHING TO CREATIVE CENTER SCRAPER (Supports US)
     # Old Actor: scraper-engine~tiktok-ads-scraper (Library - NO US)
-    # New Actor: clockworks~tiktok-creative-center-scraper (Top Ads - YES US)
-    NEW_ACTOR_ID = "clockworks~tiktok-creative-center-scraper" 
+    # New Actor: doliz~tiktok-creative-center-scraper (Top Ads - YES US)
+    NEW_ACTOR_ID = "doliz~tiktok-creative-center-scraper" 
     url = f"https://api.apify.com/v2/acts/{NEW_ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
 
     # Creative Center Scraper Input Format
