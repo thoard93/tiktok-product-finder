@@ -114,7 +114,7 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 # Apify Config (Sponsored Video Scraper)
 APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', '')
-APIFY_ACTOR_ID = "lexis-solutions/tiktok-ads-scraper" # Verified Working Actor
+APIFY_ACTOR_ID = "lexis-solutions~tiktok-ads-scraper" # Format: username~actorname
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
