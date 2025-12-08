@@ -2092,15 +2092,31 @@ def scan_apify():
         return jsonify({'error': 'No keywords provided'}), 400
     
     keyword_string = " ".join(keywords)
-    
-    # 1. Start Actor
     url = f"https://api.apify.com/v2/acts/{APIFY_ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
+
+    # Construct Explicit URL to force US Region
+    # The actor sometimes defaults to 'region=all' if we just pass keywords.
+    # We will build the search URL manually.
+    end_time_ms = int(datetime.utcnow().timestamp() * 1000)
+    start_time_ms = int((datetime.utcnow() - timedelta(days=30)).timestamp() * 1000)
     
-    # Scraper Engine Input Format (Requires list of strings)
+    # URL Encode the keyword
+    import urllib.parse
+    encoded_kw = urllib.parse.quote(keyword_string)
+    
+    # Construct the exact URL the scraper uses, but with region=US
+    target_url = (
+        f"https://library.tiktok.com/ads?region=US"
+        f"&start_time={start_time_ms}"
+        f"&end_time={end_time_ms}"
+        f"&adv_name={encoded_kw}"
+    )
+
+    # Scraper Engine Input Format (Pass the URL directly)
     actor_input = {
-        "startUrls": [keyword_string], # Expects list of strings, not objects
+        "startUrls": [target_url], 
         "maxPages": max(1, max_results // 12),
-        "country": "US", 
+        "country": "US", # Helper fallback
         "period": "LAST_30_DAYS" 
     }
     
