@@ -2506,11 +2506,12 @@ def get_stats():
     except:
         untapped_count = 0
     
-    oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
-    
-    freeship_count = Product.query.filter(
-        Product.has_free_shipping == True
-    ).count()
+    try:
+        freeship_count = Product.query.filter(
+            Product.has_free_shipping == True
+        ).count()
+    except:
+        freeship_count = 0
 
     return jsonify({
         'success': True,

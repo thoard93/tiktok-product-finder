@@ -177,13 +177,28 @@ def create_product_embed(p, title_prefix=""):
     product_name = get_val('product_name', 'Unknown Product')[:100]
     product_id = get_val('product_id', '')
     
-    # Get stats
-    sales_7d = int(get_val('sales_7d', 0) or 0)
-    sales_30d = int(get_val('sales_30d', 0) or 0)
-    influencer_count = int(get_val('influencer_count', 0) or 0)
-    video_count = int(get_val('video_count', 0) or 0)
-    commission = float(get_val('commission_rate', 0) or 0)
-    price = float(get_val('price', 0) or 0)
+    
+    # Expanded helper to check multiple keys (DB vs API)
+    def get_val_multi(keys, default=0):
+        val = default
+        for key in keys:
+            if isinstance(p, dict):
+                v = p.get(key)
+            else:
+                v = getattr(p, key, None)
+            
+            if v is not None:
+                val = v
+                break
+        return val
+
+    # Get stats with fallback to API keys
+    sales_7d = int(get_val_multi(['sales_7d', 'total_sale_7d_cnt'], 0) or 0)
+    sales_30d = int(get_val_multi(['sales_30d', 'total_sale_30d_cnt'], 0) or 0)
+    influencer_count = int(get_val_multi(['influencer_count', 'total_ifl_cnt'], 0) or 0)
+    video_count = int(get_val_multi(['video_count', 'total_video_cnt'], 0) or 0)
+    commission = float(get_val_multi(['commission_rate', 'product_commission_rate'], 0) or 0)
+    price = float(get_val_multi(['price', 'spu_avg_price'], 0) or 0)
     has_free_shipping = get_val('has_free_shipping', False)
     
     # Format commission (handle 0.15 vs 15.0)
@@ -191,7 +206,7 @@ def create_product_embed(p, title_prefix=""):
         commission = commission * 100
     
     # Get image URL
-    image_url = get_val('cached_image_url') or get_val('image_url') or get_val('cover_url', '')
+    image_url = get_val('cached_image_url') or get_val('image_url') or get_val('cover') or get_val('cover_url', '')
     if isinstance(image_url, list) and len(image_url) > 0:
         image_url = image_url[0]
     
