@@ -2092,41 +2092,20 @@ def scan_apify():
         return jsonify({'error': 'No keywords provided'}), 400
     
     keyword_string = " ".join(keywords)
-    url = f"https://api.apify.com/v2/acts/{APIFY_ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
+    
+    # SWITCHING TO CREATIVE CENTER SCRAPER (Supports US)
+    # Old Actor: scraper-engine~tiktok-ads-scraper (Library - NO US)
+    # New Actor: clockworks~tiktok-creative-center-scraper (Top Ads - YES US)
+    NEW_ACTOR_ID = "clockworks~tiktok-creative-center-scraper" 
+    url = f"https://api.apify.com/v2/acts/{NEW_ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
 
-    # Construct Explicit URL to force US Region
-    # The actor sometimes defaults to 'region=all' if we just pass keywords.
-    # We will build the search URL manually.
-    end_time_ms = int(datetime.utcnow().timestamp() * 1000)
-    start_time_ms = int((datetime.utcnow() - timedelta(days=30)).timestamp() * 1000)
-    
-    # URL Encode the keyword
-    import urllib.parse
-    encoded_kw = urllib.parse.quote(keyword_string)
-    
-    # Construct Explicit URL for Creative Center (Top Ads) which SUPPORTS US
-    # Library (library.tiktok.com) does NOT support US publicly.
-    # We switch to the "Top Ads" Inspiration page.
-    
-    # URL Encode the keyword
-    import urllib.parse
-    encoded_kw = urllib.parse.quote(keyword_string)
-    
-    # Construct the Creative Center URL
-    target_url = (
-        f"https://ads.tiktok.com/business/creativecenter/inspiration/topads/pc/en"
-        f"?region=US"
-        f"&period=30" # Last 30 days
-        f"&sort_by=engagement"
-        f"&keyword={encoded_kw}"
-    )
-
-    # Scraper Engine Input Format (Pass the URL directly)
+    # Creative Center Scraper Input Format
+    # This actor takes 'search' and 'country' directly.
     actor_input = {
-        "startUrls": [target_url], 
-        "maxPages": max(1, max_results // 12),
-        "country": "US", # Helper fallback
-        "period": "LAST_30_DAYS" 
+        "search": keyword_string,
+        "country": "US",
+        "resultsLimit": max_results,
+        "period": 30 # days
     }
     
     try:
