@@ -581,8 +581,11 @@
             btn.innerText = 'Start Brand Scan';
         }
 
-        // Initialize default
-        setMode('quick');
+        // Initialize default when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            setMode('quick');
+            refreshImages();
+        });
 
         // Refresh images helper
         async function refreshImages() {
