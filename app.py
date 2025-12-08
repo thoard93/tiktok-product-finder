@@ -2271,8 +2271,12 @@ def get_products():
     # ALWAYS exclude non-promotable products (not for sale, live only, etc.)
     # These cannot be promoted as affiliate products
     # User Request: Filter out products with 0 or 1 video (often non-promotable)
+    # EXCEPTION: Apify Ads are valid even with 1 video
     query = query.filter(
-        Product.video_count >= 2,
+        db.or_(
+            Product.video_count >= 2,
+            Product.scan_type == 'apify_ad' # Allow ads with only 1 video
+        ),
         ~Product.product_name.ilike('%not for sale%'),
         ~Product.product_name.ilike('%live only%'),
         ~Product.product_name.ilike('%sample%not for sale%'),
@@ -2311,6 +2315,22 @@ def get_products():
             Product.video_count >= 1  # At least 1 video (proven product)
         )
     
+    # Apply likely_ads filter (Ad Winners tab)
+    likely_ads = request.args.get('likely_ads', 'false').lower() == 'true'
+    if likely_ads:
+        query = query.filter(
+            db.or_(
+                # Logic A: Heuristic (High Sales, Low Influencers)
+                db.and_(
+                    Product.sales_7d > 50,
+                    Product.influencer_count < 5,
+                    Product.video_count < 5
+                ),
+                # Logic B: Explicit Apify Ads (Always ad winners)
+                Product.scan_type == 'apify_ad'
+            )
+        )
+
     # Apply untapped filter - products with low video/influencer ratio
     # These are products where influencers added to showcase but didn't make videos
     if untapped_only:
