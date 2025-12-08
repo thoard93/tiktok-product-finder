@@ -29,8 +29,10 @@ import json
 import hashlib
 import secrets
 import jwt  # For Kling AI authentication
+from whitenoise import WhiteNoise
 
 app = Flask(__name__, static_folder='pwa')
+app.wsgi_app = WhiteNoise(app.wsgi_app, root='pwa/')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///products.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
