@@ -2159,6 +2159,7 @@ def scan_apify():
                 saved_count += 1
             else:
                 existing.last_updated = datetime.utcnow()
+                existing.scan_type = 'apify_ad' # Mark as Ad Driven even if found previously
                 if not existing.image_url and p.get('image'):
                     existing.image_url = p.get('image')
                 
