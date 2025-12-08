@@ -922,6 +922,9 @@
             <div class="quick-filter" id="qf-untapped" onclick="quickFilter('untapped')">
                 🏆 Untapped <span class="count" id="qf-untapped-count">0</span>
             </div>
+            <div class="quick-filter" id="qf-freeship" onclick="quickFilter('freeship')">
+                🎁 Free Shipping <span class="count" id="qf-freeship-count">0</span>
+            </div>
             <div class="quick-filter" id="qf-commission" onclick="quickFilter('high-commission')">
                 💰 High Commission <span class="count" id="qf-commission-count">0</span>
             </div>
@@ -1104,6 +1107,9 @@
 
             // Determine badges
             let badges = '';
+            if (product.has_free_shipping) {
+                badges += '<span class="badge badge-freeship" style="background: linear-gradient(135deg, #4ade80, #22c55e); color: black;">🎁 FREE SHIP</span>';
+            }
             if (isNew) {
                 badges += '<span class="badge badge-new">NEW</span>';
             }
@@ -1143,20 +1149,20 @@
                 <div class="product-name">${product.product_name || 'Unknown Product'}</div>
                 <div class="product-metrics">
                     <div class="metric">
-                        <div class="metric-value">${formatCurrency(gmv)}</div>
-                        <div class="metric-label">GMV</div>
+                        <div class="metric-value">${formatNumber(product.sales_7d || 0)}</div>
+                        <div class="metric-label">7-Day Sales</div>
                     </div>
                     <div class="metric">
                         <div class="metric-value">${formatNumber(product.sales || 0)}</div>
-                        <div class="metric-label">Units Sold</div>
+                        <div class="metric-label">Total Sales</div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value highlight">${formatCurrency(earnings)}</div>
-                        <div class="metric-label">Potential</div>
+                        <div class="metric-value highlight">${formatNumber(product.sales_30d || 0)}</div>
+                        <div class="metric-label">30-Day Sales</div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value">${commissionRate.toFixed(0)}%</div>
-                        <div class="metric-label">Commission</div>
+                        <div class="metric-value">${formatNumber(iflCount)}</div>
+                        <div class="metric-label">Creators</div>
                     </div>
                 </div>
                 <div class="product-footer">
@@ -1164,7 +1170,6 @@
                         📹 ${videoCount} videos
                     </div>
                     <button class="btn-analyze" onclick="openAIModal(event, '${product.product_name}', ${gmv}, ${videoCount})">✨ Analyze</button>
-                    <!-- <div class="seller-name">${product.seller_name || 'TikTok Shop'}</div> -->
                 </div>
             </div>
         </div>
@@ -1271,6 +1276,7 @@
                         document.getElementById('qf-all-count').textContent = stats.total_products || 0;
                         document.getElementById('qf-gems-count').textContent = stats.hidden_gems || 0;
                         document.getElementById('qf-untapped-count').textContent = stats.untapped_products || 0;
+                        document.getElementById('qf-freeship-count').textContent = stats.freeship || 0;
                         document.getElementById('qf-commission-count').textContent = stats.high_commission || 0;
                     }
                 }
@@ -1289,7 +1295,7 @@
             ← Previous
         </button>
         <span class="page-info">
-            Page ${pagination.page} of ${pagination.pages} (${pagination.total} products)
+            Page ${pagination.page} of ${pagination.total_pages} (${pagination.total_count} products)
         </span>
         <button class="page-btn" onclick="goToPage(${pagination.page + 1})" ${!pagination.has_next ? 'disabled' : ''}>
             Next →
@@ -1360,7 +1366,7 @@
 
         function quickFilter(type) {
             document.querySelectorAll('.quick-filter').forEach(el => el.classList.remove('active'));
-            document.getElementById('qf-' + (type === 'all' ? 'all' : type === 'gems' ? 'gems' : type === 'untapped' ? 'untapped' : 'commission')).classList.add('active');
+            document.getElementById('qf-' + (type === 'all' ? 'all' : type === 'gems' ? 'gems' : type === 'untapped' ? 'untapped' : type === 'freeship' ? 'freeship' : 'commission')).classList.add('active');
 
             document.getElementById('minCommission').value = '';
             document.getElementById('competition').value = '';
@@ -1375,6 +1381,8 @@
             } else if (type === 'untapped') {
                 currentFilters.max_videos = 5;
                 currentFilters.untapped_only = 'true';
+            } else if (type === 'freeship') {
+                currentFilters.free_shipping = 'true';
             } else if (type === 'high-commission') {
                 currentFilters.min_commission = 15;
             }
