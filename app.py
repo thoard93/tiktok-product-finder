@@ -2112,6 +2112,19 @@ def scan_apify():
         "period": 30 # days
     }
     
+    # 5. Add Cookies if provided (Required for Creative Center)
+    cookies = data.get('cookies')
+    if cookies and cookies.strip():
+        # Clean quotes if user pasted them
+        clean_cookies = cookies.strip().strip('"').strip("'")
+        actor_input['cookie'] = clean_cookies # 'doliz' uses 'cookie' key (singular usually)
+        # Note: Some use 'cookies' or 'cookie'. Search results imply generic cookie header strings.
+        # We will try adding BOTH to be safe or check specific docs?
+        # Standard Apify convention often varies. We'll stick to 'cookie' based on browser header.
+        
+        # Also try 'cookies' just in case
+        actor_input['cookies'] = clean_cookies
+    
     try:
         # Start Run
         start_res = requests.post(url, json=actor_input)
