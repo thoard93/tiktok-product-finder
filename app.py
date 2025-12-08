@@ -2006,6 +2006,127 @@ def scan_single_brand(seller_id):
         'products_saved': products_saved
     })
 
+# ==================== APIFY INTGERATION (ADS) ====================
+
+def process_apify_results(items):
+    """Process raw results from Apify TikTok Ads Scraper"""
+    processed = []
+    
+    for item in items:
+        # Apify returns "landingPageUrl"
+        url = item.get('landingPageUrl', '') or item.get('displayUrl', '')
+        if not url: continue
+        
+        # Try to extract ID
+        pid = None
+        # Pattern 1: .../product/12345...
+        m = re.search(r'product/(\d+)', url)
+        if m: pid = m.group(1)
+        
+        # Pattern 2: ...id=12345...
+        if not pid:
+            m = re.search(r'[?&]id=(\d+)', url)
+            if m: pid = m.group(1)
+            
+        if pid:
+            processed.append({
+                'product_id': pid,
+                'title': item.get('title', 'Unknown Ad Product'),
+                'advertiser': item.get('advertiserName', 'Unknown'),
+                'likes': item.get('likes', 0),
+                'shares': item.get('shares', 0),
+                'url': url
+            })
+            
+    return processed
+
+@app.route('/api/scan/apify', methods=['POST'])
+@login_required
+def scan_apify():
+    """Run Apify Actor for TikTok Ads"""
+    user = get_current_user()
+    
+    # Check Token
+    if not APIFY_API_TOKEN:
+        return jsonify({'error': 'Server missing APIFY_API_TOKEN'}), 500
+        
+    data = request.json
+    keywords = data.get('keywords', [])
+    max_results = data.get('max_results', 20)
+    
+    if not keywords:
+        return jsonify({'error': 'No keywords provided'}), 400
+    
+    # 1. Start Actor
+    url = f"https://api.apify.com/v2/acts/{APIFY_ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
+    
+    actor_input = {
+        "keywords": keywords,
+        "count": max_results,
+        "searchSection": "commodities" 
+    }
+    
+    try:
+        # Start Run
+        start_res = requests.post(url, json=actor_input)
+        if start_res.status_code != 201:
+            return jsonify({'error': f"Apify Start Failed: {start_res.text}"}), 500
+            
+        run_data = start_res.json()['data']
+        run_id = run_data['id']
+        dataset_id = run_data['defaultDatasetId']
+        
+        # 2. Poll for completion (Max 60s for this demo)
+        for _ in range(20): # 20 * 3 = 60s max wait
+            time.sleep(3)
+            run_check = requests.get(f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_API_TOKEN}")
+            status = run_check.json()['data']['status']
+            
+            if status == 'SUCCEEDED':
+                break
+            if status in ['FAILED', 'ABORTED', 'TIMED-OUT']:
+                return jsonify({'error': f"Apify Run {status}"}), 500
+        
+        # 3. Fetch Results
+        data_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={APIFY_API_TOKEN}"
+        data_res = requests.get(data_url)
+        items = data_res.json()
+        
+        # 4. Process & Save
+        products = process_apify_results(items)
+        saved_count = 0
+        
+        for p in products:
+            pid = p['product_id']
+            existing = Product.query.get(pid)
+            
+            if not existing:
+                new_prod = Product(
+                    product_id=pid,
+                    product_name=p['title'],
+                    seller_name=p['advertiser'],
+                    gmv=0, # Unknown
+                    sales=0,
+                    influencer_count=0,
+                    video_count=1, # It has an ad!
+                    scan_type='apify_ad'
+                )
+                db.session.add(new_prod)
+                saved_count += 1
+            else:
+                existing.last_updated = datetime.utcnow()
+                
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f"Ad Scan Complete. Found {len(products)} ads, Saved {saved_count} new products.",
+            'products': products
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/brands/list', methods=['GET'])
 def list_top_brands():
     """Get list of top brands from EchoTik"""
