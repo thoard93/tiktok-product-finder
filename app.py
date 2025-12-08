@@ -2104,12 +2104,21 @@ def scan_apify():
     import urllib.parse
     encoded_kw = urllib.parse.quote(keyword_string)
     
-    # Construct the exact URL the scraper uses, but with region=US
+    # Construct Explicit URL for Creative Center (Top Ads) which SUPPORTS US
+    # Library (library.tiktok.com) does NOT support US publicly.
+    # We switch to the "Top Ads" Inspiration page.
+    
+    # URL Encode the keyword
+    import urllib.parse
+    encoded_kw = urllib.parse.quote(keyword_string)
+    
+    # Construct the Creative Center URL
     target_url = (
-        f"https://library.tiktok.com/ads?region=US"
-        f"&start_time={start_time_ms}"
-        f"&end_time={end_time_ms}"
-        f"&adv_name={encoded_kw}"
+        f"https://ads.tiktok.com/business/creativecenter/inspiration/topads/pc/en"
+        f"?region=US"
+        f"&period=30" # Last 30 days
+        f"&sort_by=engagement"
+        f"&keyword={encoded_kw}"
     )
 
     # Scraper Engine Input Format (Pass the URL directly)
