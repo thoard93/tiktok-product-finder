@@ -3875,7 +3875,7 @@ def debug_api():
 @app.route('/')
 @login_required
 def index():
-    return send_from_directory('pwa', 'brand_hunter.html')
+    return send_from_directory('pwa', 'dashboard_v3.html')
 
 @app.route('/product')
 @login_required
