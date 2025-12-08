@@ -2139,6 +2139,15 @@ def scan_apify():
         items = data_res.json()
         
         # 4. Process & Save
+        # Handle 'doliz' or other wrapper structures
+        if isinstance(items, list) and len(items) == 1 and isinstance(items[0], dict) and 'data' in items[0]:
+             print(f"Apify: Unwrapping 'data' key from result... (Keys: {items[0].keys()})")
+             unwrapped = items[0]['data']
+             if isinstance(unwrapped, list):
+                 items = unwrapped
+             elif isinstance(unwrapped, dict) and 'list' in unwrapped: # Possible variant
+                 items = unwrapped['list']
+        
         products = process_apify_results(items)
         saved_count = 0
         
