@@ -2056,6 +2056,7 @@ def process_apify_results(items):
                  pid = f"ad_{ad_id}" 
             
         if pid:
+            processed.append({
                 'product_id': pid,
                 'title': title[:100], # Trucate
                 'advertiser': advertiser,
