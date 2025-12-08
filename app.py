@@ -29,6 +29,8 @@ import json
 import hashlib
 import secrets
 import jwt  # For Kling AI authentication
+import traceback
+from werkzeug.exceptions import HTTPException
 from whitenoise import WhiteNoise
 
 app = Flask(__name__, static_folder='pwa')
@@ -51,6 +53,30 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 
 db = SQLAlchemy(app)
+
+# =============================================================================
+# GLOBAL ERROR HANDLER
+# =============================================================================
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Return JSON instead of HTML for API errors"""
+    # Pass through HTTP errors
+    if isinstance(e, HTTPException):
+        return e
+
+    # Only handle API routes
+    if request.path.startswith('/api/'):
+        print(f"API Error: {e}")
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+        
+    # For non-API routes, let Flask handle it (500 page)
+    return e
 
 # =============================================================================
 # AUTHENTICATION CONFIG
@@ -237,6 +263,7 @@ class Product(db.Model):
     is_favorite = db.Column(db.Boolean, default=False, index=True)
     product_status = db.Column(db.String(50), default='active', index=True)  # active, removed, out_of_stock, likely_oos
     status_note = db.Column(db.String(255))  # Optional note about status
+
     
     # For out-of-stock detection - track previous 7d sales to detect sudden drops
     prev_sales_7d = db.Column(db.Integer, default=0)
@@ -297,6 +324,14 @@ class Product(db.Model):
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
         }
+
+# =============================================================================
+# DATABASE INITIALIZATION
+# =============================================================================
+
+with app.app_context():
+    db.create_all()
+    print("✅ Database tables initialized")
 
 # =============================================================================
 # AUTHENTICATION HELPERS
@@ -980,6 +1015,48 @@ def search_deal_products(page=1, page_size=10, max_videos=30, min_sales_7d=50):
         return {'products': [], 'total': 0, 'page': page}
 
 
+def search_deal_products(page=1, page_size=10, max_videos=30, min_sales_7d=50):
+    """
+    Search for deal products using /product/list API
+    
+    Deal Hunter criteria:
+    - Free shipping (higher conversion for buyers)
+    - Low video count (default <30) = less competition for YOUR videos
+    - Proven sales (default 50+ in 7 days) = product actually sells
+    """
+    try:
+        params = {
+            "page_num": page,
+            "page_size": page_size,
+            "region": "US",
+            "free_shipping": 1,  # Only free shipping products
+            "max_total_video_cnt": max_videos,  # Low video count = less competition
+            "min_total_sale_7d_cnt": min_sales_7d,  # Proven sellers
+            "product_sort_field": 4,  # Sort by 7-day sales
+            "sort_type": 1  # Descending
+        }
+        
+        response = requests.get(
+            f"{BASE_URL}/product/list",
+            params=params,
+            auth=get_auth(),
+            timeout=30
+        )
+        data = response.json()
+        
+        if data.get('code') == 0:
+            return {
+                'products': data.get('data', []),
+                'total': data.get('total', 0),
+                'page': page
+            }
+        print(f"Deal search error: {data}")
+        return {'products': [], 'total': 0, 'page': page}
+    except Exception as e:
+        print(f"Deal search exception: {e}")
+        return {'products': [], 'total': 0, 'page': page}
+
+
 # =============================================================================
 # MAIN SCANNING ENDPOINTS
 # =============================================================================
@@ -1391,6 +1468,7 @@ def quick_scan():
                         video_30d=video_30d,
                         live_count=live_count,
                         views_count=views_count,
+                        has_free_shipping=p.get('free_shipping', 0) == 1,
                         scan_type='brand_hunter'
                     )
                     db.session.add(product)

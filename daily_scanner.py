@@ -71,6 +71,9 @@ class Product(db.Model):
     product_rating = db.Column(db.Float, default=0)
     review_count = db.Column(db.Integer, default=0)
     
+    has_free_shipping = db.Column(db.Boolean, default=False)
+    last_shown_hot = db.Column(db.DateTime)  # Track when product was last shown in Discord hot products
+    
     # User features
     is_favorite = db.Column(db.Boolean, default=False)
     product_status = db.Column(db.String(50), default='active')
@@ -164,6 +167,7 @@ def save_product(p, seller_name):
             product_rating=float(p.get('product_rating', 0) or 0),
             review_count=int(p.get('review_count', 0) or 0),
             image_url=p.get('product_img_url', ''),
+            has_free_shipping=p.get('free_shipping', 0) == 1,
             product_status='active',
             scan_type='daily_scan',
             first_seen=datetime.utcnow(),
@@ -211,7 +215,10 @@ def run_daily_scan():
                     stats['products_found'] += 1
                     
                     # Filter by influencer count, minimum sales, and video count
-                    if inf_count >= 1 and inf_count <= MAX_INFLUENCERS and sales_7d >= MIN_SALES and video_count >= 1:
+                    # Enforce video count <= 50 for gems
+                    if (inf_count >= 1 and inf_count <= MAX_INFLUENCERS and 
+                        sales_7d >= MIN_SALES and 
+                        video_count >= 1 and video_count <= 50):
                         if save_product(p, seller_name):
                             stats['products_saved'] += 1
                         else:

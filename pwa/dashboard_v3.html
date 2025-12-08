@@ -874,13 +874,13 @@
             </div>
 
             <div class="filter-group">
-                <label class="filter-label">Competition</label>
+                <label class="filter-label">Competition (Videos)</label>
                 <select id="competition" class="filter-select">
                     <option value="">All Levels</option>
-                    <option value="low">Low (0-3 influencers)</option>
-                    <option value="medium">Medium (4-30 influencers)</option>
-                    <option value="high">High (30+ influencers)</option>
-                    <option value="untapped">Untapped (≤3 with sales)</option>
+                    <option value="low">Low (0-10 videos)</option>
+                    <option value="medium">Medium (11-50 videos)</option>
+                    <option value="high">High (50+ videos)</option>
+                    <option value="untapped">Untapped (≤5 videos)</option>
                 </select>
             </div>
 
@@ -1025,8 +1025,8 @@
         }
 
         function getCompetitionClass(count) {
-            if (count <= 3) return 'low';
-            if (count <= 30) return 'medium';
+            if (count <= 10) return 'low';
+            if (count <= 50) return 'medium';
             return 'high';
         }
 
@@ -1070,6 +1070,7 @@
 
         // ==================== CREATE PRODUCT CARD ====================
         function createProductCard(product) {
+            const videoCount = product.video_count || 0;
             const iflCount = product.influencer_count || product.total_influencers || 0;
             const commissionRate = product.commission_rate || 0;
             const gmv = product.gmv || 0;
@@ -1086,9 +1087,9 @@
             if (commissionRate >= 20) {
                 badges += '<span class="badge badge-commission">' + commissionRate.toFixed(0) + '%</span>';
             }
-            if (iflCount <= 3 && iflCount > 0 && gmv > 100) {
+            if (videoCount <= 5 && gmv > 100) {
                 badges += '<span class="badge badge-untapped">UNTAPPED</span>';
-            } else if (iflCount <= 50 && iflCount >= 3) {
+            } else if (videoCount <= 20 && videoCount >= 1) {
                 badges += '<span class="badge badge-gem">HIDDEN GEM</span>';
             }
 
@@ -1136,10 +1137,10 @@
                     </div>
                 </div>
                 <div class="product-footer">
-                    <div class="influencer-count ${getCompetitionClass(iflCount)}">
-                        👥 ${iflCount} influencers
+                    <div class="influencer-count ${getCompetitionClass(videoCount)}">
+                        📹 ${videoCount} videos
                     </div>
-                    <button class="btn-analyze" onclick="openAIModal(event, '${product.product_name}', ${gmv}, ${iflCount})">✨ Analyze</button>
+                    <button class="btn-analyze" onclick="openAIModal(event, '${product.product_name}', ${gmv}, ${videoCount})">✨ Analyze</button>
                     <!-- <div class="seller-name">${product.seller_name || 'TikTok Shop'}</div> -->
                 </div>
             </div>
@@ -1292,8 +1293,20 @@
             const minCommission = document.getElementById('minCommission').value;
             if (minCommission) currentFilters.min_commission = minCommission;
 
+            // Video-based competition logic
             const competition = document.getElementById('competition').value;
-            if (competition) currentFilters.competition = competition;
+            if (competition) {
+                if (competition === 'low') {
+                    currentFilters.max_videos = 10;
+                } else if (competition === 'medium') {
+                    currentFilters.min_videos = 11;
+                    currentFilters.max_videos = 50;
+                } else if (competition === 'high') {
+                    currentFilters.min_videos = 51;
+                } else if (competition === 'untapped') {
+                    currentFilters.max_videos = 5;
+                }
+            }
 
             currentPage = 1;
             loadProducts(1, currentFilters);
@@ -1332,10 +1345,13 @@
             currentFilters = {};
 
             if (type === 'gems') {
-                currentFilters.min_influencers = 3;
-                currentFilters.max_influencers = 50;
+                // Focus on videos as requested
+                currentFilters.min_videos = 1;
+                currentFilters.max_videos = 20;
+                currentFilters.gems_only = 'true';
             } else if (type === 'untapped') {
-                currentFilters.competition = 'untapped';
+                currentFilters.max_videos = 5;
+                currentFilters.untapped_only = 'true';
             } else if (type === 'high-commission') {
                 currentFilters.min_commission = 15;
             }
@@ -1345,7 +1361,7 @@
         }
 
         // ==================== AI FEATURES ====================
-        function openAIModal(e, productName, gmv, influencers) {
+        function openAIModal(e, productName, gmv, videoCount) {
             e.stopPropagation();
 
             // Create modal if it doesn't exist
@@ -1386,10 +1402,10 @@
                 const score = Math.floor(Math.random() * (98 - 70) + 70);
                 let recommendation = "";
 
-                if (influencers < 5 && gmv > 1000) {
-                    recommendation = "💎 <strong>Hidden Gem Detected!</strong><br>Low competition with proven sales volume. Recommended strategy: Order sample immediately and test creatives emphasizing the unique value prop.";
+                if (videoCount < 10 && gmv > 1000) {
+                    recommendation = "💎 <strong>Hidden Gem Detected!</strong><br>Very low video competition (" + videoCount + " videos) with proven sales. Perfect opportunity to dominate this search term.";
                 } else if (gmv > 100000) {
-                    recommendation = "🔥 <strong>Viral Trend!</strong><br>High volume but high competition. Recommended strategy: Differentiate with a unique bundle or better offer.";
+                    recommendation = "🔥 <strong>Viral Trend!</strong><br>High volume but high competition. Recommended only if you can create higher quality content than top videos.";
                 } else {
                     recommendation = "📈 <strong>Rising Star</strong><br>Showing consistent growth. Monitor for 3 more days before testing.";
                 }
