@@ -29,6 +29,7 @@ import json
 import hashlib
 import secrets
 import jwt  # For Kling AI authentication
+import re   # For parsing product IDs from URLs
 import traceback
 from werkzeug.exceptions import HTTPException
 from whitenoise import WhiteNoise
@@ -110,6 +111,10 @@ KLING_API_BASE_URL = "https://api-singapore.klingai.com"
 
 # Gemini AI Image Generation Config
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+# Apify Config (Sponsored Video Scraper)
+APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', '')
+APIFY_ACTOR_ID = "clockworks/tiktok-ads-scraper" # Standard scraper ID
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
@@ -281,6 +286,17 @@ class Product(db.Model):
         # For filtering by influencer range + sorting by commission
         db.Index('idx_influencer_commission', 'influencer_count', 'commission_rate'),
         # For filtering by status + influencer range
+        db.Index('idx_status_influencer', 'product_status', 'influencer_count'),
+        # For filtering by influencer range + sorting by first_seen (newest)
+        db.Index('idx_influencer_firstseen', 'influencer_count', 'first_seen'),
+        # For filtering by influencer range + sorting by price
+        db.Index('idx_influencer_price', 'influencer_count', 'price'),
+        # For favorites filtering
+        db.Index('idx_favorite_sales', 'is_favorite', 'sales_7d'),
+        # For date + influencer filtering
+        db.Index('idx_firstseen_influencer', 'first_seen', 'influencer_count'),
+    )
+    
     def to_dict(self):
         return {
             'product_id': self.product_id,
@@ -1843,8 +1859,6 @@ def scan_page_range(seller_id):
                 if sales_7d < min_sales:
                     continue
                 # NOTE: Not filtering 0% commission here - seller/product/list API may not return commission
-                # Use "Refresh Data" on product detail page to get real commission from product detail API
-                
                 # Require at least 2 videos (filtered out 0-1 video products per user request)
                 if video_count < 2:
                     continue
@@ -1874,7 +1888,6 @@ def scan_page_range(seller_id):
                     existing.last_updated = datetime.utcnow()
                 else:
                     product = Product(
-                        product_id=product_id,
                         product_name=p.get('product_name', ''),
                         seller_id=seller_id,
                         seller_name=seller_name,

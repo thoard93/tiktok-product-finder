@@ -337,6 +337,11 @@
                 <div class="title">Deal Hunter</div>
                 <div class="desc">Find free shipping gems</div>
             </div>
+            <div class="scan-tab" onclick="setMode('apify')">
+                <i class="fas fa-magic"></i>
+                <div class="title">Ad Hunter (Pro)</div>
+                <div class="desc">Find sponsored ads (Apify)</div>
+            </div>
         </div>
 
         <!-- Configuration Panel -->
@@ -436,6 +441,22 @@
                     </div>
                 </div>
                 <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Start Deal Hunt 🎁</button>
+            `,
+            'apify': `
+                 <div class="config-grid">
+                    <div class="form-group" style="grid-column: span 2">
+                        <label class="form-label">Search Keywords (comma separated)</label>
+                        <input type="text" id="apify-keywords" class="form-input" placeholder="e.g. wireless charger, summer dress">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Results</label>
+                        <input type="number" id="apify-max" class="form-input" value="20" max="100">
+                    </div>
+                    <div class="form-group" style="grid-column: span 2">
+                        <div class="log-entry log-warn">⚠️ Costs ~$0.05 per search (Apify). Requires API Token.</div>
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Start Ad Hunt ⚡</button>
             `
         };
 
@@ -482,6 +503,7 @@
                 else if (currentMode === 'deep') await runDeepScan(btn);
                 else if (currentMode === 'brand') await runBrandScan(btn);
                 else if (currentMode === 'deals') await runDealScan(btn);
+                else if (currentMode === 'apify') await runApifyScan(btn);
 
                 // Reset state when scan function returns (finished or error)
                 isScanning = false;
@@ -594,6 +616,37 @@
                 log(`Error: ${e.message}`, 'error');
             }
             btn.innerText = 'Start Brand Scan';
+        }
+
+        async function runApifyScan(btn) {
+            const originalText = btn.innerText;
+            const keywordsRaw = document.getElementById('apify-keywords').value;
+            if (!keywordsRaw) { log('Please enter keywords', 'error'); return; }
+
+            const keywords = keywordsRaw.split(',').map(k => k.trim()).filter(k => k);
+            const maxResults = parseInt(document.getElementById('apify-max').value);
+
+            log(`Starting Ad Scan for: ${keywords.join(', ')}...`, 'info');
+            btn.innerText = '⏳ Scanning (Poling Apify)...';
+
+            try {
+                const res = await fetch('/api/scan/apify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keywords, max_results: maxResults })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    log(data.message, 'success');
+                } else {
+                    log(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log(`Network error: ${e.message}`, 'error');
+            }
+            btn.innerText = originalText;
         }
 
         // Initialize default when DOM is ready
