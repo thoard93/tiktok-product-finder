@@ -114,7 +114,7 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 # Apify Config (Sponsored Video Scraper)
 APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', '')
-APIFY_ACTOR_ID = "clockworks/tiktok-ads-scraper" # Standard scraper ID
+APIFY_ACTOR_ID = "lexis-solutions/tiktok-ads-scraper" # Verified Working Actor
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
@@ -2057,13 +2057,17 @@ def scan_apify():
     if not keywords:
         return jsonify({'error': 'No keywords provided'}), 400
     
+    keyword_string = " ".join(keywords)
+    
     # 1. Start Actor
     url = f"https://api.apify.com/v2/acts/{APIFY_ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
     
+    # Lexis Solutions Input Format
     actor_input = {
-        "keywords": keywords,
-        "count": max_results,
-        "searchSection": "commodities" 
+        "query": keyword_string,
+        "maxPages": max(1, max_results // 12),
+        "country": "US", # Default to US for now
+        "period": "LAST_30_DAYS" # Focus on recent ads
     }
     
     try:
