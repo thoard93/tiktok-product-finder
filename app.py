@@ -2019,30 +2019,32 @@ def process_apify_results(items):
                item.get('video_url') or 
                item.get('landingPageUrl') or 
                item.get('displayUrl') or 
-               '')
+               item.get('startUrl') or # Fallback
+               'https://www.tiktok.com/') # Final Fallback
                
-        if not url: continue
-        
         # Try multiple keys for Title
         title = (item.get('ad_text') or 
                  item.get('caption') or 
                  item.get('title') or 
                  item.get('ad_name') or 
+                 item.get('adName') or # From Debug Keys
                  'Unknown Ad Product')
                  
         # Try multiple keys for Advertiser
         advertiser = (item.get('advertiser_name') or 
                       item.get('advertiserName') or 
+                      item.get('paidBy') or # From Debug Keys
                       'Unknown')
         
         # Try to extract ID from URL
         pid = None
         # Pattern 1: .../product/12345...
-        m = re.search(r'product/(\d+)', url)
-        if m: pid = m.group(1)
+        if url and 'product/' in url:
+             m = re.search(r'product/(\d+)', url)
+             if m: pid = m.group(1)
         
         # Pattern 2: ...id=12345...
-        if not pid:
+        if not pid and url:
             m = re.search(r'[?&]id=(\d+)', url)
             if m: pid = m.group(1)
             
