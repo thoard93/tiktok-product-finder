@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TK Scanner V3</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f172a;
+            --secondary: #1e293b;
+            --accent: #3b82f6;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #0f172a;
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.15) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.15) 0%, transparent 20%);
+        }
+
+        /* Glassmorphism Header */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 70px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .header-content {
+            width: 95%;
+            max-width: 1400px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            background: linear-gradient(135deg, #00f2ea 0%, #ff0050 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            font-size: 1.8rem;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-btn {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .nav-btn:hover,
+        .nav-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        /* Main Layout */
+        .main-container {
+            margin-top: 90px;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 0 1rem;
+            display: grid;
+            gap: 2rem;
+        }
+
+        /* Scan Mode Tabs */
+        .scan-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .scan-tab {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            border-radius: 12px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scan-tab:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+
+        .scan-tab.active {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+            border-color: var(--accent);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
+        }
+
+        .scan-tab i {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            display: block;
+            color: var(--text-muted);
+        }
+
+        .scan-tab.active i {
+            color: var(--accent);
+        }
+
+        .scan-tab .title {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .scan-tab .desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Config Panel */
+        .config-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .form-input {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            padding: 0.75rem;
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            transition: 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        /* Scan Button */
+        .scan-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--accent) 0%, #2563eb 100%);
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-weight: 600;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .scan-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+
+        .scan-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Console Log */
+        .console-log {
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            margin-top: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .log-entry {
+            padding: 0.25rem 0.5rem;
+            border-left: 2px solid transparent;
+        }
+
+        .log-success {
+            color: #4ade80;
+            border-left-color: #4ade80;
+        }
+
+        .log-error {
+            color: #ef4444;
+            border-left-color: #ef4444;
+        }
+
+        .log-info {
+            color: #94a3b8;
+        }
+
+        .log-warn {
+            color: #f59e0b;
+            border-left-color: #f59e0b;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .scan-tabs {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-content">
+            <a href="/pwa/dashboard_v3.html" class="logo">
+                <div class="logo-icon">TS</div>
+                <div class="logo-text">TikTok<span style="color:white">Scanner</span></div>
+            </a>
+            <div class="nav-actions">
+                <a href="/pwa/dashboard_v3.html" class="nav-btn">Dashboard</a>
+                <a href="/pwa/admin.html" class="nav-btn">Admin</a>
+                <a href="#" class="nav-btn active">Scanner</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+
+        <!-- Scan Mode Selector -->
+        <div class="scan-tabs">
+            <div class="scan-tab active" onclick="setMode('quick')">
+                <i class="fas fa-bolt"></i>
+                <div class="title">Quick Scan</div>
+                <div class="desc">Scan top brands by rank logic</div>
+            </div>
+            <div class="scan-tab" onclick="setMode('deep')">
+                <i class="fas fa-search"></i>
+                <div class="title">Deep Scan</div>
+                <div class="desc">Analyze specific brand depth</div>
+            </div>
+            <div class="scan-tab" onclick="setMode('brand')">
+                <i class="fas fa-tag"></i>
+                <div class="title">Brand Scan</div>
+                <div class="desc">Target specific brand ID</div>
+            </div>
+            <div class="scan-tab" onclick="setMode('deals')">
+                <i class="fas fa-gift"></i>
+                <div class="title">Deal Hunter</div>
+                <div class="desc">Find free shipping gems</div>
+            </div>
+        </div>
+
+        <!-- Configuration Panel -->
+        <div class="config-panel" id="configPanel">
+            <!-- Dynamic Form Content Injected Here -->
+        </div>
+
+        <!-- Console Log -->
+        <div class="console-log" id="consoleLog">
+            <div class="log-entry log-info">System initialized. Ready to scan.</div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'quick';
+        let scanAborted = false;
+
+        const CONFIGS = {
+            'quick': `
+                <div class="config-grid">
+                    <div class="form-group">
+                        <label class="form-label">Start Rank</label>
+                        <input type="number" id="start-rank" class="form-input" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Brands to Scan</label>
+                        <input type="number" id="num-brands" class="form-input" value="10" max="50">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Pages per Brand</label>
+                        <input type="number" id="pages-per-brand" class="form-input" value="5" max="10">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Video Count</label>
+                        <input type="number" id="max-videos" class="form-input" value="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min Sales (7d)</label>
+                        <input type="number" id="min-sales" class="form-input" value="0">
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Start Quick Scan</button>
+            `,
+            'deep': `
+                 <div class="config-grid">
+                    <div class="form-group">
+                        <label class="form-label">Start Rank</label>
+                        <input type="number" id="deep-start-rank" class="form-input" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Brands to Scan</label>
+                        <input type="number" id="deep-num-brands" class="form-input" value="5" max="20">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Page Range</label>
+                        <div style="display:flex; gap:10px">
+                            <input type="number" id="deep-start-page" class="form-input" value="1" placeholder="Start">
+                            <input type="number" id="deep-end-page" class="form-input" value="20" placeholder="End">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Influencers</label>
+                        <input type="number" id="deep-max-influencers" class="form-input" value="500">
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Start Deep Scan</button>
+            `,
+            'brand': `
+                 <div class="config-grid">
+                    <div class="form-group" style="grid-column: span 2">
+                        <label class="form-label">Brand/Seller ID</label>
+                        <input type="text" id="brand-id" class="form-input" placeholder="Enter seller ID...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Page Range</label>
+                        <div style="display:flex; gap:10px">
+                            <input type="number" id="brand-start-page" class="form-input" value="1">
+                            <input type="number" id="brand-end-page" class="form-input" value="20">
+                        </div>
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Start Brand Scan</button>
+            `,
+            'deals': `
+                 <div class="config-grid">
+                    <div class="form-group">
+                        <label class="form-label">Pages to Scan</label>
+                        <input type="number" id="deals-pages" class="form-input" value="5" max="20">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Videos</label>
+                        <input type="number" id="deals-max-videos" class="form-input" value="30">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min Sales (7d)</label>
+                        <input type="number" id="deals-min-sales" class="form-input" value="50">
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Start Deal Hunt 🎁</button>
+            `
+        };
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            const panel = document.getElementById('configPanel');
+            panel.innerHTML = CONFIGS[mode];
+            panel.style.opacity = 0;
+            setTimeout(() => {
+                panel.style.opacity = 1;
+                panel.style.transition = 'opacity 0.3s';
+            }, 10);
+        }
+
+        function log(msg, type = 'info') {
+            const consoleEl = document.getElementById('consoleLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const time = new Date().toLocaleTimeString();
+            entry.innerText = `[${time}] ${msg}`;
+            consoleEl.appendChild(entry);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        async function toggleScan() {
+            const btn = document.getElementById('scanBtn');
+            if (btn.innerText.includes('Stopping')) return;
+
+            if (btn.innerText.includes('Start')) {
+                scanAborted = false;
+                if (currentMode === 'quick') await runQuickScan(btn);
+                else if (currentMode === 'deep') await runDeepScan(btn);
+                else if (currentMode === 'brand') await runBrandScan(btn);
+                else if (currentMode === 'deals') await runDealScan(btn);
+            } else {
+                scanAborted = true;
+                btn.innerText = '⏹️ Stopping...';
+                log('Aborting scan...', 'warn');
+            }
+        }
+
+        // ================= SCAN LOGIC =================
+        async function runQuickScan(btn) {
+            const originalText = btn.innerText;
+            const startRank = parseInt(document.getElementById('start-rank').value);
+            const numBrands = parseInt(document.getElementById('num-brands').value);
+            const pages = parseInt(document.getElementById('pages-per-brand').value);
+            const maxVideos = document.getElementById('max-videos').value;
+            const minSales = document.getElementById('min-sales').value;
+
+            btn.innerText = '⏹️ Stop Scan';
+            log(`Starting Quick Scan: ${numBrands} brands from rank #${startRank}`, 'info');
+
+            let totalFound = 0;
+
+            for (let i = 0; i < numBrands; i++) {
+                if (scanAborted) break;
+                const rank = startRank + i;
+                log(`Scanning Brand #${rank}...`, 'info');
+
+                try {
+                    let url = `/api/quick-scan?brand_rank=${rank}&pages=${pages}&min_sales=${minSales}&max_videos=${maxVideos}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+
+                    if (data.result) {
+                        const found = data.result.products_saved;
+                        totalFound += found;
+                        log(`Brand #${rank}: Found ${data.result.products_found}, Saved ${found} new products.`, found > 0 ? 'success' : 'info');
+                    } else if (data.error) {
+                        log(`Error brand #${rank}: ${data.error}`, 'error');
+                    }
+                } catch (e) {
+                    log(`Network error on #${rank}: ${e.message}`, 'error');
+                }
+            }
+
+            log(`Scan Complete. Total Saved: ${totalFound}`, 'success');
+            btn.innerText = originalText;
+        }
+
+        async function runDealScan(btn) {
+            const originalText = btn.innerText;
+            const pages = document.getElementById('deals-pages').value;
+            const maxVideos = document.getElementById('deals-max-videos').value;
+            const minSales = document.getElementById('deals-min-sales').value;
+
+            btn.innerText = '⏹️ Stop Scan';
+            log(`Starting Deal Hunter...`, 'info');
+
+            try {
+                const url = `/api/scan-deals?pages=${pages}&max_videos=${maxVideos}&min_sales_7d=${minSales}`;
+                const res = await fetch(url);
+
+                if (res.status === 423) {
+                    const data = await res.json();
+                    log(`Scan Locked: ${data.message}`, 'warn');
+                    btn.innerText = originalText;
+                    return;
+                }
+
+                const data = await res.json();
+                if (data.result) {
+                    log(`Deal Scan Complete! Found: ${data.result.products_found}, Saved: ${data.result.products_saved}`, 'success');
+                } else {
+                    log(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log(`Scan failed: ${e.message}`, 'error');
+            }
+            btn.innerText = originalText;
+        }
+
+        async function runDeepScan(btn) {
+            log('Deep Scan functionality requires brand list fetch first - checks logs', 'warn');
+            // Simplified for V3 - in real implementation needs the full dual-loop
+            btn.innerText = '⏹️ Stop Scan';
+            // Implementation would shadow brand_hunter.html logic
+            setTimeout(() => {
+                log('Deep Scan simulated complete (feature in progress)', 'warn');
+                btn.innerText = 'Start Deep Scan';
+            }, 2000);
+        }
+
+        async function runBrandScan(btn) {
+            const id = document.getElementById('brand-id').value;
+            if (!id) { log('Please enter a Brand ID', 'error'); return; }
+
+            log(`Scanning Brand ID: ${id}...`, 'info');
+            btn.innerText = '⏹️ Stop Scan';
+
+            try {
+                const url = `/api/scan-pages/${id}?start=1&end=5`;
+                const res = await fetch(url);
+                const data = await res.json();
+                log(`Brand Scan: Found ${data.products_found}`, 'success');
+            } catch (e) {
+                log(`Error: ${e.message}`, 'error');
+            }
+            btn.innerText = 'Start Brand Scan';
+        }
+
+        // Initialize default
+        setMode('quick');
+
+        // Refresh images helper
+        async function refreshImages() {
+            log('Triggering background image refresh...', 'info');
+            fetch('/api/refresh-images?batch=50');
+        }
+    </script>
+</body>
+
+</html>

@@ -810,23 +810,23 @@
         }
 
         .gradient-1 {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
         }
 
         .gradient-2 {
-            background: linear-gradient(135deg, #1a1a2e 0%, #2d132c 50%, #801336 100%);
+            background: linear-gradient(135deg, #2c3e50 0%, #e74c3c 100%);
         }
 
         .gradient-3 {
-            background: linear-gradient(135deg, #1a1a2e 0%, #1e3a2f 50%, #2d6a4f 100%);
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
         }
 
         .gradient-4 {
-            background: linear-gradient(135deg, #1a1a2e 0%, #2c2c54 50%, #474787 100%);
+            background: linear-gradient(135deg, #4568dc 0%, #b06ab3 100%);
         }
 
         .gradient-5 {
-            background: linear-gradient(135deg, #1a1a2e 0%, #3d2c29 50%, #6b4423 100%);
+            background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
         }
 
         /* CSS END */
@@ -842,7 +842,7 @@
             </div>
             <div class="nav-actions" style="margin-left: 2rem; display: flex; gap: 1rem;">
                 <a href="/pwa/admin.html" class="nav-btn">Admin Dashboard</a>
-                <a href="/pwa/brand_hunter.html" class="nav-btn">Scanner</a>
+                <a href="/pwa/scanner_v3.html" class="nav-btn">Scanner</a>
             </div>
             <div class="stats-bar">
                 <div class="stat-item">
@@ -868,9 +868,14 @@
     <main class="main">
         <!-- Filter Bar -->
         <div class="filter-bar">
-            <div class="filter-group search-input">
+            <div class="filter-group search-input" style="flex: 2;">
                 <label class="filter-label">Search Products</label>
                 <input type="text" id="searchInput" class="filter-input" placeholder="Search by name...">
+            </div>
+
+            <div class="filter-group" style="flex: 1.5;">
+                <label class="filter-label">Search Brands</label>
+                <input type="text" id="brandSearchInput" class="filter-input" placeholder="Search brands...">
             </div>
 
             <div class="filter-group">
@@ -1295,7 +1300,10 @@
             ← Previous
         </button>
         <span class="page-info">
-            Page ${pagination.page} of ${pagination.total_pages} (${pagination.total_count} products)
+            Page <input type="number" value="${pagination.page}" min="1" max="${pagination.total_pages}" 
+                   onchange="goToPage(parseInt(this.value))" 
+                   style="width: 50px; text-align: center; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff; padding: 2px;"> 
+            of ${pagination.total_pages}
         </span>
         <button class="page-btn" onclick="goToPage(${pagination.page + 1})" ${!pagination.has_next ? 'disabled' : ''}>
             Next →
@@ -1315,6 +1323,9 @@
 
             const search = document.getElementById('searchInput').value;
             if (search) currentFilters.search = search;
+
+            const brandSearch = document.getElementById('brandSearchInput').value;
+            if (brandSearch) currentFilters.brand = brandSearch;
 
             const sortBy = document.getElementById('sortBy').value;
             if (sortBy) currentFilters.sort_by = sortBy;
@@ -1345,6 +1356,7 @@
 
         function resetFilters() {
             document.getElementById('searchInput').value = '';
+            document.getElementById('brandSearchInput').value = '';
             document.getElementById('sortBy').value = 'gmv';
             document.getElementById('minCommission').value = '';
             document.getElementById('competition').value = '';
@@ -1465,6 +1477,10 @@
 
         // ==================== INIT ====================
         document.getElementById('searchInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') applyFilters();
+        });
+
+        document.getElementById('brandSearchInput').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') applyFilters();
         });
 

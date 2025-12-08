@@ -2508,31 +2508,20 @@ def get_stats():
     
     oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
     
+    freeship_count = Product.query.filter(
+        Product.has_free_shipping == True
+    ).count()
+
     return jsonify({
-        'total_products': total,
-        'unique_brands': brands,
-        'untapped': untapped,
-        'low_competition': low,
-        'medium_competition': medium,
-        'good_competition': good,
-        'favorites': favorites,
-        'breakdown': {
-            'untapped_1_10': untapped,
-            'low_11_30': low,
-            'medium_31_60': medium,
-            'good_61_100': good
-        },
-        'data_quality': {
-            'zero_commission': zero_commission,
-            'low_sales': low_sales,
-            'missing_images': missing_images,
-            'needs_deep_refresh': zero_commission + low_sales
-        },
-        'special_filters': {
-            'gems': gems_count,
-            'trending': trending_count,
-            'untapped': untapped_count,
-            'out_of_stock': oos_count
+        'success': True,
+        'stats': {
+            'total_products': total,
+            'unique_brands': brands,
+            'untapped_products': untapped_count,
+            'hidden_gems': gems_count,
+            'high_commission': Product.query.filter(Product.commission_rate >= 15).count(),
+            'freeship': freeship_count,
+            'avg_commission': db.session.query(func.avg(Product.commission_rate)).scalar() or 0
         }
     })
 
@@ -4799,6 +4788,29 @@ def init_database():
             '''))
             db.session.commit()
         except:
+            db.session.rollback()
+            
+        # Create Indexes for Performance
+        try:
+            indexes = [
+                ('idx_products_sales_7d', 'CREATE INDEX IF NOT EXISTS idx_products_sales_7d ON products (sales_7d DESC)'),
+                ('idx_products_video_count', 'CREATE INDEX IF NOT EXISTS idx_products_video_count ON products (video_count)'),
+                ('idx_products_free_shipping', 'CREATE INDEX IF NOT EXISTS idx_products_free_shipping ON products (has_free_shipping) WHERE has_free_shipping = TRUE'),
+                ('idx_products_status', 'CREATE INDEX IF NOT EXISTS idx_products_status ON products (product_status)'),
+                ('idx_products_seller', 'CREATE INDEX IF NOT EXISTS idx_products_seller ON products (seller_id)'),
+                ('idx_products_commission', 'CREATE INDEX IF NOT EXISTS idx_products_commission ON products (commission_rate DESC)'),
+                ('idx_products_created', 'CREATE INDEX IF NOT EXISTS idx_products_created ON products (created_at DESC)')
+            ]
+            
+            for name, sql in indexes:
+                try:
+                    db.session.execute(db.text(sql))
+                    db.session.commit()
+                except Exception as e:
+                    print(f"Index {name} error: {e}")
+                    db.session.rollback()
+        except Exception as e:
+            print(f"Index creation error: {e}")
             db.session.rollback()
         
         return jsonify({
