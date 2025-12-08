@@ -183,6 +183,27 @@
             padding: 40px;
             color: #888;
         }
+
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            body {
+                padding: 10px;
+            }
+        }
     </style>
 </head>
 
@@ -222,41 +243,45 @@
 
     <div class="section" id="tab-users">
         <h2>Registered Users</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>User</th>
-                    <th>Role</th>
-                    <th>Last Login</th>
-                    <th>Joined</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="users-table">
-                <tr>
-                    <td colspan="5" class="empty-state">Loading...</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Last Login</th>
+                        <th>Joined</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table">
+                    <tr>
+                        <td colspan="5" class="empty-state">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <div class="section" id="tab-activity" style="display:none;">
         <h2>Recent Activity</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Time (EST)</th>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th>Details</th>
-                </tr>
-            </thead>
-            <tbody id="activity-table">
-                <tr>
-                    <td colspan="4" class="empty-state">Loading...</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time (EST)</th>
+                        <th>User</th>
+                        <th>Action</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody id="activity-table">
+                    <tr>
+                        <td colspan="4" class="empty-state">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>

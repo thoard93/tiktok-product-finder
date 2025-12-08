@@ -829,6 +829,60 @@
             background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
         }
 
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: stretch;
+            }
+
+            .logo {
+                justify-content: center;
+            }
+
+            .nav-actions {
+                margin-left: 0 !important;
+                justify-content: center;
+            }
+
+            .stats-bar {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 1rem;
+            }
+
+            .stat-item {
+                flex: 1 1 100px;
+            }
+
+            .filter-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-input,
+            .filter-select,
+            .search-input,
+            .btn {
+                width: 100%;
+            }
+
+            .quick-filters,
+            .time-tabs {
+                justify-content: center;
+            }
+
+            .main {
+                padding: 1rem;
+            }
+
+            .product-grid {
+                grid-template-columns: 1fr;
+                /* Force single column on very small screens if needed, or let auto-fill handle it */
+            }
+        }
+
         /* CSS END */
     </style>
 </head>
@@ -926,9 +980,6 @@
             </div>
             <div class="quick-filter" id="qf-freeship" onclick="quickFilter('freeship')">
                 🎁 Free Shipping <span class="count" id="qf-freeship-count">0</span>
-            </div>
-            <div class="quick-filter" id="qf-commission" onclick="quickFilter('high-commission')">
-                💰 High Commission <span class="count" id="qf-commission-count">0</span>
             </div>
         </div>
 
@@ -1392,8 +1443,6 @@
                 currentFilters.untapped_only = 'true';
             } else if (type === 'freeship') {
                 currentFilters.free_shipping = 'true';
-            } else if (type === 'high-commission') {
-                currentFilters.min_commission = 15;
             }
 
             currentPage = 1;

@@ -1261,6 +1261,10 @@ def scan_top_brands():
                     if commission_rate <= 0:
                         continue
                     
+                    # Filter: Require at least 2 videos per user request
+                    if video_count < 2:
+                        continue
+                    
                     brand_result['products_found'] += 1
                     
                     # Parse image URL and collect for batch signing
@@ -1466,8 +1470,8 @@ def quick_scan():
                 if commission_rate <= 0:
                     continue
                 
-                # Require at least 1 video (product has been promoted)
-                if video_count < 1:
+                # Require at least 2 videos (filtered out 0-1 video products per user request)
+                if video_count < 2:
                     continue
                 
                 # Video count max filter (if set)
@@ -1632,6 +1636,10 @@ def scan_deals():
                 video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
                 live_count = int(p.get('total_live_cnt', 0) or 0)
                 views_count = int(p.get('total_views_cnt', 0) or 0)
+                
+                # Filter: Require at least 2 videos per user request
+                if video_count < 2:
+                    continue
                 
                 result['products_found'] += 1
                 
@@ -1847,8 +1855,8 @@ def scan_page_range(seller_id):
                 # NOTE: Not filtering 0% commission here - seller/product/list API may not return commission
                 # Use "Refresh Data" on product detail page to get real commission from product detail API
                 
-                # Require at least 1 video (product has been promoted)
-                if video_count < 1:
+                # Require at least 2 videos (filtered out 0-1 video products per user request)
+                if video_count < 2:
                     continue
                 
                 # Video count max filter (if set)
@@ -2094,7 +2102,9 @@ def get_products():
     
     # ALWAYS exclude non-promotable products (not for sale, live only, etc.)
     # These cannot be promoted as affiliate products
+    # User Request: Filter out products with 0 or 1 video (often non-promotable)
     query = query.filter(
+        Product.video_count >= 2,
         ~Product.product_name.ilike('%not for sale%'),
         ~Product.product_name.ilike('%live only%'),
         ~Product.product_name.ilike('%sample%not for sale%'),
