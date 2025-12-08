@@ -165,59 +165,70 @@ def get_product_data(product_id):
     print(f"🔍 Product {product_id} not in database, calling API...")
     return get_product_from_api(product_id)
 
+
 def create_product_embed(p, title_prefix=""):
     """Create a Discord embed for a product"""
-    product_name = p.get('product_name', 'Unknown Product')[:100]
-    product_id = p.get('product_id', '')
+    # Helper to safe get values whether p is dict or object
+    def get_val(key, default=None):
+        if isinstance(p, dict):
+            return p.get(key, default)
+        return getattr(p, key, default)
+
+    product_name = get_val('product_name', 'Unknown Product')[:100]
+    product_id = get_val('product_id', '')
     
     # Get stats
-    sales_7d = int(p.get('total_sale_7d_cnt', 0) or p.get('sales_7d', 0) or 0)
-    sales_30d = int(p.get('total_sale_30d_cnt', 0) or p.get('sales_30d', 0) or 0)
-    influencer_count = int(p.get('total_ifl_cnt', 0) or p.get('influencer_count', 0) or 0)
-    video_count = int(p.get('total_video_cnt', 0) or p.get('video_count', 0) or 0)
-    commission = float(p.get('product_commission_rate', 0) or p.get('commission_rate', 0) or 0)
-    price = float(p.get('spu_avg_price', 0) or p.get('price', 0) or 0)
+    sales_7d = int(get_val('sales_7d', 0) or 0)
+    sales_30d = int(get_val('sales_30d', 0) or 0)
+    influencer_count = int(get_val('influencer_count', 0) or 0)
+    video_count = int(get_val('video_count', 0) or 0)
+    commission = float(get_val('commission_rate', 0) or 0)
+    price = float(get_val('price', 0) or 0)
+    has_free_shipping = get_val('has_free_shipping', False)
     
-    # Format commission
+    # Format commission (handle 0.15 vs 15.0)
     if commission > 0 and commission < 1:
         commission = commission * 100
     
     # Get image URL
-    image_url = p.get('cover_url', '') or p.get('image_url', '') or p.get('cached_image_url', '')
+    image_url = get_val('cached_image_url') or get_val('image_url') or get_val('cover_url', '')
     if isinstance(image_url, list) and len(image_url) > 0:
         image_url = image_url[0]
     
-    # Determine embed color based on VIDEO COUNT (competition = videos competing with yours)
+    # Determine embed color and opportunity based on VIDEO COUNT
     if video_count <= 10:
-        color = 0xFF4500  # Orange-red for untapped
+        color = 0xFF4500  # Orange-red (Hot/Untapped)
         opportunity = "🔥 UNTAPPED (1-10 vids)"
     elif video_count <= 30:
-        color = 0x00FF00  # Green for low competition
+        color = 0x00FF00  # Green (Low Comp)
         opportunity = "💎 LOW COMPETITION (11-30 vids)"
     elif video_count <= 60:
-        color = 0xFFD700  # Gold for medium
+        color = 0xFFD700  # Gold (Medium)
         opportunity = "📊 MEDIUM (31-60 vids)"
     else:
-        color = 0x808080  # Gray for high
+        color = 0x808080  # Gray (High)
         opportunity = "⚠️ HIGH COMPETITION (61+ vids)"
     
+    title = f"{title_prefix}{product_name}"
+    if has_free_shipping:
+        title = "🎁 " + title
+    
     embed = Embed(
-        title=f"{title_prefix}{product_name}",
+        title=title,
         url=f"https://www.tiktok.com/shop/pdp/{product_id}",
         color=color
     )
     
     # Add stats fields
     embed.add_field(name="📦 7-Day Sales", value=f"{sales_7d:,}", inline=True)
-    embed.add_field(name="📊 30-Day Sales", value=f"{sales_30d:,}", inline=True)
-    embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
-    embed.add_field(name="🎬 Total Videos", value=f"{video_count:,}", inline=True)
-    embed.add_field(name="👥 Creators", value=f"{influencer_count:,}", inline=True)
     embed.add_field(name="💰 Price", value=f"${price:.2f}", inline=True)
-    embed.add_field(name="🎯 Opportunity", value=opportunity, inline=False)
+    embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
+    embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
+    embed.add_field(name="👥 Creators", value=f"{influencer_count:,}", inline=True)
+    embed.add_field(name="🎯 Opportunity", value=f"**{opportunity}**", inline=False)
     
     # Add image if available
-    if image_url and image_url.startswith('http'):
+    if image_url and str(image_url).startswith('http'):
         embed.set_thumbnail(url=image_url)
     
     embed.set_footer(text=f"Product ID: {product_id}")
@@ -250,15 +261,19 @@ def get_hot_products():
         
         # If we don't have enough fresh products, fall back to showing any free shipping product
         if len(products) < MAX_DAILY_POSTS:
+            needed = MAX_DAILY_POSTS - len(products)
+            existing_ids = [p.product_id for p in products]
+            
             fallback_products = Product.query.filter(
                 Product.has_free_shipping == True,
                 Product.sales_7d >= MIN_SALES_7D,
-                Product.video_count <= MAX_VIDEO_COUNT,
-                db.or_(Product.product_status == 'active', Product.product_status == None)
+                Product.video_count <= MAX_VIDEO_COUNT, # Keep low video count constraint if possible
+                db.or_(Product.product_status == 'active', Product.product_status == None),
+                ~Product.product_id.in_(existing_ids)
             ).order_by(
                 Product.sales_7d.desc()
-            ).limit(MAX_DAILY_POSTS).all()
-            products = fallback_products
+            ).limit(needed).all()
+            products.extend(fallback_products)
         
         # Mark products as shown today
         for p in products:
@@ -270,17 +285,8 @@ def get_hot_products():
             print(f"Error updating last_shown_hot: {e}")
             db.session.rollback()
         
-        return [{
-            'product_id': p.product_id,
-            'product_name': p.product_name,
-            'sales_7d': p.sales_7d,
-            'sales_30d': p.sales_30d,
-            'influencer_count': p.influencer_count,
-            'video_count': p.video_count,
-            'commission_rate': p.commission_rate,
-            'price': p.price,
-            'image_url': p.cached_image_url or p.image_url
-        } for p in products]
+        # Convert to dicts for consistency
+        return products  # Return objects, helper handles them
 
 @bot.event
 async def on_ready():
