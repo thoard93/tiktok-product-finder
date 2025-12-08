@@ -2143,10 +2143,24 @@ def scan_apify():
         if isinstance(items, list) and len(items) == 1 and isinstance(items[0], dict) and 'data' in items[0]:
              print(f"Apify: Unwrapping 'data' key from result... (Keys: {items[0].keys()})")
              unwrapped = items[0]['data']
+             
+             # DEBUG DEEP STRUCTURE
+             print(f"DEBUG: Unwrapped type: {type(unwrapped)}")
+             if isinstance(unwrapped, dict):
+                 print(f"DEBUG: Unwrapped keys: {list(unwrapped.keys())}")
+             
              if isinstance(unwrapped, list):
                  items = unwrapped
-             elif isinstance(unwrapped, dict) and 'list' in unwrapped: # Possible variant
-                 items = unwrapped['list']
+             elif isinstance(unwrapped, dict):
+                 # Try common keys
+                 if 'list' in unwrapped: items = unwrapped['list']
+                 elif 'items' in unwrapped: items = unwrapped['items']
+                 elif 'ads' in unwrapped: items = unwrapped['ads']
+                 elif 'creatives' in unwrapped: items = unwrapped['creatives']
+                 else:
+                     # Fallback: maybe the dict itself is the item? No, usually a list is needed.
+                     # If we can't find a list, we might be stuck.
+                     pass
         
         products = process_apify_results(items)
         saved_count = 0
