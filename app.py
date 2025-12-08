@@ -23,6 +23,7 @@ from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.pool import NullPool
 from functools import wraps
 import time
 import json
@@ -45,12 +46,11 @@ if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
     app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
 
 # Connection pool settings to handle Render's connection drops
+# Connection pool settings to handle Render's connection drops
+# Use NullPool to force fresh connections every time (prevents stale connection errors)
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,  # Test connection before using
-    'pool_recycle': 300,    # Recycle connections every 5 minutes
-    'pool_size': 5,
-    'max_overflow': 10,
-    'pool_timeout': 30,
+    'pool_pre_ping': True,
+    'poolclass': NullPool,
 }
 
 db = SQLAlchemy(app)
