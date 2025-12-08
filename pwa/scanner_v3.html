@@ -463,19 +463,34 @@
             consoleEl.scrollTop = consoleEl.scrollHeight;
         }
 
+        let isScanning = false;
+
         async function toggleScan() {
             const btn = document.getElementById('scanBtn');
-            if (btn.innerText.includes('Stopping')) return;
+            if (btn.disabled) return;
 
-            if (btn.innerText.includes('Start')) {
+            if (!isScanning) {
+                // START SCAN
                 scanAborted = false;
+                isScanning = true; // Lock immediately
+
+                // Disable button briefly to prevent double-clicks
+                btn.disabled = true;
+                setTimeout(() => btn.disabled = false, 500);
+
                 if (currentMode === 'quick') await runQuickScan(btn);
                 else if (currentMode === 'deep') await runDeepScan(btn);
                 else if (currentMode === 'brand') await runBrandScan(btn);
                 else if (currentMode === 'deals') await runDealScan(btn);
+
+                // Reset state when scan function returns (finished or error)
+                isScanning = false;
+                btn.disabled = false; // Ensure button is clickable again
             } else {
+                // STOP SCAN
                 scanAborted = true;
                 btn.innerText = '⏹️ Stopping...';
+                btn.disabled = true; // Disable until fully stopped
                 log('Aborting scan...', 'warn');
             }
         }
