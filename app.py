@@ -2885,7 +2885,7 @@ def get_products():
     query = query.filter(
         db.or_(
             Product.video_count >= 2,
-            Product.scan_type == 'apify_ad' # Allow ads with only 1 video
+            Product.scan_type.in_(['apify_ad', 'daily_virals']) # Allow ads/virals with only 1 video
         ),
         ~Product.product_name.ilike('%not for sale%'),
         ~Product.product_name.ilike('%live only%'),
