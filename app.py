@@ -2013,15 +2013,46 @@ def process_apify_results(items):
     processed = []
     
     for item in items:
-        # Try multiple keys for URL
-        url = (item.get('landing_page_url') or 
-               item.get('call_to_action_url') or 
-               item.get('click_url') or 
-               item.get('video_url') or 
-               item.get('landingPageUrl') or 
-               item.get('displayUrl') or 
-               item.get('startUrl') or # Fallback
-               'https://www.tiktok.com/') # Final Fallback
+        # Collect ALL potential URLs
+        candidates = [
+            item.get('landing_page_url'),
+            item.get('call_to_action_url'),
+            item.get('click_url'),
+            item.get('video_url'),
+            item.get('landingPageUrl'),
+            item.get('displayUrl'),
+            item.get('dest_url'), # Common in some actors
+            item.get('link')
+        ]
+        
+        # Filter None and duplicates
+        candidates = list(set([u for u in candidates if u]))
+        
+        # Smart Select: Find the one that looks like a Shop Product
+        url = None
+        
+        # Priority 1: High Confidence Shop Patterns
+        for c in candidates:
+             if 'shop' in c and ('product' in c or 'view' in c):
+                 url = c
+                 break
+        
+        # Priority 2: Generic Product Patterns
+        if not url:
+            for c in candidates:
+                if 'product' in c or 'pdp' in c:
+                    url = c
+                    break
+                    
+        # Priority 3: Any URL (Fallback)
+        if not url and candidates:
+            url = candidates[0]
+            
+        # Fallback Final
+        if not url:
+            url = 'https://www.tiktok.com/'
+
+        # Try multiple keys for Title
                
         # Try multiple keys for Title
         title = (item.get('ad_title') or # Found via Debug
