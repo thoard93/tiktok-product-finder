@@ -2704,8 +2704,9 @@ def get_products():
     # Apply date filter
     now = datetime.utcnow()
     if date_filter == 'today':
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        query = query.filter(Product.first_seen >= start_of_day)
+        # Use last 24 hours (rolling window) fixes timezone confusion
+        start_time = now - timedelta(hours=24)
+        query = query.filter(Product.first_seen >= start_time)
     elif date_filter == 'yesterday':
         start_of_yesterday = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         end_of_yesterday = now.replace(hour=0, minute=0, second=0, microsecond=0)
