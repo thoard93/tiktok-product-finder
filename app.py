@@ -1967,19 +1967,6 @@ def scan_single_brand(seller_id):
             if influencer_count < min_influencers or influencer_count > max_influencers:
                 continue
             if sales_7d < min_sales:  # Filter by 7-day sales
-                continue
-            
-            products_found += 1
-            image_url = parse_cover_url(p.get('cover_url', ''))
-            
-            existing = Product.query.get(product_id)
-            if not existing:
-                product = Product(
-                    product_id=product_id,
-                    product_name=p.get('product_name', ''),
-                    seller_id=seller_id,
-                    seller_name=seller_name,
-                    gmv=float(p.get('total_sale_gmv_amt', 0) or 0),
                     gmv_30d=float(p.get('total_sale_gmv_30d_amt', 0) or 0),
                     sales=total_sales,
                     sales_7d=sales_7d,
@@ -2043,17 +2030,39 @@ def process_apify_results(items):
         
         # Try to extract ID from URL
         pid = None
-        # Pattern 1: .../product/12345...
-        if url and 'product/' in url:
-             m = re.search(r'product/(\d+)', url)
-             if m: pid = m.group(1)
         
-        # Pattern 2: ...id=12345...
-        if not pid and url:
-            m = re.search(r'[?&]id=(\d+)', url)
+        # Helper regex for common TikTok Shop patterns
+        # 1. /product/12345
+        # 2. /pdp/12345
+        # 3. id=12345
+        # 4. view/product/12345
+        
+        if url:
+            # Pattern 1: Standard Product URL
+            m = re.search(r'product/(\d+)', url)
             if m: pid = m.group(1)
             
-        # Pattern 3: Use Ad ID if no Product ID found (Fallback)
+            # Pattern 2: PDP URL
+            if not pid:
+                m = re.search(r'pdp/(\d+)', url)
+                if m: pid = m.group(1)
+                
+            # Pattern 3: Query Param
+            if not pid:
+                m = re.search(r'[?&]id=(\d+)', url)
+                if m: pid = m.group(1)
+            
+            # Pattern 4: Combo identifier (sometimes in view params)
+            if not pid:
+                m = re.search(r'view/(\d+)', url)
+                if m: pid = m.group(1)
+
+            # Pattern 5: Numeric sequence likely to be ID in path
+            if not pid and 'shop' in url:
+                m = re.search(r'/(\d{15,})', url) # TikTok IDs are usually long
+                if m: pid = m.group(1)
+            
+        # Pattern X: Use Ad ID if no Product ID found (Fallback)
         if not pid:
              # 'id' is confirmed from user debug screenshot
              ad_id = item.get('id') or item.get('ad_id') or item.get('adId')
@@ -2209,50 +2218,45 @@ def scan_apify():
         
         for p in products:
             pid = p['product_id']
-            existing = Product.query.get(pid)
+            enrich_success = False
             
-            if not existing:
-                new_prod = Product(
-                    product_id=pid,
+            # ENRICHMENT: If we have a reallooking ID (numeric), fetch REAL stats from EchoTik
+            if pid and pid.isdigit():
+                 try:
+                     print(f"Enriching Ad Product {pid} from EchoTik...")
+                     enrich_res = requests.get(
+                        f"{BASE_URL}/product/detail",
+                        params={'product_id': pid},
+                        auth=get_auth(),
+                        timeout=5
+                     )
+                     if enrich_res.status_code == 200:
+                         edata = enrich_res.json()
+                         if edata.get('code') == 0 and edata.get('data'):
+                             e_prod = edata['data']
+                             if isinstance(e_prod, list) and len(e_prod) > 0: e_prod = e_prod[0]
+                             elif isinstance(e_prod, dict): pass
+                             else: e_prod = {}
+                             
+                             if e_prod:
+                                 # Overwrite with REAL data
+                                 p['product_name'] = e_prod.get('product_name', p['title'])
+                                 p['seller_name'] = e_prod.get('seller_name') or e_prod.get('shop_name') or p['advertiser']
+                                 p['gmv'] = float(e_prod.get('total_sale_gmv_amt', 0) or 0)
+                                 p['sales'] = int(e_prod.get('total_sale_cnt', 0) or 0)
+                                 p['sales_7d'] = int(e_prod.get('total_sale_7d_cnt', 0) or 0)
+                                 p['influencer_count'] = int(e_prod.get('total_ifl_cnt', 0) or 0)
+                                 p['commission_rate'] = float(e_prod.get('product_commission_rate', 0) or 0)
+                                 p['price'] = float(e_prod.get('spu_avg_price', 0) or 0)
+                                 p['image_url'] = parse_cover_url(e_prod.get('cover_url', '')) or p.get('image')
+                                 
+                                 # Mark as Enriched
+                                 p['is_enriched'] = True
+                                 enrich_success = True
+                                 print(f"  ✅ Enriched {pid}: {p['product_name']} (${p['gmv']})")
+                 except Exception as e:
+                     print(f"  ❌ Enrichment failed for {pid}: {e}")
 
-                    product_name=p['title'],
-                    # DEBUG: Show VALUES of brand and url to see why they fail
-                    seller_name=p['advertiser'] if p['advertiser'] != 'Unknown' else f"Debug: brand={p.get('_raw_keys')}? No. Raw Brand: {str(p.get('_raw_keys'))[:50]}",
-                    gmv=0, 
-                    sales=0,
-                    influencer_count=0,
-                    video_count=1, 
-                    scan_type='apify_ad',
-                    image_url=p.get('image'),
-                    # Hack: Store URL in status_note so we can click it
-                    status_note=p.get('url', '')[:255]
-                )
-                db.session.add(new_prod)
-                saved_count += 1
-            else:
-                existing.last_updated = datetime.utcnow()
-                existing.scan_type = 'apify_ad' 
-                if not existing.image_url and p.get('image'):
-                    existing.image_url = p.get('image')
-                
-                # Update info 
-                if p.get('url'):
-                    existing.status_note = p.get('url', '')[:255]
-
-                # DEBUG VALUES
-                val_debug = f"B:{p.get('advertiser')} T:{p.get('title')[:10]}"
-                if p['advertiser'] == 'Unknown':
-                     # Try to pull it directly from raw keys dict if possible?
-                     # We can't access raw dict here easily unless we passed it.
-                     # But we have _raw_keys list.
-                     # Let's show the LIST of keys again but confirming it's a list.
-                     existing.seller_name = f"Keys: {str(p.get('_raw_keys'))[:100]}"
-                else:
-                     existing.seller_name = p['advertiser']
-                
-        db.session.commit()
-        
-        # DEBUG MESSAGE Construction
         msg = f"Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new."
         
         if items and not products:
@@ -2379,9 +2383,7 @@ def get_products():
         )
     
     # ALWAYS exclude non-promotable products (not for sale, live only, etc.)
-    # These cannot be promoted as affiliate products
-    # User Request: Filter out products with 0 or 1 video (often non-promotable)
-    # EXCEPTION: Apify Ads are valid even with 1 video
+    # Also exclude Debug/Garbage data from previous runs
     query = query.filter(
         db.or_(
             Product.video_count >= 2,
@@ -2389,9 +2391,9 @@ def get_products():
         ),
         ~Product.product_name.ilike('%not for sale%'),
         ~Product.product_name.ilike('%live only%'),
-        ~Product.product_name.ilike('%sample%not for sale%'),
-        ~Product.product_name.ilike('%display only%'),
-        ~Product.product_name.ilike('%coming soon%')
+        ~Product.seller_name.like('Debug%'), # Hide debug artifacts
+        ~Product.seller_name.like('Keys%'),  # Hide debug keys
+        ~Product.product_name.like('Unknown%raw keys%') 
     )
     
     # Apply date filter
