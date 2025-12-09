@@ -2410,8 +2410,9 @@ def scan_apify():
                                             p['status_note'] = f"Brand Hero: {p.get('url','')}" 
                                             enrich_success = True
                                             if i < 5: debug_log = f"Success: Brand Fallback '{p['advertiser']}' -> {p['product_id']}"
-                                            else:
-                                                if i < 5: debug_log = f"Fail: Title 0 results. Fallback Brand '{p['advertiser']}' -> 0 results."
+                                        else:
+                                            # Explicitly Log Brand Failure
+                                            if i < 5: debug_log = f"Fail: Title 0 results. Fallback Brand '{p['advertiser']}' -> 0 results."
                                     else:
                                          if i < 5: debug_log = f"Fail: Brand API Code {b_res.status_code}"
                                 except Exception as e:
