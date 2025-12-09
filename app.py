@@ -2616,6 +2616,14 @@ def scan_manual_import():
             pid = None
             p_obj = item.get('product')
             
+            # DEBUG LOGGING for first 3 items
+            if len(products) < 3:
+                print(f"DEBUG ITEM {len(products)} keys: {list(item.keys())}")
+                if p_obj:
+                    print(f"DEBUG ITEM {len(products)} p_obj keys: {list(p_obj.keys()) if isinstance(p_obj, dict) else type(p_obj)}")
+                else:
+                    print(f"DEBUG ITEM {len(products)} p_obj is MISSING or None")
+            
             # Default to Video Data
             video_title = (item.get('title') or item.get('description') or item.get('desc') or item.get('caption') or "Unknown Title")
             video_cover = item.get('cover') or item.get('cover_url') or item.get('coverUrl') or ""
@@ -2738,8 +2746,8 @@ def scan_manual_import():
                    existing.product_name = p['product_name']
                 if p.get('image'):
                    existing.image_url = p.get('image')
-                   # Clear cached image if we are updating the source image to force refresh? 
-                   # existing.cached_image_url = None 
+                   # Clear cached image if we are updating the source image to force refresh
+                   existing.cached_image_url = None 
                 if p.get('seller_name') and p.get('seller_name') != "Unknown":
                    existing.seller_name = p['seller_name']
 
