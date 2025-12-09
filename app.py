@@ -2395,21 +2395,21 @@ def scan_apify():
 
                                         if b_data:
                                             hero = b_data[0]
-                                                pid = hero.get('product_id')
-                                                p['product_id'] = pid
-                                                p['product_name'] = hero.get('product_name')
-                                                p['seller_name'] = hero.get('shop_name')
-                                                p['gmv'] = float(hero.get('total_sale_gmv_amt', 0) or 0)
-                                                p['sales'] = int(hero.get('total_sale_cnt', 0) or 0)
-                                                p['sales_7d'] = int(hero.get('total_sale_7d_cnt', 0) or 0)
-                                                p['influencer_count'] = int(hero.get('total_ifl_cnt', 0) or 0)
-                                                p['commission_rate'] = float(hero.get('product_commission_rate', 0) or 0)
-                                                p['price'] = float(hero.get('spu_avg_price', 0) or 0)
-                                                p['image_url'] = parse_cover_url(hero.get('cover_url', ''))
-                                                p['is_enriched'] = True
-                                                p['status_note'] = f"Brand Hero: {p.get('url','')}" 
-                                                enrich_success = True
-                                                if i < 5: debug_log = f"Success: Brand Fallback '{p['advertiser']}' -> {p['product_id']}"
+                                            pid = hero.get('product_id')
+                                            p['product_id'] = pid
+                                            p['product_name'] = hero.get('product_name')
+                                            p['seller_name'] = hero.get('shop_name')
+                                            p['gmv'] = float(hero.get('total_sale_gmv_amt', 0) or 0)
+                                            p['sales'] = int(hero.get('total_sale_cnt', 0) or 0)
+                                            p['sales_7d'] = int(hero.get('total_sale_7d_cnt', 0) or 0)
+                                            p['influencer_count'] = int(hero.get('total_ifl_cnt', 0) or 0)
+                                            p['commission_rate'] = float(hero.get('product_commission_rate', 0) or 0)
+                                            p['price'] = float(hero.get('spu_avg_price', 0) or 0)
+                                            p['image_url'] = parse_cover_url(hero.get('cover_url', ''))
+                                            p['is_enriched'] = True
+                                            p['status_note'] = f"Brand Hero: {p.get('url','')}" 
+                                            enrich_success = True
+                                            if i < 5: debug_log = f"Success: Brand Fallback '{p['advertiser']}' -> {p['product_id']}"
                                             else:
                                                 if i < 5: debug_log = f"Fail: Title 0 results. Fallback Brand '{p['advertiser']}' -> 0 results."
                                     else:
