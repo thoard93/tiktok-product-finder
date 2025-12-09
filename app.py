@@ -2055,14 +2055,33 @@ def process_apify_results(items):
         # Try multiple keys for Title
                
         # Try multiple keys for Title
-        title = (item.get('ad_title') or # Found via Debug
-                 item.get('ad_text') or 
-                 item.get('caption') or 
-                 item.get('title') or 
-                 item.get('ad_name') or 
-                 item.get('adName') or
-                 item.get('description') or 
-                 'Unknown Ad Product')
+        # Try multiple keys for Title
+        title_key_found = "None"
+        raw_val = None
+        
+        if item.get('ad_title'):
+             title = item.get('ad_title')
+             title_key_found = 'ad_title'
+        elif item.get('title'):
+             title = item.get('title')
+             title_key_found = 'title'
+        elif item.get('ad_name'):
+             title = item.get('ad_name')
+             title_key_found = 'ad_name'
+        elif item.get('adName'):
+             title = item.get('adName')
+             title_key_found = 'adName'
+        elif item.get('caption'):
+             title = item.get('caption')
+             title_key_found = 'caption'
+        else:
+             title = 'Unknown Ad Product'
+
+        # Debug specific title issue
+        if title == 'Unknown Ad Product' or not title:
+             print(f"DEBUG: Title Missing for Item. Keys: {list(item.keys())[:5]}. 'ad_title' val: {item.get('ad_title')}")
+
+        # Try multiple keys for Advertiser
                  
         # Try multiple keys for Advertiser
         advertiser = (item.get('brand_name') or # Found via Debug
@@ -2424,6 +2443,9 @@ def scan_apify():
                 elif items:
                     keys_str = ", ".join(list(items[0].keys())[:10])
                     msg += f" [DEBUG: Item Keys: {keys_str}]"
+                
+                # Debug Check Title
+                msg += f" [DEBUG: First Title: '{products[0].get('title')}']"
         
         return jsonify({
             'success': True,
