@@ -3478,6 +3478,12 @@ def deep_refresh_products():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
 
+@app.route('/api/favorite/<product_id>', methods=['POST'])
+def toggle_favorite(product_id):
+    """Toggle favorite status for a product"""
+    try:
+        product = Product.query.get(product_id)
+        if not product:
             return jsonify({'success': False, 'error': 'Product not found'}), 404
         
         product.is_favorite = not product.is_favorite
