@@ -457,7 +457,7 @@
         }
 
         async function cleanupGarbage() {
-            if (!confirm('⚠️ Are you sure? This will permanently delete all "Unknown" products and debug data from the database.')) return;
+            if (!confirm('⚠️ Are you sure? This will permanently delete:\n- "Unknown" products\n- Debug data\n- Dead Ads (0 sales, 0 influencers)\n\nThis cannot be undone.')) return;
 
             try {
                 const response = await fetch('/api/admin/cleanup_garbage', { method: 'POST' });

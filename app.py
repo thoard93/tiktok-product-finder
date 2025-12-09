@@ -2587,13 +2587,26 @@ def cleanup_garbage():
         c3 = q3.count()
         q3.delete(synchronize_session=False)
         deleted_count += c3
+
+        # 4. Delete "Dead" Ads (Single video, 0 sales, 0 influencers, scan_type='apify_ad')
+        # These are failed enrichments that just took the ad metadata
+        q4 = db.session.query(Product).filter(
+            Product.scan_type == 'apify_ad',
+            Product.sales == 0,
+            Product.influencer_count == 0,
+            Product.video_count <= 1,
+            Product.is_favorite == False  # Safety: Never delete favorites
+        )
+        c4 = q4.count()
+        q4.delete(synchronize_session=False)
+        deleted_count += c4
         
         db.session.commit()
         
         return jsonify({
             'success': True, 
             'deleted_count': deleted_count,
-            'details': f"Keys: {c1}, Unknowns: {c2}, Debug: {c3}"
+            'details': f"Keys: {c1}, Unknowns: {c2}, Debug: {c3}, DeadAds: {c4}"
         })
         
     except Exception as e:
