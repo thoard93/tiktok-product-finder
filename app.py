@@ -2314,8 +2314,14 @@ def scan_apify():
                     search_term = clean_title_for_search(p['title'])
                     if len(search_term) > 5:
                         s_res = requests.get(
-                            f"{BASE_URL}/product/search",
-                            params={"keyword": search_term, "sort_by": "total_sale_cnt_desc", "limit": 5},
+                            f"{BASE_URL}/product/list",
+                            params={
+                                "keyword": search_term, 
+                                "region": "US",
+                                "page_size": 5,
+                                "product_sort_field": 4, # Sort by 7-day sales (popular items first)
+                                "sort_type": 1 # Descending
+                            },
                             auth=get_auth(),
                             timeout=10
                         )
