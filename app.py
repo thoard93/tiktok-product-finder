@@ -2275,6 +2275,14 @@ def scan_apify():
                  keys_str = ", ".join(list(items[0].keys())[:10]) 
                  msg += f" [DEBUG: Keys found: {keys_str}]"
         else:
+             # DEBUG: Add info about WHY they weren't saved
+             if saved_count == 0 and len(products) > 0:
+                 # Take first 3 products and show their URL and Extracted ID
+                 debug_details = []
+                 for p in products[:3]:
+                     debug_details.append(f"URL: {p.get('url', '')[:30]}... -> ID: {p.get('product_id')}")
+                 msg += f" [DEBUG: 0 Saved. Enrichment Stats: {debug_details}]"
+
             # Even if products found, if they look "Unknown", share the keys
             if products and products[0]['product_id'].startswith("apify_unknown_"):
                 if debug_keys_str:
