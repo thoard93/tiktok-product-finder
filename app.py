@@ -2278,54 +2278,6 @@ def scan_apify():
         for p in products:
             pid = p['product_id']
             enrich_success = False
-            
-            # ENRICHMENT: If we have a reallooking ID (numeric), fetch REAL stats from EchoTik
-            if pid and pid.isdigit():
-                 try:
-                     print(f"Enriching Ad Product {pid} from EchoTik...")
-                     enrich_res = requests.get(
-                        f"{BASE_URL}/product/detail",
-                        params={'product_id': pid},
-                        auth=get_auth(),
-                        timeout=5
-                     )
-                     if enrich_res.status_code == 200:
-                         edata = enrich_res.json()
-                         if edata.get('code') == 0 and edata.get('data'):
-                             e_prod = edata['data']
-                             if isinstance(e_prod, list) and len(e_prod) > 0: e_prod = e_prod[0]
-                             elif isinstance(e_prod, dict): pass
-                             else: e_prod = {}
-                             
-                             if e_prod:
-                                 # Overwrite with REAL data
-                                 p['product_name'] = e_prod.get('product_name', p['title'])
-                                 p['seller_name'] = e_prod.get('seller_name') or e_prod.get('shop_name') or p['advertiser']
-                                 p['gmv'] = float(e_prod.get('total_sale_gmv_amt', 0) or 0)
-                                 p['sales'] = int(e_prod.get('total_sale_cnt', 0) or 0)
-                                 p['sales_7d'] = int(e_prod.get('total_sale_7d_cnt', 0) or 0)
-                                 p['influencer_count'] = int(e_prod.get('total_ifl_cnt', 0) or 0)
-                                 p['commission_rate'] = float(e_prod.get('product_commission_rate', 0) or 0)
-                                 p['price'] = float(e_prod.get('spu_avg_price', 0) or 0)
-                                 p['image_url'] = parse_cover_url(e_prod.get('cover_url', '')) or p.get('image')
-                                 
-                                 # Mark as Enriched
-                                 p['is_enriched'] = True
-                                 enrich_success = True
-                                 print(f"  ✅ Enriched {pid}: {p['product_name']} (${p['gmv']})")
-                 except Exception as e:
-                     print(f"  ❌ Enrichment failed for {pid}: {e}")
-
-        msg = f"[vDebug] Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new."
-        
-        if items and not products:
-            # Use the deep debug keys if we found them (via my generic fallback)
-            if debug_keys_str:
-                msg += debug_keys_str
-            elif items:
-                keys_str = ", ".join(list(items[0].keys())[:10])
-                msg += f" [DEBUG: Keys found: {keys_str}]"
-        else:
             # DEBUG: Add info about WHY they weren't saved
             if saved_count == 0 and len(products) > 0:
                 # Take first 3 products and show their URL and Extracted ID
@@ -3218,33 +3170,6 @@ def deep_refresh_products():
                     if new_price > 0:
                         product.price = new_price
                         data_changed = True
-                    
-                    # Fix image
-                    if not product.cached_image_url:
-                        cover_url = p.get('cover_url', '')
-                        if cover_url:
-                            parsed_url = parse_cover_url(cover_url)
-                            if parsed_url:
-                                product.image_url = parsed_url
-                                signed_urls = get_cached_image_urls([parsed_url])
-                                if signed_urls.get(parsed_url):
-                                    product.cached_image_url = signed_urls[parsed_url]
-                                    product.image_cached_at = datetime.utcnow()
-                                    images_fixed += 1
-                                    data_changed = True
-                    
-                    if data_changed:
-                        updated_this_batch += 1
-                    
-                    time.sleep(0.4)  # Rate limiting
-                    
-                except Exception as e:
-                    print(f"Error deep refreshing {product.product_id}: {e}")
-                    api_errors += 1
-                    product.last_updated = datetime.utcnow()
-                    continue
-            
-            db.session.commit()
             
             total_updated += updated_this_batch
             total_processed += processed_this_batch
