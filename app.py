@@ -2712,6 +2712,15 @@ def scan_manual_import():
                 # Update stats if we found new info
                 if p['sales'] > 0: existing.sales = max(existing.sales, p['sales'])
                 if p['sales_7d'] > 0: existing.sales_7d = p['sales_7d']
+                
+                # FORCE UPDATE Display Info (to fix "Video Title" artifacts)
+                if p['product_name'] and p['product_name'] != "Unknown Title":
+                   existing.product_name = p['product_name']
+                if p.get('image'):
+                   existing.image_url = p.get('image')
+                if p.get('seller_name') and p.get('seller_name') != "Unknown":
+                   existing.seller_name = p['seller_name']
+
                 # Ensure scan_type is updated so it shows in Ad Winners
                 if existing.scan_type != 'daily_virals':
                      existing.scan_type = 'daily_virals'
