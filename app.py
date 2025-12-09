@@ -2305,47 +2305,52 @@ def scan_apify():
                 t = re.sub(r'[^\w\s]', '', t)
                 return t.strip()
 
-            # Debug details for first few items
-            debug_log = ""
-            
-            # 1. Search Rescue (Prioritized for Ads)
-            if pid.startswith('ad_') and p.get('title') and p.get('title') != 'Unknown Ad Product':
-                try:
-                    search_term = clean_title_for_search(p['title'])
-                    if len(search_term) > 5:
-                        s_res = requests.get(
-                            f"{BASE_URL}/product/list",
-                            params={
-                                "keyword": search_term, 
-                                "region": "US",
-                                "page_num": 1,
-                                "page_size": 5,
-                                "product_sort_field": 4, # Sort by 7-day sales (popular items first)
-                                "sort_type": 1 # Descending
-                            },
-                            auth=get_auth(),
-                            timeout=10
-                        )
-                        shops_found = []
-                        if s_res.status_code == 200:
-                            api_json = s_res.json()
-                            raw_data = api_json.get('data')
-                            
-                            s_data = []
-                            if isinstance(raw_data, list):
-                                s_data = raw_data
-                            elif isinstance(raw_data, dict):
-                                s_data = raw_data.get('list', [])
-                            else:
-                                # Data is None or invalid
-                                if i < 5:
-                                    debug_log = f"Fail: API Msg '{api_json.get('message')}' (Code {api_json.get('code')})"
+            # NEW: Detailed Enrichment Function (Search Rescue)
+            def enrich_product_data(p, i_log_prefix):
+                """Search EchoTik for product stats based on Title then Brand"""
+                # 1. Direct ID Check (if available) - Moved logic here
+                pid = p.get('product_id')
+                if pid and not pid.startswith('ad_') and not p.get('is_enriched'):
+                    try:
+                        detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_id": pid}, auth=get_auth(), timeout=5)
+                        if detail_res.status_code == 200:
+                            d_data = detail_res.json().get('data')
+                            if d_data:
+                                p.update({
+                                    'product_name': d_data.get('product_name', p.get('title')),
+                                    'seller_name': d_data.get('seller_name') or d_data.get('shop_name') or p.get('advertiser'),
+                                    'gmv': float(d_data.get('total_sale_gmv_amt', 0) or 0),
+                                    'sales': int(d_data.get('total_sale_cnt', 0) or 0),
+                                    'sales_7d': int(d_data.get('total_sale_7d_cnt', 0) or 0),
+                                    'influencer_count': int(d_data.get('total_ifl_cnt', 0) or 0),
+                                    'commission_rate': float(d_data.get('product_commission_rate', 0) or 0),
+                                    'price': float(d_data.get('spu_avg_price', 0) or 0),
+                                    'image_url': parse_cover_url(d_data.get('cover_url', '')),
+                                    'is_enriched': True
+                                })
+                                return True, f"Success: Direct ID {pid}"
+                    except Exception as e:
+                         pass
 
+                # 2. Search by Title
+                search_term = clean_title_for_search(p.get('title'))
+                shops_found_log = ""
+                
+                if len(search_term) > 5:
+                    try:
+                        s_res = requests.get(f"{BASE_URL}/product/list", 
+                            params={"keyword": search_term, "region": "US", "page_num": 1, "page_size": 5, "product_sort_field": 4, "sort_type": 1}, 
+                            auth=get_auth(), timeout=8)
+                        
+                        if s_res.status_code == 200:
+                            s_data = s_res.json().get('data', [])
+                            if isinstance(s_data, dict): s_data = s_data.get('list', [])
+                            
                             best_match = None
-                            for cand in s_data:
+                            for cand in (s_data or []):
                                 cand_shop = cand.get('shop_name', '').lower()
-                                ad_brand = p.get('advertiser', '').lower() # Advertiser from Ad
-                                shops_found.append(f"{cand_shop} (vs {ad_brand})") # Log comp
+                                ad_brand = p.get('advertiser', '').lower()
+                                shops_found_log += f"{cand_shop} "
                                 
                                 # Strict Match
                                 if ad_brand != 'unknown' and (ad_brand in cand_shop or cand_shop in ad_brand):
@@ -2353,102 +2358,61 @@ def scan_apify():
                                     break
                             
                             if best_match:
-                                # Found valid product!
-                                pid = best_match.get('product_id')
-                                p['product_id'] = pid
-                                p['product_name'] = best_match.get('product_name')
-                                p['seller_name'] = best_match.get('shop_name')
-                                p['gmv'] = float(best_match.get('total_sale_gmv_amt', 0) or 0)
-                                p['sales'] = int(best_match.get('total_sale_cnt', 0) or 0)
-                                p['sales_7d'] = int(best_match.get('total_sale_7d_cnt', 0) or 0)
-                                p['influencer_count'] = int(best_match.get('total_ifl_cnt', 0) or 0)
-                                p['commission_rate'] = float(best_match.get('product_commission_rate', 0) or 0)
-                                p['price'] = float(best_match.get('spu_avg_price', 0) or 0)
-                                p['image_url'] = parse_cover_url(best_match.get('cover_url', ''))
-                                p['is_enriched'] = True
-                                enrich_success = True
-                            elif not best_match and p.get('advertiser') and p.get('advertiser') != 'Unknown':
-                                # FALLBACK: Search by Brand Name
-                                try:
-                                    b_res = requests.get(
-                                        f"{BASE_URL}/product/list",
-                                        params={
-                                            "keyword": p['advertiser'], 
-                                            "region": "US",
-                                            "page_num": 1,
-                                            "page_size": 3,
-                                            "product_sort_field": 4, # Sort by 7-day sales
-                                            "sort_type": 1
-                                        },
-                                        auth=get_auth(),
-                                        timeout=5
-                                    )
-                                    if b_res.status_code == 200:
-                                        b_json = b_res.json()
-                                        raw_b_data = b_json.get('data')
-                                        
-                                        b_data = []
-                                        if isinstance(raw_b_data, list):
-                                            b_data = raw_b_data
-                                        elif isinstance(raw_b_data, dict):
-                                            b_data = raw_b_data.get('list', [])
+                                p.update({
+                                    'product_id': best_match.get('product_id'),
+                                    'product_name': best_match.get('product_name'),
+                                    'seller_name': best_match.get('shop_name'),
+                                    'gmv': float(best_match.get('total_sale_gmv_amt', 0) or 0),
+                                    'sales': int(best_match.get('total_sale_cnt', 0) or 0),
+                                    'sales_7d': int(best_match.get('total_sale_7d_cnt', 0) or 0),
+                                    'influencer_count': int(best_match.get('total_ifl_cnt', 0) or 0),
+                                    'commission_rate': float(best_match.get('product_commission_rate', 0) or 0),
+                                    'price': float(best_match.get('spu_avg_price', 0) or 0),
+                                    'image_url': parse_cover_url(best_match.get('cover_url', '')),
+                                    'is_enriched': True
+                                })
+                                return True, f"Success: Found '{p.get('title')[:20]}...'"
 
-                                        if b_data:
-                                            hero = b_data[0]
-                                            pid = hero.get('product_id')
-                                            p['product_id'] = pid
-                                            p['product_name'] = hero.get('product_name')
-                                            p['seller_name'] = hero.get('shop_name')
-                                            p['gmv'] = float(hero.get('total_sale_gmv_amt', 0) or 0)
-                                            p['sales'] = int(hero.get('total_sale_cnt', 0) or 0)
-                                            p['sales_7d'] = int(hero.get('total_sale_7d_cnt', 0) or 0)
-                                            p['influencer_count'] = int(hero.get('total_ifl_cnt', 0) or 0)
-                                            p['commission_rate'] = float(hero.get('product_commission_rate', 0) or 0)
-                                            p['price'] = float(hero.get('spu_avg_price', 0) or 0)
-                                            p['image_url'] = parse_cover_url(hero.get('cover_url', ''))
-                                            p['is_enriched'] = True
-                                            p['status_note'] = f"Brand Hero: {p.get('url','')}" 
-                                            enrich_success = True
-                                            if i < 5: debug_log = f"Success: Brand Fallback '{p['advertiser']}' -> {p['product_id']}"
-                                        else:
-                                            # Explicitly Log Brand Failure
-                                            if i < 5: debug_log = f"Fail: Title 0 results. Fallback Brand '{p['advertiser']}' -> 0 results."
+                            # 3. Fallback: Search by Brand
+                            elif p.get('advertiser') and p.get('advertiser') != 'Unknown':
+                                b_res = requests.get(f"{BASE_URL}/product/list", 
+                                    params={"keyword": p['advertiser'], "region": "US", "page_num": 1, "page_size": 1, "product_sort_field": 4, "sort_type": 1}, 
+                                    auth=get_auth(), timeout=5)
+                                if b_res.status_code == 200:
+                                    b_data = b_res.json().get('data', [])
+                                    if isinstance(b_data, dict): b_data = b_data.get('list', [])
+                                    if b_data:
+                                        hero = b_data[0]
+                                        p.update({
+                                            'product_id': hero.get('product_id'),
+                                            'product_name': hero.get('product_name'),
+                                            'seller_name': hero.get('shop_name'),
+                                            'gmv': float(hero.get('total_sale_gmv_amt', 0) or 0),
+                                            'sales': int(hero.get('total_sale_cnt', 0) or 0),
+                                            'sales_7d': int(hero.get('total_sale_7d_cnt', 0) or 0),
+                                            'influencer_count': int(hero.get('total_ifl_cnt', 0) or 0),
+                                            'commission_rate': float(hero.get('product_commission_rate', 0) or 0),
+                                            'price': float(hero.get('spu_avg_price', 0) or 0),
+                                            'image_url': parse_cover_url(hero.get('cover_url', '')),
+                                            'is_enriched': True,
+                                            'status_note': "Brand Hero Match"
+                                        })
+                                        return True, f"Success: Brand Fallback '{p['advertiser']}'"
                                     else:
-                                         if i < 5: debug_log = f"Fail: Brand API Code {b_res.status_code}"
-                                except Exception as e:
-                                    if i < 5: debug_log = f"Fail: Brand Fallback Error {str(e)}"
-                                    
-                            if not enrich_success and not debug_log:
-                                if i < 5: # Save log for first 5 if not already set
-                                    debug_log = f"Fail: '{search_term}' -> Found {shops_found} (Adv: '{p.get('advertiser')}')"
-                        else:
-                             if i < 5:
-                                 debug_log = f"Fail: API Msg '{api_json.get('message')}' (Code {api_json.get('code')})"
-                except Exception as e:
-                    if i < 5:
-                        debug_log = f"Error: {str(e)}"
+                                        return False, f"Fail: Title 0 results. Fallback Brand '{p['advertiser']}' -> 0 results."
+                    except Exception as e:
+                        return False, f"Error: {str(e)}"
+                
+                return False, f"Fail: '{search_term}' -> Found [{shops_found_log}] (Adv: '{p.get('advertiser')}')"
 
-            # 2. Direct ID Enrichment (If we have a numeric ID)
-            if not enrich_success and pid and not pid.startswith('ad_'):
-                 try:
-                     detail_res = requests.get(
-                         f"{BASE_URL}/product/detail",
-                         params={"product_id": pid},
-                         auth=get_auth(),
-                         timeout=5
-                     )
-                     if detail_res.status_code == 200:
-                         d_data = detail_res.json().get('data')
-                         if d_data:
-                              e_prod = d_data
-                              p['product_name'] = e_prod.get('product_name', p['title'])
-                              p['seller_name'] = e_prod.get('seller_name') or e_prod.get('shop_name') or p['advertiser']
-                              p['gmv'] = float(e_prod.get('total_sale_gmv_amt', 0) or 0)
-                              p['sales'] = int(e_prod.get('total_sale_cnt', 0) or 0)
-                              p['sales_7d'] = int(e_prod.get('total_sale_7d_cnt', 0) or 0)
-                              p['influencer_count'] = int(e_prod.get('total_ifl_cnt', 0) or 0)
-                              p['commission_rate'] = float(e_prod.get('product_commission_rate', 0) or 0)
-                              p['price'] = float(e_prod.get('spu_avg_price', 0) or 0)
+            # Use the new function
+            enrich_success, debug_msg = enrich_product_data(p, i)
+            if i < 5 and debug_msg: debug_log = debug_msg
+
+            # Debug details for first few items
+            debug_log = ""
+            
+
                               p['image_url'] = parse_cover_url(e_prod.get('cover_url', '')) or p.get('image')
                               p['is_enriched'] = True
                               enrich_success = True
@@ -3517,20 +3481,6 @@ def deep_refresh_products():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
 
-@app.route('/api/clear', methods=['POST'])
-def clear_products():
-    """Clear all products"""
-    Product.query.delete()
-    db.session.commit()
-    return jsonify({'success': True, 'message': 'All products cleared'})
-
-
-@app.route('/api/favorite/<product_id>', methods=['POST'])
-def toggle_favorite(product_id):
-    """Toggle favorite status for a product"""
-    try:
-        product = Product.query.get(product_id)
-        if not product:
             return jsonify({'success': False, 'error': 'Product not found'}), 404
         
         product.is_favorite = not product.is_favorite

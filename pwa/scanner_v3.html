@@ -342,6 +342,11 @@
                 <div class="title">Ad Hunter (Pro)</div>
                 <div class="desc">Find sponsored ads (Apify)</div>
             </div>
+            <div class="scan-tab" onclick="setMode('dailyvirals')">
+                <i class="fas fa-file-import"></i>
+                <div class="title">DailyVirals</div>
+                <div class="desc">Import JSON Data</div>
+            </div>
         </div>
 
         <!-- Configuration Panel -->
@@ -465,6 +470,20 @@
                     </div>
                 </div>
                 <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Start Ad Hunt ⚡</button>
+            `,
+            'dailyvirals': `
+                 <div class="config-grid">
+                    <div class="form-group" style="grid-column: span 2">
+                        <label class="form-label">Paste TheDailyVirals JSON</label>
+                        <div class="subtitle" style="margin-bottom: 5px; font-size: 0.8em; color: #ccc;">
+                            1. Go to <a href="https://thedailyvirals.com" target="_blank" style="color: #00f2ea;">TheDailyVirals</a> (Paid Ads tab)<br>
+                            2. F12 -> Network -> Copy the response from 'top-growth' or 'search' request.<br>
+                            3. Paste the raw JSON below.
+                        </div>
+                        <textarea id="dailyvirals-json" class="form-input" rows="8" placeholder='Paste JSON here... {"videos": [...]}'></textarea>
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Import DailyVirals Data 🚀</button>
             `
         };
 
@@ -512,6 +531,7 @@
                 else if (currentMode === 'brand') await runBrandScan(btn);
                 else if (currentMode === 'deals') await runDealScan(btn);
                 else if (currentMode === 'apify') await runApifyScan(btn);
+                else if (currentMode === 'dailyvirals') await runDailyViralsScan(btn);
 
                 // Reset state when scan function returns (finished or error)
                 isScanning = false;
@@ -649,6 +669,35 @@
 
                 if (data.success) {
                     log(data.message, 'success');
+                } else {
+                    log(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log(`Network error: ${e.message}`, 'error');
+            }
+            btn.innerText = originalText;
+        }
+
+        async function runDailyViralsScan(btn) {
+            const originalText = btn.innerText;
+            const jsonInput = document.getElementById('dailyvirals-json').value;
+            if (!jsonInput || jsonInput.length < 10) { log('Please paste valid JSON data', 'error'); return; }
+
+            log(`Starting DailyVirals Import...`, 'info');
+            btn.innerText = '⏳ Importing & Enriching...';
+
+            try {
+                const res = await fetch('/api/scan/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ json_data: jsonInput })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    log(data.message, 'success');
+                    if (data.debug_info) log(data.debug_info, 'info');
                 } else {
                     log(`Error: ${data.error}`, 'error');
                 }
