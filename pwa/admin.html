@@ -236,6 +236,17 @@
         <strong>Scan Status:</strong> <span id="scan-status-text">Idle - No scan running</span>
     </div>
 
+    <div class="section">
+        <h2>🛠️ Database Maintenance</h2>
+        <p style="color: #aaa; margin-bottom: 15px; font-size: 0.9rem;">
+            Clean up invalid data (e.g., "Unknown (7 keys)" or generic "Unknown" products with 0 sales) to improve
+            dashboard quality.
+        </p>
+        <button class="action-btn" onclick="cleanupGarbage()" style="font-size: 1rem; padding: 10px 20px;">
+            🗑️ Delete Garbage Data
+        </button>
+    </div>
+
     <div class="tabs">
         <button class="tab active" onclick="showTab('users')">👥 Users</button>
         <button class="tab" onclick="showTab('activity')">📋 Activity Log</button>
@@ -439,6 +450,24 @@
                     loadUsers();
                 } else {
                     alert('Failed to remove user');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function cleanupGarbage() {
+            if (!confirm('⚠️ Are you sure? This will permanently delete all "Unknown" products and debug data from the database.')) return;
+
+            try {
+                const response = await fetch('/api/admin/cleanup_garbage', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`✅ Cleanup Successful!\nDeleted ${data.deleted_count} items.\n(${data.details})`);
+                    loadStats(); // Refresh stats
+                } else {
+                    alert('Failed to cleanup: ' + (data.error || 'Unknown error'));
                 }
             } catch (err) {
                 alert('Error: ' + err.message);

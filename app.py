@@ -2553,6 +2553,54 @@ def list_top_brands():
     })
 
 # =============================================================================
+# ADMIN / CLEANUP ENDPOINTS
+# =============================================================================
+
+@app.route('/api/admin/cleanup_garbage', methods=['POST'])
+def cleanup_garbage():
+    """Delete invalid/debug products from the database"""
+    try:
+        deleted_count = 0
+        
+        # 1. Delete "Unknown (X keys)" debug entries
+        q1 = db.session.query(Product).filter(Product.product_name.like('Unknown (% keys)'))
+        c1 = q1.count()
+        q1.delete(synchronize_session=False)
+        deleted_count += c1
+        
+        # 2. Delete generic "Unknown" products with 0 sales
+        q2 = db.session.query(Product).filter(
+            Product.product_name.like('Unknown%'), 
+            Product.sales == 0
+        )
+        c2 = q2.count()
+        q2.delete(synchronize_session=False)
+        deleted_count += c2
+
+        # 3. Delete explicit Debug artifacts
+        q3 = db.session.query(Product).filter(
+            db.or_(
+                Product.seller_name.like('Debug%'),
+                Product.seller_name.like('Keys%')
+            )
+        )
+        c3 = q3.count()
+        q3.delete(synchronize_session=False)
+        deleted_count += c3
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'deleted_count': deleted_count,
+            'details': f"Keys: {c1}, Unknowns: {c2}, Debug: {c3}"
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# =============================================================================
 # PRODUCTS ENDPOINTS
 # =============================================================================
 
