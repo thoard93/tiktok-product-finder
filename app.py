@@ -2409,16 +2409,6 @@ def scan_apify():
                              if i < 5:
                                  debug_log = f"Fail: API Msg '{api_json.get('message')}' (Code {api_json.get('code')})"
                 except Exception as e:
-                    if i < 5:
-                        debug_log = f"Error: {str(e)}"
-
-            # 2. Direct ID Enrichment (If we have a numeric ID)
-            if not enrich_success and pid and not pid.startswith('ad_'):
-                         f"{BASE_URL}/product/detail",
-                         params={"product_id": pid},
-                         auth=get_auth(),
-                         timeout=5
-                     )
                      if detail_res.status_code == 200:
                          d_data = detail_res.json().get('data')
                          if d_data:
