@@ -2278,21 +2278,136 @@ def scan_apify():
         for p in products:
             pid = p['product_id']
             enrich_success = False
-            # DEBUG: Add info about WHY they weren't saved
+            
+            # Helper: Clean title
+            def clean_title_for_search(t):
+                if not t: return ""
+                t = re.sub(r'#\w+', '', t)
+                t = re.sub(r'[^\w\s]', '', t)
+                return t.strip()
+
+            # 1. Search Rescue (Prioritized for Ads)
+            # If it's an Ad ID (startswith 'ad_'), try to find Real ID via Search
+            if pid.startswith('ad_') and p.get('title') and p.get('title') != 'Unknown Ad Product':
+                try:
+                    search_term = clean_title_for_search(p['title'])
+                    if len(search_term) > 5:
+                        # Strict Brand Match Search
+                        search_res = requests.get(
+                            f"{BASE_URL}/product/search",
+                            params={"keyword": search_term, "sort_by": "total_sale_cnt_desc", "limit": 5},
+                            auth=get_auth(),
+                            timeout=10
+                        )
+                        if search_res.status_code == 200:
+                            s_data = search_res.json().get('data', {}).get('list', [])
+                            best_match = None
+                            for cand in s_data:
+                                # Strong Signal: Advertiser Name matches Shop Name (Strict)
+                                cand_shop = cand.get('shop_name', '').lower()
+                                ad_brand = p.get('advertiser', '').lower()
+                                
+                                if ad_brand != 'unknown' and (ad_brand in cand_shop or cand_shop in ad_brand):
+                                    best_match = cand
+                                    break
+                            
+                            if best_match:
+                                # Found valid product!
+                                pid = best_match.get('product_id')
+                                p['product_id'] = pid
+                                p['product_name'] = best_match.get('product_name')
+                                p['seller_name'] = best_match.get('shop_name')
+                                p['gmv'] = float(best_match.get('total_sale_gmv_amt', 0) or 0)
+                                p['sales'] = int(best_match.get('total_sale_cnt', 0) or 0)
+                                p['sales_7d'] = int(best_match.get('total_sale_7d_cnt', 0) or 0)
+                                p['influencer_count'] = int(best_match.get('total_ifl_cnt', 0) or 0)
+                                p['commission_rate'] = float(best_match.get('product_commission_rate', 0) or 0)
+                                p['price'] = float(best_match.get('spu_avg_price', 0) or 0)
+                                p['image_url'] = parse_cover_url(best_match.get('cover_url', ''))
+                                p['is_enriched'] = True
+                                enrich_success = True
+                except: pass
+
+            # 2. Direct ID Enrichment (If we have a numeric ID)
+            if not enrich_success and pid and not pid.startswith('ad_'):
+                 try:
+                     detail_res = requests.get(
+                         f"{BASE_URL}/product/detail",
+                         params={"product_id": pid},
+                         auth=get_auth(),
+                         timeout=5
+                     )
+                     if detail_res.status_code == 200:
+                         d_data = detail_res.json().get('data')
+                         if d_data:
+                              e_prod = d_data
+                              p['product_name'] = e_prod.get('product_name', p['title'])
+                              p['seller_name'] = e_prod.get('seller_name') or e_prod.get('shop_name') or p['advertiser']
+                              p['gmv'] = float(e_prod.get('total_sale_gmv_amt', 0) or 0)
+                              p['sales'] = int(e_prod.get('total_sale_cnt', 0) or 0)
+                              p['sales_7d'] = int(e_prod.get('total_sale_7d_cnt', 0) or 0)
+                              p['influencer_count'] = int(e_prod.get('total_ifl_cnt', 0) or 0)
+                              p['commission_rate'] = float(e_prod.get('product_commission_rate', 0) or 0)
+                              p['price'] = float(e_prod.get('spu_avg_price', 0) or 0)
+                              p['image_url'] = parse_cover_url(e_prod.get('cover_url', '')) or p.get('image')
+                              p['is_enriched'] = True
+                              enrich_success = True
+                 except: pass
+
+            # SAVE if enriched
+            if enrich_success:
+                 # Logic to save to DB (Simplified for this block rewrite)
+                 existing = Product.query.get(p['product_id'])
+                 if not existing:
+                     new_prod = Product(
+                         product_id=p['product_id'],
+                         product_name=p.get('product_name', 'Unknown'),
+                         seller_name=p.get('seller_name', 'Unknown'),
+                         gmv=p.get('gmv', 0),
+                         sales=p.get('sales', 0),
+                         sales_7d=p.get('sales_7d', 0),
+                         influencer_count=p.get('influencer_count', 0),
+                         commission_rate=p.get('commission_rate', 0),
+                         price=p.get('price', 0),
+                         image_url=p.get('image_url', ''),
+                         scan_type='apify_ad',
+                         first_seen=datetime.utcnow()
+                     )
+                     # Hack: Use status_note for URL
+                     new_prod.status_note = p.get('url', '')
+                     db.session.add(new_prod)
+                     saved_count += 1
+                 else:
+                     # Update existing
+                     existing.gmv = p.get('gmv', 0)
+                     existing.sales_7d = p.get('sales_7d', 0)
+                     existing.sales = p.get('sales', 0)
+                     existing.status_note = p.get('url', '')
+
+        db.session.commit()
+
+        # --- COMPLETION MESSAGE LOGIC ---
+        msg = f"[vDebug] Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new."
+        
+        if items and not products:
+            if debug_keys_str:
+                msg += debug_keys_str
+            elif items:
+                keys_str = ", ".join(list(items[0].keys())[:10])
+                msg += f" [DEBUG: Keys found: {keys_str}]"
+        else:
             if saved_count == 0 and len(products) > 0:
-                # Take first 3 products and show their URL and Extracted ID
                 debug_details = []
                 for p in products[:3]:
                     debug_details.append(f"URL: {p.get('url', '')[:30]}... -> ID: {p.get('product_id')}")
                 msg += f" [DEBUG: 0 Saved. Enrichment Stats: {debug_details}]"
 
-            # Even if products found, if they look "Unknown", share the keys
             if products and products[0]['product_id'].startswith("apify_unknown_"):
                 if debug_keys_str:
                     msg += debug_keys_str
                 elif items:
-                    keys_str = ", ".join(list(items[0].keys())[:10])
-                    msg += f" [DEBUG: Item Keys: {keys_str}]"
+                     keys_str = ", ".join(list(items[0].keys())[:10])
+                     msg += f" [DEBUG: Item Keys: {keys_str}]"
         
         return jsonify({
             'success': True,
