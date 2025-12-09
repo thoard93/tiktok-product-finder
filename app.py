@@ -2329,13 +2329,17 @@ def scan_apify():
                         shops_found = []
                         if s_res.status_code == 200:
                             api_json = s_res.json()
-                            if api_json.get('data') is not None:
-                                s_data = api_json.get('data', {}).get('list', [])
+                            raw_data = api_json.get('data')
+                            
+                            s_data = []
+                            if isinstance(raw_data, list):
+                                s_data = raw_data
+                            elif isinstance(raw_data, dict):
+                                s_data = raw_data.get('list', [])
                             else:
-                                # Data is None, likely an API error code
+                                # Data is None or invalid
                                 if i < 5:
                                     debug_log = f"Fail: API Msg '{api_json.get('message')}' (Code {api_json.get('code')})"
-                                s_data = []
 
                             best_match = None
                             for cand in s_data:
@@ -2381,10 +2385,16 @@ def scan_apify():
                                     )
                                     if b_res.status_code == 200:
                                         b_json = b_res.json()
-                                        if b_json.get('data'):
-                                            b_data = b_json.get('data', {}).get('list', [])
-                                            if b_data:
-                                                hero = b_data[0]
+                                        raw_b_data = b_json.get('data')
+                                        
+                                        b_data = []
+                                        if isinstance(raw_b_data, list):
+                                            b_data = raw_b_data
+                                        elif isinstance(raw_b_data, dict):
+                                            b_data = raw_b_data.get('list', [])
+
+                                        if b_data:
+                                            hero = b_data[0]
                                                 pid = hero.get('product_id')
                                                 p['product_id'] = pid
                                                 p['product_name'] = hero.get('product_name')
