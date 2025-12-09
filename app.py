@@ -2229,6 +2229,12 @@ def scan_apify():
                 if not existing.image_url and p.get('image'):
                     existing.image_url = p.get('image')
                 
+                # DEBUG: Force update seller_name if we have raw keys to show
+                if p.get('_raw_keys'):
+                     existing.seller_name = str(p.get('_raw_keys'))[:100]
+                elif existing.seller_name == 'Unknown' and p['advertiser'] != 'Unknown':
+                     existing.seller_name = p['advertiser']
+                
         db.session.commit()
         
         # DEBUG MESSAGE Construction
