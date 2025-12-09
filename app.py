@@ -2636,6 +2636,16 @@ def scan_manual_import():
                 
                 if p_obj.get('title'):
                     product_title = p_obj.get('title')
+                elif p_obj.get('name'):
+                    product_title = p_obj.get('name')
+                elif p_obj.get('productName'):
+                    product_title = p_obj.get('productName')
+                elif p_obj.get('product_name'):
+                    product_title = p_obj.get('product_name')
+                
+                # If product_title is suspiciously long (likely a caption) and we have no explicit title, 
+                # maybe we can clean it? But for now, let's just accept what we have.
+                # Actually, check if it equals video_title. If yes, and p_obj has nothing better, we are stuck.
                 
                 if p_obj.get('imageUrl') or p_obj.get('image_url'):
                     img_url = p_obj.get('imageUrl') or p_obj.get('image_url')

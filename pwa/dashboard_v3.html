@@ -1376,7 +1376,15 @@
 
         // ==================== FILTERS ====================
         function applyFilters() {
-            currentFilters = {};
+            // Preserve existing quick filter flags (like likely_ads, untapped, etc.)
+            // We only reset the "manual" filters like sort, competition, search
+            const preservedFilters = {};
+            if (currentFilters.likely_ads) preservedFilters.likely_ads = true;
+            if (currentFilters.untapped) preservedFilters.untapped = true;
+            if (currentFilters.hidden_gems) preservedFilters.hidden_gems = true;
+            if (currentFilters.has_free_shipping) preservedFilters.has_free_shipping = true;
+
+            currentFilters = { ...preservedFilters };
 
             const search = document.getElementById('searchInput').value;
             if (search) currentFilters.search = search;
