@@ -3169,9 +3169,18 @@ def deep_refresh_products():
                     new_price = float(p.get('spu_avg_price', 0) or 0)
                     if new_price > 0:
                         product.price = new_price
-                        data_changed = True
+                    if data_changed:
+                        updated_this_batch += 1
+                        
+                    time.sleep(0.4)  # Rate limiting
+                    
+                except Exception as e:
+                    print(f"Error deep refreshing {product.product_id}: {e}")
+                    api_errors += 1
+                    product.last_updated = datetime.utcnow()
+                    continue
             
-            total_updated += updated_this_batch
+            db.session.commit()
             total_processed += processed_this_batch
             total_commission_fixed += commission_fixed
             total_sales_fixed += sales_fixed
