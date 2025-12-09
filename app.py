@@ -2286,27 +2286,30 @@ def scan_apify():
                 t = re.sub(r'[^\w\s]', '', t)
                 return t.strip()
 
+            # Debug details for first few items
+            debug_log = ""
+            
             # 1. Search Rescue (Prioritized for Ads)
-            # If it's an Ad ID (startswith 'ad_'), try to find Real ID via Search
             if pid.startswith('ad_') and p.get('title') and p.get('title') != 'Unknown Ad Product':
                 try:
                     search_term = clean_title_for_search(p['title'])
                     if len(search_term) > 5:
-                        # Strict Brand Match Search
-                        search_res = requests.get(
+                        s_res = requests.get(
                             f"{BASE_URL}/product/search",
                             params={"keyword": search_term, "sort_by": "total_sale_cnt_desc", "limit": 5},
                             auth=get_auth(),
                             timeout=10
                         )
-                        if search_res.status_code == 200:
-                            s_data = search_res.json().get('data', {}).get('list', [])
+                        shops_found = []
+                        if s_res.status_code == 200:
+                            s_data = s_res.json().get('data', {}).get('list', [])
                             best_match = None
                             for cand in s_data:
-                                # Strong Signal: Advertiser Name matches Shop Name (Strict)
                                 cand_shop = cand.get('shop_name', '').lower()
                                 ad_brand = p.get('advertiser', '').lower()
+                                shops_found.append(cand_shop) # Log what we found
                                 
+                                # Strict Match
                                 if ad_brand != 'unknown' and (ad_brand in cand_shop or cand_shop in ad_brand):
                                     best_match = cand
                                     break
@@ -2326,7 +2329,12 @@ def scan_apify():
                                 p['image_url'] = parse_cover_url(best_match.get('cover_url', ''))
                                 p['is_enriched'] = True
                                 enrich_success = True
-                except: pass
+                            else:
+                                if len(products) < 4: # Save log for first 3
+                                    debug_log = f"Fail: '{search_term}' (Brand '{p.get('advertiser')}') -> Found {shops_found}"
+                except Exception as e:
+                    if len(products) < 4:
+                        debug_log = f"Error: {str(e)}"
 
             # 2. Direct ID Enrichment (If we have a numeric ID)
             if not enrich_success and pid and not pid.startswith('ad_'):
@@ -2353,6 +2361,9 @@ def scan_apify():
                               p['is_enriched'] = True
                               enrich_success = True
                  except: pass
+
+            # Attach debug log to product for final message
+            p['_debug_log'] = debug_log
 
             # SAVE if enriched
             if enrich_success:
@@ -2399,7 +2410,12 @@ def scan_apify():
             if saved_count == 0 and len(products) > 0:
                 debug_details = []
                 for p in products[:3]:
-                    debug_details.append(f"URL: {p.get('url', '')[:30]}... -> ID: {p.get('product_id')}")
+                    # Add detailed failure log if available
+                    fail_log = p.get('_debug_log', '')
+                    if fail_log:
+                        debug_details.append(f"LOG: {fail_log}")
+                    else:
+                        debug_details.append(f"URL: {p.get('url', '')[:30]}... -> ID: {p.get('product_id')}")
                 msg += f" [DEBUG: 0 Saved. Enrichment Stats: {debug_details}]"
 
             if products and products[0]['product_id'].startswith("apify_unknown_"):
