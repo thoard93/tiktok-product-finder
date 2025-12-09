@@ -2420,7 +2420,7 @@ def scan_apify():
                                     
                             if not enrich_success and not debug_log:
                                 if i < 5: # Save log for first 5 if not already set
-                                    debug_log = f"Fail: '{search_term}' -> Found {shops_found}"
+                                    debug_log = f"Fail: '{search_term}' -> Found {shops_found} (Adv: '{p.get('advertiser')}')"
                         else:
                              if i < 5:
                                  debug_log = f"Fail: API Msg '{api_json.get('message')}' (Code {api_json.get('code')})"
