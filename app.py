@@ -2239,6 +2239,14 @@ def scan_apify():
              elif items:
                  keys_str = ", ".join(list(items[0].keys())[:10]) 
                  msg += f" [DEBUG: Keys found: {keys_str}]"
+        else:
+            # Even if products found, if they look "Unknown", share the keys
+            if products and products[0]['product_id'].startswith("apify_unknown_"):
+                if debug_keys_str:
+                     msg += debug_keys_str
+                elif items:
+                     keys_str = ", ".join(list(items[0].keys())[:10])
+                     msg += f" [DEBUG: Item Keys: {keys_str}]"
         
         return jsonify({
             'success': True,
