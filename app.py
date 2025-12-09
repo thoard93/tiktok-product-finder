@@ -2077,7 +2077,7 @@ def process_apify_results(items):
                           item.get('image_url') or
                           item.get('imageUrl') or
                           ''),
-                '_raw_keys': list(item.keys()) # Keep debug for now
+                '_raw_keys': {k: str(item.get(k))[:50] for k in ['brand_name', 'ad_title', 'landing_page_url', 'id', 'advertiser', 'title'] if k in item} 
             })
             
     return processed
@@ -2214,14 +2214,18 @@ def scan_apify():
             if not existing:
                 new_prod = Product(
                     product_id=pid,
+                    product_id=pid,
                     product_name=p['title'],
-                    seller_name=p['advertiser'] if p['advertiser'] != 'Unknown' else str(p.get('_raw_keys', []))[:100],
-                    gmv=0, # Unknown
+                    # DEBUG: Show VALUES of brand and url to see why they fail
+                    seller_name=p['advertiser'] if p['advertiser'] != 'Unknown' else f"Debug: brand={p.get('_raw_keys')}? No. Raw Brand: {str(p.get('_raw_keys'))[:50]}",
+                    gmv=0, 
                     sales=0,
                     influencer_count=0,
-                    video_count=1, # It has an ad!
+                    video_count=1, 
                     scan_type='apify_ad',
-                    image_url=p.get('image')
+                    image_url=p.get('image'),
+                    # Hack: Store URL in status_note so we can click it
+                    status_note=p.get('url', '')[:255]
                 )
                 db.session.add(new_prod)
                 saved_count += 1
@@ -2231,14 +2235,20 @@ def scan_apify():
                 if not existing.image_url and p.get('image'):
                     existing.image_url = p.get('image')
                 
-                # Update info if we have better data now
-                if p['title'] != 'Unknown Ad Product':
-                    existing.product_name = p['title']
-                
-                if p['advertiser'] != 'Unknown':
+                # Update info 
+                if p.get('url'):
+                    existing.status_note = p.get('url', '')[:255]
+
+                # DEBUG VALUES
+                val_debug = f"B:{p.get('advertiser')} T:{p.get('title')[:10]}"
+                if p['advertiser'] == 'Unknown':
+                     # Try to pull it directly from raw keys dict if possible?
+                     # We can't access raw dict here easily unless we passed it.
+                     # But we have _raw_keys list.
+                     # Let's show the LIST of keys again but confirming it's a list.
+                     existing.seller_name = f"Keys: {str(p.get('_raw_keys'))[:100]}"
+                else:
                      existing.seller_name = p['advertiser']
-                elif p.get('_raw_keys'):
-                     existing.seller_name = str(p.get('_raw_keys'))[:100]
                 
         db.session.commit()
         
@@ -2661,7 +2671,8 @@ def get_product_detail(product_id):
             'cached_image_url': image_url,
             
             # Links
-            'tiktok_url': f'https://www.tiktok.com/shop/pdp/{product.product_id}',
+            'tiktok_url': (product.status_note if (product.scan_type == 'apify_ad' and product.status_note and product.status_note.startswith('http')) 
+                          else f'https://www.tiktok.com/shop/pdp/{product.product_id}'),
             'affiliate_url': f'https://affiliate.tiktok.com/product/{product.product_id}',
             
             # Timestamps
