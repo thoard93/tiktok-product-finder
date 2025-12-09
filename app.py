@@ -2675,34 +2675,41 @@ def scan_manual_import():
             # Attempt Enrichment (Search Rescue)
             enrich_success, msg = enrich_product_data(p, f"Item {i}: ")
             
-            if enrich_success:
-                # Save Validated Product
-                existing = Product.query.filter_by(product_id=p['product_id']).first()
-                if not existing:
-                    new_prod = Product(
-                        product_id=p['product_id'],
-                        product_name=p['product_name'],
-                        seller_name=p['seller_name'],
-                        sales=p['sales'],
-                        sales_7d=p['sales_7d'],
-                        gmv=p['gmv'],
-                        influencer_count=p['influencer_count'],
-                        commission_rate=p['commission_rate'],
-                        price=p['price'],
-                        image_url=p.get('image_url') or p.get('image'),
-                        scan_type='daily_virals',
-                        first_seen=datetime.utcnow()
-                    )
-                    db.session.add(new_prod)
-                    saved_count += 1
-                else:
-                    # Update stats
-                    existing.sales_7d = p['sales_7d']
-                    existing.sales = max(existing.sales, p['sales'])
-                
-                if i < 5: debug_log += f" | {msg}"
+            
+            # Save Validated Product (Even if enrichment fails - "Loosened Filters")
+            if not p.get('product_id'): 
+                # Generate a dummy ID if missing (unlikely with DailyVirals but safe)
+                p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
+
+            existing = Product.query.filter_by(product_id=p['product_id']).first()
+            if not existing:
+                new_prod = Product(
+                    product_id=p['product_id'],
+                    product_name=p['product_name'],
+                    seller_name=p['seller_name'],
+                    sales=p['sales'],
+                    sales_7d=p['sales_7d'],
+                    gmv=p['gmv'],
+                    influencer_count=p['influencer_count'],
+                    commission_rate=p['commission_rate'],
+                    price=p['price'],
+                    image_url=p.get('image_url') or p.get('image'),
+                    scan_type='daily_virals',
+                    first_seen=datetime.utcnow(),
+                    product_status='active',
+                    status_note=f"Imported from DailyVirals. Enriched: {enrich_success}"
+                )
+                db.session.add(new_prod)
+                saved_count += 1
             else:
-                if i < 5: debug_log += f" | {msg}"
+                # Update stats if we found new info
+                if p['sales'] > 0: existing.sales = max(existing.sales, p['sales'])
+                if p['sales_7d'] > 0: existing.sales_7d = p['sales_7d']
+                # Ensure scan_type is updated so it shows in Ad Winners
+                if existing.scan_type != 'daily_virals':
+                     existing.scan_type = 'daily_virals'
+            
+            if i < 5: debug_log += f" | {msg}"
 
         db.session.commit()
         
