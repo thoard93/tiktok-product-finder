@@ -1960,6 +1960,26 @@ def scan_single_brand(seller_id):
                 seller_name = p.get('seller_name', 'Unknown') or "Unknown"
             
             influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
+            total_sales = int(p.get('total_sale_cnt', 0) or 0)
+            sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
+            sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+            
+            if influencer_count < min_influencers or influencer_count > max_influencers:
+                continue
+            if sales_7d < min_sales:  # Filter by 7-day sales
+                continue
+            
+            products_found += 1
+            image_url = parse_cover_url(p.get('cover_url', ''))
+            
+            existing = Product.query.get(product_id)
+            if not existing:
+                product = Product(
+                    product_id=product_id,
+                    product_name=p.get('product_name', ''),
+                    seller_id=seller_id,
+                    seller_name=seller_name,
+                    gmv=float(p.get('total_sale_gmv_amt', 0) or 0),
                     gmv_30d=float(p.get('total_sale_gmv_30d_amt', 0) or 0),
                     sales=total_sales,
                     sales_7d=sales_7d,
