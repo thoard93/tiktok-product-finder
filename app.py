@@ -2265,7 +2265,7 @@ def scan_apify():
                  except Exception as e:
                      print(f"  ❌ Enrichment failed for {pid}: {e}")
 
-        msg = f"Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new."
+        msg = f"[vDebug] Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new."
         
         if items and not products:
              # Use the deep debug keys if we found them (via my generic fallback)
