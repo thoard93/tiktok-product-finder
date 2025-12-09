@@ -2413,10 +2413,7 @@ def scan_apify():
             debug_log = ""
             
 
-                              p['image_url'] = parse_cover_url(e_prod.get('cover_url', '')) or p.get('image')
-                              p['is_enriched'] = True
-                              enrich_success = True
-                 except: pass
+
 
             # Attach debug log to product for final message
             p['_debug_log'] = debug_log
