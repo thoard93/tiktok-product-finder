@@ -280,7 +280,7 @@ def release_scan_lock(user_id=None):
     scan_lock['is_locked'] = False
     scan_lock['locked_by'] = None
     scan_lock['locked_at'] = None
-    }
+
 
 # =============================================================================
 # DATABASE MODELS
