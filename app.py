@@ -2620,6 +2620,11 @@ def scan_manual_import():
             video_title = (item.get('title') or item.get('description') or item.get('desc') or item.get('caption') or "Unknown Title")
             video_cover = item.get('cover') or item.get('cover_url') or item.get('coverUrl') or ""
             
+            # Stats (Re-added)
+            views = safe_int(item.get('latest_view_count') or item.get('playBox') or item.get('views') or item.get('playCount'))
+            likes = safe_int(item.get('likeCount') or item.get('diggCount') or item.get('likes'))
+            shares = safe_int(item.get('shareCount') or item.get('shares'))
+            
             product_title = video_title
             img_url = video_cover
             
