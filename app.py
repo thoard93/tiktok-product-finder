@@ -2642,18 +2642,12 @@ def scan_manual_import():
                 pid = p_obj.get('productId')
                 if not pid: pid = p_obj.get('product_id')
                 
-                if p_obj.get('title'):
+                if p_obj.get('productName'):
+                    product_title = p_obj.get('productName')
+                elif p_obj.get('title'):
                     product_title = p_obj.get('title')
                 elif p_obj.get('name'):
                     product_title = p_obj.get('name')
-                elif p_obj.get('productName'):
-                    product_title = p_obj.get('productName')
-                elif p_obj.get('product_name'):
-                    product_title = p_obj.get('product_name')
-                
-                # If product_title is suspiciously long (likely a caption) and we have no explicit title, 
-                # maybe we can clean it? But for now, let's just accept what we have.
-                # Actually, check if it equals video_title. If yes, and p_obj has nothing better, we are stuck.
                 
                 if p_obj.get('imageUrl') or p_obj.get('image_url'):
                     img_url = p_obj.get('imageUrl') or p_obj.get('image_url')
@@ -2671,10 +2665,27 @@ def scan_manual_import():
                 if isinstance(creator, dict):
                     advertiser = creator.get('username') or creator.get('nickname') or "Unknown"
 
-            # 3. Sales Fallback (from DailyVirals data if enrichment fails)
+            # 3. Sales / GMV Mappings (Exact match from user snippet)
             raw_sales = 0
+            sales_7d = 0
+            gmv = 0
+            
             if isinstance(p_obj, dict):
-                 raw_sales = safe_int(p_obj.get('soldCount') or p_obj.get('sales') or 0)
+                 # Sales = totalUnitsSold
+                 raw_sales = safe_int(p_obj.get('totalUnitsSold') or p_obj.get('soldCount') or p_obj.get('sales') or 0)
+                 
+                 # Sales 7d = revenueLastSevenDays (Proxy, or seek units if available)
+                 # Note: revenueLastSevenDays is typically GMV-7d. 
+                 # If we want units-7d, we might not have it. Let's map it to sales_7d field for now even if it's value.
+                 sales_7d = safe_int(p_obj.get('revenueLastSevenDays') or 0)
+                 
+                 # GMV
+                 revenue_analytics = p_obj.get('revenueAnalytics')
+                 if isinstance(revenue_analytics, dict):
+                     gmv = safe_int(revenue_analytics.get('totalRevenue') or 0)
+                 else:
+                     gmv = safe_int(p_obj.get('totalRevenue') or 0)
+
 
             # Create Candidate
             p = {
@@ -2685,9 +2696,9 @@ def scan_manual_import():
                 'advertiser': advertiser, 
                 'price': 0,
                 'commission_rate': 0,
-                'sales': raw_sales,    # Use partial sales data if available
-                'sales_7d': raw_sales, # Fallback
-                'gmv': 0,
+                'sales': raw_sales,    # Total Units
+                'sales_7d': sales_7d,  # Weekly Revenue (as proxy for sorting)
+                'gmv': gmv,            # Total Revenue
                 'influencer_count': 0,
                 'video_count': 1, 
                 'video_views': views,
@@ -2765,7 +2776,7 @@ def scan_manual_import():
         return jsonify({
             'success': True,
             'message': f"Imported {len(products)} items. Enriched & Saved {saved_count} new products.",
-            'debug_info': f"Schema Keys Detected: {schema_debug[:5]}... Logs: {debug_log}"
+            'debug_info': f"DailyVirals Import Stats: {schema_debug[:5]}... Logs: {debug_log}"
         })
 
     except Exception as e:
