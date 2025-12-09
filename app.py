@@ -2344,36 +2344,6 @@ def scan_apify():
                                 shops_found.append(f"{cand_shop} (vs {ad_brand})") # Log comp
                                 
                                 # Strict Match
-                                if ad_brand != 'unknown' and (ad_brand in cand_shop or cand_shop in ad_brand):
-                                    best_match = cand
-                                    break
-                            
-                            if best_match:
-                                # Found valid product!
-                                pid = best_match.get('product_id')
-                                p['product_id'] = pid
-                                p['product_name'] = best_match.get('product_name')
-                                p['seller_name'] = best_match.get('shop_name')
-                                p['gmv'] = float(best_match.get('total_sale_gmv_amt', 0) or 0)
-                                p['sales'] = int(best_match.get('total_sale_cnt', 0) or 0)
-                                p['sales_7d'] = int(best_match.get('total_sale_7d_cnt', 0) or 0)
-                                p['influencer_count'] = int(best_match.get('total_ifl_cnt', 0) or 0)
-                                p['commission_rate'] = float(best_match.get('product_commission_rate', 0) or 0)
-                                p['price'] = float(best_match.get('spu_avg_price', 0) or 0)
-                                p['image_url'] = parse_cover_url(best_match.get('cover_url', ''))
-                                p['is_enriched'] = True
-                                enrich_success = True
-                            else:
-                                if i < 5: # Save log for first 5
-                                    debug_log = f"Fail: '{search_term}' -> Found {shops_found}"
-                        else:
-                             if i < 5:
-                                 debug_log = f"Fail: API {s_res.status_code}"
-                except Exception as e:
-                    if i < 5:
-                        debug_log = f"Error: {str(e)}"
-
-            # 2. Direct ID Enrichment (If we have a numeric ID)
             if not enrich_success and pid and not pid.startswith('ad_'):
                  try:
                      detail_res = requests.get(
