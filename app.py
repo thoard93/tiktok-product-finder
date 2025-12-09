@@ -2612,40 +2612,42 @@ def scan_manual_import():
             # Map Schema (DailyVirals -> Product)
             # Keys observed: title, creator.username, latest_view_count, likeCount, product.productId
             
-            # Title
-            title = (item.get('title') or item.get('description') or item.get('desc') or item.get('caption') or "Unknown Title")
+            # Product ID & Data from 'product' object if exists
+            pid = None
+            p_obj = item.get('product')
             
-            # Stats
-            views = safe_int(item.get('latest_view_count') or item.get('playBox') or item.get('views') or item.get('playCount'))
-            likes = safe_int(item.get('likeCount') or item.get('diggCount') or item.get('likes'))
-            shares = safe_int(item.get('shareCount') or item.get('shares'))
+            # Default to Video Data
+            video_title = (item.get('title') or item.get('description') or item.get('desc') or item.get('caption') or "Unknown Title")
+            video_cover = item.get('cover') or item.get('cover_url') or item.get('coverUrl') or ""
             
+            product_title = video_title
+            img_url = video_cover
+            
+            if isinstance(p_obj, dict):
+                # DailyVirals has a 'product' nested object!
+                # Prioritize PRODUCT data over VIDEO data
+                pid = p_obj.get('productId')
+                if not pid: pid = p_obj.get('product_id')
+                
+                if p_obj.get('title'):
+                    product_title = p_obj.get('title')
+                
+                if p_obj.get('imageUrl') or p_obj.get('image_url'):
+                    img_url = p_obj.get('imageUrl') or p_obj.get('image_url')
+
             # Advertiser / Brand
             advertiser = "Unknown"
             creator = item.get('creator')
             if isinstance(creator, dict):
+                # If we have a product but no detailed seller info, we might want to flag it
+                # For now, default to creator but maybe prefix it?
                 advertiser = creator.get('username') or creator.get('nickname') or "Unknown"
-            else:
-                advertiser = (item.get('nickname') or item.get('author') or item.get('brand') or item.get('advertiser') or "Unknown")
-            
-            # Product ID & Data from 'product' object if exists
-            pid = None
-            p_obj = item.get('product')
-            img_url = item.get('cover') or item.get('cover_url') or item.get('coverUrl') or ""
-            
-            if isinstance(p_obj, dict):
-                # DailyVirals has a 'product' nested object!
-                pid = p_obj.get('productId')
-                if not pid: pid = p_obj.get('product_id')
-                
-                # Check for image in product
-                if not img_url: img_url = p_obj.get('imageUrl') or p_obj.get('image_url')
-            
+
             # Create Candidate
             p = {
                 'product_id': pid, 
-                'product_name': title[:100],
-                'title': title, 
+                'product_name': product_title[:100],  # Use Product Title
+                'title': product_title,               # Use Product Title for search
                 'seller_name': advertiser, 
                 'advertiser': advertiser, 
                 'price': 0,
@@ -2659,7 +2661,7 @@ def scan_manual_import():
                 'video_likes': likes,
                 'scan_type': 'daily_virals', 
                 'url': item.get('videoUrl') or item.get('link') or "",
-                'image': img_url,
+                'image': img_url,                     # Use Product Image
                 'is_enriched': False
             }
             products.append(p)
