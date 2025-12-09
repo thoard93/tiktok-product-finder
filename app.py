@@ -2214,9 +2214,8 @@ def scan_apify():
             if not existing:
                 new_prod = Product(
                     product_id=pid,
-                    product_name=p['title'] if p['title'] != 'Unknown Ad Product' else f"Unknown ({len(p.get('_raw_keys', []))} raw keys)",
-                    # DEBUG: Save RAW keys if available
-                    seller_name=str(p.get('_raw_keys', p['advertiser']))[:100],
+                    product_name=p['title'],
+                    seller_name=p['advertiser'] if p['advertiser'] != 'Unknown' else str(p.get('_raw_keys', []))[:100],
                     gmv=0, # Unknown
                     sales=0,
                     influencer_count=0,
@@ -2228,15 +2227,18 @@ def scan_apify():
                 saved_count += 1
             else:
                 existing.last_updated = datetime.utcnow()
-                existing.scan_type = 'apify_ad' # Mark as Ad Driven even if found previously
+                existing.scan_type = 'apify_ad' 
                 if not existing.image_url and p.get('image'):
                     existing.image_url = p.get('image')
                 
-                # DEBUG: Force update seller_name if we have raw keys to show
-                if p.get('_raw_keys'):
-                     existing.seller_name = str(p.get('_raw_keys'))[:100]
-                elif existing.seller_name == 'Unknown' and p['advertiser'] != 'Unknown':
+                # Update info if we have better data now
+                if p['title'] != 'Unknown Ad Product':
+                    existing.product_name = p['title']
+                
+                if p['advertiser'] != 'Unknown':
                      existing.seller_name = p['advertiser']
+                elif p.get('_raw_keys'):
+                     existing.seller_name = str(p.get('_raw_keys'))[:100]
                 
         db.session.commit()
         
