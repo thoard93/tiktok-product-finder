@@ -2413,22 +2413,6 @@ def scan_apify():
                     # Add detailed failure log if available
                     fail_log = p.get('_debug_log', '')
                     if fail_log:
-                        debug_details.append(f"LOG: {fail_log}")
-                    else:
-                        debug_details.append(f"URL: {p.get('url', '')[:30]}... -> ID: {p.get('product_id')}")
-                msg += f" [DEBUG: 0 Saved. Enrichment Stats: {debug_details}]"
-
-            if products and products[0]['product_id'].startswith("apify_unknown_"):
-                if debug_keys_str:
-                    msg += debug_keys_str
-                elif items:
-                     keys_str = ", ".join(list(items[0].keys())[:10])
-                     msg += f" [DEBUG: Item Keys: {keys_str}]"
-        
-        return jsonify({
-            'success': True,
-            'message': msg,
-            'products': products,
             'debug_raw_count': len(items)
         })
         
