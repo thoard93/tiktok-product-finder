@@ -2318,6 +2318,7 @@ def scan_apify():
                             params={
                                 "keyword": search_term, 
                                 "region": "US",
+                                "page": 1,
                                 "page_size": 5,
                                 "product_sort_field": 4, # Sort by 7-day sales (popular items first)
                                 "sort_type": 1 # Descending
@@ -2325,7 +2326,6 @@ def scan_apify():
                             auth=get_auth(),
                             timeout=10
                         )
-                        shops_found = []
                         shops_found = []
                         if s_res.status_code == 200:
                             api_json = s_res.json()
@@ -2371,6 +2371,7 @@ def scan_apify():
                                         params={
                                             "keyword": p['advertiser'], 
                                             "region": "US",
+                                            "page": 1,
                                             "page_size": 3,
                                             "product_sort_field": 4, # Sort by 7-day sales
                                             "sort_type": 1
