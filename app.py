@@ -120,6 +120,129 @@ APIFY_ACTOR_ID = "scraper-engine~tiktok-ads-scraper" # Supports US Ads
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
 
 # =============================================================================
+# SHARED HELPERS
+# =============================================================================
+
+def parse_cover_url(url):
+    """Clean up cover URL"""
+    if not url: return ""
+    return url
+
+def enrich_product_data(p, i_log_prefix=""):
+    """
+    Global Helper: Search EchoTik for product stats based on Title then Brand.
+    Used by both Apify Scanner and Manual Import.
+    """
+    # Local Auth Helper
+    def get_auth_local():
+        return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
+
+    # Helper: Clean title
+    def clean_title_for_search(t):
+        if not t: return ""
+        t = re.sub(r'#\w+', '', t)
+        t = re.sub(r'[^\w\s]', '', t)
+        return t.strip()
+
+    # 1. Direct ID Check (if available)
+    pid = p.get('product_id')
+    if pid and not pid.startswith('ad_') and not p.get('is_enriched'):
+        try:
+            detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_id": pid}, auth=get_auth_local(), timeout=5)
+            if detail_res.status_code == 200:
+                d_data = detail_res.json().get('data')
+                if d_data:
+                    p.update({
+                        'product_name': d_data.get('product_name', p.get('title')),
+                        'seller_name': d_data.get('seller_name') or d_data.get('shop_name') or p.get('advertiser'),
+                        'gmv': float(d_data.get('total_sale_gmv_amt', 0) or 0),
+                        'sales': int(d_data.get('total_sale_cnt', 0) or 0),
+                        'sales_7d': int(d_data.get('total_sale_7d_cnt', 0) or 0),
+                        'influencer_count': int(d_data.get('total_ifl_cnt', 0) or 0),
+                        'commission_rate': float(d_data.get('product_commission_rate', 0) or 0),
+                        'price': float(d_data.get('spu_avg_price', 0) or 0),
+                        'image_url': parse_cover_url(d_data.get('cover_url', '')),
+                        'is_enriched': True
+                    })
+                    return True, f"Success: Direct ID {pid}"
+        except Exception as e:
+                pass
+
+    # 2. Search by Title
+    search_term = clean_title_for_search(p.get('title'))
+    shops_found_log = ""
+    
+    if len(search_term) > 5:
+        try:
+            s_res = requests.get(f"{BASE_URL}/product/list", 
+                params={"keyword": search_term, "region": "US", "page_num": 1, "page_size": 5, "product_sort_field": 4, "sort_type": 1}, 
+                auth=get_auth_local(), timeout=8)
+            
+            if s_res.status_code == 200:
+                s_data = s_res.json().get('data', [])
+                if isinstance(s_data, dict): s_data = s_data.get('list', [])
+                
+                best_match = None
+                for cand in (s_data or []):
+                    cand_shop = cand.get('shop_name', '').lower()
+                    ad_brand = p.get('advertiser', '').lower()
+                    shops_found_log += f"{cand_shop} "
+                    
+                    # Strict Match
+                    if ad_brand != 'unknown' and (ad_brand in cand_shop or cand_shop in ad_brand):
+                        best_match = cand
+                        break
+                
+                if best_match:
+                    p.update({
+                        'product_id': best_match.get('product_id'),
+                        'product_name': best_match.get('product_name'),
+                        'seller_name': best_match.get('shop_name'),
+                        'gmv': float(best_match.get('total_sale_gmv_amt', 0) or 0),
+                        'sales': int(best_match.get('total_sale_cnt', 0) or 0),
+                        'sales_7d': int(best_match.get('total_sale_7d_cnt', 0) or 0),
+                        'influencer_count': int(best_match.get('total_ifl_cnt', 0) or 0),
+                        'commission_rate': float(best_match.get('product_commission_rate', 0) or 0),
+                        'price': float(best_match.get('spu_avg_price', 0) or 0),
+                        'image_url': parse_cover_url(best_match.get('cover_url', '')),
+                        'is_enriched': True
+                    })
+                    return True, f"Success: Found '{p.get('title')[:20]}...'"
+
+                # 3. Fallback: Search by Brand
+                elif p.get('advertiser') and p.get('advertiser') != 'Unknown':
+                    b_res = requests.get(f"{BASE_URL}/product/list", 
+                        params={"keyword": p['advertiser'], "region": "US", "page_num": 1, "page_size": 1, "product_sort_field": 4, "sort_type": 1}, 
+                        auth=get_auth_local(), timeout=5)
+                    if b_res.status_code == 200:
+                        b_data = b_res.json().get('data', [])
+                        if isinstance(b_data, dict): b_data = b_data.get('list', [])
+                        if b_data:
+                            hero = b_data[0]
+                            p.update({
+                                'product_id': hero.get('product_id'),
+                                'product_name': hero.get('product_name'),
+                                'seller_name': hero.get('shop_name'),
+                                'gmv': float(hero.get('total_sale_gmv_amt', 0) or 0),
+                                'sales': int(hero.get('total_sale_cnt', 0) or 0),
+                                'sales_7d': int(hero.get('total_sale_7d_cnt', 0) or 0),
+                                'influencer_count': int(hero.get('total_ifl_cnt', 0) or 0),
+                                'commission_rate': float(hero.get('product_commission_rate', 0) or 0),
+                                'price': float(hero.get('spu_avg_price', 0) or 0),
+                                'image_url': parse_cover_url(hero.get('cover_url', '')),
+                                'is_enriched': True,
+                                'status_note': "Brand Hero Match"
+                            })
+                            return True, f"Success: Brand Fallback '{p['advertiser']}'"
+                        else:
+                            return False, f"Fail: Title 0 results. Fallback Brand '{p['advertiser']}' -> 0 results."
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+    
+    return False, f"Fail: '{search_term}' -> Found [{shops_found_log}] (Adv: '{p.get('advertiser')}')"
+
+
+# =============================================================================
 # SCAN LOCK (prevent simultaneous scans)
 # =============================================================================
 
@@ -157,18 +280,6 @@ def release_scan_lock(user_id=None):
     scan_lock['is_locked'] = False
     scan_lock['locked_by'] = None
     scan_lock['locked_at'] = None
-    scan_lock['scan_type'] = None
-    return True
-
-def get_scan_status():
-    """Get current scan lock status"""
-    if not scan_lock['is_locked']:
-        return {'locked': False}
-    return {
-        'locked': True,
-        'locked_by': scan_lock['locked_by'],
-        'locked_at': scan_lock['locked_at'].isoformat() if scan_lock['locked_at'] else None,
-        'scan_type': scan_lock['scan_type']
     }
 
 # =============================================================================
@@ -1553,21 +1664,6 @@ def quick_scan():
         db.session.rollback()
         release_scan_lock(user_id)  # Release lock on error too
         return jsonify({
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-
-
-@app.route('/api/scan-deals', methods=['GET'])
-@login_required
-def scan_deals():
-    """
-    Deal Hunter - Find products with FREE SHIPPING + PROVEN SALES + LOW VIDEOS
-    
-    These are GOLDEN opportunities:
-    - Free shipping = higher conversion for buyers
-    - Low video count = less competition, your content stands out
-    - Proven sales = product actually sells
     
     Parameters:
         pages: Number of pages to scan (default: 5, max 20)
