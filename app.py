@@ -2073,7 +2073,8 @@ def process_apify_results(items):
                           item.get('thumbnail') or
                           item.get('poster') or
                           item.get('imageUrl') or
-                          '')
+                          ''),
+                '_raw_keys': list(item.keys()) # DEBUG: Capture raw keys
             })
             
     return processed
@@ -2210,9 +2211,9 @@ def scan_apify():
             if not existing:
                 new_prod = Product(
                     product_id=pid,
-                    product_name=p['title'] if p['title'] != 'Unknown Ad Product' else f"Unknown ({len(p.items())} keys)",
-                    # DEBUG HACK: If advertiser is unknown, save the KEYS so we can see them in the UI
-                    seller_name=p['advertiser'] if p['advertiser'] != 'Unknown' else str(list(p.keys()))[:100],
+                    product_name=p['title'] if p['title'] != 'Unknown Ad Product' else f"Unknown ({len(p.get('_raw_keys', []))} raw keys)",
+                    # DEBUG: Save RAW keys if available
+                    seller_name=str(p.get('_raw_keys', p['advertiser']))[:100],
                     gmv=0, # Unknown
                     sales=0,
                     influencer_count=0,
