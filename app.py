@@ -414,7 +414,7 @@ class Product(db.Model):
             'product_name': self.product_name,
             'seller_id': self.seller_id,
             'seller_name': self.seller_name,
-            'is_ad_driven': (self.scan_type == 'apify_ad') or (self.sales_7d > 50 and self.influencer_count < 5 and self.video_count < 5),
+            'is_ad_driven': (self.scan_type in ['apify_ad', 'daily_virals']) or (self.sales_7d > 50 and self.influencer_count < 5 and self.video_count < 5),
             'gmv': self.gmv,
             'gmv_30d': self.gmv_30d,
             'sales': self.sales,
@@ -2931,7 +2931,7 @@ def get_products():
                     Product.video_count < 5
                 ),
                 # Logic B: Explicit Apify Ads (Always ad winners)
-                Product.scan_type == 'apify_ad'
+                Product.scan_type.in_(['apify_ad', 'daily_virals'])
             )
         )
 
@@ -3340,7 +3340,7 @@ def get_stats():
                             Product.influencer_count < 5,
                             Product.video_count < 5
                         ),
-                        Product.scan_type == 'apify_ad'
+                        Product.scan_type.in_(['apify_ad', 'daily_virals'])
                     )
                 ).count()
             }
