@@ -2294,7 +2294,7 @@ def scan_apify():
             print(f"Apify: Found {len(items)} items but 0 products. First item keys: {items[0].keys() if len(items)>0 else 'None'}")
 
         
-        for p in products:
+        for i, p in enumerate(products):
             pid = p['product_id']
             enrich_success = False
             
@@ -2325,8 +2325,8 @@ def scan_apify():
                             best_match = None
                             for cand in s_data:
                                 cand_shop = cand.get('shop_name', '').lower()
-                                ad_brand = p.get('advertiser', '').lower()
-                                shops_found.append(cand_shop) # Log what we found
+                                ad_brand = p.get('advertiser', '').lower() # Advertiser from Ad
+                                shops_found.append(f"{cand_shop} (vs {ad_brand})") # Log comp
                                 
                                 # Strict Match
                                 if ad_brand != 'unknown' and (ad_brand in cand_shop or cand_shop in ad_brand):
@@ -2349,10 +2349,13 @@ def scan_apify():
                                 p['is_enriched'] = True
                                 enrich_success = True
                             else:
-                                if len(products) < 4: # Save log for first 3
-                                    debug_log = f"Fail: '{search_term}' (Brand '{p.get('advertiser')}') -> Found {shops_found}"
+                                if i < 5: # Save log for first 5
+                                    debug_log = f"Fail: '{search_term}' -> Found {shops_found}"
+                        else:
+                             if i < 5:
+                                 debug_log = f"Fail: API {s_res.status_code}"
                 except Exception as e:
-                    if len(products) < 4:
+                    if i < 5:
                         debug_log = f"Error: {str(e)}"
 
             # 2. Direct ID Enrichment (If we have a numeric ID)
