@@ -1960,26 +1960,6 @@ def scan_single_brand(seller_id):
                 seller_name = p.get('seller_name', 'Unknown') or "Unknown"
             
             influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
-            total_sales = int(p.get('total_sale_cnt', 0) or 0)
-            sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
-            sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
-            
-            if influencer_count < min_influencers or influencer_count > max_influencers:
-                continue
-            if sales_7d < min_sales:  # Filter by 7-day sales
-                continue
-            
-            products_found += 1
-            image_url = parse_cover_url(p.get('cover_url', ''))
-            
-            existing = Product.query.get(product_id)
-            if not existing:
-                product = Product(
-                    product_id=product_id,
-                    product_name=p.get('product_name', ''),
-                    seller_id=seller_id,
-                    seller_name=seller_name,
-                    gmv=float(p.get('total_sale_gmv_amt', 0) or 0),
                     gmv_30d=float(p.get('total_sale_gmv_30d_amt', 0) or 0),
                     sales=total_sales,
                     sales_7d=sales_7d,
@@ -2151,6 +2131,21 @@ def scan_apify():
         # Also try 'cookies' just in case
         actor_input['cookies'] = clean_cookies
     
+    # Create cleanup of old "Unknown" junk before running scan
+    try:
+        junk_deleted = Product.query.filter(
+            db.or_(
+                Product.product_name == 'Unknown Ad Product',
+                Product.seller_name.like('Debug%'),
+                Product.seller_name.like('Keys%')
+            )
+        ).delete(synchronize_session=False)
+        db.session.commit()
+        print(f"Cleaned up {junk_deleted} junk 'Unknown' products.")
+    except Exception as e:
+        print(f"Cleanup warning: {e}")
+        db.session.rollback()
+
     try:
         # Start Run
         start_res = requests.post(url, json=actor_input)
