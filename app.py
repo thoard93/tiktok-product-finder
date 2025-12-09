@@ -2110,51 +2110,6 @@ def process_apify_results(items):
                 m = re.search(r'pdp/(\d+)', url)
                 if m: pid = m.group(1)
                 
-            # Pattern 3: Query Param
-            if not pid:
-                m = re.search(r'[?&]id=(\d+)', url)
-                if m: pid = m.group(1)
-            
-            # Pattern 4: Combo identifier (sometimes in view params)
-            if not pid:
-                m = re.search(r'view/(\d+)', url)
-                if m: pid = m.group(1)
-
-            # Pattern 5: Numeric sequence likely to be ID in path
-            if not pid and 'shop' in url:
-                m = re.search(r'/(\d{15,})', url) # TikTok IDs are usually long
-                if m: pid = m.group(1)
-            
-        # Pattern X: Use Ad ID if no Product ID found (Fallback)
-        if not pid:
-             # 'id' is confirmed from user debug screenshot
-             ad_id = item.get('id') or item.get('ad_id') or item.get('adId')
-             if ad_id:
-                 pid = f"ad_{ad_id}" 
-            
-        if pid:
-            processed.append({
-                'product_id': pid,
-                'title': title[:100], # Trucate
-                'advertiser': advertiser,
-                'likes': item.get('like', 0) or item.get('likes', 0), # 'like' found via debug
-                'shares': item.get('share', 0) or item.get('shares', 0),
-                'url': url,
-                'image': (item.get('cover') or 
-                          item.get('video_cover') or 
-                          item.get('cover_url') or 
-                          item.get('thumbnail_url') or 
-                          item.get('thumbnail') or
-                          item.get('poster') or
-                          item.get('image_url') or
-                          item.get('imageUrl') or
-                          ''),
-                '_raw_keys': {k: str(item.get(k))[:50] for k in ['brand_name', 'ad_title', 'landing_page_url', 'id', 'advertiser', 'title'] if k in item} 
-            })
-            
-    return processed
-
-@app.route('/api/scan/apify', methods=['POST'])
 @login_required
 def scan_apify():
     """Run Apify Actor for TikTok Ads"""
@@ -2490,6 +2445,165 @@ def scan_apify():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/scan/manual', methods=['POST'])
+@login_required
+def scan_manual_import():
+    """Manual Import of JSON data (e.g. from TheDailyVirals)"""
+    user = get_current_user()
+    data = request.json
+    
+    raw_input = data.get('json_data', '')
+    if not raw_input:
+        return jsonify({'error': 'No JSON data provided'}), 400
+        
+    try:
+        # 1. Parse JSON
+        if isinstance(raw_input, str):
+            parsed = json.loads(raw_input)
+        else:
+            parsed = raw_input
+            
+        items = []
+        # Heuristic: Find the list of items
+        if isinstance(parsed, list):
+            items = parsed
+        elif isinstance(parsed, dict):
+             # Try common keys
+             if 'videos' in parsed: items = parsed['videos']
+             elif 'data' in parsed: items = parsed['data'] # classic
+             elif 'list' in parsed: items = parsed['list']
+             else:
+                 # Last resort: Any list value?
+                 for k, v in parsed.items():
+                     if isinstance(v, list) and len(v) > 0:
+                         items = v
+                         break
+        
+        if not items:
+             # Debugging help for user
+             keys_found = list(parsed.keys()) if isinstance(parsed, dict) else "List[]"
+             return jsonify({'error': f"Could not find a list of items in the JSON. Top-level keys: {keys_found}. Please copy the response that contains the list of videos/products."}), 400
+
+        # 2. Process Items
+        products = []
+        schema_debug = []
+        
+        # Helper for safe int conversion
+        def safe_int(val):
+            try:
+                if val is None: return 0
+                return int(val)
+            except:
+                return 0
+
+        for item in items:
+            # Map Schema (DailyVirals -> Product)
+            # Keys observed: title, creator.username, latest_view_count, likeCount, product.productId
+            
+            # Title
+            title = (item.get('title') or item.get('description') or item.get('desc') or item.get('caption') or "Unknown Title")
+            
+            # Stats
+            views = safe_int(item.get('latest_view_count') or item.get('playBox') or item.get('views') or item.get('playCount'))
+            likes = safe_int(item.get('likeCount') or item.get('diggCount') or item.get('likes'))
+            shares = safe_int(item.get('shareCount') or item.get('shares'))
+            
+            # Advertiser / Brand
+            advertiser = "Unknown"
+            creator = item.get('creator')
+            if isinstance(creator, dict):
+                advertiser = creator.get('username') or creator.get('nickname') or "Unknown"
+            else:
+                advertiser = (item.get('nickname') or item.get('author') or item.get('brand') or item.get('advertiser') or "Unknown")
+            
+            # Product ID & Data from 'product' object if exists
+            pid = None
+            p_obj = item.get('product')
+            img_url = item.get('cover') or item.get('cover_url') or item.get('coverUrl') or ""
+            
+            if isinstance(p_obj, dict):
+                # DailyVirals has a 'product' nested object!
+                pid = p_obj.get('productId')
+                if not pid: pid = p_obj.get('product_id')
+                
+                # Check for image in product
+                if not img_url: img_url = p_obj.get('imageUrl') or p_obj.get('image_url')
+            
+            # Create Candidate
+            p = {
+                'product_id': pid, 
+                'product_name': title[:100],
+                'title': title, 
+                'seller_name': advertiser, 
+                'advertiser': advertiser, 
+                'price': 0,
+                'commission_rate': 0,
+                'sales': 0, 
+                'sales_7d': 0,
+                'gmv': 0,
+                'influencer_count': 0,
+                'video_count': 1, 
+                'video_views': views,
+                'video_likes': likes,
+                'scan_type': 'daily_virals', 
+                'url': item.get('videoUrl') or item.get('link') or "",
+                'image': img_url,
+                'is_enriched': False
+            }
+            products.append(p)
+            
+            if len(schema_debug) < 1:
+                schema_debug = list(item.keys())
+
+        # 3. Enrich Candidates
+        saved_count = 0
+        debug_log = ""
+        
+        for i, p in enumerate(products):
+            # Attempt Enrichment (Search Rescue)
+            enrich_success, msg = enrich_product_data(p, f"Item {i}: ")
+            
+            if enrich_success:
+                # Save Validated Product
+                existing = Product.query.filter_by(product_id=p['product_id']).first()
+                if not existing:
+                    new_prod = Product(
+                        product_id=p['product_id'],
+                        product_name=p['product_name'],
+                        seller_name=p['seller_name'],
+                        sales=p['sales'],
+                        sales_7d=p['sales_7d'],
+                        gmv=p['gmv'],
+                        influencer_count=p['influencer_count'],
+                        commission_rate=p['commission_rate'],
+                        price=p['price'],
+                        image_url=p.get('image_url') or p.get('image'),
+                        scan_type='daily_virals',
+                        first_seen=datetime.utcnow()
+                    )
+                    db.session.add(new_prod)
+                    saved_count += 1
+                else:
+                    # Update stats
+                    existing.sales_7d = p['sales_7d']
+                    existing.sales = max(existing.sales, p['sales'])
+                
+                if i < 5: debug_log += f" | {msg}"
+            else:
+                if i < 5: debug_log += f" | {msg}"
+
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f"Imported {len(products)} items. Enriched & Saved {saved_count} new products.",
+            'debug_info': f"Schema Keys Detected: {schema_debug[:5]}... Logs: {debug_log}"
+        })
+
+    except Exception as e:
+        return jsonify({'error': f"Import Failed: {str(e)}"}), 500
 
 @app.route('/api/brands/list', methods=['GET'])
 def list_top_brands():
