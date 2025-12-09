@@ -1664,6 +1664,20 @@ def quick_scan():
         db.session.rollback()
         release_scan_lock(user_id)  # Release lock on error too
         return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/scan-deals', methods=['GET'])
+@login_required
+def scan_deals():
+    """
+    Deal Hunter - Find products with FREE SHIPPING + PROVEN SALES + LOW VIDEOS
+    
+    These are GOLDEN opportunities:
+    - Free shipping = higher conversion for buyers
+    - Low video count = less competition, your content stands out
+    - Proven sales = product actually sells
     
     Parameters:
         pages: Number of pages to scan (default: 5, max 20)
