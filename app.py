@@ -2288,28 +2288,28 @@ def scan_apify():
         msg = f"[vDebug] Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new."
         
         if items and not products:
-             # Use the deep debug keys if we found them (via my generic fallback)
-             if debug_keys_str:
-                 msg += debug_keys_str
-             elif items:
-                 keys_str = ", ".join(list(items[0].keys())[:10]) 
-                 msg += f" [DEBUG: Keys found: {keys_str}]"
+            # Use the deep debug keys if we found them (via my generic fallback)
+            if debug_keys_str:
+                msg += debug_keys_str
+            elif items:
+                keys_str = ", ".join(list(items[0].keys())[:10])
+                msg += f" [DEBUG: Keys found: {keys_str}]"
         else:
-             # DEBUG: Add info about WHY they weren't saved
-             if saved_count == 0 and len(products) > 0:
-                 # Take first 3 products and show their URL and Extracted ID
-                 debug_details = []
-                 for p in products[:3]:
-                     debug_details.append(f"URL: {p.get('url', '')[:30]}... -> ID: {p.get('product_id')}")
-                 msg += f" [DEBUG: 0 Saved. Enrichment Stats: {debug_details}]"
+            # DEBUG: Add info about WHY they weren't saved
+            if saved_count == 0 and len(products) > 0:
+                # Take first 3 products and show their URL and Extracted ID
+                debug_details = []
+                for p in products[:3]:
+                    debug_details.append(f"URL: {p.get('url', '')[:30]}... -> ID: {p.get('product_id')}")
+                msg += f" [DEBUG: 0 Saved. Enrichment Stats: {debug_details}]"
 
             # Even if products found, if they look "Unknown", share the keys
             if products and products[0]['product_id'].startswith("apify_unknown_"):
                 if debug_keys_str:
-                     msg += debug_keys_str
+                    msg += debug_keys_str
                 elif items:
-                     keys_str = ", ".join(list(items[0].keys())[:10])
-                     msg += f" [DEBUG: Item Keys: {keys_str}]"
+                    keys_str = ", ".join(list(items[0].keys())[:10])
+                    msg += f" [DEBUG: Item Keys: {keys_str}]"
         
         return jsonify({
             'success': True,
