@@ -2170,13 +2170,33 @@ def scan_apify():
                  elif 'items' in unwrapped: items = unwrapped['items']
                  elif 'ads' in unwrapped: items = unwrapped['ads']
                  elif 'creatives' in unwrapped: items = unwrapped['creatives']
+                 elif 'videos' in unwrapped: items = unwrapped['videos'] # Common in TikTok
+                 elif 'candidates' in unwrapped: items = unwrapped['candidates']
                  else:
-                     # Fallback: maybe the dict itself is the item? No, usually a list is needed.
-                     # If we can't find a list, we might be stuck.
-                     pass
-        
+                     # Fallback: Find ANY list value
+                     found_list = False
+                     for k, v in unwrapped.items():
+                         if isinstance(v, list) and len(v) > 0:
+                             print(f"Apify: Found heuristic list in key '{k}'")
+                             items = v
+                             found_list = True
+                             break
+                     
+                     # If still no list, maybe the keys are the IDs? (Rare)
+                     if not found_list:
+                          # Inject keys into items for debugging via frontend
+                          items[0]['_debug_data_keys'] = list(unwrapped.keys())
+
         products = process_apify_results(items)
         saved_count = 0
+        
+        debug_keys_str = ""
+        if items and len(items) > 0 and isinstance(items[0], dict):
+             # Check for our special debug key
+             if '_debug_data_keys' in items[0]:
+                 debug_keys_str = f" [DEBUG: Data Keys: {items[0]['_debug_data_keys']}]"
+             else:
+                 debug_keys_str = f" [DEBUG: Item Keys: {list(items[0].keys())[:5]}]"
         
         # DEBUG: Log if items found but no products
         if items and not products:
@@ -2213,8 +2233,12 @@ def scan_apify():
         msg = f"Ad Scan Complete. Found {len(products)} ads (from {len(items)} raw), Saved {saved_count} new."
         
         if items and not products:
-             keys_str = ", ".join(list(items[0].keys())[:10]) # First 10 keys
-             msg += f" [DEBUG: Keys found: {keys_str}]"
+             # Use the deep debug keys if we found them (via my generic fallback)
+             if debug_keys_str:
+                 msg += debug_keys_str
+             elif items:
+                 keys_str = ", ".join(list(items[0].keys())[:10]) 
+                 msg += f" [DEBUG: Keys found: {keys_str}]"
         
         return jsonify({
             'success': True,
