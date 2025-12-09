@@ -2214,7 +2214,7 @@ def scan_apify():
             if not existing:
                 new_prod = Product(
                     product_id=pid,
-                    product_id=pid,
+
                     product_name=p['title'],
                     # DEBUG: Show VALUES of brand and url to see why they fail
                     seller_name=p['advertiser'] if p['advertiser'] != 'Unknown' else f"Debug: brand={p.get('_raw_keys')}? No. Raw Brand: {str(p.get('_raw_keys'))[:50]}",
