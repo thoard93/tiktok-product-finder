@@ -2016,6 +2016,7 @@ def process_apify_results(items):
         # Try multiple keys for URL
         url = (item.get('landing_page_url') or 
                item.get('call_to_action_url') or 
+               item.get('click_url') or 
                item.get('video_url') or 
                item.get('landingPageUrl') or 
                item.get('displayUrl') or 
@@ -2023,20 +2024,20 @@ def process_apify_results(items):
                'https://www.tiktok.com/') # Final Fallback
                
         # Try multiple keys for Title
-        title = (item.get('ad_text') or 
+        title = (item.get('ad_title') or # Found via Debug
+                 item.get('ad_text') or 
                  item.get('caption') or 
                  item.get('title') or 
                  item.get('ad_name') or 
                  item.get('adName') or
-                 item.get('description') or # Creative Center
-                 item.get('video_description') or
+                 item.get('description') or 
                  'Unknown Ad Product')
                  
         # Try multiple keys for Advertiser
-        advertiser = (item.get('advertiser_name') or 
+        advertiser = (item.get('brand_name') or # Found via Debug
+                      item.get('advertiser_name') or 
                       item.get('advertiserName') or 
                       item.get('paidBy') or 
-                      item.get('brand_name') or # Creative Center
                       item.get('brandName') or
                       'Unknown')
         
@@ -2053,9 +2054,9 @@ def process_apify_results(items):
             if m: pid = m.group(1)
             
         # Pattern 3: Use Ad ID if no Product ID found (Fallback)
-        # This allows us to save the ad even if it's not directly a Shop product link
         if not pid:
-             ad_id = item.get('ad_id') or item.get('id') or item.get('adId')
+             # 'id' is confirmed from user debug screenshot
+             ad_id = item.get('id') or item.get('ad_id') or item.get('adId')
              if ad_id:
                  pid = f"ad_{ad_id}" 
             
@@ -2064,17 +2065,19 @@ def process_apify_results(items):
                 'product_id': pid,
                 'title': title[:100], # Trucate
                 'advertiser': advertiser,
-                'likes': item.get('likes', 0),
-                'shares': item.get('shares', 0),
+                'likes': item.get('like', 0) or item.get('likes', 0), # 'like' found via debug
+                'shares': item.get('share', 0) or item.get('shares', 0),
                 'url': url,
                 'image': (item.get('cover') or 
                           item.get('video_cover') or 
+                          item.get('cover_url') or 
                           item.get('thumbnail_url') or 
                           item.get('thumbnail') or
                           item.get('poster') or
+                          item.get('image_url') or
                           item.get('imageUrl') or
                           ''),
-                '_raw_keys': list(item.keys()) # DEBUG: Capture raw keys
+                '_raw_keys': list(item.keys()) # Keep debug for now
             })
             
     return processed
