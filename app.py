@@ -2326,8 +2326,17 @@ def scan_apify():
                             timeout=10
                         )
                         shops_found = []
+                        shops_found = []
                         if s_res.status_code == 200:
-                            s_data = s_res.json().get('data', {}).get('list', [])
+                            api_json = s_res.json()
+                            if api_json.get('data') is not None:
+                                s_data = api_json.get('data', {}).get('list', [])
+                            else:
+                                # Data is None, likely an API error code
+                                if i < 5:
+                                    debug_log = f"Fail: API Msg '{api_json.get('message')}' (Code {api_json.get('code')})"
+                                s_data = []
+
                             best_match = None
                             for cand in s_data:
                                 cand_shop = cand.get('shop_name', '').lower()
