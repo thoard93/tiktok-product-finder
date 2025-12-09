@@ -2640,13 +2640,23 @@ def scan_manual_import():
                 if p_obj.get('imageUrl') or p_obj.get('image_url'):
                     img_url = p_obj.get('imageUrl') or p_obj.get('image_url')
 
-            # Advertiser / Brand
+            # Advertiser / Brand / Shop Name
             advertiser = "Unknown"
-            creator = item.get('creator')
-            if isinstance(creator, dict):
-                # If we have a product but no detailed seller info, we might want to flag it
-                # For now, default to creator but maybe prefix it?
-                advertiser = creator.get('username') or creator.get('nickname') or "Unknown"
+            
+            # 1. Try Product Object Shop Name (Best)
+            if isinstance(p_obj, dict):
+                 advertiser = p_obj.get('shopName') or p_obj.get('shop_name') or advertiser
+            
+            # 2. Try Creator Name (Fallback)
+            if advertiser == "Unknown":
+                creator = item.get('creator')
+                if isinstance(creator, dict):
+                    advertiser = creator.get('username') or creator.get('nickname') or "Unknown"
+
+            # 3. Sales Fallback (from DailyVirals data if enrichment fails)
+            raw_sales = 0
+            if isinstance(p_obj, dict):
+                 raw_sales = safe_int(p_obj.get('soldCount') or p_obj.get('sales') or 0)
 
             # Create Candidate
             p = {
@@ -2657,8 +2667,8 @@ def scan_manual_import():
                 'advertiser': advertiser, 
                 'price': 0,
                 'commission_rate': 0,
-                'sales': 0, 
-                'sales_7d': 0,
+                'sales': raw_sales,    # Use partial sales data if available
+                'sales_7d': raw_sales, # Fallback
                 'gmv': 0,
                 'influencer_count': 0,
                 'video_count': 1, 
