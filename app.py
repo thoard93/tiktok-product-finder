@@ -2318,7 +2318,7 @@ def scan_apify():
                             params={
                                 "keyword": search_term, 
                                 "region": "US",
-                                "page": 1,
+                                "page_num": 1,
                                 "page_size": 5,
                                 "product_sort_field": 4, # Sort by 7-day sales (popular items first)
                                 "sort_type": 1 # Descending
@@ -2371,7 +2371,7 @@ def scan_apify():
                                         params={
                                             "keyword": p['advertiser'], 
                                             "region": "US",
-                                            "page": 1,
+                                            "page_num": 1,
                                             "page_size": 3,
                                             "product_sort_field": 4, # Sort by 7-day sales
                                             "sort_type": 1
