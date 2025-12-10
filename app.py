@@ -2597,28 +2597,6 @@ def scan_manual_import():
              return jsonify({'error': f"Could not find a list of items in the JSON. Top-level keys: {keys_found}. Please copy the response that contains the list of videos/products."}), 400
 
         # 2. Process Items
-        # 3. Enrich Candidates
-        saved_count = 0
-        debug_log = ""
-        skipped_count = 0
-        
-        # Filter out items with no product data BEFORE processing
-        valid_products = []
-        for p in products:
-            # Check if this candidate came from a valid 'product' object
-            # We determine this by checking if we successfully extracted a Product ID or Title from product data
-            # Or simpler: check if the original mapping found a p_obj. 
-            # Actually, let's look at the 'is_valid_product' flag we should have set.
-            # INSTEAD: Let's just check if product_name starts with # or has "Unknown" (heuristic for bad data)
-            # BETTER: In the previous loop, we defaulted to video data. 
-            # Let's retroactively filter: if p['scan_type'] == 'daily_virals' and p['sales'] == 0:
-            # Wait, 0 sales is valid.
-            
-            # Let's Modify the Loop Above instead.
-            pass
-
-        # RE-WRITING THE LOOP ABOVE TO FILTER
-        # We need to restart the products list
         products = []
         schema_debug = []
         skipped_items = 0
