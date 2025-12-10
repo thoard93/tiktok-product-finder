@@ -2733,8 +2733,10 @@ def scan_manual_import():
                 # FORCE UPDATE
                 if p['product_name'] and p['product_name'] != "Unknown Title":
                    existing.product_name = p['product_name']
-                if p.get('image'):
-                   existing.image_url = p.get('image')
+                # Prioritize Enriched Image (image_url) over Import Image (image)
+                new_img = p.get('image_url') or p.get('image')
+                if new_img:
+                   existing.image_url = new_img
                    existing.cached_image_url = None 
                 if p.get('seller_name') and p.get('seller_name') != "Unknown":
                    existing.seller_name = p['seller_name']
