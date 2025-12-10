@@ -897,6 +897,9 @@
             <div class="nav-actions" style="margin-left: 2rem; display: flex; gap: 1rem;">
                 <a href="/pwa/admin.html" class="nav-btn">Admin Dashboard</a>
                 <a href="/pwa/scanner_v3.html" class="nav-btn">Scanner</a>
+                <button onclick="refreshAds()" class="nav-btn"
+                    style="background: rgba(254, 44, 85, 0.2); color: #fe2c55; border: 1px solid #fe2c55;">⚡ Refresh
+                    Ads</button>
             </div>
             <div class="stats-bar">
                 <div class="stat-item">
@@ -1537,6 +1540,37 @@
             const overlay = document.querySelector('.modal-overlay');
             if (overlay) {
                 overlay.classList.remove('active');
+            }
+        }
+
+        // ==================== REFRESH ADS ====================
+        async function refreshAds() {
+            if (!confirm('Start batch refresh for all Ad Winners? This runs in background.')) return;
+
+            const btn = document.querySelector('button[onclick="refreshAds()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Starting...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/refresh-ads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    loadProducts(1, currentFilters); // Reload grid
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Request failed');
+                console.error(err);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
 

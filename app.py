@@ -2750,19 +2750,6 @@ def scan_manual_import():
                 
                 existing.first_seen = datetime.utcnow()
             
-            if i < 5: debug_log += f" | {msg}"
-
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': f"Processed {len(items)} items. Imported {len(products)} valid products. Skipped {skipped_items} videos.",
-            'debug_info': f"Stats: {schema_debug[:5]}... Logs: {debug_log}"
-        })
-
-    except Exception as e:
-        return jsonify({'error': f"Import Failed: {str(e)}"}), 500
-
 @app.route('/api/brands/list', methods=['GET'])
 def list_top_brands():
     """Get list of top brands from EchoTik"""
@@ -3019,7 +3006,11 @@ def get_products():
     total_count = query.count()
     
     # Apply sorting
-    sort_column = getattr(Product, sort_by, Product.sales_7d)
+    if sort_by == 'new':
+        sort_column = Product.first_seen
+    else:
+        sort_column = getattr(Product, sort_by, Product.sales_7d)
+        
     if sort_order == 'asc':
         query = query.order_by(sort_column.asc())
     else:
