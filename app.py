@@ -2835,7 +2835,7 @@ def refresh_daily_virals_ads():
             else:
                 # If failure is just "not found", likely a placeholder product (ad copy title).
                 # We preserved it via the force visibility check below, so don't alarm the user.
-                if "0 results" in msg or "Smart Truncate" in msg:
+                if "0 results" in msg or "Smart Truncate" in msg or "Adv:" in msg:
                      pass # Don't log expected failures for placeholders
                 elif len(debug_log) < 10:
                     debug_log.append(f"{p.product_name}: {msg}")
