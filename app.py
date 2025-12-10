@@ -187,7 +187,7 @@ def enrich_product_data(p, i_log_prefix="", force=False):
         try:
             s_res = requests.get(f"{BASE_URL}/product/list", 
                 params={"keyword": search_term, "region": "US", "page_num": 1, "page_size": 5, "product_sort_field": 4, "sort_type": 1}, 
-                auth=get_auth_local(), timeout=8)
+                auth=get_auth_local(), timeout=30)
             
             if s_res.status_code == 200:
                 s_data = s_res.json().get('data', [])
@@ -224,7 +224,7 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                 elif brand_raw and brand_raw != 'Unknown':
                     b_res = requests.get(f"{BASE_URL}/product/list", 
                         params={"keyword": brand_raw, "region": "US", "page_num": 1, "page_size": 1, "product_sort_field": 4, "sort_type": 1}, 
-                        auth=get_auth_local(), timeout=5)
+                        auth=get_auth_local(), timeout=30)
                     if b_res.status_code == 200:
                         b_data = b_res.json().get('data', [])
                         if isinstance(b_data, dict): b_data = b_data.get('list', [])
