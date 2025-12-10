@@ -2750,6 +2750,64 @@ def scan_manual_import():
                 
                 existing.first_seen = datetime.utcnow()
             
+            if i < 5: debug_log += f" | {msg}"
+
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f"Processed {len(items)} items. Imported {len(products)} valid products. Skipped {skipped_items} videos.",
+            'debug_info': f"Stats: {schema_debug[:5]}... Logs: {debug_log}"
+        })
+
+    except Exception as e:
+        return jsonify({'error': f"Import Failed: {str(e)}"}), 500
+
+@app.route('/api/refresh-ads', methods=['POST'])
+def refresh_daily_virals_ads():
+    """Batch refresh enrichment for 'Ad Winners' (DailyVirals) products."""
+    try:
+        # Get all daily_virals products, newest first
+        products = Product.query.filter_by(scan_type='daily_virals').order_by(Product.first_seen.desc()).all()
+        
+        count = 0
+        success_count = 0
+        
+        for p in products:
+            p_dict = p.to_dict()
+            p_dict['product_id'] = p.product_id 
+            
+            # Slow down slightly to be polite
+            time.sleep(1.5)
+            
+            success, msg = enrich_product_data(p_dict, f"Refreshing {p.product_id}: ")
+            if success:
+                # Update DB from enriched dict
+                p.product_name = p_dict['product_name']
+                p.image_url = p_dict['image_url']
+                p.seller_name = p_dict['seller_name']
+                p.sales = p_dict.get('sales', 0)
+                p.sales_7d = p_dict.get('sales_7d', 0)
+                p.influencer_count = p_dict.get('influencer_count', 0)
+                p.commission_rate = p_dict.get('commission_rate', 0)
+                p.last_updated = datetime.utcnow()
+                success_count += 1
+            
+            count += 1
+            if count % 5 == 0:
+                db.session.commit()
+                
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f"Refreshed {count} Ad Winners. Success: {success_count}."
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
 @app.route('/api/brands/list', methods=['GET'])
 def list_top_brands():
     """Get list of top brands from EchoTik"""
