@@ -220,6 +220,34 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     })
                     return True, f"Success: Found '{title_raw[:20]}...'"
 
+                # 2.5 Smart Fallback: Truncated Search (for ad copy titles like "BLASTS GREASE...")
+                if not best_match and len(search_term.split()) > 5:
+                    trunc_term = " ".join(search_term.split()[:5])
+                    t_res = requests.get(f"{BASE_URL}/product/list", 
+                        params={"keyword": trunc_term, "region": "US", "page_num": 1, "page_size": 1, "product_sort_field": 4, "sort_type": 1}, 
+                        auth=get_auth_local(), timeout=30)
+                    
+                    if t_res.status_code == 200:
+                        t_data = t_res.json().get('data', [])
+                        if isinstance(t_data, dict): t_data = t_data.get('list', [])
+                        if t_data:
+                            # Use the first result from truncated search
+                            best_match = t_data[0]
+                            p.update({
+                                'product_id': best_match.get('product_id'),
+                                'product_name': best_match.get('product_name'),
+                                'seller_name': best_match.get('shop_name'),
+                                'gmv': float(best_match.get('total_sale_gmv_amt', 0) or 0),
+                                'sales': int(best_match.get('total_sale_cnt', 0) or 0),
+                                'sales_7d': int(best_match.get('total_sale_7d_cnt', 0) or 0),
+                                'influencer_count': int(best_match.get('total_ifl_cnt', 0) or 0),
+                                'commission_rate': float(best_match.get('product_commission_rate', 0) or 0),
+                                'price': float(best_match.get('spu_avg_price', 0) or 0),
+                                'image_url': parse_cover_url(best_match.get('cover_url', '')),
+                                'is_enriched': True
+                            })
+                            return True, f"Success: Smart Truncate '{trunc_term}...'"
+
                 # 3. Fallback: Search by Brand
                 elif brand_raw and brand_raw != 'Unknown':
                     b_res = requests.get(f"{BASE_URL}/product/list", 
