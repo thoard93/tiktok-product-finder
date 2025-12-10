@@ -2600,6 +2600,14 @@ def scan_manual_import():
         products = []
         schema_debug = []
         skipped_items = 0
+        
+        # Helper for safe int conversion
+        def safe_int(val):
+            try:
+                if val is None: return 0
+                return int(val)
+            except:
+                return 0
 
         for item in items:
             # Map Schema (DailyVirals -> Product)
