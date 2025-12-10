@@ -2597,136 +2597,123 @@ def scan_manual_import():
              return jsonify({'error': f"Could not find a list of items in the JSON. Top-level keys: {keys_found}. Please copy the response that contains the list of videos/products."}), 400
 
         # 2. Process Items
+        # 3. Enrich Candidates
+        saved_count = 0
+        debug_log = ""
+        skipped_count = 0
+        
+        # Filter out items with no product data BEFORE processing
+        valid_products = []
+        for p in products:
+            # Check if this candidate came from a valid 'product' object
+            # We determine this by checking if we successfully extracted a Product ID or Title from product data
+            # Or simpler: check if the original mapping found a p_obj. 
+            # Actually, let's look at the 'is_valid_product' flag we should have set.
+            # INSTEAD: Let's just check if product_name starts with # or has "Unknown" (heuristic for bad data)
+            # BETTER: In the previous loop, we defaulted to video data. 
+            # Let's retroactively filter: if p['scan_type'] == 'daily_virals' and p['sales'] == 0:
+            # Wait, 0 sales is valid.
+            
+            # Let's Modify the Loop Above instead.
+            pass
+
+        # RE-WRITING THE LOOP ABOVE TO FILTER
+        # We need to restart the products list
         products = []
         schema_debug = []
-        
-        # Helper for safe int conversion
-        def safe_int(val):
-            try:
-                if val is None: return 0
-                return int(val)
-            except:
-                return 0
+        skipped_items = 0
 
         for item in items:
             # Map Schema (DailyVirals -> Product)
             # Keys observed: title, creator.username, latest_view_count, likeCount, product.productId
             
-            # Product ID & Data from 'product' object if exists
-            pid = None
             p_obj = item.get('product')
             
-            # DEBUG LOGGING for first 3 items
-            if len(products) < 3:
-                raw_dump = json.dumps(item, default=str)[:200]
-                print(f"DEBUG ITEM {len(products)} keys: {list(item.keys())}")
-                print(f"DEBUG RAW: {raw_dump}")
-                
-                # Add to schema_debug for frontend visibility
-                if len(schema_debug) < 1:
-                     schema_debug.append(f"RAW_DUMP: {raw_dump}")
-            
-            # Default to Video Data
-            video_title = (item.get('title') or item.get('description') or item.get('desc') or item.get('caption') or "Unknown Title")
-            video_cover = item.get('cover') or item.get('cover_url') or item.get('coverUrl') or ""
+            # STRICT MODE: If no product object, SKIP IT.
+            # This prevents "Video Title" garbage imports.
+            if not isinstance(p_obj, dict):
+                skipped_items += 1
+                continue
+
+            # Product ID & Data from 'product' object
+            pid = p_obj.get('productId') or p_obj.get('product_id')
             
             # Stats (Re-added)
             views = safe_int(item.get('latest_view_count') or item.get('playBox') or item.get('views') or item.get('playCount'))
             likes = safe_int(item.get('likeCount') or item.get('diggCount') or item.get('likes'))
-            shares = safe_int(item.get('shareCount') or item.get('shares'))
             
-            product_title = video_title
-            img_url = video_cover
+            # Title Mapping
+            product_title = "Unknown Product"
+            if p_obj.get('productName'):
+                product_title = p_obj.get('productName')
+            elif p_obj.get('title'):
+                product_title = p_obj.get('title')
+            elif p_obj.get('name'):
+                product_title = p_obj.get('name')
             
-            if isinstance(p_obj, dict):
-                # DailyVirals has a 'product' nested object!
-                # Prioritize PRODUCT data over VIDEO data
-                pid = p_obj.get('productId')
-                if not pid: pid = p_obj.get('product_id')
-                
-                if p_obj.get('productName'):
-                    product_title = p_obj.get('productName')
-                elif p_obj.get('title'):
-                    product_title = p_obj.get('title')
-                elif p_obj.get('name'):
-                    product_title = p_obj.get('name')
-                
-                if p_obj.get('imageUrl') or p_obj.get('image_url'):
-                    img_url = p_obj.get('imageUrl') or p_obj.get('image_url')
+            img_url = ""
+            if p_obj.get('imageUrl') or p_obj.get('image_url'):
+                img_url = p_obj.get('imageUrl') or p_obj.get('image_url')
 
             # Advertiser / Brand / Shop Name
             advertiser = "Unknown"
-            
-            # 1. Try Product Object Shop Name (Best)
             if isinstance(p_obj, dict):
                  advertiser = p_obj.get('shopName') or p_obj.get('shop_name') or advertiser
-            
-            # 2. Try Creator Name (Fallback)
             if advertiser == "Unknown":
                 creator = item.get('creator')
                 if isinstance(creator, dict):
                     advertiser = creator.get('username') or creator.get('nickname') or "Unknown"
 
-            # 3. Sales / GMV Mappings (Exact match from user snippet)
-            raw_sales = 0
-            sales_7d = 0
+            # Sales / GMV Mappings
+            raw_sales = safe_int(p_obj.get('totalUnitsSold') or p_obj.get('soldCount') or p_obj.get('sales') or 0)
+            sales_7d = safe_int(p_obj.get('revenueLastSevenDays') or 0)
+             
+            # GMV
             gmv = 0
-            
-            if isinstance(p_obj, dict):
-                 # Sales = totalUnitsSold
-                 raw_sales = safe_int(p_obj.get('totalUnitsSold') or p_obj.get('soldCount') or p_obj.get('sales') or 0)
-                 
-                 # Sales 7d = revenueLastSevenDays (Proxy, or seek units if available)
-                 # Note: revenueLastSevenDays is typically GMV-7d. 
-                 # If we want units-7d, we might not have it. Let's map it to sales_7d field for now even if it's value.
-                 sales_7d = safe_int(p_obj.get('revenueLastSevenDays') or 0)
-                 
-                 # GMV
-                 revenue_analytics = p_obj.get('revenueAnalytics')
-                 if isinstance(revenue_analytics, dict):
-                     gmv = safe_int(revenue_analytics.get('totalRevenue') or 0)
-                 else:
-                     gmv = safe_int(p_obj.get('totalRevenue') or 0)
-
+            revenue_analytics = p_obj.get('revenueAnalytics')
+            if isinstance(revenue_analytics, dict):
+                 gmv = safe_int(revenue_analytics.get('totalRevenue') or 0)
+            else:
+                 gmv = safe_int(p_obj.get('totalRevenue') or 0)
 
             # Create Candidate
             p = {
                 'product_id': pid, 
-                'product_name': product_title[:100],  # Use Product Title
-                'title': product_title,               # Use Product Title for search
+                'product_name': product_title[:100],
+                'title': product_title,
                 'seller_name': advertiser, 
                 'advertiser': advertiser, 
                 'price': 0,
                 'commission_rate': 0,
-                'sales': raw_sales,    # Total Units
-                'sales_7d': sales_7d,  # Weekly Revenue (as proxy for sorting)
-                'gmv': gmv,            # Total Revenue
+                'sales': raw_sales,
+                'sales_7d': sales_7d,
+                'gmv': gmv,
                 'influencer_count': 0,
                 'video_count': 1, 
                 'video_views': views,
                 'video_likes': likes,
                 'scan_type': 'daily_virals', 
                 'url': item.get('videoUrl') or item.get('link') or "",
-                'image': img_url,                     # Use Product Image
+                'image': img_url,
                 'is_enriched': False
             }
             products.append(p)
             
             if len(schema_debug) < 1:
-                schema_debug = list(item.keys())
+                # Dump the first VALID item key to debug
+                raw_dump = json.dumps(item, default=str)[:200]
+                schema_debug.append(f"KEYS: {list(item.keys())}")
+                schema_debug.append(f"RAW_DUMP: {raw_dump}")
 
         # 3. Enrich Candidates
         saved_count = 0
         debug_log = ""
         
         for i, p in enumerate(products):
-            # Attempt Enrichment (Search Rescue)
+            # Attempt Enrichment
             enrich_success, msg = enrich_product_data(p, f"Item {i}: ")
             
-            
-            # Save Validated Product (Even if enrichment fails - "Loosened Filters")
             if not p.get('product_id'): 
-                # Generate a dummy ID if missing (unlikely with DailyVirals but safe)
                 p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
 
             existing = Product.query.filter_by(product_id=p['product_id']).first()
@@ -2750,25 +2737,21 @@ def scan_manual_import():
                 db.session.add(new_prod)
                 saved_count += 1
             else:
-                # Update stats if we found new info
                 if p['sales'] > 0: existing.sales = max(existing.sales, p['sales'])
                 if p['sales_7d'] > 0: existing.sales_7d = p['sales_7d']
                 
-                # FORCE UPDATE Display Info (to fix "Video Title" artifacts)
+                # FORCE UPDATE
                 if p['product_name'] and p['product_name'] != "Unknown Title":
                    existing.product_name = p['product_name']
                 if p.get('image'):
                    existing.image_url = p.get('image')
-                   # Clear cached image if we are updating the source image to force refresh
                    existing.cached_image_url = None 
                 if p.get('seller_name') and p.get('seller_name') != "Unknown":
                    existing.seller_name = p['seller_name']
 
-                # Ensure scan_type is updated so it shows in Ad Winners
                 if existing.scan_type != 'daily_virals':
                      existing.scan_type = 'daily_virals'
                 
-                # Update first_seen so they show up as "Newest"
                 existing.first_seen = datetime.utcnow()
             
             if i < 5: debug_log += f" | {msg}"
@@ -2777,8 +2760,8 @@ def scan_manual_import():
         
         return jsonify({
             'success': True,
-            'message': f"Imported {len(products)} items. Enriched & Saved {saved_count} new products.",
-            'debug_info': f"DailyVirals Import Stats: {schema_debug[:5]}... Logs: {debug_log}"
+            'message': f"Processed {len(items)} items. Imported {len(products)} valid products. Skipped {skipped_items} videos.",
+            'debug_info': f"Stats: {schema_debug[:5]}... Logs: {debug_log}"
         })
 
     except Exception as e:
