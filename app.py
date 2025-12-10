@@ -2618,11 +2618,13 @@ def scan_manual_import():
             
             # DEBUG LOGGING for first 3 items
             if len(products) < 3:
+                raw_dump = json.dumps(item, default=str)[:200]
                 print(f"DEBUG ITEM {len(products)} keys: {list(item.keys())}")
-                if p_obj:
-                    print(f"DEBUG ITEM {len(products)} p_obj keys: {list(p_obj.keys()) if isinstance(p_obj, dict) else type(p_obj)}")
-                else:
-                    print(f"DEBUG ITEM {len(products)} p_obj is MISSING or None")
+                print(f"DEBUG RAW: {raw_dump}")
+                
+                # Add to schema_debug for frontend visibility
+                if len(schema_debug) < 1:
+                     schema_debug.append(f"RAW_DUMP: {raw_dump}")
             
             # Default to Video Data
             video_title = (item.get('title') or item.get('description') or item.get('desc') or item.get('caption') or "Unknown Title")
