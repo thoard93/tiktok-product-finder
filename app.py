@@ -140,8 +140,8 @@ def enrich_product_data(p, i_log_prefix="", force=False):
     # Helper: Clean title
     def clean_title_for_search(t):
         if not t: return ""
-        t = re.sub(r'#\w+', '', t)
-        t = re.sub(r'[^\w\s]', '', t)
+        t = re.sub(r'#\w+', '', t) # Remove hashtags
+        t = re.sub(r'[^\w\s]', '', t) # Remove emojis/punctuation
         return t.strip()
 
     # 1. Direct ID Check (if available)
@@ -2807,6 +2807,13 @@ def refresh_daily_virals_ads():
             else:
                 if len(debug_log) < 10:
                     debug_log.append(f"{p.product_name}: {msg}")
+            
+            # ALWAYS force visibility for these manually imported products
+            # This ensures they don't disappear from dashboard even if stats enrichment fails
+            # (e.g. placeholder products where title is just ad copy)
+            if p.video_count < 1:
+                p.video_count = 1
+            p.scan_type = 'daily_virals' # Reinforce type
             
             count += 1
             if count % 5 == 0:
