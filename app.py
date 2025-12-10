@@ -244,9 +244,9 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                                 'is_enriched': True,
                                 'status_note': "Brand Hero Match"
                             })
-                            return True, f"Success: Brand Fallback '{p['advertiser']}'"
+                            return True, f"Success: Brand Fallback '{brand_raw}'"
                         else:
-                            return False, f"Fail: Title 0 results. Fallback Brand '{p['advertiser']}' -> 0 results."
+                            return False, f"Fail: Title 0 results. Fallback Brand '{brand_raw}' -> 0 results."
         except Exception as e:
             return False, f"Error: {str(e)}"
     
