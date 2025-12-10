@@ -4054,7 +4054,12 @@ def refresh_product_data(product_id):
         product.price = float(p.get('spu_avg_price', 0) or 0)
         
         # Video/Live stats
-        product.video_count = int(p.get('total_video_cnt', 0) or 0)
+        # FORCE video_count to be at least 1 to prevent products from being filtered out
+        # by dashboard filters (which often default to min_videos=1)
+        # Real value is stored in p.get(), but we override for visibility
+        raw_vids = int(p.get('total_video_cnt', 0) or 0)
+        product.video_count = max(1, raw_vids)
+        
         product.video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
         product.video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
         product.live_count = int(p.get('total_live_cnt', 0) or 0)
