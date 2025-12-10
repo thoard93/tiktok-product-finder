@@ -149,7 +149,7 @@ def enrich_product_data(p, i_log_prefix=""):
     if pid and not pid.startswith('ad_') and not p.get('is_enriched'):
         try:
             # Increased timeout to 15s to handle potentially slow upstream stats
-            detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_id": pid}, auth=get_auth_local(), timeout=15)
+            detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_ids": pid}, auth=get_auth_local(), timeout=15)
             if detail_res.status_code == 200:
                 d_data = detail_res.json().get('data')
                 if d_data:
