@@ -290,6 +290,26 @@ def get_hot_products():
             ).limit(needed).all()
             products.extend(fallback_products)
         
+        # Convert to dicts BEFORE commit to avoid DetachedInstanceError
+        # (Commit expires objects, so accessing them later fails without a session)
+        product_dicts = []
+        for p in products:
+            p_dict = {
+                'product_id': p.product_id,
+                'product_name': p.product_name,
+                'seller_name': p.seller_name,
+                'sales_7d': p.sales_7d,
+                'sales_30d': p.sales_30d,
+                'influencer_count': p.influencer_count,
+                'video_count': p.video_count,
+                'commission_rate': p.commission_rate,
+                'price': p.price,
+                'image_url': p.cached_image_url or p.image_url,
+                'cached_image_url': p.cached_image_url,
+                'has_free_shipping': p.has_free_shipping
+            }
+            product_dicts.append(p_dict)
+
         # Mark products as shown today
         for p in products:
             p.last_shown_hot = datetime.utcnow()
@@ -300,8 +320,7 @@ def get_hot_products():
             print(f"Error updating last_shown_hot: {e}")
             db.session.rollback()
         
-        # Convert to dicts for consistency
-        return products  # Return objects, helper handles them
+        return product_dicts
 
 @bot.event
 async def on_ready():
@@ -341,11 +360,19 @@ async def daily_hot_products():
     
     # Send each product as an embed
     for i, p in enumerate(products, 1):
-        embed = create_product_embed(p, title_prefix=f"#{i} ")
-        await channel.send(embed=embed)
-        await asyncio.sleep(1)  # Rate limiting
+        try:
+            embed = create_product_embed(p, title_prefix=f"#{i} ")
+            await channel.send(embed=embed)
+            await asyncio.sleep(1)  # Rate limiting
+        except Exception as e:
+            print(f"❌ Error sending product #{i} ({getattr(p, 'product_id', 'unknown')}): {e}")
+            # Try sending a basic error message to the channel so we know it failed here
+            try:
+                await channel.send(f"⚠️ Failed to display product #{i}. Check logs.")
+            except:
+                pass
     
-    print(f"   Posted {len(products)} free shipping deals")
+    print(f"   Finished hot products loop.")
 
 @bot.event
 async def on_message(message):
