@@ -1560,7 +1560,11 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    alert(data.message);
+                    let msg = data.message;
+                    if (data.debug_info && data.debug_info.includes("Failures")) {
+                        msg += "\n\n" + data.debug_info;
+                    }
+                    alert(msg);
                     loadProducts(1, currentFilters); // Reload grid
                 } else {
                     alert('Error: ' + data.error);

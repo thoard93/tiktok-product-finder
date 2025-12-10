@@ -128,7 +128,7 @@ def parse_cover_url(url):
     if not url: return ""
     return url
 
-def enrich_product_data(p, i_log_prefix=""):
+def enrich_product_data(p, i_log_prefix="", force=False):
     """
     Global Helper: Search EchoTik for product stats based on Title then Brand.
     Used by both Apify Scanner and Manual Import.
@@ -147,24 +147,27 @@ def enrich_product_data(p, i_log_prefix=""):
     # 1. Direct ID Check (if available)
     # 1. Direct ID Check (if available)
     pid = p.get('product_id')
-    # Skip internal IDs (dv_...) and ads (ad_...)
-    if pid and not pid.startswith('ad_') and not pid.startswith('dv_') and not p.get('is_enriched'):
+    # Try ID lookup if we have an ID AND (force=True OR not enriched)
+    # Removing 'dv_' check because some manual imports might have real IDs masked as dv_ or the user implies it works.
+    if pid and not pid.startswith('ad_') and (force or not p.get('is_enriched')):
         try:
-            # Increased timeout to 15s to handle potentially slow upstream stats
-            detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_ids": pid}, auth=get_auth_local(), timeout=15)
+            # Match timeout to refresh_product_data (30s)
+            detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_ids": pid}, auth=get_auth_local(), timeout=30)
             if detail_res.status_code == 200:
                 d_data = detail_res.json().get('data')
                 if d_data:
+                    # Found by ID! Update and return
+                    d_item = d_data[0] # API returns list
                     p.update({
-                        'product_name': d_data.get('product_name', p.get('title')),
-                        'seller_name': d_data.get('seller_name') or d_data.get('shop_name') or p.get('advertiser'),
-                        'gmv': float(d_data.get('total_sale_gmv_amt', 0) or 0),
-                        'sales': int(d_data.get('total_sale_cnt', 0) or 0),
-                        'sales_7d': int(d_data.get('total_sale_7d_cnt', 0) or 0),
-                        'influencer_count': int(d_data.get('total_ifl_cnt', 0) or 0),
-                        'commission_rate': float(d_data.get('product_commission_rate', 0) or 0),
-                        'price': float(d_data.get('spu_avg_price', 0) or 0),
-                        'image_url': parse_cover_url(d_data.get('cover_url', '')),
+                        'product_name': d_item.get('product_name', p.get('title')),
+                        'seller_name': d_item.get('seller_name') or d_item.get('shop_name') or p.get('advertiser'),
+                        'gmv': float(d_item.get('total_sale_gmv_amt', 0) or 0),
+                        'sales': int(d_item.get('total_sale_cnt', 0) or 0),
+                        'sales_7d': int(d_item.get('total_sale_7d_cnt', 0) or 0),
+                        'influencer_count': int(d_item.get('total_ifl_cnt', 0) or 0),
+                        'commission_rate': float(d_item.get('product_commission_rate', 0) or 0),
+                        'price': float(d_item.get('spu_avg_price', 0) or 0),
+                        'image_url': parse_cover_url(d_item.get('cover_url', '')),
                         'is_enriched': True
                     })
                     return True, f"Success: Direct ID {pid}"
@@ -2779,6 +2782,7 @@ def refresh_daily_virals_ads():
         
         count = 0
         success_count = 0
+        debug_log = []
         
         for p in products:
             p_dict = p.to_dict()
@@ -2787,9 +2791,10 @@ def refresh_daily_virals_ads():
             # Slow down slightly to be polite
             time.sleep(1.5)
             
-            success, msg = enrich_product_data(p_dict, f"Refreshing {p.product_id}: ")
+            # Force enrichment (skip is_enriched check) to ensure we get fresh data
+            success, msg = enrich_product_data(p_dict, f"Ref {p.product_id}: ", force=True)
             if success:
-                # Update DB from enriched dict
+                # Update DB
                 p.product_name = p_dict['product_name']
                 p.image_url = p_dict['image_url']
                 p.seller_name = p_dict['seller_name']
@@ -2799,6 +2804,9 @@ def refresh_daily_virals_ads():
                 p.commission_rate = p_dict.get('commission_rate', 0)
                 p.last_updated = datetime.utcnow()
                 success_count += 1
+            else:
+                if len(debug_log) < 10:
+                    debug_log.append(f"{p.product_name}: {msg}")
             
             count += 1
             if count % 5 == 0:
@@ -2806,9 +2814,11 @@ def refresh_daily_virals_ads():
                 
         db.session.commit()
         
+        debug_str = "\n".join(debug_log)
         return jsonify({
             'success': True,
-            'message': f"Refreshed {count} Ad Winners. Success: {success_count}."
+            'message': f"Refreshed {count} Ad Winners. Success: {success_count}.",
+            'debug_info': f"Failures:\n{debug_str}"
         })
         
     except Exception as e:
