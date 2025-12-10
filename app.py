@@ -145,8 +145,10 @@ def enrich_product_data(p, i_log_prefix=""):
         return t.strip()
 
     # 1. Direct ID Check (if available)
+    # 1. Direct ID Check (if available)
     pid = p.get('product_id')
-    if pid and not pid.startswith('ad_') and not p.get('is_enriched'):
+    # Skip internal IDs (dv_...) and ads (ad_...)
+    if pid and not pid.startswith('ad_') and not pid.startswith('dv_') and not p.get('is_enriched'):
         try:
             # Increased timeout to 15s to handle potentially slow upstream stats
             detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_ids": pid}, auth=get_auth_local(), timeout=15)
@@ -170,8 +172,13 @@ def enrich_product_data(p, i_log_prefix=""):
                 pass
 
     # 2. Search by Title
-    search_term = clean_title_for_search(p.get('title'))
+    # Robust title extraction (handles 'title' from JSON or 'product_name' from DB)
+    title_raw = p.get('title') or p.get('product_name')
+    search_term = clean_title_for_search(title_raw)
     shops_found_log = ""
+    
+    # Robust brand extraction
+    brand_raw = p.get('advertiser') or p.get('seller_name') or "Unknown"
     
     if len(search_term) > 5:
         try:
@@ -186,7 +193,7 @@ def enrich_product_data(p, i_log_prefix=""):
                 best_match = None
                 for cand in (s_data or []):
                     cand_shop = cand.get('shop_name', '').lower()
-                    ad_brand = p.get('advertiser', '').lower()
+                    ad_brand = brand_raw.lower()
                     shops_found_log += f"{cand_shop} "
                     
                     # Strict Match
@@ -208,12 +215,12 @@ def enrich_product_data(p, i_log_prefix=""):
                         'image_url': parse_cover_url(best_match.get('cover_url', '')),
                         'is_enriched': True
                     })
-                    return True, f"Success: Found '{p.get('title')[:20]}...'"
+                    return True, f"Success: Found '{title_raw[:20]}...'"
 
                 # 3. Fallback: Search by Brand
-                elif p.get('advertiser') and p.get('advertiser') != 'Unknown':
+                elif brand_raw and brand_raw != 'Unknown':
                     b_res = requests.get(f"{BASE_URL}/product/list", 
-                        params={"keyword": p['advertiser'], "region": "US", "page_num": 1, "page_size": 1, "product_sort_field": 4, "sort_type": 1}, 
+                        params={"keyword": brand_raw, "region": "US", "page_num": 1, "page_size": 1, "product_sort_field": 4, "sort_type": 1}, 
                         auth=get_auth_local(), timeout=5)
                     if b_res.status_code == 200:
                         b_data = b_res.json().get('data', [])
