@@ -148,7 +148,8 @@ def enrich_product_data(p, i_log_prefix=""):
     pid = p.get('product_id')
     if pid and not pid.startswith('ad_') and not p.get('is_enriched'):
         try:
-            detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_id": pid}, auth=get_auth_local(), timeout=5)
+            # Increased timeout to 15s to handle potentially slow upstream stats
+            detail_res = requests.get(f"{BASE_URL}/product/detail", params={"product_id": pid}, auth=get_auth_local(), timeout=15)
             if detail_res.status_code == 200:
                 d_data = detail_res.json().get('data')
                 if d_data:
@@ -2696,6 +2697,9 @@ def scan_manual_import():
         debug_log = ""
         
         for i, p in enumerate(products):
+            # Slow down slightly to effectively use the 'Direct ID' lookup without hitting rate limits
+            time.sleep(1.5)
+            
             # Attempt Enrichment
             enrich_success, msg = enrich_product_data(p, f"Item {i}: ")
             
@@ -2734,6 +2738,10 @@ def scan_manual_import():
                    existing.cached_image_url = None 
                 if p.get('seller_name') and p.get('seller_name') != "Unknown":
                    existing.seller_name = p['seller_name']
+                
+                # Ensure at least 1 video count if currently 0
+                if existing.video_count < 1:
+                     existing.video_count = 1
 
                 if existing.scan_type != 'daily_virals':
                      existing.scan_type = 'daily_virals'
