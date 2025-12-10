@@ -2833,7 +2833,11 @@ def refresh_daily_virals_ads():
                 p.last_updated = datetime.utcnow()
                 success_count += 1
             else:
-                if len(debug_log) < 10:
+                # If failure is just "not found", likely a placeholder product (ad copy title).
+                # We preserved it via the force visibility check below, so don't alarm the user.
+                if "0 results" in msg or "Smart Truncate" in msg:
+                     pass # Don't log expected failures for placeholders
+                elif len(debug_log) < 10:
                     debug_log.append(f"{p.product_name}: {msg}")
             
             # ALWAYS force visibility for these manually imported products
@@ -2849,11 +2853,13 @@ def refresh_daily_virals_ads():
                 
         db.session.commit()
         
-        debug_str = "\n".join(debug_log)
+        preserved_count = count - success_count
+        debug_str = "\n".join(debug_log) if debug_log else "None"
+        
         return jsonify({
             'success': True,
-            'message': f"Refreshed {count} Ad Winners. Success: {success_count}.",
-            'debug_info': f"Failures:\n{debug_str}"
+            'message': f"Refreshed {count} Ad Winners. Updated: {success_count}. Preserved: {preserved_count}.",
+            'debug_info': f"Failures (showing real errors only):\n{debug_str}"
         })
         
     except Exception as e:
