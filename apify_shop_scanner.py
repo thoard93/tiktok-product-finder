@@ -39,9 +39,9 @@ def run_apify_scan():
 
     # Search Logic: US Search for "trending"
     run_input = {
-        "keyword": "trending products", # Actor uses singular 'keyword'
+        "keyword": "trending products", 
         "limit": 60,
-        "country": "US" # Validated from user screenshot
+        "country_code": "US" # "country" was wrong, "country_code" is required
     }
 
     # 1. Start Actor
