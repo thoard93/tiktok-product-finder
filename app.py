@@ -2878,6 +2878,38 @@ def list_top_brands():
     
     return jsonify({
         'brands': [{
+            'id': b.get('seller_id', ''),
+            'name': b.get('seller_name', 'Unknown'),
+            'logo': b.get('seller_logo', ''),
+            'sales': b.get('sales', 0),
+            'products': b.get('product_count', 0)
+        } for b in brands],
+        'page': page,
+        'has_next': len(brands) >= 20
+    })
+
+@app.route('/api/run-apify-scan', methods=['POST'])
+def trigger_apify_scan():
+    """Trigger the Apify Shop Scanner script as a subprocess"""
+    try:
+        # Use python executable relative to environment
+        import sys
+        import subprocess
+        
+        # Determine python path
+        python_exe = sys.executable
+        script_path = os.path.join(os.path.dirname(__file__), 'apify_shop_scanner.py')
+        
+        # Run in background (fire and forget)
+        # Using subprocess.Popen allows app to return immediately
+        subprocess.Popen([python_exe, script_path])
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Viral Trend Scan started! Check back in 2-3 minutes.'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
             'seller_id': b.get('seller_id'),
             'seller_name': b.get('seller_name'),
             'gmv': b.get('total_sale_gmv_amt', 0),
@@ -3225,6 +3257,11 @@ def get_products():
         base_filter,
         Product.has_free_shipping == True
     ).count()
+
+    # Apify Trends (Viral)
+    apify_count = Product.query.filter(
+        Product.scan_type == 'apify_viral'
+    ).count()
     
     return jsonify({
         'success': True,
@@ -3243,6 +3280,7 @@ def get_products():
             'trending': trending_count,
             'proven': proven_count,
             'freeship': freeship_count,
+            'apify_count': apify_count,
             'all': all_count,
             'untapped': untapped_count,
             'low': low_count,

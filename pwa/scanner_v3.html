@@ -347,6 +347,11 @@
                 <div class="title">DailyVirals</div>
                 <div class="desc">Import JSON Data</div>
             </div>
+            <div class="scan-tab" onclick="setMode('viral_trends')">
+                <i class="fas fa-fire"></i>
+                <div class="title">Viral Trends</div>
+                <div class="desc">Apify #tiktokshop Scan</div>
+            </div>
         </div>
 
         <!-- Configuration Panel -->
@@ -484,6 +489,19 @@
                     </div>
                 </div>
                 <button class="scan-btn" id="scanBtn" onclick="toggleScan()">Import DailyVirals Data 🚀</button>
+            `,
+            'viral_trends': `
+                 <div class="config-grid">
+                    <div class="form-group" style="grid-column: span 2">
+                        <div class="log-entry log-success">
+                            <h3>🤖 Apify Viral Scanner</h3>
+                            <p>Scrapes TikTok for #tiktokmademebuyit and #amazonfinds to find viral products.</p>
+                            <p><strong>Cost:</strong> FREE (Uses 'clockworks' free actor)</p>
+                            <p><strong>Duration:</strong> ~2-3 minutes</p>
+                        </div>
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🚀 Start Viral Scan</button>
             `
         };
 
@@ -532,6 +550,7 @@
                 else if (currentMode === 'deals') await runDealScan(btn);
                 else if (currentMode === 'apify') await runApifyScan(btn);
                 else if (currentMode === 'dailyvirals') await runDailyViralsScan(btn);
+                else if (currentMode === 'viral_trends') await runViralTrendsScan(btn);
 
                 // Reset state when scan function returns (finished or error)
                 isScanning = false;
@@ -705,6 +724,32 @@
                 log(`Network error: ${e.message}`, 'error');
             }
             btn.innerText = originalText;
+        }
+
+        async function runViralTrendsScan(btn) {
+            const originalText = btn.innerText;
+
+            log(`Starting Viral Trends Scan (Apify)...`, 'info');
+            btn.innerText = '⏳ Scanning Background...';
+
+            try {
+                const res = await fetch('/api/run-apify-scan', {
+                    method: 'POST'
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    log(data.message, 'success');
+                    log('You can close this window. The products will appear in the "Apify Trends" tab shortly.', 'info');
+                } else {
+                    log(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log(`Network error: ${e.message}`, 'error');
+            }
+            // Keep button state for 5s to show result, then reset
+            setTimeout(() => { btn.innerText = originalText; }, 5000);
         }
 
         // Initialize default when DOM is ready
