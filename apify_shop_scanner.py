@@ -20,23 +20,28 @@ t_part1 = "apify_api_"
 t_part2 = "fd3d6uEEsUzuizgkMQHR"
 t_part3 = "SHYSQXn47W0sE7Uf"
 APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', t_part1 + t_part2 + t_part3)
-ACTOR_ID = "clockworks~free-tiktok-scraper" # Works with free tier
+ACTOR_ID = "clockworks/tiktok-shop-scraper" # PAID ACTOR - Scrapes Products directly
 
 def run_apify_scan():
     if not APIFY_API_TOKEN:
         print("X Error: APIFY_API_TOKEN not found.")
         return
 
-    print(f">> Starting Viral Video Scan via {ACTOR_ID}...")
+    print(f">> Starting Shop Product Scan via {ACTOR_ID}...")
     
-    # input for Viral Hashtags
+    # Clean up old "viral video" junk
+    with app.app_context():
+        deleted = Product.query.filter(Product.scan_type == 'apify_viral').delete()
+        db.session.commit()
+        if deleted > 0:
+            print(f">> Cleaned up {deleted} old 'viral' products.")
+
+    # Search Logic: 50 generic "trending" products to start
     run_input = {
-        "hashtags": ["tiktokmademebuyit", "amazonfinds"],
-        "resultsPerPage": 40,
-        "proxyCountry": "US",
-        "shouldDownloadCovers": False,
-        "shouldDownloadSlideshowImages": False,
-        "shouldDownloadVideos": False
+        "searchQueries": ["trending", "gadgets", "home", "beauty"],
+        "maxItems": 60,
+        "country": "US",
+        "proxyConfig": { "useApifyProxy": True }
     }
 
     # 1. Start Actor
@@ -68,7 +73,7 @@ def run_apify_scan():
             print(f"X Run failed with status: {status}")
             return
         
-        time.sleep(5)
+        time.sleep(10)
 
     # 3. Fetch Results
     print("   Fetching results...")
@@ -82,60 +87,48 @@ def run_apify_scan():
     with app.app_context():
         for item in items:
             try:
-                # Map fields
-                # ID: Use video ID as product ID with prefix
-                vid = str(item.get('id') or item.get('webVideoUrl', '').split('/')[-1])
-                if not vid: continue
+                # Basic validation
+                pid_raw = str(item.get('id') or item.get('product_id'))
+                if not pid_raw or 'test' in pid_raw: continue
                 
-                pid = f"viral_{vid}"
-
-                # Function to remove non-BMP characters (emojis)
-                def remove_emojis(text):
-                    return ''.join(c for c in text if c <= '\uFFFF')
-
-                # DEBUG: Create specific debug product on first run of loop if not exists
-                if saved_count == 0:
-                    try:
-                        debug_id = f"viral_debug_{int(time.time())}"
-                        dp = Product(product_id=debug_id)
-                        dp.product_name = "Scanner Debug - Running..."
-                        dp.seller_name = "System"
-                        dp.scan_type = 'apify_viral'
-                        dp.video_count = 1
-                        dp.first_seen = datetime.utcnow()
-                        db.session.add(dp)
-                        db.session.commit()
-                        print("   Debug product saved.")
-                    except Exception as e:
-                        print(f"   Failed to save debug product: {e}")
-
+                pid = f"shop_{pid_raw}" # Prefix to avoid collisions
+                
                 p = Product.query.get(pid)
                 if not p:
                     p = Product(product_id=pid)
                     p.first_seen = datetime.utcnow()
                 
-                # Heuristic Mapping
-                desc = item.get('text') or "Viral Find"
-                # Clean emojis and truncate
-                clean_desc = remove_emojis(desc)
-                p.product_name = (clean_desc[:100] + '...') if len(clean_desc) > 100 else clean_desc
+                # Direct Mapping
+                p.product_name = (item.get('title') or "Unknown Product")[:200]
+                p.seller_name = item.get('shop_name') or item.get('seller_name') or "TikTok Shop"
                 
-                p.image_url = item.get('videoCover') or item.get('authorMeta', {}).get('avatar') or ""
+                # Image
+                imgs = item.get('images') or []
+                if imgs and len(imgs) > 0:
+                    p.image_url = imgs[0]
                 
-                # Proxy metrics
-                likes = int(item.get('diggCount', 0))
-                views = int(item.get('playCount', 0))
+                # Sales & Price
+                # Safe get for sold_count which might be '10K+' string or int
+                sold_raw = item.get('sold_count', 0)
+                if isinstance(sold_raw, str):
+                    if 'K' in sold_raw: sold_raw = float(sold_raw.replace('K','').replace('+','')) * 1000
+                    elif 'M' in sold_raw: sold_raw = float(sold_raw.replace('M','').replace('+','')) * 1000000
+                p.sales = int(float(sold_raw)) if sold_raw else 0
                 
-                p.sales = likes # Use Likes as proxy for "Sales" sorting
-                p.sales_7d = int(likes / 100) # Rough estimate
-                # p.views_count = views (Removed to avoid schema mismatch)
-                p.video_count = 1
+                price_info = item.get('price', {})
+                if isinstance(price_info, dict):
+                    p.price = float(price_info.get('min') or price_info.get('value') or 0)
+                else:
+                    p.price = float(price_info) if price_info else 0
                 
-                p.seller_name = item.get('authorMeta', {}).get('name') or "Viral Creator"
-                p.status_note = f"Source: {item.get('webVideoUrl')}"
-                p.scan_type = 'apify_viral'
+                # URL
+                p.product_url = item.get('product_url') or f"https://shop.tiktok.com/view/product/{pid_raw}"
+                if not p.product_url or 'http' not in p.product_url:
+                     p.product_url = f"https://shop.tiktok.com/view/product/{pid_raw}?region=US&locale=en"
+
+                p.scan_type = 'apify_shop'
                 p.last_updated = datetime.utcnow()
-                # p.has_free_shipping = True (Removed to avoid schema mismatch)
+                p.is_ad_driven = True # Mark as "found by scanner" for logic
                 
                 db.session.add(p)
                 saved_count += 1
@@ -144,7 +137,8 @@ def run_apify_scan():
         
         db.session.commit()
     
-    print(f">> Apify Scan Complete. Saved/Updated {saved_count} viral products.")
+    print(f">> Apify Shop Scan Complete. Saved {saved_count} REAL products.")
+    print(">> Cleanup complete.")
 
 if __name__ == '__main__':
     run_apify_scan()

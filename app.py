@@ -3135,7 +3135,7 @@ def get_products():
     # Apply apify scan filter
     apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
     if apify_scan:
-        query = query.filter(Product.scan_type == 'apify_viral')
+        query = query.filter(Product.scan_type == 'apify_shop')
 
     # Apply trending filter - products with sales growth or high recent sales
     if trending_only:
@@ -3263,9 +3263,9 @@ def get_products():
         Product.has_free_shipping == True
     ).count()
 
-    # Apify Trends (Viral)
+    # Apify Trends (Paid Shop Scan)
     apify_count = Product.query.filter(
-        Product.scan_type == 'apify_viral'
+        Product.scan_type == 'apify_shop'
     ).count()
     
     return jsonify({
