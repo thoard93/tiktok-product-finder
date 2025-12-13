@@ -40,8 +40,8 @@ def run_apify_scan():
     # Search Logic: US Search for "trending"
     run_input = {
         "keyword": "trending products", 
-        "limit": 60,
-        "country_code": "US" # "country" was wrong, "country_code" is required
+        "limit": 10,  # Actor enforces max limit of 10
+        "country_code": "US" 
     }
 
     # 1. Start Actor
