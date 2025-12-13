@@ -58,6 +58,29 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'poolclass': NullPool,
 }
 
+@app.route('/api/debug-products')
+def debug_products_dump():
+    """Dump last 10 products to verify DB state"""
+    try:
+        # Force fresh query
+        db.session.expire_all()
+        products = Product.query.order_by(Product.first_seen.desc()).limit(10).all()
+        return jsonify({
+            'count': len(products),
+            'products': [{
+                'id': p.product_id,
+                'name': p.product_name,
+                'scan_type': p.scan_type,
+                'video_count': p.video_count,
+                'is_hidden': getattr(p, 'is_hidden', 'N/A'),
+                'is_ad_driven': p.is_ad_driven,
+                'created': p.first_seen.isoformat()
+            } for p in products],
+            'db_uri': app.config['SQLALCHEMY_DATABASE_URI']
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 db = SQLAlchemy(app)
 
 # =============================================================================
