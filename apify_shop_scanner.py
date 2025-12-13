@@ -89,6 +89,26 @@ def run_apify_scan():
                 
                 pid = f"viral_{vid}"
 
+                # Function to remove non-BMP characters (emojis)
+                def remove_emojis(text):
+                    return ''.join(c for c in text if c <= '\uFFFF')
+
+                # DEBUG: Create specific debug product on first run of loop if not exists
+                if saved_count == 0:
+                    try:
+                        debug_id = f"viral_debug_{int(time.time())}"
+                        dp = Product(product_id=debug_id)
+                        dp.product_name = "Scanner Debug - Running..."
+                        dp.seller_name = "System"
+                        dp.scan_type = 'apify_viral'
+                        dp.video_count = 1
+                        dp.first_seen = datetime.utcnow()
+                        db.session.add(dp)
+                        db.session.commit()
+                        print("   Debug product saved.")
+                    except Exception as e:
+                        print(f"   Failed to save debug product: {e}")
+
                 p = Product.query.get(pid)
                 if not p:
                     p = Product(product_id=pid)
@@ -96,8 +116,9 @@ def run_apify_scan():
                 
                 # Heuristic Mapping
                 desc = item.get('text') or "Viral Find"
-                # Truncate desc
-                p.product_name = (desc[:100] + '...') if len(desc) > 100 else desc
+                # Clean emojis and truncate
+                clean_desc = remove_emojis(desc)
+                p.product_name = (clean_desc[:100] + '...') if len(clean_desc) > 100 else clean_desc
                 
                 p.image_url = item.get('videoCover') or item.get('authorMeta', {}).get('avatar') or ""
                 
