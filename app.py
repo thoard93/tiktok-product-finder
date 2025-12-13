@@ -2898,7 +2898,26 @@ def run_apify_scan():
         
         script_path = os.path.join(os.path.dirname(__file__), 'apify_shop_scanner.py')
         
-            'message': 'Viral Trend Scan started! Check back in 2-3 minutes.'
+        # Run synchronously to capture output
+        result = subprocess.run(
+            [sys.executable, script_path],
+            capture_output=True,
+            text=True
+        )
+        
+        stdout = result.stdout
+        stderr = result.stderr
+        
+        if result.returncode != 0:
+            return jsonify({
+                'success': False, 
+                'error': f"Script failed (Exit Code {result.returncode}):\n{stderr}\n{stdout}"
+            })
+            
+        return jsonify({
+            'success': True, 
+            'message': 'Scanner finished successfully.',
+            'debug_log': stdout
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
