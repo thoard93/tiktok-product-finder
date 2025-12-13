@@ -40,8 +40,9 @@ def run_apify_scan():
     # Search Logic: 50 generic "trending" products to start
     run_input = {
         "keywords": ["trending", "gadgets", "home", "beauty"], 
-        "maxItems": 60,
-        "country": "US"
+        "limit": 60,      # "maxItems" was ignored, "limit" is correct
+        "country": "US",
+        "region": "US"    # Ensure US region to override default "VN"
     }
 
     # 1. Start Actor
