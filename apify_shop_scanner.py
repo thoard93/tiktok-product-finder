@@ -21,7 +21,7 @@ t_part1 = "apify_api_"
 t_part2 = "fd3d6uEEsUzuizgkMQHR"
 t_part3 = "SHYSQXn47W0sE7Uf"
 APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', t_part1 + t_part2 + t_part3)
-ACTOR_ID = "clockworks~tiktok-shop-scraper" # Tilde format for Clockworks
+ACTOR_ID = "pratikdani~tiktok-shop-search-scraper" # User-Selected US Search Scraper
 
 def run_apify_scan():
     if not APIFY_API_TOKEN:
@@ -37,12 +37,11 @@ def run_apify_scan():
         if deleted > 0:
             print(f">> Cleaned up {deleted} old 'viral' products.")
 
-    # Search Logic: 60 US Trending Products
-    # Using Clockworks parameters
+    # Search Logic: US Search for "trending"
     run_input = {
-        "isTrendingProducts": True, 
+        "keyword": "trending products", # Actor uses singular 'keyword'
         "limit": 60,
-        "region": "US" 
+        "country": "US" # Validated from user screenshot
     }
 
     # 1. Start Actor
