@@ -2899,8 +2899,9 @@ def run_apify_scan():
         script_path = os.path.join(os.path.dirname(__file__), 'apify_shop_scanner.py')
         
         # Run synchronously to capture output
+        # Use -u for unbuffered output to ensure we catch prints
         result = subprocess.run(
-            [sys.executable, script_path],
+            [sys.executable, '-u', script_path],
             capture_output=True,
             text=True
         )
@@ -2908,16 +2909,18 @@ def run_apify_scan():
         stdout = result.stdout
         stderr = result.stderr
         
+        debug_info = f"Exe: {sys.executable}\nScript: {script_path}\nReturn Code: {result.returncode}\n\nSTDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
+        
         if result.returncode != 0:
             return jsonify({
                 'success': False, 
-                'error': f"Script failed (Exit Code {result.returncode}):\n{stderr}\n{stdout}"
+                'error': f"Script failed (Exit Code {result.returncode}):\n{debug_info}"
             })
             
         return jsonify({
             'success': True, 
             'message': 'Scanner finished successfully.',
-            'debug_log': stdout
+            'debug_log': debug_info
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

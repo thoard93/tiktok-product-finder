@@ -11,8 +11,9 @@ import requests
 import json
 from datetime import datetime
 
-# Import from main application to ensure schema compatibility
 from app import app, db, Product
+
+print("IMPORTANT: Script Starting...", flush=True)
 
 # Apify Config
 # Split token to avoid GitHub secret scanning
