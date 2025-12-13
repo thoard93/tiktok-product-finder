@@ -3050,9 +3050,6 @@ def get_products():
     # ALWAYS exclude non-promotable products (not for sale, live only, etc.)
     # Also exclude Debug/Garbage data from previous runs
     query = query.filter(
-        db.or_(
-            Product.scan_type.in_(['apify_ad', 'daily_virals', 'apify_bestseller', 'apify_viral']) # Allow ads/virals/bestsellers with only 1 video
-        ),
         ~Product.product_name.ilike('%not for sale%'),
         ~Product.product_name.ilike('%live only%'),
         ~Product.seller_name.like('Debug%'), # Hide debug artifacts
