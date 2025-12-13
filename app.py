@@ -487,7 +487,7 @@ class Product(db.Model):
 
 with app.app_context():
     db.create_all()
-    print("✅ Database tables initialized")
+    print(">> Database tables initialized")
 
 # =============================================================================
 # AUTHENTICATION HELPERS
@@ -3028,8 +3028,7 @@ def get_products():
     # Also exclude Debug/Garbage data from previous runs
     query = query.filter(
         db.or_(
-            Product.video_count >= 2,
-            Product.scan_type.in_(['apify_ad', 'daily_virals']) # Allow ads/virals with only 1 video
+            Product.scan_type.in_(['apify_ad', 'daily_virals', 'apify_bestseller', 'apify_viral']) # Allow ads/virals/bestsellers with only 1 video
         ),
         ~Product.product_name.ilike('%not for sale%'),
         ~Product.product_name.ilike('%live only%'),
@@ -3096,6 +3095,11 @@ def get_products():
             Product.sales_7d >= 10  # At least some sales to show it works
         )
     
+    # Apply apify scan filter
+    apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
+    if apify_scan:
+        query = query.filter(Product.scan_type == 'apify_viral')
+
     # Apply trending filter - products with sales growth or high recent sales
     if trending_only:
         try:

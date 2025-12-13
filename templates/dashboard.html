@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,7 +29,7 @@
             border-radius: 20px;
             padding: 30px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
         }
 
         h1 {
@@ -57,12 +58,12 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
 
         .tab:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
         }
 
         .tab.active {
@@ -75,7 +76,7 @@
             border-radius: 15px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             display: flex;
             gap: 15px;
             flex-wrap: wrap;
@@ -93,7 +94,8 @@
             color: #333;
         }
 
-        input, select {
+        input,
+        select {
             padding: 10px 15px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
@@ -101,7 +103,8 @@
             transition: border 0.3s;
         }
 
-        input:focus, select:focus {
+        input:focus,
+        select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -111,7 +114,7 @@
             border-radius: 15px;
             padding: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
 
         .stats-grid {
@@ -146,7 +149,7 @@
             background: white;
             border-radius: 15px;
             padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             transition: all 0.3s;
             position: relative;
             overflow: hidden;
@@ -154,7 +157,7 @@
 
         .product-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
 
         .gem-badge {
@@ -270,7 +273,7 @@
             border-radius: 15px;
             padding: 50px;
             text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
 
         .no-products-text {
@@ -279,6 +282,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -289,6 +293,7 @@
         <div class="tabs">
             <button class="tab active" data-tab="all">📊 All Products</button>
             <button class="tab" data-tab="gems">💎 Brand Hunter Gems</button>
+            <button class="tab" data-tab="apify">🤖 Apify Trends</button>
         </div>
 
         <div class="controls">
@@ -347,7 +352,8 @@
             const params = new URLSearchParams({
                 tab: currentTab,
                 brand: document.getElementById('brandFilter').value,
-                sort: document.getElementById('sortBy').value
+                sort: document.getElementById('sortBy').value,
+                apify_scan: currentTab === 'apify' // Triggers backend filter
             });
 
             fetch(`/api/products?${params}`)
@@ -465,4 +471,5 @@
         loadProducts();
     </script>
 </body>
+
 </html>

@@ -393,7 +393,7 @@ function resetFilters() {
 
 function quickFilter(type) {
     document.querySelectorAll('.quick-filter').forEach(el => el.classList.remove('active'));
-    document.getElementById('qf-' + (type === 'all' ? 'all' : type === 'gems' ? 'gems' : type === 'untapped' ? 'untapped' : 'commission')).classList.add('active');
+    document.getElementById('qf-' + (type === 'high-commission' ? 'commission' : type)).classList.add('active');
 
     document.getElementById('minCommission').value = '';
     document.getElementById('competition').value = '';
@@ -403,6 +403,8 @@ function quickFilter(type) {
     if (type === 'gems') {
         currentFilters.min_influencers = 3;
         currentFilters.max_influencers = 50;
+    } else if (type === 'apify') {
+        currentFilters.apify_scan = 'true';
     } else if (type === 'untapped') {
         currentFilters.competition = 'untapped';
     } else if (type === 'high-commission') {
