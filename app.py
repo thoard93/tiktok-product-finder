@@ -2912,6 +2912,23 @@ def trigger_apify_scan():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/debug/recent', methods=['GET'])
+def debug_recent_products():
+    """Debug: Show last 10 products and their scan_types"""
+    try:
+        products = Product.query.order_by(Product.first_seen.desc()).limit(10).all()
+        return jsonify({
+            'success': True,
+            'products': [{
+                'id': p.product_id,
+                'name': p.product_name,
+                'scan_type': p.scan_type,
+                'first_seen': str(p.first_seen)
+            } for p in products]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # ADMIN / CLEANUP ENDPOINTS
 # =============================================================================
