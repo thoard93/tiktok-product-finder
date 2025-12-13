@@ -21,7 +21,7 @@ t_part1 = "apify_api_"
 t_part2 = "fd3d6uEEsUzuizgkMQHR"
 t_part3 = "SHYSQXn47W0sE7Uf"
 APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', t_part1 + t_part2 + t_part3)
-ACTOR_ID = "novi~tiktok-shop-scraper" # Tilde format is required for API URL
+ACTOR_ID = "excavator~tiktok-shop-scraper" # Official US-Supported Scraper
 
 def run_apify_scan():
     if not APIFY_API_TOKEN:
@@ -37,12 +37,11 @@ def run_apify_scan():
         if deleted > 0:
             print(f">> Cleaned up {deleted} old 'viral' products.")
 
-    # Search Logic: 50 generic "trending" products to start
+    # Search Logic: 60 US Trending Products
     run_input = {
-        "keywords": ["trending", "gadgets", "home", "beauty"], 
+        "isTrendingProducts": True, # Ignore keywords, get trending
         "limit": 60,
-        "country": "US"
-        # "region": "US"  <-- REMOVED: "region" is only for SEA (ID, VN, etc). US uses "country".
+        "region": "US" # Excavator supports US region
     }
 
     # 1. Start Actor
