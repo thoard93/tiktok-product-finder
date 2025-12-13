@@ -1333,21 +1333,21 @@
                 if (data.success && (data.counts || data.stats)) {
                     stats = data.counts || data.stats;
                     document.getElementById('totalProducts').textContent = formatNumber(stats.total_products || stats.all || 0);
-                    document.getElementById('hiddenGems').textContent = formatNumber(stats.hidden_gems || 0);
-                    document.getElementById('untappedCount').textContent = formatNumber(stats.untapped_products || 0);
+                    document.getElementById('hiddenGems').textContent = formatNumber(stats.hidden_gems || stats.gems || 0);
+                    document.getElementById('untappedCount').textContent = formatNumber(stats.untapped_products || stats.untapped || 0);
                     // Avg Commission element removed from HTML, so we skip it here to avoid crash
 
                     if (document.getElementById('qf-all-count')) {
-                        document.getElementById('qf-all-count').textContent = stats.total_products || 0;
-                        document.getElementById('qf-gems-count').textContent = stats.hidden_gems || 0;
-                        document.getElementById('qf-untapped-count').textContent = stats.untapped_products || 0;
+                        document.getElementById('qf-all-count').textContent = stats.total_products || stats.all || 0;
+                        document.getElementById('qf-gems-count').textContent = stats.hidden_gems || stats.gems || 0;
+                        document.getElementById('qf-untapped-count').textContent = stats.untapped_products || stats.untapped || 0;
                         document.getElementById('qf-freeship-count').textContent = stats.freeship || 0;
                         // document.getElementById('qf-commission-count').textContent = stats.high_commission || 0;
                         if (document.getElementById('qf-apify-count')) {
                             document.getElementById('qf-apify-count').textContent = stats.apify_count || 0;
                         }
                         if (document.getElementById('qf-ads-count')) {
-                            document.getElementById('qf-ads-count').textContent = stats.ad_winners || 0;
+                            document.getElementById('qf-ads-count').textContent = stats.ad_winners || stats.trending || 0;
                         }
                     }
                 }
