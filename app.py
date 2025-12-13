@@ -2910,16 +2910,7 @@ def trigger_apify_scan():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-            'seller_id': b.get('seller_id'),
-            'seller_name': b.get('seller_name'),
-            'gmv': b.get('total_sale_gmv_amt', 0),
-            'products_count': b.get('total_product_cnt', 0),
-            'influencer_count': b.get('total_ifl_cnt', 0),
-            'total_sales': b.get('total_sale_cnt', 0)
-        } for b in brands],
-        'page': page,
-        'count': len(brands)
-    })
+
 
 # =============================================================================
 # ADMIN / CLEANUP ENDPOINTS
