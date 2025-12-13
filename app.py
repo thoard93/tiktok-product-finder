@@ -2889,23 +2889,15 @@ def list_top_brands():
     })
 
 @app.route('/api/run-apify-scan', methods=['POST'])
-def trigger_apify_scan():
-    """Trigger the Apify Shop Scanner script as a subprocess"""
+def run_apify_scan():
+    """Triggers the Apify Shop Scanner script synchronously and returns output."""
     try:
         # Use python executable relative to environment
         import sys
         import subprocess
         
-        # Determine python path
-        python_exe = sys.executable
         script_path = os.path.join(os.path.dirname(__file__), 'apify_shop_scanner.py')
         
-        # Run in background (fire and forget)
-        # Using subprocess.Popen allows app to return immediately
-        subprocess.Popen([python_exe, script_path])
-        
-        return jsonify({
-            'success': True, 
             'message': 'Viral Trend Scan started! Check back in 2-3 minutes.'
         })
     except Exception as e:

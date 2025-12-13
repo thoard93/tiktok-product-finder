@@ -741,7 +741,8 @@
 
                 if (data.success) {
                     log(data.message, 'success');
-                    log('You can close this window. The products will appear in the "Apify Trends" tab shortly.', 'info');
+                    if (data.debug_log) log(data.debug_log, 'info'); // Show script output
+                    log('You can close this window. The products will appear in the "Shop Scraper" tab shortly.', 'info');
                 } else {
                     log(`Error: ${data.error}`, 'error');
                 }
