@@ -1330,9 +1330,9 @@
                 const response = await fetch('/api/stats');
                 const data = await response.json();
 
-                if (data.success && data.stats) {
-                    stats = data.stats;
-                    document.getElementById('totalProducts').textContent = formatNumber(stats.total_products || 0);
+                if (data.success && (data.counts || data.stats)) {
+                    stats = data.counts || data.stats;
+                    document.getElementById('totalProducts').textContent = formatNumber(stats.total_products || stats.all || 0);
                     document.getElementById('hiddenGems').textContent = formatNumber(stats.hidden_gems || 0);
                     document.getElementById('untappedCount').textContent = formatNumber(stats.untapped_products || 0);
                     // Avg Commission element removed from HTML, so we skip it here to avoid crash
