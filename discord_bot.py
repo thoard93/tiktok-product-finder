@@ -413,6 +413,7 @@ async def lookup_command(ctx, *, query: str = None):
         return
     
     await ctx.message.add_reaction('🔍')
+    status_msg = await ctx.reply("⏳ Scanning... This may take ~20-30 seconds if I need to fetch fresh data...", mention_author=False)
     
     # Try to resolve if it's a share link
     if 'vm.tiktok.com' in query or '/t/' in query:
@@ -424,20 +425,75 @@ async def lookup_command(ctx, *, query: str = None):
     
     if not product_id:
         await ctx.message.add_reaction('❌')
-        await ctx.reply("❌ Could not extract product ID from your input.", mention_author=False)
+        await status_msg.edit(content="❌ Could not extract product ID from your input.")
         return
     
     product = get_product_data(product_id)
     
     if not product:
         await ctx.message.add_reaction('❌')
-        await ctx.reply(f"❌ Product `{product_id}` not found.", mention_author=False)
+        await status_msg.edit(content=f"❌ Product `{product_id}` not found/scan timed out.")
         return
     
+    await status_msg.delete()
     embed = create_product_embed(product)
     await ctx.reply(embed=embed, mention_author=False)
     await ctx.message.remove_reaction('🔍', bot.user)
     await ctx.message.add_reaction('✅')
+
+def get_hot_products():
+    """Get Top Products from the New Scraper Tab (Apify Shop)"""
+    from datetime import timedelta
+    
+    with app.app_context():
+        # Calculate cutoff date for repeat prevention
+        cutoff_date = datetime.utcnow() - timedelta(days=DAYS_BEFORE_REPEAT)
+        
+        # Query: 
+        products = Product.query.filter(
+            Product.scan_type == 'apify_shop', # ONLY new scraper data
+            Product.live_count > 0,            # Stock > 0
+            Product.video_count > 0,           # Videos > 0
+            db.or_(
+                Product.last_shown_hot == None,  # Never shown
+                Product.last_shown_hot < cutoff_date  # Or shown more than 3 days ago
+            )
+        ).order_by(
+            Product.sales_7d.desc() # Top Sales first
+        ).limit(MAX_DAILY_POSTS).all()
+        
+        # Convert to dicts BEFORE commit to avoid DetachedInstanceError
+        # (Commit expires objects, so accessing them later fails without a session)
+        product_dicts = []
+        for p in products:
+            p_dict = {
+                'product_id': p.product_id,
+                'product_name': p.product_name,
+                'seller_name': p.seller_name,
+                'sales_7d': p.sales_7d,
+                'sales_30d': p.sales_30d,
+                'influencer_count': p.influencer_count,
+                'video_count': p.video_count,
+                'commission_rate': p.commission_rate,
+                'price': p.price,
+                'image_url': p.cached_image_url or p.image_url,
+                'cached_image_url': p.cached_image_url,
+                'has_free_shipping': p.has_free_shipping,
+                'live_count': p.live_count, # Include live_count/stock
+                'stock': p.live_count
+            }
+            product_dicts.append(p_dict)
+            
+            # Mark products as shown today
+            p.last_shown_hot = datetime.utcnow()
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            print(f"Error updating last_shown_hot: {e}")
+            db.session.rollback()
+            
+        return product_dicts
 
 @bot.command(name='hotproducts')
 @commands.has_permissions(administrator=True)
