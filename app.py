@@ -6328,9 +6328,10 @@ def admin_create_key():
 def developer_portal():
     """Render Developer Portal"""
     try:
+        user = get_current_user()
         # Get User's Key
-        key = ApiKey.query.filter_by(user_id=current_user.id, is_active=True).first()
-        return render_template('developer_dashboard.html', api_key=key, user=current_user)
+        key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
+        return render_template('developer_dashboard.html', api_key=key, user=user)
     except Exception as e:
         return f"Error loading portal: {e}", 500
 
@@ -6339,8 +6340,9 @@ def developer_portal():
 def user_generate_key():
     """User generates or rotates their own key"""
     try:
+        user = get_current_user()
         # Deactivate old keys
-        old_keys = ApiKey.query.filter_by(user_id=current_user.id, is_active=True).all()
+        old_keys = ApiKey.query.filter_by(user_id=user.id, is_active=True).all()
         for k in old_keys:
             k.is_active = False
             
@@ -6361,7 +6363,7 @@ def user_generate_key():
         
         new_key = ApiKey(
             key=new_key_str,
-            user_id=current_user.id,
+            user_id=user.id,
             credits=existing_credits,
             is_active=True
         )
@@ -6387,6 +6389,7 @@ endpoint_secret = os.environ.get('STRIPE_WEBHOOK_SECRET')
 def create_checkout_session():
     """Create Stripe Session for Credits"""
     try:
+        user = get_current_user()
         data = request.get_json() or {}
         plan = data.get('plan') # starter, pro, enterprise
         
@@ -6420,10 +6423,10 @@ def create_checkout_session():
             mode='payment',
             success_url=request.host_url + 'developer?success=true',
             cancel_url=request.host_url + 'developer?canceled=true',
-            client_reference_id=str(current_user.id),
+            client_reference_id=str(user.id),
             metadata={
                 'credits_to_add': selected['credits'],
-                'user_id': current_user.id
+                'user_id': user.id
             }
         )
         return jsonify({'url': checkout_session.url})
