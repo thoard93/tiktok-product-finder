@@ -1452,7 +1452,19 @@
 
         function quickFilter(type) {
             document.querySelectorAll('.quick-filter').forEach(el => el.classList.remove('active'));
-            document.getElementById('qf-' + (type === 'all' ? 'all' : type === 'gems' ? 'gems' : type === 'untapped' ? 'untapped' : type === 'freeship' ? 'freeship' : type === 'ads' ? 'ads' : 'commission')).classList.add('active');
+            // Smart active class toggle
+            const idMap = {
+                'all': 'qf-all',
+                'gems': 'qf-gems',
+                'untapped': 'qf-untapped',
+                'freeship': 'qf-freeship',
+                'ads': 'qf-ads',
+                'apify': 'qf-apify',
+                'commission': 'qf-commission'
+            };
+            const targetId = idMap[type] || 'qf-all';
+            const el = document.getElementById(targetId);
+            if (el) el.classList.add('active');
 
             document.getElementById('minCommission').value = '';
             document.getElementById('competition').value = '';
@@ -1471,6 +1483,8 @@
                 currentFilters.free_shipping = 'true';
             } else if (type === 'ads') {
                 currentFilters.likely_ads = 'true';
+            } else if (type === 'apify') {
+                currentFilters.apify_scan = 'true';
             }
 
             currentPage = 1;

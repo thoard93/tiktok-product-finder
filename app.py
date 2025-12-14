@@ -3596,7 +3596,8 @@ def get_stats():
                         ),
                         Product.scan_type.in_(['apify_ad', 'daily_virals'])
                     )
-                ).count()
+                ).count(),
+                'apify_count': Product.query.filter(Product.scan_type == 'apify_shop').count()
             }
         })
 
