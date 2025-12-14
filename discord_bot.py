@@ -16,7 +16,7 @@ from requests.auth import HTTPBasicAuth
 import asyncio
 
 # Database setup - Import from main application to ensure model consistency
-from app import app, db, Product
+from app import app, db, Product, User, ApiKey
 
 # Discord Config
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
@@ -419,9 +419,56 @@ async def lookup_command(ctx, *, query: str = None):
     if not query:
         await ctx.reply("Usage: `!lookup <product_id or TikTok URL>`", mention_author=False)
         return
+
+    # =========================================================================
+    # CREDIT SYSTEM CHECK
+    # =========================================================================
+    ADMIN_IDS = [274339622119669760]
+    discord_id = str(ctx.author.id)
+    user_credits = 0
+    is_admin = ctx.author.id in ADMIN_IDS
+    
+    if not is_admin:
+        with app.app_context():
+            # 1. Check if user exists (Linked via Discord Login)
+            user = User.query.filter_by(discord_id=discord_id).first()
+            if not user:
+                await ctx.reply(f"❌ **Unregistered User**\nPlease log in to the web dashboard first to link your account:\n{os.environ.get('RENDER_EXTERNAL_URL', 'https://your-app.com')}/login", mention_author=False)
+                return
+
+            # 2. Check for Active API Key
+            api_key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
+            if not api_key:
+                await ctx.reply(f"❌ **No API Key Found**\nPlease generate a key at:\n{os.environ.get('RENDER_EXTERNAL_URL', 'https://your-app.com')}/developer", mention_author=False)
+                return
+            
+            # 3. Check Credits
+            if api_key.credits < 1:
+                await ctx.reply(f"❌ **Insufficient Credits**\nYou have 0 credits. Buy more at:\n{os.environ.get('RENDER_EXTERNAL_URL', 'https://your-app.com')}/developer", mention_author=False)
+                return
+                
+            # 4. Deduct Credit (Preliminary - refund if fail?)
+            # We deduct strictly to prevent abuse.
+            try:
+                api_key.credits -= 1
+                user_credits = api_key.credits
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                await ctx.reply("❌ Database error checking credits.", mention_author=False)
+                return
+    else:
+        user_credits = 999999 # Admin
+        
+    # =========================================================================
+    # EXECUTE SCAN
+    # =========================================================================
     
     await ctx.message.add_reaction('🔍')
-    status_msg = await ctx.reply("⏳ Scanning... This may take ~20-30 seconds if I need to fetch fresh data...", mention_author=False)
+    if is_admin:
+        status_msg = await ctx.reply(f"👑 **Admin Bypass** | Scanning... ", mention_author=False)
+    else:
+        status_msg = await ctx.reply(f"💳 **1 Credit Deducted** (Remaining: {user_credits}) | Scanning...", mention_author=False)
     
     # Try to resolve if it's a share link
     if 'vm.tiktok.com' in query or '/t/' in query:
@@ -433,18 +480,43 @@ async def lookup_command(ctx, *, query: str = None):
     
     if not product_id:
         await ctx.message.add_reaction('❌')
-        await status_msg.edit(content="❌ Could not extract product ID from your input.")
+        # REFUND if extraction failed?
+        # Simpler: Don't refund for bad input to discourage spam, OR refund. 
+        # Let's refund for bad input if not admin.
+        if not is_admin:
+             with app.app_context():
+                api_key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
+                if api_key:
+                    api_key.credits += 1
+                    db.session.commit()
+                    
+        await status_msg.edit(content="❌ Could not extract product ID from your input. (Credit Refunded)")
         return
     
     product = get_product_data(product_id)
     
     if not product:
         await ctx.message.add_reaction('❌')
-        await status_msg.edit(content=f"❌ Product `{product_id}` not found/scan timed out.")
+         # REFUND if scan failed
+        if not is_admin:
+             with app.app_context():
+                api_key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
+                if api_key:
+                    api_key.credits += 1
+                    db.session.commit()
+                    
+        await status_msg.edit(content=f"❌ Product `{product_id}` not found/scan timed out. (Credit Refunded)")
         return
     
     await status_msg.delete()
     embed = create_product_embed(product)
+    
+    # Add Credit Footer
+    if not is_admin:
+        embed.set_footer(text=f"Credits Remaining: {user_credits} | ID: {product_id}")
+    else:
+        embed.set_footer(text=f"👑 Admin Mode | ID: {product_id}")
+        
     await ctx.reply(embed=embed, mention_author=False)
     await ctx.message.remove_reaction('🔍', bot.user)
     await ctx.message.add_reaction('✅')
