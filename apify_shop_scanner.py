@@ -251,6 +251,17 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     p.influencer_count = parse_metric(item.get('total_ifl_cnt'))
                     p.video_count = parse_metric(item.get('total_video_count') or item.get('videos_count'))
 
+                    # Commission
+                    raw_comm = item.get('affiliate_commission_rate') or item.get('commission_rate')
+                    if raw_comm:
+                        try:
+                            # Handle "15.00" or "0.15" or "15%"
+                            comm_val = float(str(raw_comm).replace('%', ''))
+                            if comm_val < 1: # 0.15 -> 15.0
+                                comm_val = comm_val * 100
+                            p.commission_rate = comm_val
+                        except: pass
+
                     # Valid URL
                     p.product_url = f"https://shop.tiktok.com/view/product/{pid_raw}?region=US&locale=en"
 

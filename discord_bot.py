@@ -194,8 +194,8 @@ def create_product_embed(p, title_prefix=""):
         return val
 
     # Get stats with fallback to API keys
+    total_sales = int(get_val_multi(['sales', 'total_sale_cnt'], 0) or 0) # Use TOTAL sales
     sales_7d = int(get_val_multi(['sales_7d', 'total_sale_7d_cnt'], 0) or 0)
-    sales_30d = int(get_val_multi(['sales_30d', 'total_sale_30d_cnt'], 0) or 0)
     influencer_count = int(get_val_multi(['influencer_count', 'total_ifl_cnt'], 0) or 0)
     video_count = int(get_val_multi(['video_count', 'total_video_cnt'], 0) or 0)
     commission = float(get_val_multi(['commission_rate', 'product_commission_rate'], 0) or 0)
@@ -238,7 +238,7 @@ def create_product_embed(p, title_prefix=""):
     
     # Add stats fields
     embed.add_field(name="📦 Stock", value=f"{stock:,}", inline=True)
-    embed.add_field(name="📉 7-Day Sales", value=f"{sales_7d:,}", inline=True)
+    embed.add_field(name="📉 Total Sales", value=f"{total_sales:,}", inline=True)
     embed.add_field(name="💰 Price", value=f"${price:.2f}", inline=True)
     embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
     embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
