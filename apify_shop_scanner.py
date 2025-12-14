@@ -168,7 +168,16 @@ def run_apify_scan():
                         print(f"DEBUG ITEM: {json.dumps(item, default=str)}")
                     
                     # Name
-                    p.product_name = (item.get('product_name') or item.get('title') or item.get('name') or "Unknown Product")[:200]
+                    raw_name = item.get('product_name') or item.get('title') or item.get('name')
+                    if not raw_name:
+                         log(f"[WARN] No name found for {pid}. Keys: {list(item.keys())}")
+                         p.product_name = "Unknown Product"
+                    else:
+                         p.product_name = raw_name[:200]
+                    
+                    # Fix Sort Order: If manual lookup (TARGET_ID), make it "Newest"
+                    if TARGET_ID or p.product_name != "Unknown Product":
+                         p.first_seen = datetime.utcnow() # Bump to top of "Newest Added" list
                     
                     # Seller Name
                     seller_data = item.get('seller') or {}
