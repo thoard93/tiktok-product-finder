@@ -6153,9 +6153,7 @@ def get_scanner_logs():
     except Exception as e:
          return jsonify({'logs': [f"Error reading logs: {str(e)}"]})
 
-with app.app_context():
-    ensure_db_schema()
-    db.create_all()
+
 
 
 # =============================================================================
@@ -6189,10 +6187,7 @@ def check_and_migrate_db():
             pass
 
 # Run migration check on startup (Safe for Gunicorn)
-try:
-    check_and_migrate_db()
-except:
-    pass
+
 
 # =============================================================================
 # SAAS API MODELS
@@ -6538,6 +6533,16 @@ def saas_worker_loop():
 
 # Start Worker Thread on App Start (Daemon)
 # Only start if likely running as main server (not during build)
+# Run migration check on startup (Safe for Gunicorn)
+# MUST BE AT END OF FILE so all models are loaded
+with app.app_context():
+    try:
+        ensure_db_schema()
+        db.create_all()
+        check_and_migrate_db()
+    except Exception as e:
+        print(f"Error during DB init: {e}")
+
 if os.environ.get('RENDER') or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     t = threading.Thread(target=saas_worker_loop, daemon=True)
     t.start()
