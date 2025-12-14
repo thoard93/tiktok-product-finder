@@ -199,9 +199,10 @@ def run_apify_scan():
                         except:
                             return 0.0
 
-                    # Sales
+                    # Sales (Parsed safely)
                     p.sales = parse_metric(item.get('total_sale_cnt') or item.get('sales'))
-                    p.sales_30d = parse_metric(item.get('total_sale_30d_cnt'))
+                    p.sales_30d = parse_metric(item.get('total_sale_30d_cnt') or item.get('sales_30d'))
+                    p.sales_7d = parse_metric(item.get('total_sale_7d_cnt') or item.get('sales_7d'))
 
                     # GMV
                     p.gmv = parse_float(item.get('total_sale_gmv_amt'))
@@ -227,14 +228,22 @@ def run_apify_scan():
                     if isinstance(skus, dict):
                         for sku_key, sku_data in skus.items():
                              total_stock += int(sku_data.get('stock', 0))
+                    elif isinstance(skus, list): # Handle list case just in case
+                         for s in skus:
+                             total_stock += int(s.get('stock', 0))
                     
                     # Hack: Store Stock in 'favorites' temporarily or just print?
                     # Product Table has no 'stock' column.
                     # We will use 'favorites' column as a proxy for STOCK for now (since we don't have real favorites from Apify).
                     p.favorites = total_stock # Stock Proxy
+                    p.msg_gmv = ads_gmv_val # Ads GMV Proxy
+
+                    # Debug Logs for User
+                    if batch_saved < 3: # Only log first few
+                        log(f"   [DEBUG] {p.product_name[:30]}... | Stock: {total_stock} | Sales: {p.sales} | 7d: {p.sales_7d}")
 
                     # Store Ads GMV in 'msg_gmv' (since we don't send messages)
-                    p.msg_gmv = ads_gmv_val # Ads GMV Proxy
+                    # p.msg_gmv = ads_gmv_val # Ads GMV Proxy (Already set above)
 
                     # Price
                     p.price = parse_float(item.get('avg_price') or item.get('real_price') or item.get('price'))
@@ -244,9 +253,9 @@ def run_apify_scan():
                     p.video_count = parse_metric(item.get('total_video_count') or item.get('videos_count'))
                     p.views_count = parse_metric(item.get('view_count'))
                     
-                    # URL
+                    # URL (Updated Format)
                     if not p.product_url or 'http' not in p.product_url:
-                         p.product_url = f"https://shop.tiktok.com/view/product/{pid_raw}?region=US&locale=en"
+                         p.product_url = f"https://www.tiktok.com/view/product/{pid_raw}"
 
                     p.scan_type = 'apify_shop'
                     p.last_updated = datetime.utcnow()
