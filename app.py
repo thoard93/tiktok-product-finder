@@ -454,6 +454,7 @@ class Product(db.Model):
     sales_velocity = db.Column(db.Float, default=0)  # Percentage change in sales
     
     scan_type = db.Column(db.String(50), default='brand_hunter')
+    is_ad_driven = db.Column(db.Boolean, default=False) # Track if found via ad scan
     first_seen = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     
@@ -5804,6 +5805,7 @@ def init_database():
             ('last_alert_sent', 'TIMESTAMP'),
             ('gem_alert_sent', 'TIMESTAMP'),
             ('stock_alert_sent', 'TIMESTAMP'),
+            ('is_ad_driven', 'BOOLEAN DEFAULT FALSE'),
         ]
         
         added = []
