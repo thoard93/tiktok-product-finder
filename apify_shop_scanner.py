@@ -231,16 +231,17 @@ def run_apify_scan():
                          for s in skus:
                              total_stock += int(s.get('stock', 0))
                     
-                    # Hack: Store Stock in 'favorites' temporarily or just print?
+                    # Hack: Store Stock in 'live_count' (Hijacked field)
                     # Product Table has no 'stock' column.
-                    # We will use 'favorites' column as a proxy for STOCK for now (since we don't have real favorites from Apify).
-                    p.favorites = total_stock # Stock Proxy
+                    # We will use 'live_count' column as a proxy for STOCK.
+                    p.live_count = total_stock # Stock Proxy (Hijacked)
                     p.msg_gmv = ads_gmv_val # Ads GMV Proxy
 
                     # Debug Logs for User
-                    if batch_saved < 1: # Log detailed keys for the VERY first item
+                    if batch_saved < 2: # Log detailed keys for the VERY first item
                         log(f"   [DEBUG_KEYS] Keys found: {list(item.keys())}")
-                        log(f"   [DEBUG_RAW] ID: {item.get('id')} | ProductID: {item.get('product_id')} | Title: {item.get('title')}")
+                        # Log group_id to check if it's the real product ID
+                        log(f"   [DEBUG_RAW] ID: {item.get('id')} | PID: {item.get('product_id')} | GID: {item.get('group_id')}")
 
                     if batch_saved < 3: # Only log first few
                         log(f"   [DEBUG] {p.product_name[:30]}... | Stock: {total_stock} | Sales: {p.sales} | 7d: {p.sales_7d}")

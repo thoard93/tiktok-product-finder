@@ -493,6 +493,7 @@ class Product(db.Model):
             'sales_30d': self.sales_30d,
             'influencer_count': self.influencer_count,
             'commission_rate': self.commission_rate,
+            'stock': self.live_count, # Hijacked field for Apify Stock
             'price': self.price,
             'image_url': self.cached_image_url or self.image_url,  # Prefer cached
             'cached_image_url': self.cached_image_url,
@@ -3123,10 +3124,13 @@ def get_products():
     
     # Build query - exclude unavailable products by default
     if apify_scan:
-        # Apify Shop scan: Explicitly show shop scraper items, ignoring video counts (they are 0 initially)
+        # Apify Shop scan: Explicitly show shop scraper items
+        # Also apply video count filters if they are set (so user can filter 0-10 etc)
         query = Product.query.filter(
             Product.scan_type == 'apify_shop',
-            db.or_(Product.product_status == None, Product.product_status == 'active')
+            db.or_(Product.product_status == None, Product.product_status == 'active'),
+            Product.video_count >= min_videos,
+            Product.video_count <= max_videos
         )
     elif oos_only:
         # Show only likely OOS products
