@@ -5950,6 +5950,24 @@ def run_viral_trends_scan():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/scanner-logs', methods=['GET'])
+@login_required
+def get_scanner_logs():
+    """Read the tail of the scanner log file."""
+    try:
+        log_path = os.path.join(basedir, 'scans', 'apify_shop.log')
+        if not os.path.exists(log_path):
+             return jsonify({'logs': ["Waiting for scan to start..."]})
+        
+        # Read last 30 lines
+        with open(log_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            tail = lines[-30:]
+            
+        return jsonify({'logs': [l.strip() for l in tail]})
+    except Exception as e:
+         return jsonify({'logs': [f"Error reading logs: {str(e)}"]})
+
 with app.app_context():
     ensure_db_schema()
     db.create_all()

@@ -23,6 +23,26 @@ t_part3 = "SHYSQXn47W0sE7Uf"
 APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', t_part1 + t_part2 + t_part3)
 ACTOR_ID = "pratikdani~tiktok-shop-search-scraper" # User-Selected US Search Scraper
 
+# Setup Logging
+log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scans')
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+log_file = os.path.join(log_dir, 'apify_shop.log')
+
+def log(msg):
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    line = f"[{timestamp}] {msg}"
+    print(line, flush=True)
+    try:
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(line + "\n")
+    except:
+        pass
+
+# Initialize log file
+with open(log_file, 'w') as f:
+    f.write(f"--- Scan Started at {datetime.now()} ---\n")
+
 import argparse
 
 def run_apify_scan():
@@ -34,11 +54,11 @@ def run_apify_scan():
     MAX_PRODUCTS = args.max_products
     
     if not APIFY_API_TOKEN:
-        print("X Error: APIFY_API_TOKEN not found.")
+        log("X Error: APIFY_API_TOKEN not found.")
         return
 
-    print(f">> Starting Shop Product Scan via {ACTOR_ID}...", flush=True)
-    print(f">> Target: {MAX_PRODUCTS} products (Batch size: {LIMIT_PER_RUN})")
+    log(f">> Starting Shop Product Scan via {ACTOR_ID}...")
+    log(f">> Target: {MAX_PRODUCTS} products (Batch size: {LIMIT_PER_RUN})")
     
     # Clean up old "viral video" junk only on first run of session? 
     # Actually, let's keep it additive for now, or clear old ones?
@@ -49,13 +69,13 @@ def run_apify_scan():
         deleted = Product.query.filter(Product.scan_type == 'apify_shop').delete()
         db.session.commit()
         if deleted > 0:
-            print(f">> Cleaned up {deleted} old products for fresh scan.")
+            log(f">> Cleaned up {deleted} old products for fresh scan.")
 
     total_saved = 0
     page = 1
     
     while total_saved < MAX_PRODUCTS:
-        print(f"\n--- Batch {page} (Target: {total_saved}/{MAX_PRODUCTS}) ---")
+        log(f"\n--- Batch {page} (Target: {total_saved}/{MAX_PRODUCTS}) ---")
         
         # Search Logic: US Search for "trending"
         # We can shift keys slightly or just rely on random sort from Apify?
@@ -76,15 +96,15 @@ def run_apify_scan():
         try:
             start_res = requests.post(start_url, json=run_input)
             if start_res.status_code != 201:
-                print(f"X Failed to start actor: {start_res.text}")
+                log(f"X Failed to start actor: {start_res.text}")
                 break # Stop loop
             
             run_data = start_res.json()['data']
             run_id = run_data['id']
             dataset_id = run_data['defaultDatasetId']
-            print(f"   Actor started! Run ID: {run_id}")
+            log(f"   Actor started! Run ID: {run_id}")
         except Exception as e:
-            print(f"X Error starting actor: {e}")
+            log(f"X Error starting actor: {e}")
             break
 
         # 2. Poll for completion
@@ -94,24 +114,24 @@ def run_apify_scan():
             status_res = requests.get(f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_API_TOKEN}")
             status_data = status_res.json()['data']
             status = status_data['status']
-            print(f"   Status: {status}...")
+            log(f"   Status: {status}...")
             
             if status == 'SUCCEEDED':
                 break
             elif status in ['FAILED', 'ABORTED', 'TIMED-OUT']:
-                print(f"X Run failed with status: {status}")
+                log(f"X Run failed with status: {status}")
                 return # Fatal error
             
 
         # 3. Fetch Results
-        print("   Fetching results...")
+        log("   Fetching results...")
         data_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={APIFY_API_TOKEN}"
         items_res = requests.get(data_url)
         items = items_res.json()
-        print(f"   Found {len(items)} items.")
+        log(f"   Found {len(items)} items.")
 
         if not items:
-            print("   No items found. Stopping.")
+            log("   No items found. Stopping.")
             break
 
         # 4. Save to DB
@@ -234,24 +254,24 @@ def run_apify_scan():
                     db.session.add(p)
                     batch_saved += 1
                 except Exception as e:
-                    print(f"   Error saving item: {e}")
+                    log(f"   Error saving item: {e}")
             
             db.session.commit()
             
-        print(f"   Batch Saved: {batch_saved}")
+        log(f"   Batch Saved: {batch_saved}")
         total_saved += batch_saved
         
         if total_saved >= MAX_PRODUCTS:
-            print(">> Reached Max Product Limit. Stopping.")
+            log(">> Reached Max Product Limit. Stopping.")
             break
             
         # Pause before next batch to be nice
-        print("   Pausing 5s before next batch...")
+        log("   Pausing 5s before next batch...")
         time.sleep(5)
         page += 1
     
-    print(f">> Apify Shop Scan Complete. Total Saved: {total_saved} products.")
-    print(">> Cleanup complete.")
+    log(f">> Apify Shop Scan Complete. Total Saved: {total_saved} products.")
+    log(">> Cleanup complete.")
 
 if __name__ == '__main__':
     run_apify_scan()

@@ -740,6 +740,35 @@
             btn.innerText = '⏳ Scanning Background...';
 
             const maxProducts = document.getElementById('viral-max').value || 50;
+            const consoleEl = document.getElementById('consoleLog');
+
+            // Start Polling Logs
+            const logInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/scanner-logs');
+                    const data = await res.json();
+                    if (data.logs && data.logs.length > 0) {
+                        consoleEl.innerHTML = '';
+                        data.logs.forEach(msg => {
+                            const entry = document.createElement('div');
+                            entry.className = 'log-entry';
+                            if (msg.includes('Error') || msg.includes('X ')) entry.className += ' log-error';
+                            else if (msg.includes('Saved') || msg.includes('Complete')) entry.className += ' log-success';
+                            entry.innerText = msg;
+                            consoleEl.appendChild(entry);
+                        });
+                        consoleEl.scrollTop = consoleEl.scrollHeight;
+
+                        if (data.logs.some(l => l.includes('Scan Complete') || l.includes('Fatal error'))) {
+                            clearInterval(logInterval);
+                            btn.innerText = originalText;
+                            if (data.logs.some(l => l.includes('Scan Complete'))) {
+                                log("Scan finished. Check 'Shop Scraper' tab.", 'success');
+                            }
+                        }
+                    }
+                } catch (e) { }
+            }, 2000);
 
             try {
                 const res = await fetch('/api/run-viral-trends-scan', {
