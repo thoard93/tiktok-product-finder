@@ -1466,6 +1466,15 @@
             const el = document.getElementById(targetId);
             if (el) el.classList.add('active');
 
+            // Update URL
+            const url = new URL(window.location);
+            if (type === 'all') {
+                url.searchParams.delete('tab');
+            } else {
+                url.searchParams.set('tab', type);
+            }
+            window.history.pushState({}, '', url);
+
             document.getElementById('minCommission').value = '';
             document.getElementById('competition').value = '';
 
@@ -1609,11 +1618,21 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             loadStats();
-            loadProducts(1, {});
-            updateFavoritesCount();
-            if (document.getElementById('qf-all')) {
-                document.getElementById('qf-all').classList.add('active');
+
+            // Check URL for tab param
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
+
+            if (tab && ['gems', 'untapped', 'freeship', 'ads', 'apify'].includes(tab)) {
+                quickFilter(tab);
+            } else {
+                loadProducts(1, {});
+                if (document.getElementById('qf-all')) {
+                    document.getElementById('qf-all').classList.add('active');
+                }
             }
+
+            updateFavoritesCount();
         });
         // JS END
     </script>

@@ -497,8 +497,15 @@
                             <h3>🤖 TikTok Shop Scraper (Paid Data)</h3>
                             <p>Scrapes REAL product data (Price, Sold, Revenue) using 'clockworks/tiktok-shop-scraper'.</p>
                             <p><strong>Cost:</strong> PAID (Uses Apify Compute Units ~$$)</p>
-                            <p><strong>Clean Slate:</strong> Starts by WIPING old 'apify_viral' data.</p>
+                            <p><strong>Clean Slate:</strong> Starts by WIPING old 'apify_shop' data (optional in code).</p>
                         </div>
+                    </div>
+                    <div class="form-group">
+                         <label class="form-label">Max Products (Batch Mode)</label>
+                         <input type="number" id="viral-max" class="form-input" value="50" min="10" max="500" step="10">
+                         <div class="subtitle" style="font-size: 0.8em; color: #94a3b8; margin-top: 5px;">
+                            Scans in batches of 20 with pauses to ensure data quality.
+                         </div>
                     </div>
                 </div>
                 <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🚀 Start Shop Scan</button>
@@ -732,9 +739,13 @@
             log(`Starting Viral Trends Scan (Apify)...`, 'info');
             btn.innerText = '⏳ Scanning Background...';
 
+            const maxProducts = document.getElementById('viral-max').value || 50;
+
             try {
                 const res = await fetch('/api/run-apify-scan', {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ max_products: parseInt(maxProducts) })
                 });
 
                 const data = await res.json();

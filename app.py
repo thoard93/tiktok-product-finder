@@ -5892,6 +5892,29 @@ def init_database():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/run-apify-scan', methods=['POST'])
+@login_required
+def run_apify_scan():
+    """Trigger the Apify Shop Scanner as a background process."""
+    try:
+        data = request.get_json() or {}
+        max_products = data.get('max_products', 50)
+        
+        script_path = os.path.join(basedir, 'apify_shop_scanner.py')
+        
+        # Pass the max_products argument to the script
+        cmd = [sys.executable, script_path, '--max_products', str(max_products)]
+        
+        # Run process detached (Windows vs Linux handling)
+        if os.name == 'nt':
+            process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            process = subprocess.Popen(cmd, start_new_session=True)
+            
+        return jsonify({'success': True, 'message': f'Scanner started in background (Limit: {max_products} products). Check console for progress.'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 with app.app_context():
     db.create_all()
 
