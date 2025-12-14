@@ -22,6 +22,7 @@ import secrets
 import sys
 import subprocess
 import requests
+import stripe
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for
@@ -6370,6 +6371,127 @@ def user_generate_key():
         return jsonify({'success': True, 'key': new_key_str})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+        return jsonify({'success': True, 'key': new_key_str})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# =============================================================================
+# STRIPE PAYMENT ROUTES
+# =============================================================================
+stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+endpoint_secret = os.environ.get('STRIPE_WEBHOOK_SECRET')
+
+@app.route('/api/stripe/create-checkout-session', methods=['POST'])
+@login_required
+def create_checkout_session():
+    """Create Stripe Session for Credits"""
+    try:
+        data = request.get_json() or {}
+        plan = data.get('plan') # starter, pro, enterprise
+        
+        if not stripe.api_key:
+            return jsonify({'error': 'Stripe not configured (STRIPE_SECRET_KEY missing)'}), 500
+
+        # Define Products (Hardcoded for simplicity, or use Price IDs)
+        pricing = {
+            'starter': {'amount': 500, 'credits': 100, 'name': 'Starter Pack (100 Credits)'},
+            'pro': {'amount': 2000, 'credits': 500, 'name': 'Pro Pack (500 Credits)'},
+            'enterprise': {'amount': 5000, 'credits': 1500, 'name': 'Enterprise Pack (1500 Credits)'}
+        }
+        
+        selected = pricing.get(plan)
+        if not selected:
+             return jsonify({'error': 'Invalid plan'}), 400
+             
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'unit_amount': selected['amount'], # in cents
+                    'product_data': {
+                        'name': selected['name'],
+                        'description': 'Credits for TikTokShop Finder API',
+                    },
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=request.host_url + 'developer?success=true',
+            cancel_url=request.host_url + 'developer?canceled=true',
+            client_reference_id=str(current_user.id),
+            metadata={
+                'credits_to_add': selected['credits'],
+                'user_id': current_user.id
+            }
+        )
+        return jsonify({'url': checkout_session.url})
+    except Exception as e:
+         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stripe/webhook', methods=['POST'])
+def stripe_webhook():
+    """Handle Stripe Webhooks to fulfill credits"""
+    payload = request.get_data()
+    sig_header = request.headers.get('Stripe-Signature')
+    event = None
+
+    try:
+        # Verify Signature if secret is set
+        if endpoint_secret:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, endpoint_secret
+            )
+        else:
+            # Fallback for dev/test without verification (NOT SECURE FOR PROD - warn user)
+            data = json.loads(payload)
+            event = stripe.Event.construct_from(data, stripe.api_key)
+            
+    except ValueError as e:
+        return 'Invalid payload', 400
+    except stripe.error.SignatureVerificationError as e:
+        return 'Invalid signature', 400
+
+    # Handle the event
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        
+        # Fulfill the purchase
+        user_id = session.get('client_reference_id') or session.get('metadata', {}).get('user_id')
+        credits = session.get('metadata', {}).get('credits_to_add')
+        
+        if user_id and credits:
+            fulfill_credits(user_id, int(credits))
+            
+    return jsonify({'status': 'success'})
+
+def fulfill_credits(user_id, amount):
+    """Add credits to user's active key"""
+    with app.app_context():
+        try:
+            print(f">> STRIPE: Adding {amount} credits to User {user_id}")
+            # Find active key
+            key = ApiKey.query.filter_by(user_id=user_id, is_active=True).first()
+            if key:
+                key.credits += amount
+                db.session.commit()
+                print(">> STRIPE: Credits added successfully!")
+            else:
+                # Create a key if they don't have one? Or just log error?
+                # Let's create one.
+                new_key_str = secrets.token_hex(16)
+                new_key = ApiKey(
+                    key=new_key_str,
+                    user_id=user_id,
+                    credits=amount,
+                    is_active=True
+                )
+                db.session.add(new_key)
+                db.session.commit()
+                print(">> STRIPE: Created new key with credits!")
+        except Exception as e:
+            print(f"!! STRIPE FULFILLMENT ERROR: {e}")
 
 # =============================================================================
 # SAAS WORKER (Background Thread)

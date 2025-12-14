@@ -391,60 +391,66 @@
         </div>
     </div>
 
-    <!-- Purchase Modal -->
-    <div class="modal" id="purchaseModal">
-        <div class="modal-content">
-            <h2 style="margin-bottom: 1rem;">Confirm Purchase</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 2rem;">
-                You are about to purchase the <span id="planName" style="color: white; font-weight: 700;">Starter
-                    Pack</span>.
-                <br><br>
-                Since we are in Beta, your credits will be added manually by Admin after payment.
-            </p>
-            <button class="btn-primary"
-                onclick="window.open('https://discord.com/users/350036660855209987', '_blank')">Contact Admin to
-                Pay</button>
-            <button class="btn-sm" style="margin-top: 1rem; background: transparent;"
-                onclick="document.getElementById('purchaseModal').style.display='none'">Cancel</button>
-        </div>
+    <!-- Toast Notification -->
+    <div id="toast"
+        style="position: fixed; bottom: 20px; right: 20px; background: var(--success); color: white; padding: 1rem 2rem; border-radius: 0.5rem; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+        Payment Successful! Credits Added. 🚀
     </div>
 
-    <script>
-        function copyKey() {
-            const keyText = document.getElementById('apiKeyDisplay').innerText.trim();
-            navigator.clipboard.writeText(keyText);
-            alert('API Key copied to clipboard!');
+    <script>n        yKey() {
+        cons            t = document.getElementById('apiKeyDisplay').innerText.trim();
+        navi            ipboard.writeText(keyText);
+        // S            l feedback
+        const btn = event.ta        ;
+            const original = btn.innerTe                 btn.innerText = "Copied!";
+        setTimeoub            Text =                000);
+    }
+
+    async function generateKey() {
+        if (!confirm("G                w API Key? Old keys will stop w                et urn;
+        
+                              const res =                 '/api/use                     { method: 'POST' });
+                         a             res.jso n();
+            i        atc        ) {
+                       ation.reload();
+            } else {                     alert('Error: '            error);
+            }
+        }            e) { alert(e); }                    const regenerateKey = genera                async function buyCredits                     const btn = event.target;
+                   abl            e;
+        btn.innerText = "Loading...";
+        
+        try                   const res = await fetch('/api/stripe/create-checkout-sessi         {
+         method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ plan: plan })
+            });
+            const data = await res.json();
+            
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                alert('Error creating session: ' + (data.error || 'Unknown error'));
+            }
+        } catch(e) {
+            alert('Payment Error: ' + e);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Buy Now";
         }
-
-        async function generateKey() {
-            if (!confirm("Generate a new API Key?")) return;
-
-            try {
-                const res = await fetch('/api/user/generate-key', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (e) { alert(e); }
+    }
+    
+    // Check for Success Params
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('success')) {
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 5000);
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
         }
-
-        // Alias for regen
-        const regenerateKey = generateKey;
-
-        function buyCredits(plan) {
-            // Placeholder for Stripe link
-            const plans = {
-                'starter': 'Starter Pack ($5)',
-                'pro': 'Pro Pack ($20)',
-                'enterprise': 'Enterprise Pack ($50)'
-            };
-            document.getElementById('planName').innerText = plans[plan];
-            document.getElementById('purchaseModal').style.display = 'flex';
-        }
+    }
     </script>
-
 </body>
 
 </html>
