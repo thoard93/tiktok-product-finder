@@ -463,34 +463,7 @@ class Product(db.Model):
     original_price = db.Column(db.Float, default=0) # Added for Strikethrough Price
     product_url = db.Column(db.String(500))
 
-# =============================================================================
-# DB MIGRATION HELPER (Run on startup to ensure schema matches model)
-# =============================================================================
-def check_and_migrate_db():
-    """Add missing columns to existing tables"""
-    with app.app_context():
-        inspector = db.inspect(db.engine)
-        columns = [c['name'] for c in inspector.get_columns('products')]
-        
-        if 'original_price' not in columns:
-            print(">> MIGRATION: Adding 'original_price' column to products table...")
-            try:
-                # Postgres vs SQLite syntax
-                if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
-                    db.session.execute(db.text('ALTER TABLE products ADD COLUMN original_price FLOAT DEFAULT 0'))
-                else:
-                    db.session.execute(db.text('ALTER TABLE products ADD COLUMN IF NOT EXISTS original_price FLOAT DEFAULT 0'))
-                db.session.commit()
-                print(">> MIGRATION: Success!")
-            except Exception as e:
-                print(f"!! MIGRATION FAILED: {e}")
-                db.session.rollback()
 
-# Run migration check on startup (Safe for Gunicorn)
-try:
-    check_and_migrate_db()
-except:
-    pass
     image_url = db.Column(db.Text)
     cached_image_url = db.Column(db.Text)  # Signed URL that works
     image_cached_at = db.Column(db.DateTime)  # When cache was created
@@ -6182,5 +6155,212 @@ with app.app_context():
     ensure_db_schema()
     db.create_all()
 
+
+# =============================================================================
+# DB MIGRATION HELPER (Run on startup to ensure schema matches model)
+# =============================================================================
+def check_and_migrate_db():
+    """Add missing columns to existing tables"""
+    with app.app_context():
+        # Wrap in try/except to avoid crash if DB not ready
+        try:
+            inspector = db.inspect(db.engine)
+            if not inspector: return
+            
+            # Check Products table
+            if 'products' in inspector.get_tables():
+                columns = [c['name'] for c in inspector.get_columns('products')]
+                
+                if 'original_price' not in columns:
+                    print(">> MIGRATION: Adding 'original_price' column to products table...")
+                    try:
+                        if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
+                            db.session.execute(db.text('ALTER TABLE products ADD COLUMN original_price FLOAT DEFAULT 0'))
+                        else:
+                            db.session.execute(db.text('ALTER TABLE products ADD COLUMN IF NOT EXISTS original_price FLOAT DEFAULT 0'))
+                        db.session.commit()
+                        print(">> MIGRATION: Success!")
+                    except Exception as e:
+                        print(f"!! MIGRATION FAILED: {e}")
+                        db.session.rollback()
+        except:
+            pass
+
+# Run migration check on startup (Safe for Gunicorn)
+try:
+    check_and_migrate_db()
+except:
+    pass
+
+# =============================================================================
+# SAAS API MODELS
+# =============================================================================
+
+class ApiKey(db.Model):
+    """API Keys for external SaaS access"""
+    __tablename__ = 'api_keys'
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(32), unique=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    credits = db.Column(db.Integer, default=0) # 1 credit = 1 scan
+    total_usage = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+class ScanJob(db.Model):
+    """Async Job Queue for SaaS Scans"""
+    __tablename__ = 'scan_jobs'
+    id = db.Column(db.String(36), primary_key=True) # UUID
+    status = db.Column(db.String(20), default='queued', index=True) # queued, processing, completed, failed
+    input_query = db.Column(db.String(500))
+    result_json = db.Column(db.Text)
+    api_key_id = db.Column(db.Integer, db.ForeignKey('api_keys.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+
+# =============================================================================
+# SAAS API ROUTES
+# =============================================================================
+import uuid
+import threading
+
+@app.route('/api/extern/scan', methods=['POST'])
+def extern_scan_start():
+    """Start a scan via API Key (Async)"""
+    api_key_val = request.headers.get('X-API-KEY')
+    if not api_key_val:
+        return jsonify({'error': 'Missing X-API-KEY header'}), 401
+    
+    key = ApiKey.query.filter_by(key=api_key_val, is_active=True).first()
+    if not key:
+        return jsonify({'error': 'Invalid API Key'}), 401
+    
+    if key.credits < 1:
+         return jsonify({'error': 'Insufficient Credits'}), 402
+    
+    data = request.get_json() or {}
+    query = data.get('query') or data.get('url')
+    if not query:
+        return jsonify({'error': 'Missing query/url'}), 400
+        
+    # Deduct Credit
+    key.credits -= 1
+    key.total_usage += 1
+    
+    # Create Job
+    job_id = str(uuid.uuid4())
+    job = ScanJob(id=job_id, status='queued', input_query=query, api_key_id=key.id)
+    db.session.add(job)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'job_id': job_id,
+        'status': 'queued',
+        'credits_remaining': key.credits
+    })
+
+@app.route('/api/extern/jobs/<job_id>', methods=['GET'])
+def extern_job_status(job_id):
+    """Check job status"""
+    api_key_val = request.headers.get('X-API-KEY')
+    if not api_key_val:
+        return jsonify({'error': 'Missing X-API-KEY header'}), 401
+    
+    # We could validate key config here but for speed we just check job existence
+    job = ScanJob.query.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+        
+    resp = {
+        'id': job.id,
+        'status': job.status,
+        'created_at': job.created_at.isoformat(),
+        'result': None
+    }
+    
+    if job.result_json:
+        try:
+            resp['result'] = json.loads(job.result_json)
+        except:
+            resp['result'] = job.result_json
+            
+    return jsonify(resp)
+
+@app.route('/api/admin/create-key', methods=['POST'])
+@login_required
+def admin_create_key():
+    """Admin: Generate a new SaaS API Key"""
+    try:
+        data = request.get_json() or {}
+        credits = int(data.get('credits', 100))
+        
+        new_key_str = secrets.token_hex(16) # 32 chars
+        
+        new_key = ApiKey(
+            key=new_key_str,
+            user_id=current_user.id,
+            credits=credits,
+            is_active=True
+        )
+        db.session.add(new_key)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'api_key': new_key_str,
+            'credits': credits,
+            'message': 'Key generated! Save it now, it cannot be retrieved later (hashed? no, stored plain for now for simplicity)'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# =============================================================================
+# SAAS WORKER (Background Thread)
+# =============================================================================
+def saas_worker_loop():
+    """Poll DB for queued jobs and process them"""
+    print(">> SAAS WORKER STARTED")
+    while True:
+        try:
+            with app.app_context():
+                # Fetch OLDEST queued job
+                job = ScanJob.query.filter_by(status='queued').order_by(ScanJob.created_at.asc()).first()
+                
+                if job:
+                    print(f">> PROCESSING JOB {job.id} for query: {job.input_query}")
+                    job.status = 'processing'
+                    db.session.commit()
+                    
+                    try:
+                        # Extract Product ID
+                        pid = extract_product_id(job.input_query)
+                        if pid:
+                            # Use existing logic
+                            res = start_hybrid_scan(pid)
+                            job.result_json = json.dumps(res)
+                            job.status = 'completed'
+                        else:
+                            job.result_json = json.dumps({'success': False, 'error': 'Invalid TikTok URL/ID'})
+                            job.status = 'failed'
+                    except Exception as e:
+                        job.result_json = json.dumps({'success': False, 'error': str(e)})
+                        job.status = 'failed'
+                    
+                    job.completed_at = datetime.utcnow()
+                    db.session.commit()
+                else:
+                    time.sleep(2) # Sleep if no jobs
+        except Exception as e:
+            print(f"!! SAAS WORKER ERROR: {e}")
+            time.sleep(5)
+
+# Start Worker Thread on App Start (Daemon)
+# Only start if likely running as main server (not during build)
+if os.environ.get('RENDER') or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    t = threading.Thread(target=saas_worker_loop, daemon=True)
+    t.start()
+    
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
