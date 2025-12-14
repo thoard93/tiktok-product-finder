@@ -11,6 +11,14 @@ with app.app_context():
     print(f"Products with scan_type='apify_viral': {count_viral}")
     
     if count_shop > 0:
-        latest = Product.query.filter_by(scan_type='apify_shop').order_by(Product.first_seen.desc()).limit(5).all()
+    if count_shop > 0:
+        latest = Product.query.filter_by(scan_type='apify_shop').order_by(Product.first_seen.desc()).limit(10).all()
         for p in latest:
-            print(f"- {p.product_name} | ID: {p.product_id} | Videos: {p.video_count} | Hidden: {p.is_hidden}")
+            print(f"--- Product: {p.product_id} ---")
+            print(f"Name: {p.product_name[:50]}...")
+            print(f"Seller: {p.seller_name}")
+            print(f"Sales: {p.sales} | Sales7d: {p.sales_7d} | Sales30d: {p.sales_30d}")
+            print(f"GMV: {p.gmv} | GMV7d: {p.gmv_7d}")
+            print(f"Image: {p.image_url}")
+            print(f"First Seen: {p.first_seen}")
+            print("-" * 30)
