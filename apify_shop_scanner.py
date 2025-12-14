@@ -102,14 +102,25 @@ def run_apify_scan():
         }
 
         if TARGET_ID:
-             # Construct direct URL to try forcing the scraper to look at this product
-             # Note: Different actors behave differently. Trying 'startUrls' is a common Apify standard.
+             # SWITCH to Clockworks Scraper for better Detail Page resolution
+             # "pratikdani" failed on direct links. "clockworks" is more robust for PDPs.
+             CURRENT_ACTOR = "clockworks/tiktok-shop-scraper" 
              direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
-             run_input['startUrls'] = [{'url': direct_url}]
-             # Some actors prioritize 'productUrl' or similar, but let's try this standard first along with keyword.
+             
+             # Clockworks Input Format
+             run_input = {
+                 "startUrls": [{"url": direct_url}],
+                 "maxItems": 1,
+                 "scrapeDetails": True
+             }
+             log(f">> Switching to Detail Scraper: {CURRENT_ACTOR}")
+        else:
+             CURRENT_ACTOR = ACTOR_ID
+        
+        log(f">> Run Input: {json.dumps(run_input)}")
         
         # 1. Start Actor
-        start_url = f"https://api.apify.com/v2/acts/{ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
+        start_url = f"https://api.apify.com/v2/acts/{CURRENT_ACTOR}/runs?token={APIFY_API_TOKEN}"
         run_id = None
         dataset_id = None
         
