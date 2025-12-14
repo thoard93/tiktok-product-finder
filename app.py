@@ -25,7 +25,7 @@ import requests
 import stripe
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for
+from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.pool import NullPool
 from functools import wraps
