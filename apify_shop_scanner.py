@@ -248,11 +248,12 @@ def run_apify_scan():
                     pid_clean = str(item.get('product_id'))
                     p.product_url = f"https://www.tiktok.com/shop/pdp/{pid_clean}"
 
-                    # Debug Logs for User (Consolidated)
+                    # Debug Logs
                     if batch_saved < 2: 
+                        log(f"   [DEBUG_URI] DB: {app.config['SQLALCHEMY_DATABASE_URI']}")
                         log(f"   [DEBUG] {p.product_name[:20]}... | Stock: {total_stock} | Sales: {p.sales} | URL: {p.product_url}")
-                        if batch_saved == 0:
-                             log(f"   [DEBUG_RAW] ID: {item.get('id')} | PID: {item.get('product_id')}")
+                        # Verify Object State
+                        log(f"   [DEBUG_OBJ] p.live_count before commit: {p.live_count}")
 
                     p.scan_type = 'apify_shop'
                     p.last_updated = datetime.utcnow()
@@ -263,7 +264,14 @@ def run_apify_scan():
                 except Exception as e:
                     log(f"   Error saving item: {e}")
             
-            db.session.commit()
+            try:
+                db.session.commit()
+                # Verify Persistence (only for first item)
+                if batch_saved > 0:
+                   p_verify = Product.query.get(p.product_id)
+                   log(f"   [DEBUG_PERSIST] Re-query Live Count: {p_verify.live_count if p_verify else 'NOT FOUND'}")
+            except Exception as commit_err:
+                 log(f"   [CRITICAL] Commit Failed: {commit_err}")
             
         log(f"   Batch Saved: {batch_saved}")
         total_saved += batch_saved
