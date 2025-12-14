@@ -581,6 +581,36 @@ def generate_watermark(user):
 # AUTHENTICATION ROUTES
 # =============================================================================
 
+# =============================================================================
+# DATABASE MIGRATION HELPER
+# =============================================================================
+
+def ensure_db_schema():
+    """Manually add missing columns if they don't exist"""
+    try:
+        columns_to_add = [
+            ('product_url', 'VARCHAR(500)'),
+            ('is_ad_driven', 'BOOLEAN DEFAULT FALSE'),
+            ('video_count', 'INTEGER DEFAULT 0'),
+            ('video_7d', 'INTEGER DEFAULT 0'),
+        ]
+        
+        for col_name, col_type in columns_to_add:
+            try:
+                db.session.execute(db.text(f'ALTER TABLE products ADD COLUMN {col_name} {col_type}'))
+                db.session.commit()
+                print(f">> Added column: {col_name}")
+            except Exception as e:
+                db.session.rollback()
+                # print(f">> Column {col_name} exists or error: {e}")
+                pass
+    except Exception as e:
+        print(f"Schema update error: {e}")
+
+# =============================================================================
+# AUTHENTICATION ROUTES
+# =============================================================================
+
 @app.route('/login')
 def login_page():
     """Show login page"""
@@ -5921,6 +5951,7 @@ def run_viral_trends_scan():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 with app.app_context():
+    ensure_db_schema()
     db.create_all()
 
 if __name__ == '__main__':
