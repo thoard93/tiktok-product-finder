@@ -18,6 +18,7 @@ Strategy:
 """
 
 import os
+import secrets
 import sys
 import subprocess
 import requests
@@ -6312,6 +6313,61 @@ def admin_create_key():
             'credits': credits,
             'message': 'Key generated! Save it now, it cannot be retrieved later (hashed? no, stored plain for now for simplicity)'
         })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# =============================================================================
+# USER DEVELOPER ROUTES
+# =============================================================================
+@app.route('/developer')
+@login_required
+def developer_portal():
+    """Render Developer Portal"""
+    try:
+        # Get User's Key
+        key = ApiKey.query.filter_by(user_id=current_user.id, is_active=True).first()
+        return render_template('developer_dashboard.html', api_key=key, user=current_user)
+    except Exception as e:
+        return f"Error loading portal: {e}", 500
+
+@app.route('/api/user/generate-key', methods=['POST'])
+@login_required
+def user_generate_key():
+    """User generates or rotates their own key"""
+    try:
+        # Deactivate old keys
+        old_keys = ApiKey.query.filter_by(user_id=current_user.id, is_active=True).all()
+        for k in old_keys:
+            k.is_active = False
+            
+        # Create new key
+        new_key_str = secrets.token_hex(16)
+        # Give 5 free credits on first generation attempt if total usage is 0? 
+        # Or just 0. Let's start with 0.
+        
+        # Check if they had credits on old key?
+        # If rotating, transfer credits.
+        existing_credits = 0
+        if old_keys:
+            existing_credits = sum([k.credits for k in old_keys])
+            
+        # Bonus for new users?
+        if not old_keys:
+            existing_credits = 5 # 5 Free Scans
+        
+        new_key = ApiKey(
+            key=new_key_str,
+            user_id=current_user.id,
+            credits=existing_credits,
+            is_active=True
+        )
+        db.session.add(new_key)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'key': new_key_str})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

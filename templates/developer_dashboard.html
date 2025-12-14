@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Portal | TikTokShop Finder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --accent: #f43f5e;
+            /* Rose/Red for generic */
+            --accent-glow: rgba(244, 63, 94, 0.3);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* Sidebar (Simplified version of main dash) */
+        .sidebar {
+            width: 260px;
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: white;
+            text-decoration: none;
+        }
+
+        .brand span {
+            color: var(--accent);
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover,
+        .nav-item.active {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        .nav-item.active {
+            border-left: 3px solid var(--accent);
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            padding: 3rem;
+            overflow-y: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        /* Grid Layout */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card h3 {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .card .value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        /* API Key Section */
+        .key-container {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .key-display {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            filter: blur(4px);
+            transition: filter 0.3s;
+            cursor: pointer;
+            user-select: all;
+        }
+
+        .key-display:hover,
+        .key-display.revealed {
+            filter: blur(0);
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+
+        .btn-sm:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Pricing Cards */
+        .pricing-card {
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .pricing-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent);
+            box-shadow: 0 10px 30px -10px var(--accent-glow);
+        }
+
+        .price {
+            font-size: 3rem;
+            font-weight: 700;
+            color: white;
+            margin: 1rem 0;
+        }
+
+        .price span {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 1rem;
+            transition: opacity 0.2s;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        /* Documentation */
+        .code-block {
+            background: #000;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #a5b4fc;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .comment {
+            color: #64748b;
+        }
+
+        .string {
+            color: #4ade80;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            border: 1px solid var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <a href="/" class="brand">
+            <span>⚡</span> TS Finder
+        </a>
+        <nav>
+            <a href="/" class="nav-item">Products</a>
+            <a href="/scanner" class="nav-item">Scanner</a>
+            <a href="/developer" class="nav-item active">Developer API</a>
+        </nav>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <div>
+                <h1>Developer Portal</h1>
+                <p style="color: var(--text-secondary);">Manage your API Keys and Credits</p>
+            </div>
+            <div>
+                <span class="nav-item" style="background: rgba(255,255,255,0.05);">
+                    User: {{ current_user.discord_username }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Stats & Key -->
+        <div class="grid">
+            <!-- API Key Card -->
+            <div class="card" style="grid-column: span 2;">
+                <h3>Your API Secret Key</h3>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                    Include this in the <code>X-API-KEY</code> header of your requests.
+                </p>
+
+                {% if api_key %}
+                <div class="key-container">
+                    <div class="key-display" id="apiKeyDisplay" onclick="this.classList.toggle('revealed')">
+                        {{ api_key.key }}
+                    </div>
+                    <button class="btn-sm" onclick="copyKey()">Copy</button>
+                </div>
+                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                    <button class="btn-sm" style="color: var(--accent); background: rgba(244,63,94,0.1);"
+                        onclick="regenerateKey()">
+                        Regenerate Key
+                    </button>
+                </div>
+                {% else %}
+                <div style="text-align: center; padding: 2rem;">
+                    <button class="btn-primary" style="width: auto;" onclick="generateKey()">Generate API Key</button>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Credits Card -->
+            <div class="card">
+                <h3>Credits Remaining</h3>
+                <div class="value" style="color: var(--success);">
+                    {{ api_key.credits if api_key else 0 }}
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                    1 Scan = 1 Credit typically ($0.05 value)
+                </p>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <h2 style="margin-bottom: 1.5rem;">Purchase Credits</h2>
+        <div class="grid">
+            <div class="card pricing-card">
+                <h3>Starter Pack</h3>
+                <div class="price">$5 <span>/ 100 Credits</span></div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Perfect for testing and small bots.</p>
+                <button class="btn-primary" onclick="buyCredits('starter')">Buy Now</button>
+            </div>
+
+            <div class="card pricing-card" style="border-color: var(--accent);">
+                <div
+                    style="position: absolute; top:0; right:0; background: var(--accent); color: white; padding: 0.25rem 0.75rem; font-size: 0.75rem; border-bottom-left-radius: 0.5rem;">
+                    POPULAR</div>
+                <h3>Pro Pack</h3>
+                <div class="price">$20 <span>/ 500 Credits</span></div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Best value for serious tools.</p>
+                <button class="btn-primary" onclick="buyCredits('pro')">Buy Now</button>
+            </div>
+
+            <div class="card pricing-card">
+                <h3>Enterprise</h3>
+                <div class="price">$50 <span>/ 1500 Credits</span></div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Volume discount for agencies.</p>
+                <button class="btn-primary" onclick="buyCredits('enterprise')">Buy Now</button>
+            </div>
+        </div>
+
+        <!-- Documentation -->
+        <h2 style="margin-bottom: 1.5rem;">Quick Start</h2>
+        <div class="card">
+            <h3>Python Example</h3>
+            <div class="code-block" style="margin-top: 1rem;">
+                import requests
+                import json
+
+                api_key = <span class="string">"{{ api_key.key if api_key else 'YOUR_KEY_HERE' }}"</span>
+                url = <span class="string">"https://{{ request.host }}/api/extern/scan"</span>
+
+                payload = { <span class="string">"url"</span>: <span
+                    class="string">"https://shop.tiktok.com/view/product/..."</span> }
+                headers = {
+                <span class="string">"Content-Type"</span>: <span class="string">"application/json"</span>,
+                <span class="string">"X-API-KEY"</span>: api_key
+                }
+
+                <span class="comment"># 1. Start Job</span>
+                response = requests.post(url, json=payload, headers=headers)
+                job_id = response.json().get(<span class="string">'job_id'</span>)
+                print(f"Job Started: {job_id}")
+
+                <span class="comment"># 2. Poll for Results (Wait a few seconds)</span>
+                import time
+                time.sleep(5)
+                status_url = f"https://{{ request.host }}/api/extern/jobs/{job_id}"
+                result = requests.get(status_url, headers=headers).json()
+                print(result)
+            </div>
+        </div>
+    </div>
+
+    <!-- Purchase Modal -->
+    <div class="modal" id="purchaseModal">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 1rem;">Confirm Purchase</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                You are about to purchase the <span id="planName" style="color: white; font-weight: 700;">Starter
+                    Pack</span>.
+                <br><br>
+                Since we are in Beta, your credits will be added manually by Admin after payment.
+            </p>
+            <button class="btn-primary"
+                onclick="window.open('https://discord.com/users/350036660855209987', '_blank')">Contact Admin to
+                Pay</button>
+            <button class="btn-sm" style="margin-top: 1rem; background: transparent;"
+                onclick="document.getElementById('purchaseModal').style.display='none'">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        function copyKey() {
+            const keyText = document.getElementById('apiKeyDisplay').innerText.trim();
+            navigator.clipboard.writeText(keyText);
+            alert('API Key copied to clipboard!');
+        }
+
+        async function generateKey() {
+            if (!confirm("Generate a new API Key?")) return;
+
+            try {
+                const res = await fetch('/api/user/generate-key', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) { alert(e); }
+        }
+
+        // Alias for regen
+        const regenerateKey = generateKey;
+
+        function buyCredits(plan) {
+            // Placeholder for Stripe link
+            const plans = {
+                'starter': 'Starter Pack ($5)',
+                'pro': 'Pro Pack ($20)',
+                'enterprise': 'Enterprise Pack ($50)'
+            };
+            document.getElementById('planName').innerText = plans[plan];
+            document.getElementById('purchaseModal').style.display = 'flex';
+        }
+    </script>
+
+</body>
+
+</html>
