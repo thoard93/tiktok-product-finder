@@ -209,7 +209,10 @@ def run_apify_scan():
                     raw_name = item.get('product_name') or item.get('title') or item.get('name')
                     if not raw_name:
                          log(f"[WARN] No name found for {pid}. Keys: {list(item.keys())}")
-                         p.product_name = "Unknown Product"
+                         if TARGET_ID:
+                             p.product_name = f"TikTok Product {pid_raw}" # Better than "Unknown"
+                         else:
+                             p.product_name = "Unknown Product"
                     else:
                          p.product_name = raw_name[:200]
                     
@@ -314,9 +317,11 @@ def run_apify_scan():
                     p.video_count = parse_metric(item.get('total_video_count') or item.get('videos_count'))
 
                     # URL (Force Set to Shop View format which is often more reliable)
-                    pid_clean = str(item.get('product_id'))
+                    # Use pid_raw which we robustly resolved at the start of the loop
+                    # pid_clean = str(item.get('product_id')) <-- THIS WAS THE BUG (None)
+                    
                     # Format: https://shop.tiktok.com/view/product/1729...?region=US&locale=en
-                    p.product_url = f"https://shop.tiktok.com/view/product/{pid_clean}?region=US&locale=en"
+                    p.product_url = f"https://shop.tiktok.com/view/product/{pid_raw}?region=US&locale=en"
 
                     # Debug Logs
                     if batch_saved < 2: 
