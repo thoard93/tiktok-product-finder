@@ -102,18 +102,31 @@ def run_apify_scan():
         }
 
         if TARGET_ID:
-             # SWITCH to Excavator (User request / advertised as fast)
-             # ID: excavator~tiktok-shop-product
-             CURRENT_ACTOR = "excavator~tiktok-shop-product" 
-             
-             direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
-             
-             # Excavator requires 'urls' key (per error message)
-             run_input = {
-                 "urls": [{"url": direct_url}],
-                 "maxItems": 1
-             }
-             log(f">> Switching to Fast Scraper: {CURRENT_ACTOR}")
+             # Check if input is a Name (has letters/spaces) or ID (digits)
+             # "Search by Name" is the only way to get Influencer/Video stats publicly
+             is_keyword_search = False
+             if any(c.isalpha() for c in TARGET_ID):
+                 is_keyword_search = True
+            
+             if is_keyword_search:
+                 # SEARCH MODE (Get Stats)
+                 CURRENT_ACTOR = "pratikdani~tiktok-shop-search-scraper"
+                 run_input = {
+                     "keyword": TARGET_ID,
+                     "limit": 5,
+                     "countryCode": "US",
+                     "sortType": "relevance_desc"
+                 }
+                 log(f">> Switching to Search Scraper (Stats Mode) for: '{TARGET_ID}'")
+             else:
+                 # ID MODE (Detail Only)
+                 CURRENT_ACTOR = "excavator~tiktok-shop-product" 
+                 direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
+                 run_input = {
+                     "urls": [{"url": direct_url}],
+                     "maxItems": 1
+                 }
+                 log(f">> Switching to Fast Detail Scraper for ID: {TARGET_ID}")
         else:
              CURRENT_ACTOR = ACTOR_ID
         
@@ -184,10 +197,11 @@ def run_apify_scan():
                          continue
 
                     # Basic validation
-                    # Fallback: If we are targeting a specific ID and the scraper returns an item without an ID, assume it's the one we asked for.
+                    # Fallback: If we are targeting a specific ID and the scraper returns an item without an ID...
                     pid_raw = str(item.get('id') or item.get('product_id'))
                     
-                    if (not pid_raw or 'None' in pid_raw) and TARGET_ID:
+                    # Only fallback to TARGET_ID if it looks like a numeric ID (not a keyword search title)
+                    if (not pid_raw or 'None' in pid_raw) and TARGET_ID and TARGET_ID.isdigit():
                         pid_raw = TARGET_ID
                     
                     if not pid_raw or 'None' in pid_raw or 'test' in pid_raw: 
