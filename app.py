@@ -4345,10 +4345,18 @@ def extract_product_id(input_str):
     # Handle Short Links (tiktok.com/t/ or vm.tiktok.com)
     if '/t/' in input_str or 'vm.tiktok.com' in input_str:
         try:
-             # Resolve the redirect to get the full URL
-             response = requests.head(input_str, allow_redirects=True, timeout=10)
-             input_str = response.url
-             # print(f"DEBUG: Resolved short link to {input_str}")
+             # Browser-like headers to avoid 403 blocks
+             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+             
+             # Use GET with stream=True (stop downloading body) instead of HEAD (often blocked)
+             response = requests.get(input_str, allow_redirects=True, timeout=15, headers=headers, stream=True)
+             
+             resolved_url = response.url
+             response.close() # Close connection immediately
+             
+             print(f"DEBUG: Resolved short link {input_str} -> {resolved_url}")
+             input_str = resolved_url
+             
         except Exception as e:
              print(f"Error resolving short link {input_str}: {e}")
              # Continue to try regex on original string just in case
