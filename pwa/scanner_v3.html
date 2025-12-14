@@ -612,7 +612,7 @@
                         <input type="text" id="lookup-input" class="form-input" placeholder="Paste link or ID here..." style="font-family:monospace">
                     </div>
                 </div>
-                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🔍 Loopup Product</button>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🔍 Lookup Product</button>
             `
         };
 
@@ -662,6 +662,7 @@
                 else if (currentMode === 'apify') await runApifyScan(btn);
                 else if (currentMode === 'dailyvirals') await runDailyViralsScan(btn);
                 else if (currentMode === 'viral_trends') await runViralTrendsScan(btn);
+                else if (currentMode === 'lookup') await runSingleProductScan(btn);
 
                 // Reset state when scan function returns (finished or error)
                 isScanning = false;
