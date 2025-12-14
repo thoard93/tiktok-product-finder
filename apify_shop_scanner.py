@@ -102,18 +102,18 @@ def run_apify_scan():
         }
 
         if TARGET_ID:
-             # SWITCH to Barrierefix (Supports direct productUrls)
-             CURRENT_ACTOR = "barrierefix~tiktok-shop-scraper" 
+             # SWITCH to Excavator (User request / advertised as fast)
+             # ID: excavator~tiktok-shop-product
+             CURRENT_ACTOR = "excavator~tiktok-shop-product" 
              
              direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
              
-             # Input Format: Send keys for multiple likely schemas to be safe
+             # Excavator likely uses startUrls (Crawler standard)
              run_input = {
-                 "productUrls": [direct_url],
-                 "startUrls": [{"url": direct_url}], 
+                 "startUrls": [{"url": direct_url}],
                  "maxItems": 1
              }
-             log(f">> Switching to Direct URL Scraper: {CURRENT_ACTOR}")
+             log(f">> Switching to Fast Scraper: {CURRENT_ACTOR}")
         else:
              CURRENT_ACTOR = ACTOR_ID
         
