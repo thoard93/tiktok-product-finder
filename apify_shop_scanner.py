@@ -237,32 +237,22 @@ def run_apify_scan():
                     p.live_count = total_stock # Stock Proxy (Hijacked)
                     p.msg_gmv = ads_gmv_val # Ads GMV Proxy
 
-                    # Debug Logs for User
-                    if batch_saved < 2: # Log detailed keys for the VERY first item
-                        log(f"   [DEBUG_KEYS] Keys found: {list(item.keys())}")
-                        # Log group_id to check if it's the real product ID
-                        log(f"   [DEBUG_RAW] ID: {item.get('id')} | PID: {item.get('product_id')} | GID: {item.get('group_id')}")
-
-                    if batch_saved < 3: # Only log first few
-                        log(f"   [DEBUG] {p.product_name[:30]}... | Stock: {total_stock} | Sales: {p.sales} | 7d: {p.sales_7d}")
-                        log(f"   [DEBUG_URL] Generated: {p.product_url}")
-
-                    # Store Ads GMV in 'msg_gmv' (since we don't send messages)
-                    # p.msg_gmv = ads_gmv_val # Ads GMV Proxy (Already set above)
-
                     # Price
                     p.price = parse_float(item.get('avg_price') or item.get('real_price') or item.get('price'))
 
                     # Influencers & Videos
                     p.influencer_count = parse_metric(item.get('total_ifl_cnt'))
                     p.video_count = parse_metric(item.get('total_video_count') or item.get('videos_count'))
+
                     # URL (Force Set with correct format)
                     pid_clean = str(item.get('product_id'))
                     p.product_url = f"https://www.tiktok.com/shop/pdp/{pid_clean}"
 
-                    # Debug Logs for User (Simplified)
-                    if batch_saved < 3: 
-                        log(f"   [DEBUG] {p.product_name[:20]}... | Stock: {p.favorites} | Sales: {p.sales} | URL: {p.product_url}")
+                    # Debug Logs for User (Consolidated)
+                    if batch_saved < 2: 
+                        log(f"   [DEBUG] {p.product_name[:20]}... | Stock: {total_stock} | Sales: {p.sales} | URL: {p.product_url}")
+                        if batch_saved == 0:
+                             log(f"   [DEBUG_RAW] ID: {item.get('id')} | PID: {item.get('product_id')}")
 
                     p.scan_type = 'apify_shop'
                     p.last_updated = datetime.utcnow()
