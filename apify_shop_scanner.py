@@ -102,18 +102,18 @@ def run_apify_scan():
         }
 
         if TARGET_ID:
-             # SWITCH to Clockworks Scraper (General Data Extractor often supports Shop URLs)
-             # Valid ID found via search: clockworks/free-tiktok-scraper
-             CURRENT_ACTOR = "clockworks~free-tiktok-scraper" 
-             direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
+             # SWITCH to Novi Shop Search (Maybe better than Pratikdani?)
+             # ID: novi~tiktok-shop-scraper
+             CURRENT_ACTOR = "novi~tiktok-shop-scraper" 
              
-             # Clockworks Input Format
+             # Novi Input Format (Schema: keyword, limit, countryCode)
              run_input = {
-                 "startUrls": [{"url": direct_url}],
-                 "maxItems": 1,
-                 "scrapeDetails": True
+                 "keyword": TARGET_ID, # Try searching by ID
+                 "limit": 1,
+                 "countryCode": "US",
+                 "isTrendingProducts": False
              }
-             log(f">> Switching to Detail Scraper: {CURRENT_ACTOR}")
+             log(f">> Switching to Novi Scraper: {CURRENT_ACTOR}")
         else:
              CURRENT_ACTOR = ACTOR_ID
         
