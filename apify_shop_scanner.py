@@ -113,7 +113,7 @@ def run_apify_scan():
                  CURRENT_ACTOR = "pratikdani~tiktok-shop-search-scraper"
                  run_input = {
                      "keyword": TARGET_ID,
-                     "limit": 5,
+                     "limit": 1, # Reduced to 1 to save cost (was 5)
                      "country_code": "US",  # snake_case required
                      "sort_type": "relevance_desc" # snake_case likely required
                  }
