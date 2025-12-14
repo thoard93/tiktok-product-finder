@@ -244,16 +244,16 @@ def run_apify_scan():
                     p.influencer_count = parse_metric(item.get('total_ifl_cnt'))
                     p.video_count = parse_metric(item.get('total_video_count') or item.get('videos_count'))
 
-                    # URL (Force Set with correct format)
+                    # URL (Force Set to Shop View format which is often more reliable)
                     pid_clean = str(item.get('product_id'))
-                    p.product_url = f"https://www.tiktok.com/shop/pdp/{pid_clean}"
+                    # Format: https://shop.tiktok.com/view/product/1729...?region=US&locale=en
+                    p.product_url = f"https://shop.tiktok.com/view/product/{pid_clean}?region=US&locale=en"
 
                     # Debug Logs
                     if batch_saved < 2: 
                         log(f"   [DEBUG_URI] DB: {app.config['SQLALCHEMY_DATABASE_URI']}")
-                        log(f"   [DEBUG] {p.product_name[:20]}... | Stock: {total_stock} | Sales: {p.sales} | URL: {p.product_url}")
-                        # Verify Object State
-                        log(f"   [DEBUG_OBJ] p.live_count before commit: {p.live_count}")
+                        log(f"   [DEBUG_OBJ] Saving '{p.product_name[:10]}...' | Stock: {total_stock} | URL: {p.product_url}")
+                        p._debug_stock_val = total_stock # Attach temp attrib for verification
 
                     p.scan_type = 'apify_shop'
                     p.last_updated = datetime.utcnow()
@@ -266,10 +266,11 @@ def run_apify_scan():
             
             try:
                 db.session.commit()
-                # Verify Persistence (only for first item)
+                # Verify Persistence for items in this batch
                 if batch_saved > 0:
+                   # Check the last item added
                    p_verify = Product.query.get(p.product_id)
-                   log(f"   [DEBUG_PERSIST] Re-query Live Count: {p_verify.live_count if p_verify else 'NOT FOUND'}")
+                   log(f"   [DEBUG_PERSIST] {p.product_id} -> Saved Stock: {p_verify.live_count if p_verify else 'NOT FOUND'}")
             except Exception as commit_err:
                  log(f"   [CRITICAL] Commit Failed: {commit_err}")
             

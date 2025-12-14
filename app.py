@@ -60,6 +60,31 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'poolclass': NullPool,
 }
 
+@app.route('/api/debug/check-product/<product_id>')
+def check_product_debug(product_id):
+    """Debug endpoint to inspect RAW DB values for a product"""
+    try:
+        # Try both ID formats (raw and shop_ prefixed)
+        p = Product.query.get(product_id)
+        if not p and not product_id.startswith('shop_'):
+             p = Product.query.get(f"shop_{product_id}")
+        
+        if not p:
+            return jsonify({'found': False, 'message': f'Product {product_id} not found'}), 404
+            
+        return jsonify({
+            'found': True,
+            'id': p.product_id,
+            'name': p.product_name,
+            'scan_type': p.scan_type,
+            'live_count_db_value': p.live_count,
+            'stock_in_to_dict': p.to_dict().get('stock'),
+            'product_url': p.product_url,
+            'db_uri_used': app.config['SQLALCHEMY_DATABASE_URI']
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/debug-products')
 def debug_products_dump():
     """Dump last 10 products to verify DB state"""
