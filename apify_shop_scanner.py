@@ -101,6 +101,13 @@ def run_apify_scan():
             "page": page
         }
 
+        if TARGET_ID:
+             # Construct direct URL to try forcing the scraper to look at this product
+             # Note: Different actors behave differently. Trying 'startUrls' is a common Apify standard.
+             direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
+             run_input['startUrls'] = [{'url': direct_url}]
+             # Some actors prioritize 'productUrl' or similar, but let's try this standard first along with keyword.
+        
         # 1. Start Actor
         start_url = f"https://api.apify.com/v2/acts/{ACTOR_ID}/runs?token={APIFY_API_TOKEN}"
         run_id = None
@@ -133,8 +140,12 @@ def run_apify_scan():
                 break
             elif status in ['FAILED', 'ABORTED', 'TIMED-OUT']:
                 log(f"X Run failed with status: {status}")
-                return # Fatal error
+                if TARGET_ID: return # Fatal error for single item
+                break # Break inner poll loop -> Continue outer loop (maybe retry?)
             
+        # If run didn't succeed, verify before fetching
+        if status != 'SUCCEEDED':
+             continue 
 
         # 3. Fetch Results
         log("   Fetching results...")
@@ -144,7 +155,11 @@ def run_apify_scan():
         log(f"   Found {len(items)} items.")
 
         if not items:
-            log("   No items found. Stopping.")
+            log("   No items found.")
+            if TARGET_ID:
+                log("   [Single Scan] Stopping - ID not found.")
+                break # STOP INFINITE LOOP for single ID
+            log("   Stopping batch scan.")
             break
 
         # 4. Save to DB
