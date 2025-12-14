@@ -108,9 +108,9 @@ def run_apify_scan():
              
              direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
              
-             # Excavator likely uses startUrls (Crawler standard)
+             # Excavator requires 'urls' key (per error message)
              run_input = {
-                 "startUrls": [{"url": direct_url}],
+                 "urls": [{"url": direct_url}],
                  "maxItems": 1
              }
              log(f">> Switching to Fast Scraper: {CURRENT_ACTOR}")
