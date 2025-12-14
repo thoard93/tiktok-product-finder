@@ -50,7 +50,7 @@ def run_apify_scan():
     parser.add_argument('--max_products', type=int, default=50)
     args, unknown = parser.parse_known_args()
     
-    LIMIT_PER_RUN = 20
+    LIMIT_PER_RUN = 10 # Apify Actor limit restriction
     MAX_PRODUCTS = args.max_products
     
     if not APIFY_API_TOKEN:
