@@ -19,6 +19,7 @@ Strategy:
 
 import os
 import sys
+import subprocess
 import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
@@ -426,6 +427,7 @@ class Product(db.Model):
     influencer_count = db.Column(db.Integer, default=0, index=True)
     commission_rate = db.Column(db.Float, default=0, index=True)
     price = db.Column(db.Float, default=0, index=True)
+    product_url = db.Column(db.String(500))
     image_url = db.Column(db.Text)
     cached_image_url = db.Column(db.Text)  # Signed URL that works
     image_cached_at = db.Column(db.DateTime)  # When cache was created
@@ -5818,6 +5820,7 @@ def init_database():
             ('gem_alert_sent', 'TIMESTAMP'),
             ('stock_alert_sent', 'TIMESTAMP'),
             ('is_ad_driven', 'BOOLEAN DEFAULT FALSE'),
+            ('product_url', 'VARCHAR(500)'),
         ]
         
         added = []
