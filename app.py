@@ -35,10 +35,15 @@ import secrets
 import re   # For parsing product IDs from URLs
 import traceback
 from werkzeug.exceptions import HTTPException
-from whitenoise import WhiteNoise
+try:
+    from whitenoise import WhiteNoise
+except ImportError:
+    WhiteNoise = None
+    print("WARNING: WhiteNoise not found. Static files may not be served correctly if running as web server.")
 
 app = Flask(__name__, static_folder='pwa')
-app.wsgi_app = WhiteNoise(app.wsgi_app, root='pwa/')
+if WhiteNoise:
+    app.wsgi_app = WhiteNoise(app.wsgi_app, root='pwa/')
 
 # Force absolute path for SQLite to prevent subprocess mismatches
 basedir = os.path.abspath(os.path.dirname(__file__))
