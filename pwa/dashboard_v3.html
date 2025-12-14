@@ -1392,7 +1392,7 @@
             if (currentFilters.untapped) preservedFilters.untapped = true;
             if (currentFilters.hidden_gems) preservedFilters.hidden_gems = true;
             if (currentFilters.has_free_shipping) preservedFilters.has_free_shipping = true;
-            if (currentFilters.scan_type) preservedFilters.scan_type = currentFilters.scan_type; // Preserve Active Tab Context
+            if (currentFilters.apify_scan) preservedFilters.apify_scan = currentFilters.apify_scan; // Preserve Active Tab Context (Correct Key)
 
             currentFilters = { ...preservedFilters };
 

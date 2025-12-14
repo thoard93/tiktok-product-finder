@@ -257,7 +257,7 @@ def run_apify_scan():
                     p.video_count = parse_metric(item.get('total_video_count') or item.get('videos_count'))
                     # URL (Force Set with correct format)
                     pid_clean = str(item.get('product_id'))
-                    p.product_url = f"https://www.tiktok.com/view/product/{pid_clean}"
+                    p.product_url = f"https://www.tiktok.com/shop/pdp/{pid_clean}"
 
                     # Debug Logs for User (Simplified)
                     if batch_saved < 3: 
