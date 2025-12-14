@@ -18,6 +18,7 @@ Strategy:
 """
 
 import os
+import sys
 import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
@@ -493,6 +494,7 @@ class Product(db.Model):
             'price': self.price,
             'image_url': self.cached_image_url or self.image_url,  # Prefer cached
             'cached_image_url': self.cached_image_url,
+            'product_url': self.product_url,
             'video_count': self.video_count,
             'video_7d': self.video_7d,
             'video_30d': self.video_30d,

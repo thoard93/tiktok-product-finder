@@ -581,7 +581,8 @@
 
         function renderProduct(p) {
             const comp = getCompetitionLevel(p.influencer_count || p.total_influencers, p.video_count);
-            const tiktokUrl = `https://www.tiktok.com/view/product/${p.product_id}`;
+            // Use stored URL if available (important for 'shop_' prefixed IDs), else construct default
+            const tiktokUrl = p.product_url || `https://www.tiktok.com/view/product/${p.product_id}`;
             const tiktokSearchUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(p.product_name || '')}`;
             const echotikUrl = `https://echotik.live/products/${p.product_id}`;
             // Fix commission - if decimal, multiply by 100
