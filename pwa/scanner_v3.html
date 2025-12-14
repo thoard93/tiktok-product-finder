@@ -289,6 +289,88 @@
             border-left-color: #f59e0b;
         }
 
+        /* Product Result Card */
+        .product-result-card {
+            background: var(--card-bg);
+            border: 1px solid var(--accent);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            display: none;
+            /* Hidden by default */
+            animation: slideUp 0.5s ease;
+        }
+
+        .result-header {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .result-img-box {
+            width: 120px;
+            height: 120px;
+            border-radius: 12px;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 1px solid var(--border);
+        }
+
+        .result-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .result-info {
+            flex-grow: 1;
+        }
+
+        .result-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-box {
+            background: rgba(15, 23, 42, 0.5);
+            padding: 0.8rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .stat-val {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
             .scan-tabs {
@@ -362,6 +444,11 @@
         <!-- Configuration Panel -->
         <div class="config-panel" id="configPanel">
             <!-- Dynamic Form Content Injected Here -->
+        </div>
+
+        <!-- Product Result Display -->
+        <div class="product-result-card" id="productResult">
+            <!-- Injected by JS -->
         </div>
 
         <!-- Console Log -->
@@ -864,6 +951,43 @@
                 if (data.success) {
                     log(data.message, 'success');
                     // Poll logs handles the rest
+                    // But we also want to catch the "Scan Complete" and show the product!
+                    // The logInterval handles the UI updates, but let's hook into it.
+
+                    // We need the ID to fetch details. The API returns it!
+                    const targetId = data.product_id;
+
+                    // Wait for the "Scan Complete" log separately? 
+                    // Or just poll the product endpoint until it updates/exists?
+                    // Let's poll the product endpoint every 3s.
+
+                    let attempts = 0;
+                    const productPoll = setInterval(async () => {
+                        if (attempts > 20) { clearInterval(productPoll); return; } // Timeout 60s
+                        attempts++;
+
+                        try {
+                            // We don't know the exact internal ID (shop_ID) yet, but maybe we can guess?
+                            // The scanner prefixes with 'shop_'.
+                            const shopId = 'shop_' + targetId;
+
+                            // Or we can search by original ID?
+                            // Let's try fetching /api/product/shop_{targetId}
+                            const prodRes = await fetch(`/api/product/${shopId}`);
+                            if (prodRes.ok) {
+                                const prod = await prodRes.json();
+                                if (prod && prod.product_id) {
+                                    // FOUND IT!
+                                    clearInterval(productPoll);
+                                    clearInterval(logInterval); // Stop log polling too
+                                    btn.innerText = originalText;
+                                    log("Product Data Retrieved! Showing details...", 'success');
+                                    showProductResult(prod);
+                                }
+                            }
+                        } catch (e) { }
+                    }, 3000);
+
                 } else {
                     log(`Error: ${data.error}`, 'error');
                     clearInterval(logInterval);
@@ -874,6 +998,49 @@
                 clearInterval(logInterval);
                 btn.innerText = originalText;
             }
+        }
+
+        function showProductResult(p) {
+            const card = document.getElementById('productResult');
+            const stock = p.stock || 0;
+            const sales = p.sales_7d || p.sales || 0;
+            const salesLabel = p.sales_7d ? '7-Day Sales' : 'Total Sales'; // Smart Label
+
+            card.innerHTML = `
+                <div class="result-header">
+                    <div class="result-img-box">
+                        <img src="${p.image_url}" class="result-img" alt="Product Image">
+                    </div>
+                    <div class="result-info">
+                        <div class="result-title">${p.product_name}</div>
+                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                             <span class="badge" style="background:var(--accent); padding:4px 8px; border-radius:4px; font-size:0.8rem;">📦 Stock: ${stock.toLocaleString()}</span>
+                             <span class="badge" style="background:#10b981; padding:4px 8px; border-radius:4px; font-size:0.8rem; color:black;">💰 $${p.price}</span>
+                        </div>
+                        <div class="result-stats">
+                            <div class="stat-box">
+                                <div class="stat-val">${sales.toLocaleString()}</div>
+                                <div class="stat-label">${salesLabel}</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-val">$${(p.gmv || 0).toLocaleString()}</div>
+                                <div class="stat-label">GMV</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-val">${p.video_count || 0}</div>
+                                <div class="stat-label">Videos</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:1rem; display:flex; gap:10px;">
+                            <button onclick="window.open('${p.product_url}', '_blank')" class="scan-btn" style="padding:0.5rem; font-size:0.9rem;">View on TikTok</button>
+                            <button onclick="window.location.href='/pwa/dashboard_v3.html?highlight=${p.product_id}'" class="scan-btn" style="padding:0.5rem; font-size:0.9rem; background: #334155;">View in Dashboard</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            card.style.display = 'block';
+            card.scrollIntoView({ behavior: 'smooth' });
         }
 
         // Initialize default when DOM is ready
