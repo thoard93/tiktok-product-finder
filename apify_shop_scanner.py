@@ -152,9 +152,16 @@ def run_apify_scan():
         with app.app_context():
             for item in items:
                 try:
+                    # Check for explicit error from Apify
+                    if item.get('error'):
+                         log(f"[ERROR] Apify returned error for item: {item.get('error')}")
+                         continue
+
                     # Basic validation
                     pid_raw = str(item.get('id') or item.get('product_id'))
-                    if not pid_raw or 'test' in pid_raw: continue
+                    if not pid_raw or 'None' in pid_raw or 'test' in pid_raw: 
+                        log(f"[WARN] Skipping invalid ID: {pid_raw}. Item keys: {list(item.keys())}")
+                        continue
                     
                     pid = f"shop_{pid_raw}" # Prefix to avoid collisions
                     
