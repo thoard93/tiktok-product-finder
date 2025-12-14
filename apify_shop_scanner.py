@@ -239,8 +239,13 @@ def run_apify_scan():
                     p.msg_gmv = ads_gmv_val # Ads GMV Proxy
 
                     # Debug Logs for User
+                    if batch_saved < 1: # Log detailed keys for the VERY first item
+                        log(f"   [DEBUG_KEYS] Keys found: {list(item.keys())}")
+                        log(f"   [DEBUG_RAW] ID: {item.get('id')} | ProductID: {item.get('product_id')} | Title: {item.get('title')}")
+
                     if batch_saved < 3: # Only log first few
                         log(f"   [DEBUG] {p.product_name[:30]}... | Stock: {total_stock} | Sales: {p.sales} | 7d: {p.sales_7d}")
+                        log(f"   [DEBUG_URL] Generated: {p.product_url}")
 
                     # Store Ads GMV in 'msg_gmv' (since we don't send messages)
                     # p.msg_gmv = ads_gmv_val # Ads GMV Proxy (Already set above)
