@@ -102,80 +102,80 @@ def run_apify_scan():
                 if saved_count == 0:
                     print(f"DEBUG ITEM: {json.dumps(item, default=str)}")
                 
-                p.product_name = (item.get('title') or item.get('name') or item.get('productName') or item.get('product_title') or "Unknown Product")[:200]
+                # Name
+                p.product_name = (item.get('product_name') or item.get('title') or item.get('name') or "Unknown Product")[:200]
                 
-                # Seller Name - Check nested shop object
-                shop_data = item.get('shop') or {}
-                if isinstance(shop_data, dict):
-                    p.seller_name = shop_data.get('shop_name') or item.get('seller_name') or "TikTok Shop"
+                # Seller Name
+                seller_data = item.get('seller') or {}
+                if isinstance(seller_data, dict):
+                     p.seller_name = seller_data.get('seller_name') or item.get('shop_name') or "TikTok Shop"
                 else:
-                    p.seller_name = item.get('shop_name') or item.get('seller_name') or "TikTok Shop"
+                     p.seller_name = item.get('seller_name') or item.get('shop_name') or "TikTok Shop"
                 
-                # Image
-                # 'images_privatization' seems to contain filenames. 
-                # We try to use a standard TikTok CDN prefix. If this fails, the frontend proxy might need adjustment or we need a better actor.
-                # Common TikTok CDN: https://p16-oec-va.ibyteimg.com/tos-maliva-i-o3syd03w52-us/{filename}
-                imgs = item.get('images') or item.get('main_images') or []
-                priv_imgs = item.get('images_privatization') or []
+                # Image - The log shows 'cover_url' is the main image
+                p.image_url = item.get('cover_url') or item.get('main_images', [None])[0]
                 
-                if isinstance(imgs, list) and len(imgs) > 0:
-                    p.image_url = imgs[0]
-                elif isinstance(imgs, str):
-                    p.image_url = imgs
-                elif isinstance(priv_imgs, list) and len(priv_imgs) > 0:
-                     # Try to construct URL from privatization ID
-                     # This is a best-guess based on common TikTok patterns for the US region
-                     p.image_url = f"https://p16-oec-va.ibyteimg.com/tos-maliva-i-o3syd03w52-us/{priv_imgs[0]}"
-
-                
-                # Sales (Lifetime)
-                sold_raw = item.get('sold_count') or item.get('sales') or item.get('sold') or 0
-                if isinstance(sold_raw, str):
-                    if 'K' in sold_raw: sold_raw = float(sold_raw.replace('K','').replace('+','')) * 1000
-                    elif 'M' in sold_raw: sold_raw = float(sold_raw.replace('M','').replace('+','')) * 1000000
-                p.sales = int(float(sold_raw)) if sold_raw else 0
-
-                # Sales (7 Days)
-                week_sold_raw = item.get('week_sold_count') or 0
-                if isinstance(week_sold_raw, str):
-                     if 'K' in week_sold_raw: week_sold_raw = float(week_sold_raw.replace('K','').replace('+','')) * 1000
-                p.sales_7d = int(float(week_sold_raw)) if week_sold_raw else 0
-                
-                # GMV (Total Sales Value) - e.g. "$8.48M"
-                gmv_raw = item.get('total_sales') or "0"
-                if isinstance(gmv_raw, str):
-                    gmv_raw = gmv_raw.replace('$','').replace(',','')
-                    if 'K' in gmv_raw: gmv_raw = float(gmv_raw.replace('K','')) * 1000
-                    elif 'M' in gmv_raw: gmv_raw = float(gmv_raw.replace('M','')) * 1000000
-                p.gmv = float(gmv_raw) if gmv_raw else 0
-
-                # GMV (7 Days)
-                week_gmv_raw = item.get('week_sales') or "0"
-                if isinstance(week_gmv_raw, str):
-                    week_gmv_raw = week_gmv_raw.replace('$','').replace(',','')
-                    if 'K' in week_gmv_raw: week_gmv_raw = float(week_gmv_raw.replace('K','')) * 1000
-                p.gmv_7d = float(week_gmv_raw) if week_gmv_raw else 0
-                
-                # Price
-                price_info = item.get('price', {})
-                if isinstance(price_info, dict):
-                    p.price = float(price_info.get('min') or price_info.get('value') or 0)
-                else:
+                # Helper to clean "K/M" strings like "$61.79K" or "4.6K"
+                def parse_metric(val):
+                    if not val: return 0
+                    val = str(val).replace('$', '').replace(',', '').strip()
+                    mult = 1
+                    if 'K' in val:
+                        mult = 1000
+                        val = val.replace('K', '')
+                    elif 'M' in val:
+                         mult = 1000000
+                         val = val.replace('M', '')
                     try:
-                        # Could be "$8.99" string
-                        p_clean = str(price_info).replace('$','')
-                        p.price = float(p_clean)
+                        return int(float(val) * mult)
                     except:
-                        p.price = 0
+                        return 0
+
+                def parse_float(val):
+                    if not val: return 0.0
+                    val = str(val).replace('$', '').replace(',', '').strip()
+                    mult = 1
+                    if 'K' in val:
+                        mult = 1000
+                        val = val.replace('K', '')
+                    elif 'M' in val:
+                         mult = 1000000
+                         val = val.replace('M', '')
+                    try:
+                        return float(val) * mult
+                    except:
+                        return 0.0
+
+                # Sales
+                # Log: "total_sale_cnt": "4.6K"
+                p.sales = parse_metric(item.get('total_sale_cnt') or item.get('sales'))
                 
-                # URL
-                p.product_url = item.get('product_url') or f"https://shop.tiktok.com/view/product/{pid_raw}"
+                # Sales 30d
+                # Log: "total_sale_30d_cnt": "501"
+                p.sales_30d = parse_metric(item.get('total_sale_30d_cnt'))
+
+                # GMV
+                # Log: "total_sale_gmv_amt": "$61.79K"
+                p.gmv = parse_float(item.get('total_sale_gmv_amt'))
+
+                # Price
+                # Log: "avg_price": "$17.6"
+                p.price = parse_float(item.get('avg_price') or item.get('real_price') or item.get('price'))
+
+                # Influencers & Videos
+                # Log: "total_ifl_cnt": "134", "total_video_count": "168"
+                p.influencer_count = parse_metric(item.get('total_ifl_cnt'))
+                p.video_count = parse_metric(item.get('total_video_count') or item.get('videos_count'))
+                p.views_count = parse_metric(item.get('view_count'))
+                
+                # URL construction
+                # Log: "product_id": "1729668452437561369"
                 if not p.product_url or 'http' not in p.product_url:
                      p.product_url = f"https://shop.tiktok.com/view/product/{pid_raw}?region=US&locale=en"
 
                 p.scan_type = 'apify_shop'
                 p.last_updated = datetime.utcnow()
-                p.is_ad_driven = True # Mark as "found by scanner" for logic
+                p.is_ad_driven = True
                 
                 db.session.add(p)
                 saved_count += 1
