@@ -4323,12 +4323,14 @@ import re
 def extract_product_id(input_str):
     """
     Extract product ID from various TikTok URL formats or raw ID.
+    Handles redirects for short links (e.g. tiktok.com/t/...)
     
     Supported formats:
     - https://www.tiktok.com/shop/pdp/1729436251038
     - https://www.tiktok.com/shop/product/1729436251038
     - https://shop.tiktok.com/view/product/1729436251038
     - https://affiliate.tiktok.com/product/1729436251038
+    - https://www.tiktok.com/t/ZTHwgwbUL5uL7-oXGV7/ (Short link)
     - 1729436251038 (raw ID)
     """
     if not input_str:
@@ -4339,6 +4341,17 @@ def extract_product_id(input_str):
     # If it's just digits, return as-is
     if input_str.isdigit():
         return input_str
+
+    # Handle Short Links (tiktok.com/t/ or vm.tiktok.com)
+    if '/t/' in input_str or 'vm.tiktok.com' in input_str:
+        try:
+             # Resolve the redirect to get the full URL
+             response = requests.head(input_str, allow_redirects=True, timeout=10)
+             input_str = response.url
+             # print(f"DEBUG: Resolved short link to {input_str}")
+        except Exception as e:
+             print(f"Error resolving short link {input_str}: {e}")
+             # Continue to try regex on original string just in case
     
     # Try to extract from URL patterns
     patterns = [
@@ -5992,20 +6005,14 @@ def run_single_product_scan():
         if not input_val:
              return jsonify({'success': False, 'error': 'Please provide a Product URL or ID'}), 400
 
-        # Parse ID from URL if valid URL provided
-        product_id = input_val
-        if 'tiktok.com' in input_val:
-            # Attempt to extract ID from typical patterns
-            # Pattern 1: /product/1729383...?
-            import re
-            # Matches /product/DIGITS or /pdp/DIGITS
-            match = re.search(r'/(?:product|pdp)/(\d+)', input_val)
-            if match:
-                product_id = match.group(1)
-            else:
-                # Fallback: Is the whole thing a query? use as keyword if simple?
-                # For now let's hope it's an ID or standard URL.
-                pass
+        # Parse ID from URL using robust extractor (handles short links)
+        product_id = extract_product_id(input_val)
+        
+        if not product_id:
+            # Fallback for very weird cases: return error?
+            # Or if it's a keyword search intended? 
+            # User wants "Single Product Lookup" -> should enforce ID.
+            return jsonify({'success': False, 'error': f'Could not extract Product ID from: {input_val}. Please use a full link or ID.'}), 400
         
         script_path = os.path.join(basedir, 'apify_shop_scanner.py')
         
