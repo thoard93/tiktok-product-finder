@@ -544,12 +544,13 @@
         </div>
     </main>
     <script>
-        // Smart back navigation - uses history if available, otherwise goes to home
+        // Smart back navigation
         function goBack() {
-            // Check if we came from Brand Hunter (has history)
-            if (document.referrer && document.referrer.includes(window.location.origin)) {
-                history.back();
+            // If we have history within the app, go back (preserves scroll & filters)
+            if (window.history.length > 1) {
+                window.history.back();
             } else {
+                // Fallback to home
                 window.location.href = '/';
             }
         }

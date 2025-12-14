@@ -100,30 +100,68 @@ def run_apify_scan():
                 
                 # Direct Mapping - Robust Fallbacks
                 p.product_name = (item.get('title') or item.get('name') or item.get('productName') or item.get('product_title') or "Unknown Product")[:200]
-                p.seller_name = item.get('shop_name') or item.get('seller_name') or item.get('shopName') or "TikTok Shop"
+                
+                # Seller Name - Check nested shop object
+                shop_data = item.get('shop') or {}
+                if isinstance(shop_data, dict):
+                    p.seller_name = shop_data.get('shop_name') or item.get('seller_name') or "TikTok Shop"
+                else:
+                    p.seller_name = item.get('shop_name') or item.get('seller_name') or "TikTok Shop"
                 
                 # Image
+                # 'images_privatization' seems to contain filenames. 
+                # We try to use a standard TikTok CDN prefix. If this fails, the frontend proxy might need adjustment or we need a better actor.
+                # Common TikTok CDN: https://p16-oec-va.ibyteimg.com/tos-maliva-i-o3syd03w52-us/{filename}
                 imgs = item.get('images') or item.get('main_images') or []
+                priv_imgs = item.get('images_privatization') or []
+                
                 if isinstance(imgs, list) and len(imgs) > 0:
                     p.image_url = imgs[0]
                 elif isinstance(imgs, str):
                     p.image_url = imgs
+                elif isinstance(priv_imgs, list) and len(priv_imgs) > 0:
+                     # Try to construct URL from privatization ID
+                     # This is a best-guess based on common TikTok patterns for the US region
+                     p.image_url = f"https://p16-oec-va.ibyteimg.com/tos-maliva-i-o3syd03w52-us/{priv_imgs[0]}"
+
                 
-                # Sales & Price
-                # Safe get for sold_count which might be '10K+' string or int
+                # Sales (Lifetime)
                 sold_raw = item.get('sold_count') or item.get('sales') or item.get('sold') or 0
                 if isinstance(sold_raw, str):
                     if 'K' in sold_raw: sold_raw = float(sold_raw.replace('K','').replace('+','')) * 1000
                     elif 'M' in sold_raw: sold_raw = float(sold_raw.replace('M','').replace('+','')) * 1000000
                 p.sales = int(float(sold_raw)) if sold_raw else 0
+
+                # Sales (7 Days)
+                week_sold_raw = item.get('week_sold_count') or 0
+                if isinstance(week_sold_raw, str):
+                     if 'K' in week_sold_raw: week_sold_raw = float(week_sold_raw.replace('K','').replace('+','')) * 1000
+                p.sales_7d = int(float(week_sold_raw)) if week_sold_raw else 0
                 
+                # GMV (Total Sales Value) - e.g. "$8.48M"
+                gmv_raw = item.get('total_sales') or "0"
+                if isinstance(gmv_raw, str):
+                    gmv_raw = gmv_raw.replace('$','').replace(',','')
+                    if 'K' in gmv_raw: gmv_raw = float(gmv_raw.replace('K','')) * 1000
+                    elif 'M' in gmv_raw: gmv_raw = float(gmv_raw.replace('M','')) * 1000000
+                p.gmv = float(gmv_raw) if gmv_raw else 0
+
+                # GMV (7 Days)
+                week_gmv_raw = item.get('week_sales') or "0"
+                if isinstance(week_gmv_raw, str):
+                    week_gmv_raw = week_gmv_raw.replace('$','').replace(',','')
+                    if 'K' in week_gmv_raw: week_gmv_raw = float(week_gmv_raw.replace('K','')) * 1000
+                p.gmv_7d = float(week_gmv_raw) if week_gmv_raw else 0
+                
+                # Price
                 price_info = item.get('price', {})
                 if isinstance(price_info, dict):
                     p.price = float(price_info.get('min') or price_info.get('value') or 0)
                 else:
-                    # Could be just a number or string in some actors
                     try:
-                        p.price = float(price_info)
+                        # Could be "$8.99" string
+                        p_clean = str(price_info).replace('$','')
+                        p.price = float(p_clean)
                     except:
                         p.price = 0
                 
