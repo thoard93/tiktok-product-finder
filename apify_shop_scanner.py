@@ -102,18 +102,16 @@ def run_apify_scan():
         }
 
         if TARGET_ID:
-             # SWITCH to Novi Shop Search (Maybe better than Pratikdani?)
-             # ID: novi~tiktok-shop-scraper
-             CURRENT_ACTOR = "novi~tiktok-shop-scraper" 
+             # SWITCH to Barrierefix (Supports direct productUrls)
+             # ID: barrierefix~tiktok-shop-scraper or similar checking docs
+             CURRENT_ACTOR = "barrierefix~tiktok-shop-scraper" 
              
-             # Novi Input Format (Schema: keyword, limit, countryCode)
+             # Input Format
              run_input = {
-                 "keyword": TARGET_ID, # Try searching by ID
-                 "limit": 1,
-                 "countryCode": "US",
-                 "isTrendingProducts": False
+                 "productUrls": [f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"],
+                 "maxItems": 1
              }
-             log(f">> Switching to Novi Scraper: {CURRENT_ACTOR}")
+             log(f">> Switching to Direct URL Scraper: {CURRENT_ACTOR}")
         else:
              CURRENT_ACTOR = ACTOR_ID
         
