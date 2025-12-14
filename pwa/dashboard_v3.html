@@ -1172,6 +1172,9 @@
             if (product.has_free_shipping) {
                 badges += '<span class="badge badge-freeship" style="background: linear-gradient(135deg, #4ade80, #22c55e); color: black;">🎁 FREE SHIP</span>';
             }
+            if (product.stock > 0) {
+                badges += `<span class="badge" style="background: linear-gradient(135deg, #60a5fa, #3b82f6); color: white;">📦 Stock: ${formatNumber(product.stock)}</span>`;
+            }
             if (isNew) {
                 badges += '<span class="badge badge-new">NEW</span>';
             }
@@ -1215,7 +1218,7 @@
                 <div class="product-metrics">
                     <div class="metric">
                         <div class="metric-value">${formatNumber(product.sales_7d || product.sales || 0)}</div>
-                        <div class="metric-label">7-Day Sales</div>
+                        <div class="metric-label">${product.sales_7d ? '7-Day Sales' : 'Total Sales'}</div>
                     </div>
                     <div class="metric">
                         <div class="metric-value">${formatNumber(product.gmv || product.sales || 0)}</div>
