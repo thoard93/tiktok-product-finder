@@ -199,10 +199,9 @@ def run_apify_scan():
                         except:
                             return 0.0
 
-                    # Sales (Parsed safely)
                     p.sales = parse_metric(item.get('total_sale_cnt') or item.get('sales'))
                     p.sales_30d = parse_metric(item.get('total_sale_30d_cnt') or item.get('sales_30d'))
-                    p.sales_7d = parse_metric(item.get('total_sale_7d_cnt') or item.get('sales_7d'))
+                    # p.sales_7d -> Field unavailable in Apify. Will default to 0.
 
                     # GMV
                     p.gmv = parse_float(item.get('total_sale_gmv_amt'))
@@ -256,11 +255,13 @@ def run_apify_scan():
                     # Influencers & Videos
                     p.influencer_count = parse_metric(item.get('total_ifl_cnt'))
                     p.video_count = parse_metric(item.get('total_video_count') or item.get('videos_count'))
-                    p.views_count = parse_metric(item.get('view_count'))
-                    
-                    # URL (Updated Format)
-                    if not p.product_url or 'http' not in p.product_url:
-                         p.product_url = f"https://www.tiktok.com/view/product/{pid_raw}"
+                    # URL (Force Set with correct format)
+                    pid_clean = str(item.get('product_id'))
+                    p.product_url = f"https://www.tiktok.com/view/product/{pid_clean}"
+
+                    # Debug Logs for User (Simplified)
+                    if batch_saved < 3: 
+                        log(f"   [DEBUG] {p.product_name[:20]}... | Stock: {p.favorites} | Sales: {p.sales} | URL: {p.product_url}")
 
                     p.scan_type = 'apify_shop'
                     p.last_updated = datetime.utcnow()
