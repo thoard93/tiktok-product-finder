@@ -85,7 +85,8 @@ def run_apify_scan():
             "keyword": "trending products", 
             "limit": LIMIT_PER_RUN,
             "country_code": "US",
-            "sort_type": 1 # 1=Default (Relevance?), 2=Sales? Let's stick to default for variety
+            "sort_type": 1, # 1=Default (Relevance?), 2=Sales? Let's stick to default for variety
+            "page": page
         }
 
         # 1. Start Actor

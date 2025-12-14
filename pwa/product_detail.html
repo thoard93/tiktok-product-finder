@@ -621,6 +621,7 @@
                         <div class="stats-grid">
                             <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-value accent">${formatCurrency(p.gmv)}</div><div class="stat-label">Total GMV</div></div>
                             <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">${formatNumber(p.sales)}</div><div class="stat-label">Units Sold</div></div>
+                            <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-value text-green-400">${formatNumber(p.favorites || 0)}</div><div class="stat-label">Stock / Favorites</div></div>
                             <div class="stat-card"><div class="stat-icon">👤</div><div class="stat-value cyan">${formatNumber(p.influencer_count || 0)}</div><div class="stat-label">Influencers</div></div>
                             <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-value success">${formatCurrency(p.price || 0)}</div><div class="stat-label">Price</div></div>
                         </div>
