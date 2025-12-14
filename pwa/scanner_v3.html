@@ -352,6 +352,11 @@
                 <div class="title">Viral Trends</div>
                 <div class="desc">Apify #tiktokshop Scan</div>
             </div>
+            <div class="scan-tab" onclick="setMode('lookup')">
+                <i class="fas fa-microscope"></i>
+                <div class="title">Product Lookup</div>
+                <div class="desc">Scan Specific Product</div>
+            </div>
         </div>
 
         <!-- Configuration Panel -->
@@ -509,6 +514,18 @@
                     </div>
                 </div>
                 <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🚀 Start Shop Scan</button>
+            `,
+            'lookup': `
+                 <div class="config-grid">
+                    <div class="form-group" style="grid-column: span 2">
+                        <label class="form-label">TikTok Shop Product URL or ID</label>
+                         <div class="subtitle" style="margin-bottom: 5px; font-size: 0.8em; color: #ccc;">
+                            Paste a full link (e.g. shop.tiktok.com/view/product/...) or just the ID.
+                        </div>
+                        <input type="text" id="lookup-input" class="form-input" placeholder="Paste link or ID here..." style="font-family:monospace">
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🔍 Loopup Product</button>
             `
         };
 
@@ -791,6 +808,72 @@
             }
             // Keep button state for 5s to show result, then reset
             setTimeout(() => { btn.innerText = originalText; }, 5000);
+        }
+
+        async function runSingleProductScan(btn) {
+            const originalText = btn.innerText;
+            const inputVal = document.getElementById('lookup-input').value;
+
+            if (!inputVal || inputVal.length < 5) {
+                log('Please enter a valid Product URL or ID', 'error');
+                return;
+            }
+
+            log(`Starting Single Product Scan...`, 'info');
+            btn.innerText = '⏳ Searching...';
+
+            const consoleEl = document.getElementById('consoleLog');
+
+            // Start Polling Logs
+            const logInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/scanner-logs');
+                    const data = await res.json();
+                    if (data.logs && data.logs.length > 0) {
+                        consoleEl.innerHTML = '';
+                        data.logs.forEach(msg => {
+                            const entry = document.createElement('div');
+                            entry.className = 'log-entry';
+                            if (msg.includes('Error') || msg.includes('X ')) entry.className += ' log-error';
+                            else if (msg.includes('Saved') || msg.includes('Complete')) entry.className += ' log-success';
+                            entry.innerText = msg;
+                            consoleEl.appendChild(entry);
+                        });
+                        consoleEl.scrollTop = consoleEl.scrollHeight;
+
+                        if (data.logs.some(l => l.includes('Scan Complete') || l.includes('Fatal error'))) {
+                            clearInterval(logInterval);
+                            btn.innerText = originalText;
+                            if (data.logs.some(l => l.includes('Scan Complete'))) {
+                                log("Lookup finished. Check 'Shop Scraper' tab in Dashboard.", 'success');
+                            }
+                        }
+                    }
+                } catch (e) { }
+            }, 2000);
+
+            try {
+                const res = await fetch('/api/run-single-product-scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url_or_id: inputVal })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    log(data.message, 'success');
+                    // Poll logs handles the rest
+                } else {
+                    log(`Error: ${data.error}`, 'error');
+                    clearInterval(logInterval);
+                    btn.innerText = originalText;
+                }
+            } catch (e) {
+                log(`Network error: ${e.message}`, 'error');
+                clearInterval(logInterval);
+                btn.innerText = originalText;
+            }
         }
 
         // Initialize default when DOM is ready

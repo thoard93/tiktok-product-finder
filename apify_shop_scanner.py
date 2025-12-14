@@ -48,28 +48,38 @@ import argparse
 def run_apify_scan():
     parser = argparse.ArgumentParser()
     parser.add_argument('--max_products', type=int, default=50)
+    parser.add_argument('--product_id', type=str, default=None, help="Specific Product ID/Keyword to scan")
     args, unknown = parser.parse_known_args()
     
     LIMIT_PER_RUN = 10 # Apify Actor limit restriction
     MAX_PRODUCTS = args.max_products
-    
+    TARGET_ID = args.product_id
+
     if not APIFY_API_TOKEN:
         log("X Error: APIFY_API_TOKEN not found.")
         return
 
-    log(f">> Starting Shop Product Scan via {ACTOR_ID}...")
-    log(f">> Target: {MAX_PRODUCTS} products (Batch size: {LIMIT_PER_RUN})")
+    if TARGET_ID:
+        log(f">> Starting Single Product Scan for: {TARGET_ID}")
+        MAX_PRODUCTS = 1 # Only need one
+        # If it's a long number, it's likely an ID. If text, it's a keyword.
+        # The actor uses 'keyword' for both.
+    else:
+        log(f">> Starting Shop Product Scan via {ACTOR_ID}...")
+        log(f">> Target: {MAX_PRODUCTS} products (Batch size: {LIMIT_PER_RUN})")
     
     # Clean up old "viral video" junk only on first run of session? 
     # Actually, let's keep it additive for now, or clear old ones?
     # User pref: "Clean Slate" mentioned in UI. Let's clear for now to avoid duplicates confusing stats.
-    with app.app_context():
-        # Only delete older than 1 hour to allow "append" logic if we wanted, 
-        # but for now, full refresh is safer for "Current Trends"
-        deleted = Product.query.filter(Product.scan_type == 'apify_shop').delete()
-        db.session.commit()
-        if deleted > 0:
-            log(f">> Cleaned up {deleted} old products for fresh scan.")
+    # ONLY clear if running a broad scan. If targeting a specific product, keep the rest!
+    if not TARGET_ID:
+        with app.app_context():
+            # Only delete older than 1 hour to allow "append" logic if we wanted, 
+            # but for now, full refresh is safer for "Current Trends"
+            deleted = Product.query.filter(Product.scan_type == 'apify_shop').delete()
+            db.session.commit()
+            if deleted > 0:
+                log(f">> Cleaned up {deleted} old products for fresh scan.")
 
     total_saved = 0
     page = 1
@@ -81,8 +91,10 @@ def run_apify_scan():
         # We can shift keys slightly or just rely on random sort from Apify?
         # Apify actor doesn't support "page" param well, but "limit" works.
         # We might get duplicates, so we just filter them out.
+        search_keyword = TARGET_ID if TARGET_ID else "trending products"
+        
         run_input = {
-            "keyword": "trending products", 
+            "keyword": search_keyword, 
             "limit": LIMIT_PER_RUN,
             "country_code": "US",
             "sort_type": 1, # 1=Default (Relevance?), 2=Sales? Let's stick to default for variety

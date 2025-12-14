@@ -5981,6 +5981,51 @@ def run_viral_trends_scan():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/run-single-product-scan', methods=['POST'])
+@login_required
+def run_single_product_scan():
+    """Trigger the Apify Shop Scanner for a specific Product ID or URL."""
+    try:
+        data = request.get_json() or {}
+        input_val = data.get('url_or_id', '').strip()
+        
+        if not input_val:
+             return jsonify({'success': False, 'error': 'Please provide a Product URL or ID'}), 400
+
+        # Parse ID from URL if valid URL provided
+        product_id = input_val
+        if 'tiktok.com' in input_val:
+            # Attempt to extract ID from typical patterns
+            # Pattern 1: /product/1729383...?
+            import re
+            # Matches /product/DIGITS or /pdp/DIGITS
+            match = re.search(r'/(?:product|pdp)/(\d+)', input_val)
+            if match:
+                product_id = match.group(1)
+            else:
+                # Fallback: Is the whole thing a query? use as keyword if simple?
+                # For now let's hope it's an ID or standard URL.
+                pass
+        
+        script_path = os.path.join(basedir, 'apify_shop_scanner.py')
+        
+        # Pass product_id to the script
+        cmd = [sys.executable, script_path, '--product_id', product_id]
+        
+        # Run process detached
+        if os.name == 'nt':
+            process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            process = subprocess.Popen(cmd, start_new_session=True)
+            
+        return jsonify({
+            'success': True, 
+            'message': f'Searching for Product ID: {product_id}... Check console.',
+            'product_id': product_id
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/scanner-logs', methods=['GET'])
 @login_required
 def get_scanner_logs():
