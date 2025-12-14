@@ -15,28 +15,13 @@ import requests
 from requests.auth import HTTPBasicAuth
 import asyncio
 
-# Database setup
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', '').replace('postgres://', 'postgresql://', 1)
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,
-    'pool_recycle': 300,
-}
-db = SQLAlchemy(app)
+# Database setup - Import from main application to ensure model consistency
+from app import app, db, Product
 
 # Discord Config
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
 HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
 PRODUCT_LOOKUP_CHANNEL_ID = int(os.environ.get('PRODUCT_LOOKUP_CHANNEL_ID', 0))
-
-# EchoTik API Config
-BASE_URL = "https://open.echotik.live/api/v3/echotik"
-ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
-ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
 
 # Hot Product Criteria - Free Shipping Deals
 MIN_SALES_7D = 50  # Lower threshold since we're filtering by free shipping
@@ -45,35 +30,11 @@ MAX_DAILY_POSTS = 5  # Top 5 daily
 DAYS_BEFORE_REPEAT = 3  # Don't show same product for 3 days
 
 def get_auth():
-    return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
+    # EchoTik is deprecated
+    return None
 
-# Product model (must match app.py)
-class Product(db.Model):
-    __tablename__ = 'products'
-    product_id = db.Column(db.String(50), primary_key=True)
-    product_name = db.Column(db.String(500))
-    seller_id = db.Column(db.String(50))
-    seller_name = db.Column(db.String(255))
-    gmv = db.Column(db.Float, default=0)
-    gmv_30d = db.Column(db.Float, default=0)
-    sales = db.Column(db.Integer, default=0)
-    sales_7d = db.Column(db.Integer, default=0)
-    sales_30d = db.Column(db.Integer, default=0)
-    influencer_count = db.Column(db.Integer, default=0)
-    commission_rate = db.Column(db.Float, default=0)
-    price = db.Column(db.Float, default=0)
-    image_url = db.Column(db.Text)
-    cached_image_url = db.Column(db.Text)
-    video_count = db.Column(db.Integer, default=0)
-    video_7d = db.Column(db.Integer, default=0)
-    video_30d = db.Column(db.Integer, default=0)
-    live_count = db.Column(db.Integer, default=0)
-    views_count = db.Column(db.Integer, default=0)
-    product_rating = db.Column(db.Float, default=0)
-    product_status = db.Column(db.String(50), default='active')
-    has_free_shipping = db.Column(db.Boolean, default=False)
-    last_shown_hot = db.Column(db.DateTime)  # Track when product was last shown in hot products
-    last_updated = db.Column(db.DateTime)
+# Model imported from app.py
+
 
 # Discord Bot Setup
 intents = discord.Intents.default()
@@ -132,37 +93,77 @@ def get_product_from_db(product_id):
             }
         return None
 
+# Import the hybrid scan logic
+from app import start_hybrid_scan
+
 def get_product_from_api(product_id):
-    """Fetch product details from EchoTik API"""
+    """
+    Trigger Apify Hybrid Scan and poll database for results.
+    Replaces EchoTik API call.
+    """
     try:
-        response = requests.get(
-            f"{BASE_URL}/product/detail",
-            params={'product_ids': product_id},
-            auth=get_auth(),
-            timeout=30
-        )
+        print(f"🚀 Triggering Hybrid Scan for {product_id}...")
         
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('code') == 0 and data.get('data'):
-                products = data.get('data', [])
-                if isinstance(products, list) and len(products) > 0:
-                    return products[0]
+        # 1. Start the Scan
+        with app.app_context():
+            # This does Prefetch (Instant) + Launches Apify (Async)
+            # Returns dict with 'success'
+            res = start_hybrid_scan(product_id)
+            if not res.get('success'):
+                print(f"❌ Scan trigger failed: {res.get('error')}")
+                return None
+        
+        # 2. Poll Database for completion (Wait for 'apify_shop' scan type)
+        # Apify usually takes 20-40s for a single item search.
+        print(f"⏳ Polling DB for completion (Max 45s)...")
+        import time
+        for i in range(9): # 9 * 5s = 45s
+            time.sleep(5)
+            with app.app_context():
+                # We need to construct the specific shop_ID that app.py uses
+                # app.py uses f"shop_{product_id}" for new items
+                pid = f"shop_{product_id}"
+                p = Product.query.get(pid)
+                
+                if p:
+                    # Check if Apify has finished (scan_type changes)
+                    # Or if we have stats (video_count > 0)
+                    if p.scan_type == 'apify_shop':
+                        print(f"✅ Scan Complete! Found stats for {pid}")
+                        return p
+                    
+                    # If we have name but still prefetch, keep waiting...
+                    print(f"   ... Waiting for Apify (Current: {p.scan_type}, Videos: {p.video_count})")
+        
+        # If timeout, return whatever partial data we have (Prefetch data)
+        with app.app_context():
+            p = Product.query.get(f"shop_{product_id}")
+            if p:
+                print("⚠️ Timeout waiting for stats. Returning basic data.")
+                return p
+                
         return None
+
     except Exception as e:
         print(f"Error fetching product {product_id}: {e}")
         return None
 
 def get_product_data(product_id):
-    """Get product - check database first, then API if not found"""
-    # Try database first (no API call!)
-    db_product = get_product_from_db(product_id)
-    if db_product:
-        print(f"✅ Product {product_id} found in database (saved API call)")
-        return db_product
+    """Get product - check database first. If simple prefetch, upgrade it."""
     
-    # Not in database, call API
-    print(f"🔍 Product {product_id} not in database, calling API...")
+    with app.app_context():
+        # Check DB
+        # Note: The bot logic uses numeric ID, but app uses 'shop_' prefix.
+        # We need to handle both lookups.
+        db_product = Product.query.get(product_id) or Product.query.get(f"shop_{product_id}")
+        
+        # If found AND has stats (apify_shop), return it immediately
+        if db_product and db_product.scan_type == 'apify_shop':
+            print(f"✅ Product {product_id} found in database (Cached)")
+            return db_product
+    
+    # Not found OR needs upgrade -> Call Scan
+    print(f"🔍 Product {product_id} needs scan/upgrade, calling Scanner...")
     return get_product_from_api(product_id)
 
 
@@ -199,6 +200,7 @@ def create_product_embed(p, title_prefix=""):
     video_count = int(get_val_multi(['video_count', 'total_video_cnt'], 0) or 0)
     commission = float(get_val_multi(['commission_rate', 'product_commission_rate'], 0) or 0)
     price = float(get_val_multi(['price', 'spu_avg_price'], 0) or 0)
+    stock = int(get_val_multi(['live_count', 'stock'], 0) or 0) # live_count is proxy for stock
     has_free_shipping = get_val('has_free_shipping', False)
     
     # Format commission (handle 0.15 vs 15.0)
@@ -235,7 +237,8 @@ def create_product_embed(p, title_prefix=""):
     )
     
     # Add stats fields
-    embed.add_field(name="📦 7-Day Sales", value=f"{sales_7d:,}", inline=True)
+    embed.add_field(name="📦 Stock", value=f"{stock:,}", inline=True)
+    embed.add_field(name="📉 7-Day Sales", value=f"{sales_7d:,}", inline=True)
     embed.add_field(name="💰 Price", value=f"${price:.2f}", inline=True)
     embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
     embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
@@ -252,64 +255,30 @@ def create_product_embed(p, title_prefix=""):
     return embed
 
 def get_hot_products():
-    """Get hot FREE SHIPPING products from database with variety (no repeats for 3 days)"""
+    """Get Top Products from the New Scraper Tab (Apify Shop)"""
     from datetime import timedelta
     
     with app.app_context():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.utcnow() - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query free shipping products with low video count
-        # Exclude products shown in the last 3 days
+        # Query: 
+        # 1. New Scraper Data (scan_type='apify_shop')
+        # 2. Has Stock (live_count > 0)
+        # 3. Has Videos (video_count > 0)
+        # 4. Not shown recently
         products = Product.query.filter(
-            Product.has_free_shipping == True,  # Free shipping only!
-            Product.sales_7d >= MIN_SALES_7D,
-            Product.video_count <= MAX_VIDEO_COUNT,
-            db.or_(Product.product_status == 'active', Product.product_status == None),
+            Product.scan_type == 'apify_shop', # ONLY new scraper data
+            Product.live_count > 0,            # Stock > 0
+            Product.video_count > 0,           # Videos > 0
             db.or_(
                 Product.last_shown_hot == None,  # Never shown
                 Product.last_shown_hot < cutoff_date  # Or shown more than 3 days ago
             )
         ).order_by(
-            Product.sales_7d.desc()
+            Product.sales_7d.desc() # Top Sales first
         ).limit(MAX_DAILY_POSTS).all()
         
-        # If we don't have enough fresh products, fall back to showing any free shipping product
-        if len(products) < MAX_DAILY_POSTS:
-            needed = MAX_DAILY_POSTS - len(products)
-            existing_ids = [p.product_id for p in products]
-            
-            fallback_products = Product.query.filter(
-                Product.has_free_shipping == True,
-                Product.sales_7d >= MIN_SALES_7D,
-                Product.video_count <= MAX_VIDEO_COUNT, # Keep low video count constraint if possible
-                db.or_(Product.product_status == 'active', Product.product_status == None),
-                ~Product.product_id.in_(existing_ids)
-            ).order_by(
-                Product.sales_7d.desc()
-            ).limit(needed).all()
-            products.extend(fallback_products)
-        
-        # Convert to dicts BEFORE commit to avoid DetachedInstanceError
-        # (Commit expires objects, so accessing them later fails without a session)
-        product_dicts = []
-        for p in products:
-            p_dict = {
-                'product_id': p.product_id,
-                'product_name': p.product_name,
-                'seller_name': p.seller_name,
-                'sales_7d': p.sales_7d,
-                'sales_30d': p.sales_30d,
-                'influencer_count': p.influencer_count,
-                'video_count': p.video_count,
-                'commission_rate': p.commission_rate,
-                'price': p.price,
-                'image_url': p.cached_image_url or p.image_url,
-                'cached_image_url': p.cached_image_url,
-                'has_free_shipping': p.has_free_shipping
-            }
-            product_dicts.append(p_dict)
-
         # Mark products as shown today
         for p in products:
             p.last_shown_hot = datetime.utcnow()
@@ -319,8 +288,8 @@ def get_hot_products():
         except Exception as e:
             print(f"Error updating last_shown_hot: {e}")
             db.session.rollback()
-        
-        return product_dicts
+            
+        return products
 
 @bot.event
 async def on_ready():

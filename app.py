@@ -6002,6 +6002,80 @@ def run_viral_trends_scan():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+def start_hybrid_scan(product_id):
+    """
+    Shared logic to start a Hybrid Scan (Prefetch Title -> Apify Search).
+    Used by Flask API and Discord Bot.
+    """
+    # -------------------------------------------------------------------------
+    # PRE-FETCH: Get Title/Seller to enable "Search by Name" (for Stats)
+    # -------------------------------------------------------------------------
+    search_query = product_id # Default to ID
+    found_title = ""
+    
+    try:
+         # Construct direct URL
+         target_url = f"https://shop.tiktok.com/view/product/{product_id}?region=US&locale=en"
+         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+         
+         verify_res = requests.get(target_url, headers=headers, timeout=10)
+         
+         if verify_res.status_code == 200:
+             html = verify_res.text
+             
+             # Simple Regex Extraction to avoid huge BS4 dependency if not present
+             import re
+             title_match = re.search(r'"title":"(.*?)","', html) or re.search(r'<title>(.*?)</title>', html)
+             
+             # Basic Data Save (So user sees meaningful card immediately)
+             with app.app_context():
+                 existing = Product.query.get(f"shop_{product_id}")
+                 if not existing:
+                     existing = Product(product_id=f"shop_{product_id}")
+                     existing.first_seen = datetime.utcnow()
+                 
+                 if title_match:
+                     clean_title = title_match.group(1).split('|')[0].strip() # Remove "| TikTok Shop"
+                     # Unescape HTML entities if needed, but simple strip is ok for now
+                     existing.product_name = clean_title[:200]
+                     found_title = clean_title
+                     search_query = clean_title # USE TITLE FOR APIFY SCAN
+                 else:
+                     existing.product_name = f"TikTok Product {product_id}"
+                 
+                 existing.product_url = target_url
+                 existing.last_updated = datetime.utcnow()
+                 existing.scan_type = 'lookup_prefetch'
+                 
+                 db.session.add(existing)
+                 db.session.commit()
+                 print(f"DEBUG: Pre-fetched Key Data. Title: {found_title}")
+             
+    except Exception as e_pre:
+         print(f"Pre-fetch failed: {e_pre}")
+    
+    # -------------------------------------------------------------------------
+
+    script_path = os.path.join(basedir, 'apify_shop_scanner.py')
+    
+    # Pass TITLE (search_query) to the script if we found it, otherwise ID
+    # The scanner will detect if it's a textual title and use Search capability.
+    cmd = [sys.executable, script_path, '--product_id', search_query]
+    
+    # Run process detached
+    if os.name == 'nt':
+        process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    else:
+        process = subprocess.Popen(cmd, start_new_session=True)
+        
+    return {
+        'success': True, 
+        'message': f'Found "{search_query[:20]}...". Analyzing Stats (Influencers/Videos)...',
+        'product_id': product_id,
+        'source': 'apify',
+        'search_query': search_query
+    }
+
 @app.route('/api/run-single-product-scan', methods=['POST'])
 @login_required
 def run_single_product_scan():
@@ -6019,61 +6093,22 @@ def run_single_product_scan():
         if not product_id:
             return jsonify({'success': False, 'error': f'Could not extract Product ID from: {input_val}. Please use a full link or ID.'}), 400
             
-        # -------------------------------------------------------------------------
-        # PRE-FETCH: Get Title/Seller to enable "Search by Name" (for Stats)
-        # -------------------------------------------------------------------------
-        search_query = product_id # Default to ID
-        
-        try:
-             # Construct direct URL
-             target_url = f"https://shop.tiktok.com/view/product/{product_id}?region=US&locale=en"
-             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-             
-             verify_res = requests.get(target_url, headers=headers, timeout=10)
-             
-             if verify_res.status_code == 200:
-                 html = verify_res.text
-                 
-                 # Simple Regex Extraction to avoid huge BS4 dependency if not present
-                 import re
-                 title_match = re.search(r'"title":"(.*?)","', html) or re.search(r'<title>(.*?)</title>', html)
-                 
-                 # Basic Data Save (So user sees meaningful card immediately)
-                 existing = Product.query.get(f"shop_{product_id}")
-                 if not existing:
-                     existing = Product(product_id=f"shop_{product_id}")
-                     existing.first_seen = datetime.utcnow()
-                 
-                 found_title = ""
-                 if title_match:
-                     clean_title = title_match.group(1).split('|')[0].strip() # Remove "| TikTok Shop"
-                     # Unescape HTML entities if needed, but simple strip is ok for now
-                     existing.product_name = clean_title[:200]
-                     found_title = clean_title
-                     search_query = clean_title # USE TITLE FOR APIFY SCAN
-                 else:
-                     existing.product_name = f"TikTok Product {product_id}"
-                 
-                 existing.product_url = target_url
-                 existing.last_updated = datetime.utcnow()
-                 existing.scan_type = 'lookup_prefetch'
-                 
-                 db.session.add(existing)
-                 db.session.commit()
-                 print(f"DEBUG: Pre-fetched Key Data. Title: {found_title}")
-                 
-        except Exception as e_pre:
-             print(f"Pre-fetch failed: {e_pre}")
-        
-        # -------------------------------------------------------------------------
+        result = start_hybrid_scan(product_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/refresh-shop-products', methods=['POST'])
+@login_required
+def refresh_shop_products():
+    """Trigger the 'Refresh All' usage of Apify Shop Scanner."""
+    try:
         script_path = os.path.join(basedir, 'apify_shop_scanner.py')
         
-        # Pass TITLE (search_query) to the script if we found it, otherwise ID
-        # The scanner will detect if it's a textual title and use Search capability.
-        cmd = [sys.executable, script_path, '--product_id', search_query]
+        # Trigger with --refresh_all flag
+        cmd = [sys.executable, script_path, '--refresh_all']
         
-        # Run process detached
+        # Run process detached (Background)
         if os.name == 'nt':
             process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
         else:
@@ -6081,9 +6116,7 @@ def run_single_product_scan():
             
         return jsonify({
             'success': True, 
-            'message': f'Found "{search_query[:20]}...". Analyzing Stats (Influencers/Videos)...',
-            'product_id': product_id,
-            'source': 'apify'
+            'message': 'Started Bulk Refresh for ALL Shop Products! This may take several minutes. Check logs.'
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

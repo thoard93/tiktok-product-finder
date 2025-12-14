@@ -900,6 +900,9 @@
                 <button onclick="refreshAds()" class="nav-btn"
                     style="background: rgba(254, 44, 85, 0.2); color: #fe2c55; border: 1px solid #fe2c55;">⚡ Refresh
                     Ads</button>
+                <button onclick="refreshShopProducts()" class="nav-btn"
+                    style="background: rgba(37, 244, 238, 0.1); color: #25f4ee; border: 1px solid #25f4ee;">🔄 Refresh
+                    Shop</button>
             </div>
             <div class="stats-bar">
                 <div class="stat-item">
@@ -1599,6 +1602,36 @@
                     }
                     alert(msg);
                     loadProducts(1, currentFilters); // Reload grid
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Request failed');
+                console.error(err);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // ==================== REFRESH SHOP PRODUCTS ====================
+        async function refreshShopProducts() {
+            if (!confirm('Start batch refresh for ALL Shop Scraper products?\n\nThis runs in the background and may take a few minutes depending on how many products you have.\n(approx 5-10s per product)')) return;
+
+            const btn = document.querySelector('button[onclick="refreshShopProducts()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Starting...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/refresh-shop-products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
                 } else {
                     alert('Error: ' + data.error);
                 }
