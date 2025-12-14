@@ -184,7 +184,12 @@ def run_apify_scan():
                          continue
 
                     # Basic validation
+                    # Fallback: If we are targeting a specific ID and the scraper returns an item without an ID, assume it's the one we asked for.
                     pid_raw = str(item.get('id') or item.get('product_id'))
+                    
+                    if (not pid_raw or 'None' in pid_raw) and TARGET_ID:
+                        pid_raw = TARGET_ID
+                    
                     if not pid_raw or 'None' in pid_raw or 'test' in pid_raw: 
                         log(f"[WARN] Skipping invalid ID: {pid_raw}. Item keys: {list(item.keys())}")
                         continue
@@ -207,6 +212,16 @@ def run_apify_scan():
                          p.product_name = "Unknown Product"
                     else:
                          p.product_name = raw_name[:200]
+                    
+                    # Excavator Schema Mapping (sold, price, images)
+                    if item.get('sold'):
+                        p.sales = parse_metric(item.get('sold'))
+                    if item.get('images') and isinstance(item.get('images'), list) and len(item.get('images')) > 0:
+                        p.image_url = item.get('images')[0]
+                    if item.get('price'):
+                         try:
+                             p.price = float(str(item.get('price')).replace('$','').replace(',',''))
+                         except: pass
                     
                     # Fix Sort Order: If manual lookup (TARGET_ID), make it "Newest"
                     if TARGET_ID or p.product_name != "Unknown Product":
