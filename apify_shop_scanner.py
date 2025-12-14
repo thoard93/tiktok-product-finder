@@ -104,7 +104,7 @@ def run_apify_scan():
         if TARGET_ID:
              # SWITCH to Clockworks Scraper for better Detail Page resolution
              # "pratikdani" failed on direct links. "clockworks" is more robust for PDPs.
-             CURRENT_ACTOR = "clockworks/tiktok-shop-scraper" 
+             CURRENT_ACTOR = "clockworks~tiktok-shop-scraper" 
              direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
              
              # Clockworks Input Format
