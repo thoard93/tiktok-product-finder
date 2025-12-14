@@ -114,8 +114,8 @@ def run_apify_scan():
                  run_input = {
                      "keyword": TARGET_ID,
                      "limit": 5,
-                     "countryCode": "US",
-                     "sortType": "relevance_desc"
+                     "country_code": "US",  # snake_case required
+                     "sort_type": "relevance_desc" # snake_case likely required
                  }
                  log(f">> Switching to Search Scraper (Stats Mode) for: '{TARGET_ID}'")
              else:
