@@ -3466,6 +3466,7 @@ def get_product_detail(product_id):
             'video_7d': int(product.video_7d or 0),
             'video_30d': int(product.video_30d or 0),
             'live_count': int(product.live_count or 0),
+            'stock': int(product.live_count or 0), # Fix: Map live_count to stock for frontend
             'views_count': int(product.views_count or 0),
             'product_rating': float(product.product_rating or 0),
             'review_count': int(product.review_count or 0),
@@ -3482,8 +3483,9 @@ def get_product_detail(product_id):
             'cached_image_url': image_url,
             
             # Links
-            'tiktok_url': (product.status_note if (product.scan_type == 'apify_ad' and product.status_note and product.status_note.startswith('http')) 
-                          else f'https://www.tiktok.com/shop/pdp/{product.product_id}'),
+            # Fix: Use saved product_url if available (contains correct shop.tiktok.com format)
+            'product_url': product.product_url or f'https://shop.tiktok.com/view/product/{product.product_id}?region=US&locale=en',
+            'tiktok_url': product.product_url or f'https://shop.tiktok.com/view/product/{product.product_id}?region=US&locale=en',
             'affiliate_url': f'https://affiliate.tiktok.com/product/{product.product_id}',
             
             # Timestamps
