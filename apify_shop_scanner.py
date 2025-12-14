@@ -99,6 +99,9 @@ def run_apify_scan():
                     p.first_seen = datetime.utcnow()
                 
                 # Direct Mapping - Robust Fallbacks
+                if saved_count == 0:
+                    print(f"DEBUG ITEM: {json.dumps(item, default=str)}")
+                
                 p.product_name = (item.get('title') or item.get('name') or item.get('productName') or item.get('product_title') or "Unknown Product")[:200]
                 
                 # Seller Name - Check nested shop object
