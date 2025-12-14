@@ -455,9 +455,42 @@ class Product(db.Model):
     sales_7d = db.Column(db.Integer, default=0, index=True)
     sales_30d = db.Column(db.Integer, default=0)
     influencer_count = db.Column(db.Integer, default=0, index=True)
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    
     commission_rate = db.Column(db.Float, default=0, index=True)
     price = db.Column(db.Float, default=0, index=True)
+    original_price = db.Column(db.Float, default=0) # Added for Strikethrough Price
     product_url = db.Column(db.String(500))
+
+# =============================================================================
+# DB MIGRATION HELPER (Run on startup to ensure schema matches model)
+# =============================================================================
+def check_and_migrate_db():
+    """Add missing columns to existing tables"""
+    with app.app_context():
+        inspector = db.inspect(db.engine)
+        columns = [c['name'] for c in inspector.get_columns('products')]
+        
+        if 'original_price' not in columns:
+            print(">> MIGRATION: Adding 'original_price' column to products table...")
+            try:
+                # Postgres vs SQLite syntax
+                if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
+                    db.session.execute(db.text('ALTER TABLE products ADD COLUMN original_price FLOAT DEFAULT 0'))
+                else:
+                    db.session.execute(db.text('ALTER TABLE products ADD COLUMN IF NOT EXISTS original_price FLOAT DEFAULT 0'))
+                db.session.commit()
+                print(">> MIGRATION: Success!")
+            except Exception as e:
+                print(f"!! MIGRATION FAILED: {e}")
+                db.session.rollback()
+
+# Run migration check on startup (Safe for Gunicorn)
+try:
+    check_and_migrate_db()
+except:
+    pass
     image_url = db.Column(db.Text)
     cached_image_url = db.Column(db.Text)  # Signed URL that works
     image_cached_at = db.Column(db.DateTime)  # When cache was created

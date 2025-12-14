@@ -243,9 +243,22 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     p.live_count = total_stock 
                     p.msg_gmv = parse_float(item.get('total_sale_gmv_nd_amt')) 
 
+                    p.msg_gmv = parse_float(item.get('total_sale_gmv_nd_amt')) 
+
                     # Price (Avg)
                     if not p.price:
                         p.price = parse_float(item.get('avg_price') or item.get('real_price') or item.get('price'))
+                    
+                    # Original Price (for Sale/Strikethrough)
+                    # Try common Apify keys for pre-discount price
+                    p.original_price = parse_float(item.get('original_price') or item.get('market_price') or item.get('list_price'))
+                    
+                    # specific fix for some actors that put original price in 'skus'[0]['original_price']
+                    if not p.original_price and item.get('skus'):
+                        try:
+                            sku = item.get('skus')[0] if isinstance(item.get('skus'), list) else list(item.get('skus').values())[0]
+                            p.original_price = parse_float(sku.get('original_price'))
+                        except: pass
 
                     # Influencers & Videos
                     p.influencer_count = parse_metric(item.get('total_ifl_cnt'))

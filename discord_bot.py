@@ -200,12 +200,20 @@ def create_product_embed(p, title_prefix=""):
     video_count = int(get_val_multi(['video_count', 'total_video_cnt'], 0) or 0)
     commission = float(get_val_multi(['commission_rate', 'product_commission_rate'], 0) or 0)
     price = float(get_val_multi(['price', 'spu_avg_price'], 0) or 0)
+    original_price = float(get_val_multi(['original_price'], 0) or 0) # New field
     stock = int(get_val_multi(['live_count', 'stock'], 0) or 0) # live_count is proxy for stock
     has_free_shipping = get_val('has_free_shipping', False)
     
     # Format commission (handle 0.15 vs 15.0)
     if commission > 0 and commission < 1:
         commission = commission * 100
+    
+    # Calculate Display Price (Handle Sale)
+    price_display = f"${price:.2f}"
+    if original_price > price:
+        discount_pct = int(((original_price - price) / original_price) * 100)
+        if discount_pct > 0:
+            price_display = f"~~${original_price:.2f}~~ **${price:.2f}** ({discount_pct}% OFF)"
     
     # Get image URL
     image_url = get_val('cached_image_url') or get_val('image_url') or get_val('cover') or get_val('cover_url', '')
@@ -239,7 +247,7 @@ def create_product_embed(p, title_prefix=""):
     # Add stats fields
     embed.add_field(name="📦 Stock", value=f"{stock:,}", inline=True)
     embed.add_field(name="📉 Total Sales", value=f"{total_sales:,}", inline=True)
-    embed.add_field(name="💰 Price", value=f"${price:.2f}", inline=True)
+    embed.add_field(name="💰 Price", value=price_display, inline=True)
     embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
     embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
     embed.add_field(name="👥 Creators", value=f"{influencer_count:,}", inline=True)
