@@ -318,6 +318,13 @@ def run_apify_scan():
                  log(f"   [CRITICAL] Commit Failed: {commit_err}")
             
         log(f"   Batch Saved: {batch_saved}")
+        
+        # Stop infinite loop if single lookup failed to save anything (e.g. error response)
+        if TARGET_ID and batch_saved == 0:
+             log(f"   [Single Scan] No valid products saved (likely Error response). Stopping.")
+             break
+
+        total_saved += batch_saved
         total_saved += batch_saved
         
         if total_saved >= MAX_PRODUCTS:
