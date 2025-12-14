@@ -6017,11 +6017,57 @@ def run_single_product_scan():
         product_id = extract_product_id(input_val)
         
         if not product_id:
-            # Fallback for very weird cases: return error?
-            # Or if it's a keyword search intended? 
-            # User wants "Single Product Lookup" -> should enforce ID.
             return jsonify({'success': False, 'error': f'Could not extract Product ID from: {input_val}. Please use a full link or ID.'}), 400
-        
+            
+        # -------------------------------------------------------------------------
+        # FAST PATH: Try Internal API (EchoTik) First
+        # -------------------------------------------------------------------------
+        try:
+             # Re-use existing auth logic from enrich_product_data or similar
+             # Using get_auth() helper if available globally
+             res = requests.get(
+                 f"{BASE_URL}/product/detail", 
+                 params={"product_ids": product_id}, 
+                 auth=get_auth(), 
+                 timeout=15
+             )
+             
+             if res.status_code == 200:
+                 d_data = res.json().get('data')
+                 if d_data and len(d_data) > 0:
+                     d_item = d_data[0]
+                     print(f"DEBUG: Found product {product_id} via Internal API!")
+                     
+                     # Map to DB Model
+                     existing = Product.query.get(f"shop_{product_id}")
+                     if not existing:
+                         existing = Product(product_id=f"shop_{product_id}")
+                         existing.first_seen = datetime.utcnow()
+                     
+                     existing.product_name = d_item.get('product_name', 'Unknown')
+                     existing.seller_name = d_item.get('seller_name') or d_item.get('shop_name') or 'TikTok Shop'
+                     existing.price = float(d_item.get('spu_avg_price', 0) or 0)
+                     existing.sales = int(d_item.get('total_sale_cnt', 0) or 0)
+                     existing.sales_7d = int(d_item.get('total_sale_7d_cnt', 0) or 0)
+                     existing.influencer_count = int(d_item.get('total_ifl_cnt', 0) or 0)
+                     existing.image_url = parse_cover_url(d_item.get('cover_url', ''))
+                     existing.product_url = f"https://shop.tiktok.com/view/product/{product_id}?region=US&locale=en"
+                     existing.last_updated = datetime.utcnow()
+                     existing.scan_type = 'lookup_api' # Distinguish from Apify
+                     
+                     db.session.add(existing)
+                     db.session.commit()
+                     
+                     return jsonify({
+                        'success': True, 
+                        'message': f'Found product instantly!',
+                        'product_id': product_id,
+                        'source': 'internal_api'
+                     })
+        except Exception as e_api:
+             print(f"Internal API Lookup failed: {e_api} - Falling back to Apify")
+        # -------------------------------------------------------------------------
+
         script_path = os.path.join(basedir, 'apify_shop_scanner.py')
         
         # Pass product_id to the script
@@ -6035,8 +6081,9 @@ def run_single_product_scan():
             
         return jsonify({
             'success': True, 
-            'message': f'Searching for Product ID: {product_id}... Check console.',
-            'product_id': product_id
+            'message': f'Internal API invalid. Starting Deep Scan (Apify) for ID: {product_id}...',
+            'product_id': product_id,
+            'source': 'apify'
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
