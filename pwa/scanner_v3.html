@@ -742,7 +742,7 @@
             const maxProducts = document.getElementById('viral-max').value || 50;
 
             try {
-                const res = await fetch('/api/run-apify-scan', {
+                const res = await fetch('/api/run-viral-trends-scan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ max_products: parseInt(maxProducts) })

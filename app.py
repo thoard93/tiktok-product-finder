@@ -5892,9 +5892,9 @@ def init_database():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/run-apify-scan', methods=['POST'])
+@app.route('/api/run-viral-trends-scan', methods=['POST'])
 @login_required
-def run_apify_scan():
+def run_viral_trends_scan():
     """Trigger the Apify Shop Scanner as a background process."""
     try:
         data = request.get_json() or {}
