@@ -103,12 +103,14 @@ def run_apify_scan():
 
         if TARGET_ID:
              # SWITCH to Barrierefix (Supports direct productUrls)
-             # ID: barrierefix~tiktok-shop-scraper or similar checking docs
              CURRENT_ACTOR = "barrierefix~tiktok-shop-scraper" 
              
-             # Input Format
+             direct_url = f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"
+             
+             # Input Format: Send keys for multiple likely schemas to be safe
              run_input = {
-                 "productUrls": [f"https://shop.tiktok.com/view/product/{TARGET_ID}?region=US&locale=en"],
+                 "productUrls": [direct_url],
+                 "startUrls": [{"url": direct_url}], 
                  "maxItems": 1
              }
              log(f">> Switching to Direct URL Scraper: {CURRENT_ACTOR}")
