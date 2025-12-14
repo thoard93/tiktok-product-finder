@@ -1190,9 +1190,9 @@
             return `
         <div class="product-card" onclick="window.location.href='/product?id=${productId}'">
             <div class="product-image-container">
-                ${product.cached_image_url ? `
+                ${(product.cached_image_url || product.image_url) ? `
                     <img class="product-image" 
-                         src="${product.cached_image_url}" 
+                         src="${product.cached_image_url || product.image_url}" 
                          alt="${product.product_name || 'Product'}"
                          loading="lazy"
                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -1214,12 +1214,12 @@
                 <div class="product-name">${product.product_name || 'Unknown Product'}</div>
                 <div class="product-metrics">
                     <div class="metric">
-                        <div class="metric-value">${formatNumber(product.sales_7d || 0)}</div>
+                        <div class="metric-value">${formatNumber(product.sales_7d || product.sales || 0)}</div>
                         <div class="metric-label">7-Day Sales</div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value">${formatNumber(product.sales || 0)}</div>
-                        <div class="metric-label">Total Sales</div>
+                        <div class="metric-value">${formatNumber(product.gmv || product.sales || 0)}</div>
+                        <div class="metric-label">${product.gmv ? 'Total GMV' : 'Total Sales'}</div>
                     </div>
                     <div class="metric">
                         <div class="metric-value highlight">${formatNumber(product.sales_30d || 0)}</div>
