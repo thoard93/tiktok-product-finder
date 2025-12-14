@@ -3084,8 +3084,17 @@ def get_products():
     # Proven sellers filter (products with 50+ total sales)
     proven_only = request.args.get('proven_only', 'false').lower() == 'true'
     
+    # Apify Shop Scraper filter
+    apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
+    
     # Build query - exclude unavailable products by default
-    if oos_only:
+    if apify_scan:
+        # Apify Shop scan: Explicitly show shop scraper items, ignoring video counts (they are 0 initially)
+        query = Product.query.filter(
+            Product.scan_type == 'apify_shop',
+            db.or_(Product.product_status == None, Product.product_status == 'active')
+        )
+    elif oos_only:
         # Show only likely OOS products
         query = Product.query.filter(
             Product.video_count >= min_videos,

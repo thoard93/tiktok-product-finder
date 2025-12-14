@@ -98,18 +98,20 @@ def run_apify_scan():
                     p = Product(product_id=pid)
                     p.first_seen = datetime.utcnow()
                 
-                # Direct Mapping
-                p.product_name = (item.get('title') or "Unknown Product")[:200]
-                p.seller_name = item.get('shop_name') or item.get('seller_name') or "TikTok Shop"
+                # Direct Mapping - Robust Fallbacks
+                p.product_name = (item.get('title') or item.get('name') or item.get('productName') or item.get('product_title') or "Unknown Product")[:200]
+                p.seller_name = item.get('shop_name') or item.get('seller_name') or item.get('shopName') or "TikTok Shop"
                 
                 # Image
-                imgs = item.get('images') or []
-                if imgs and len(imgs) > 0:
+                imgs = item.get('images') or item.get('main_images') or []
+                if isinstance(imgs, list) and len(imgs) > 0:
                     p.image_url = imgs[0]
+                elif isinstance(imgs, str):
+                    p.image_url = imgs
                 
                 # Sales & Price
                 # Safe get for sold_count which might be '10K+' string or int
-                sold_raw = item.get('sold_count', 0)
+                sold_raw = item.get('sold_count') or item.get('sales') or item.get('sold') or 0
                 if isinstance(sold_raw, str):
                     if 'K' in sold_raw: sold_raw = float(sold_raw.replace('K','').replace('+','')) * 1000
                     elif 'M' in sold_raw: sold_raw = float(sold_raw.replace('M','').replace('+','')) * 1000000
@@ -119,7 +121,11 @@ def run_apify_scan():
                 if isinstance(price_info, dict):
                     p.price = float(price_info.get('min') or price_info.get('value') or 0)
                 else:
-                    p.price = float(price_info) if price_info else 0
+                    # Could be just a number or string in some actors
+                    try:
+                        p.price = float(price_info)
+                    except:
+                        p.price = 0
                 
                 # URL
                 p.product_url = item.get('product_url') or f"https://shop.tiktok.com/view/product/{pid_raw}"
