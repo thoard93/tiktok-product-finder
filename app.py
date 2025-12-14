@@ -31,7 +31,7 @@ import time
 import json
 import hashlib
 import secrets
-import jwt  # For Kling AI authentication
+# import jwt  # Moved inside generate_kling_jwt_token to avoid dependency crash for Bot
 import re   # For parsing product IDs from URLs
 import traceback
 from werkzeug.exceptions import HTTPException
@@ -5198,6 +5198,7 @@ def image_proxy(product_id):
 
 def generate_kling_jwt_token():
     """Generate JWT token for Kling AI API authentication"""
+    import jwt # Lazy import to prevent crash if library missing elsewhere
     if not KLING_ACCESS_KEY or not KLING_SECRET_KEY:
         return None
     
