@@ -284,7 +284,7 @@
             </div>
             <div>
                 <span class="nav-item" style="background: rgba(255,255,255,0.05);">
-                    User: {{ current_user.discord_username }}
+                    User: {{ user.discord_username }}
                 </span>
             </div>
         </div>
@@ -397,59 +397,71 @@
         Payment Successful! Credits Added. 🚀
     </div>
 
-    <script>n        yKey() {
-        cons            t = document.getElementById('apiKeyDisplay').innerText.trim();
-        navi            ipboard.writeText(keyText);
-        // S            l feedback
-        const btn = event.ta        ;
-            const original = btn.innerTe                 btn.innerText = "Copied!";
-        setTimeoub            Text =                000);
-    }
+    <script>
+        function copyKey() {
+            const keyText = document.getElementById('apiKeyDisplay').innerText.trim();
+            navigator.clipboard.writeText(keyText);
+            // Visual feedback
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "Copied!";
+            setTimeout(() => btn.innerText = originalText, 2000);
+        }
 
-    async function generateKey() {
-        if (!confirm("G                w API Key? Old keys will stop w                et urn;
-        
-                              const res =                 '/api/use                     { method: 'POST' });
-                         a             res.jso n();
-            i        atc        ) {
-                       ation.reload();
-            } else {                     alert('Error: '            error);
-            }
-        }            e) { alert(e); }                    const regenerateKey = genera                async function buyCredits                     const btn = event.target;
-                   abl            e;
-        btn.innerText = "Loading...";
-        
-        try                   const res = await fetch('/api/stripe/create-checkout-sessi         {
-         method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ plan: plan })
-            });
-            const data = await res.json();
-            
-            if (data.url) {
-                window.location.href = data.url;
-            } else {
-                alert('Error creating session: ' + (data.error || 'Unknown error'));
-            }
-        } catch(e) {
-            alert('Payment Error: ' + e);
-        } finally {
-            btn.disabled = false;
-            btn.innerText = "Buy Now";
+        async function generateKey() {
+            if (!confirm("Generate a new API Key? Old keys will stop working.")) return;
+
+            try {
+                const res = await fetch('/api/user/generate-key', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) { alert(e); }
         }
-    }
-    
-    // Check for Success Params
-    window.onload = function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('success')) {
-            const toast = document.getElementById('toast');
-            toast.style.display = 'block';
-            setTimeout(() => toast.style.display = 'none', 5000);
-            // Clean URL
-            window.history.replaceState({}, document.title, window.location.pathname);
+
+        const regenerateKey = generateKey;
+
+        async function buyCredits(plan) {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerText = "Loading...";
+
+            try {
+                const res = await fetch('/api/stripe/create-checkout-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plan: plan })
+                });
+                const data = await res.json();
+
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert('Error creating session: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Payment Error: ' + e);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Buy Now";
+            }
         }
-    }
+
+        // Check for Success Params
+        window.onload = function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('success')) {
+                const toast = document.getElementById('toast');
+                toast.style.display = 'block';
+                setTimeout(() => toast.style.display = 'none', 5000);
+                // Clean URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
     </script>
 </body>
 
