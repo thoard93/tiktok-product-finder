@@ -897,6 +897,62 @@
         }
 
         /* CSS END */
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1.5rem;
+                text-align: center;
+            }
+
+            .logo {
+                flex-direction: column;
+            }
+
+            .stats-bar {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+                width: 100%;
+            }
+
+            .nav-btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            .header .user-info {
+                width: 100%;
+            }
+
+            .filter-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-group {
+                width: 100%;
+            }
+
+            .filter-group input,
+            .filter-group select {
+                width: 100%;
+            }
+
+            .products-grid {
+                grid-template-columns: 1fr !important;
+                /* Force single column */
+            }
+
+            .page-title {
+                font-size: 1.5rem;
+                text-align: center;
+            }
+
+            .main {
+                padding: 1rem;
+            }
+        }
     </style>
 </head>
 

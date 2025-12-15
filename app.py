@@ -36,7 +36,7 @@ import secrets
 # import jwt  # Moved inside generate_kling_jwt_token to avoid dependency crash for Bot
 import re   # For parsing product IDs from URLs
 import traceback
-from apify_service import ApifyService # Apify Service
+# from apify_service import ApifyService # Apify Service - REMOVED for V2
 from werkzeug.exceptions import HTTPException
 try:
     from whitenoise import WhiteNoise
@@ -186,9 +186,7 @@ KLING_API_BASE_URL = "https://api-singapore.klingai.com"
 # Gemini AI Image Generation Config
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
-# Apify Config (Sponsored Video Scraper)
-APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', '')
-APIFY_ACTOR_ID = "scraper-engine~tiktok-ads-scraper" # Supports US Ads
+# Apify Config - REMOVED for V2
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
@@ -2799,21 +2797,9 @@ def scan_manual_import():
             # Attempt Enrichment
             # Bridge to Apify: Queue for Background Scanning (Async)
             # This replaces synchronous Echotik enrichment while Echotik is unavailable
-            import uuid
-            if p.get('url') or p.get('product_id'):
-                job_id = str(uuid.uuid4())
-                # Use URL if available, else ID
-                q_input = p.get('url') or p.get('product_id')
-                
-                # Create Job
-                job = ScanJob(id=job_id, status='queued', input_query=q_input, api_key_id=None)
-                db.session.add(job)
-                
-                enrich_success = True
-                msg = f"Queued Bridge Job {job_id[:8]}"
-            else:
-                enrich_success = False
-                msg = "No ID/URL for Bridge"
+            # Auto-Scraping Removed for V2 (EchoTik transition)
+            enrich_success = False
+            msg = "Imported Raw (Vantage Mode)"
             
             if not p.get('product_id'): 
                 p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
@@ -5171,7 +5157,7 @@ def index():
         return send_from_directory(app.static_folder, 'login.html')
         
     # If logged in, show Dashboard
-    return send_from_directory('pwa', 'dashboard_v3.html')
+    return send_from_directory('pwa', 'dashboard_v4.html')
 
 @app.route('/product')
 @login_required
@@ -6100,68 +6086,7 @@ def start_hybrid_scan(product_id):
         'search_query': search_query
     }
 
-@app.route('/api/run-single-product-scan', methods=['POST'])
-@login_required
-def run_single_product_scan():
-    """Trigger the Apify Shop Scanner for a specific Product ID or URL."""
-    try:
-        data = request.get_json() or {}
-        input_val = data.get('url_or_id', '').strip()
-        
-        if not input_val:
-             return jsonify({'success': False, 'error': 'Please provide a Product URL or ID'}), 400
-
-        # Parse ID from URL using robust extractor (handles short links)
-        product_id = extract_product_id(input_val)
-        
-        if not product_id:
-            return jsonify({'success': False, 'error': f'Could not extract Product ID from: {input_val}. Please use a full link or ID.'}), 400
-            
-        result = start_hybrid_scan(product_id)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/refresh-shop-products', methods=['POST'])
-@login_required
-def refresh_shop_products():
-    """Trigger the 'Refresh All' usage of Apify Shop Scanner."""
-    try:
-        script_path = os.path.join(basedir, 'apify_shop_scanner.py')
-        
-        # Trigger with --refresh_all flag
-        cmd = [sys.executable, script_path, '--refresh_all']
-        
-        # Run process detached (Background)
-        if os.name == 'nt':
-            process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        else:
-            process = subprocess.Popen(cmd, start_new_session=True)
-            
-        return jsonify({
-            'success': True, 
-            'message': 'Started Bulk Refresh for ALL Shop Products! This may take several minutes. Check logs.'
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/scanner-logs', methods=['GET'])
-@login_required
-def get_scanner_logs():
-    """Read the tail of the scanner log file."""
-    try:
-        log_path = os.path.join(basedir, 'scans', 'apify_shop.log')
-        if not os.path.exists(log_path):
-             return jsonify({'logs': ["Waiting for scan to start..."]})
-        
-        # Read last 30 lines
-        with open(log_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            tail = lines[-30:]
-            
-        return jsonify({'logs': [l.strip() for l in tail]})
-    except Exception as e:
-         return jsonify({'logs': [f"Error reading logs: {str(e)}"]})
+# Apify Routes Removed for V2
 
 
 
@@ -6530,67 +6455,7 @@ def fulfill_credits(user_id, amount):
 # =============================================================================
 # SAAS WORKER (Background Thread)
 # =============================================================================
-def saas_worker_loop():
-    """Poll DB for queued jobs and process them"""
-    print(">> SAAS WORKER STARTED")
-    while True:
-        try:
-            with app.app_context():
-                # Fetch OLDEST queued job
-                job = ScanJob.query.filter_by(status='queued').order_by(ScanJob.created_at.asc()).first()
-                
-                if job:
-                    print(f">> PROCESSING JOB {job.id} for query: {job.input_query}")
-                    job.status = 'processing'
-                    db.session.commit()
-                    
-                    try:
-                        # Extract Product ID
-                        pid = extract_product_id(job.input_query)
-                        if pid:
-                            # Use Direct Sync Scan (Bridge Mode) to ensure data is saved
-                            # Avoids subprocess issues
-                            from apify_shop_scanner import scan_target
-                            
-                            saved_ids = scan_target(pid, 1) # Scan 1 product, returns list of IDs
-                            
-                            if saved_ids and len(saved_ids) > 0:
-                                saved_count = len(saved_ids)
-                                real_id = saved_ids[0]
-                                
-                                # DEDUPLICATE: If we looked up a placeholder (dv_) but saved a real ID
-                                if pid.startswith('dv_') and pid != real_id:
-                                    # Delete the temporary placeholder so user sees the Enriched Real Product
-                                    placeholder = Product.query.get(pid)
-                                    if placeholder:
-                                        db.session.delete(placeholder)
-                                        db.session.commit()
-                                        print(f"   [Bridge] Replaced placeholder {pid} with real product {real_id}")
-                                
-                                job.result_json = json.dumps({
-                                    'success': True, 
-                                    'message': f"Enriched {real_id}", 
-                                    'saved': saved_count,
-                                    'real_id': real_id
-                                })
-                                job.status = 'completed'
-                            else:
-                                job.result_json = json.dumps({'success': False, 'message': f"Apify returned 0 items for {pid}", 'saved': 0})
-                                job.status = 'failed'
-                        else:
-                            job.result_json = json.dumps({'success': False, 'error': 'Invalid TikTok URL/ID'})
-                            job.status = 'failed'
-                    except Exception as e:
-                        job.result_json = json.dumps({'success': False, 'error': str(e)})
-                        job.status = 'failed'
-                    
-                    job.completed_at = datetime.utcnow()
-                    db.session.commit()
-                else:
-                    time.sleep(2) # Sleep if no jobs
-        except Exception as e:
-            print(f"!! SAAS WORKER ERROR: {e}")
-            time.sleep(5)
+# SAAS Worker Removed for V2
 
 # Start Worker Thread on App Start (Daemon)
 # Only start if likely running as main server (not during build)
@@ -6604,9 +6469,9 @@ with app.app_context():
     except Exception as e:
         print(f"Error during DB init: {e}")
 
-if os.environ.get('RENDER') or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-    t = threading.Thread(target=saas_worker_loop, daemon=True)
-    t.start()
+# if os.environ.get('RENDER') or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+#     t = threading.Thread(target=saas_worker_loop, daemon=True)
+#     t.start()
     
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

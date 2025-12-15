@@ -32,13 +32,17 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10, origin_id=None):
         log(f"--- Batch {page} (Saved: {total_saved}/{MAX_PRODUCTS}) ---")
         
         # 1. Fetch Items via Service
+        # 1. Fetch Items via Service
         if TARGET_ID:
-            if any(c.isalpha() for c in TARGET_ID):
+            # Check if it's a Direct Lookup (Numeric ID or URL)
+            is_direct = TARGET_ID.isdigit() or "http" in TARGET_ID or "tiktok.com" in TARGET_ID
+            
+            if not is_direct:
                  log(f">> Keyword Search: '{TARGET_ID}'")
                  res = ApifyService.search_products(TARGET_ID, limit=3)
             else:
-                 log(f">> ID Lookup: {TARGET_ID}")
-                 # Updated signature expects single ID
+                 log(f">> ID/URL Lookup: {TARGET_ID}")
+                 # Updated signature expects single ID/URL
                  res = ApifyService.get_product_details(TARGET_ID)
         else:
              # Broad Discovery
@@ -211,8 +215,14 @@ def run_apify_scan():
             log(f">> Found {len(products)} products to refresh.")
             for p in products:
                 # Use ID for Daily Virals (more accurate), Name for others if ID is placeholder
-                if p.scan_type == 'daily_virals' and p.product_id and not p.product_id.startswith('dv_'):
-                    target = p.product_id
+                # Use ID for Daily Virals (more accurate), Name for others if ID is placeholder
+                if p.scan_type == 'daily_virals':
+                    if p.product_id and not p.product_id.startswith('dv_'):
+                        target = p.product_id
+                    elif p.product_url and 'http' in p.product_url:
+                        target = p.product_url # Use Direct URL if ID is placeholder
+                    else:
+                        target = p.product_name
                 else:
                     target = p.product_name if (p.product_name and "Unknown" not in p.product_name) else p.product_id.replace('shop_','')
                 
