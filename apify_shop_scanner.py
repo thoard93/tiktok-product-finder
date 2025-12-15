@@ -13,7 +13,7 @@ from apify_service import ApifyService
 def log(msg):
     print(f"[Scanner] {msg}", flush=True)
 
-def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
+def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10, origin_id=None):
     # LAZY IMPORT to avoid Circular Dependency with app.py
     from app import app, db, Product
     
@@ -149,18 +149,18 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     p.product_url = f"https://shop.tiktok.com/view/product/{data['product_id']}?region=US&locale=en"
                     
                     # INTELLIGENT TAB MANAGEMENT:
-                    # If this scan was triggered by a 'daily_virals' item (Ad Winner), keep it in that tab!
-                    # Otherwise, default to 'apify_shop'
-                    if TARGET_ID and (TARGET_ID.startswith('dv_') or p.scan_type == 'daily_virals'):
+                    # Check origin_id (passed from refresh loop) OR TARGET_ID
+                    check_id = origin_id or TARGET_ID
+                    
+                    if check_id and (check_id.startswith('dv_') or p.scan_type == 'daily_virals'):
                          p.scan_type = 'daily_virals'
                          
-                         # CLEANUP: If we just saved a Real ID (shop_X), but the Target was a Placeholder (dv_Y)
-                         # We should delete the Placeholder so we don't have duplicates
-                         if TARGET_ID.startswith('dv_') and pid != TARGET_ID:
-                             old_placeholder = Product.query.get(TARGET_ID)
+                         # CLEANUP: If we just saved a Real ID (shop_X), but the Origin was a Placeholder (dv_Y)
+                         if check_id.startswith('dv_') and pid != check_id:
+                             old_placeholder = Product.query.get(check_id)
                              if old_placeholder:
                                  db.session.delete(old_placeholder)
-                                 log(f"   [Cleanup] Replaced placeholder {TARGET_ID} with enriched {pid}")
+                                 log(f"   [Cleanup] Replaced placeholder {check_id} with enriched {pid}")
                     else:
                          p.scan_type = 'apify_shop'
                          
@@ -216,8 +216,8 @@ def run_apify_scan():
                 else:
                     target = p.product_name if (p.product_name and "Unknown" not in p.product_name) else p.product_id.replace('shop_','')
                 
-                log(f">> Refreshing: {target}")
-                scan_target(target, 1)
+                log(f">> Refreshing: {target} (Origin: {p.product_id})")
+                scan_target(target, 1, origin_id=p.product_id)
                 time.sleep(2)
     elif args.product_id:
         scan_target(args.product_id, 1)
