@@ -103,7 +103,7 @@ class ApifyService:
             run_input = {
                 "startUrls": [{"url": target_url}],
                 "country_code": "US",
-                "maxItems": 20 # Fetch enough to include the real product (avoiding 'suggested' taking top spot)
+                "maxItems": 1 # Try cheap/fast lookup first
             }
             # Use 'search' actor but in detail mode
             items = cls.run_actor(ApifyService.ACTOR_SEARCH, run_input, wait_sec=45)
@@ -119,12 +119,12 @@ class ApifyService:
                             print(f"DEBUG: Found MATCHING Product ID {pid}")
                             return [i]
                     
-                    print(f"DEBUG: ID {url_or_id} not found in {len(items)} results. (Top ID: {items[0].get('product_id')})")
-                    return [] # Strict matching failed
+                    print(f"DEBUG: ID {url_or_id} not found in Pratik results. Falling back...")
+                    # Do NOT return [] here; let it fall through to Excavator
                 else:
-                    return items[:1] # URL mode: hope for best
+                    return items[:1] # URL mode: return first result
             else:
-                print("DEBUG: Pratik Dani returned 0 items.")
+                print("DEBUG: Pratik Dani returned 0 items. Falling back...")
         except Exception as e:
             print(f"DEBUG: Pratik Dani failed: {e}")
 
