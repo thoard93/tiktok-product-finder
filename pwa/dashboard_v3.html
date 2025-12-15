@@ -874,12 +874,25 @@
             }
 
             .main {
-                padding: 1rem;
+                padding: 0.5rem;
+                /* Reduced padding for mobile */
             }
 
             .product-grid {
                 grid-template-columns: 1fr;
-                /* Force single column on very small screens if needed, or let auto-fill handle it */
+            }
+
+            .product-name {
+                font-size: 1rem;
+                /* Slightly larger for readability on small screens? Or smaller? User said cramped. Keep standard but maybe improve line-height */
+            }
+
+            .stat-value {
+                font-size: 1.2rem;
+            }
+
+            .header {
+                padding: 1rem;
             }
         }
 
@@ -1226,8 +1239,8 @@
                 <div class="product-name">${product.product_name || 'Unknown Product'}</div>
                 <div class="product-metrics">
                     <div class="metric">
-                        <div class="metric-value">${formatNumber(product.sales_7d || product.sales || 0)}</div>
-                        <div class="metric-label">${product.sales_7d ? '7-Day Sales' : 'Total Sales'}</div>
+                        <div class="metric-value">${formatNumber(product.sales || product.sales_7d || 0)}</div>
+                        <div class="metric-label">Total Sales</div>
                     </div>
                     <div class="metric">
                         <div class="metric-value">${formatNumber(product.gmv || product.sales || 0)}</div>

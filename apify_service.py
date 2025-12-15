@@ -115,10 +115,20 @@ class ApifyService:
         Normalizes Apify raw data into a standard Dict matching our DB Model.
         Returns None if invalid.
         """
-        if item.get('error'): return None
+        if not item or item.get('error'): return None
 
-        pid_raw = str(item.get('id') or item.get('product_id'))
-        if not pid_raw or 'None' in pid_raw: return None
+        # UNWRAP: Pratik Dani's Search Scraper often nests data in 'product' or 'item'
+        if 'product' in item and isinstance(item['product'], dict):
+            item = item['product']
+        
+        # DEBUG: Print keys for diagnosis
+        # print(f"DEBUG NORMALIZE KEYS: {list(item.keys())}", flush=True)
+
+        pid_raw = str(item.get('id') or item.get('product_id') or item.get('item_id'))
+        if not pid_raw or 'None' in pid_raw: 
+            # LOG FAILURE for debugging
+            print(f"DEBUG: Mapping Failed. KEYS: {list(item.keys())}, RAW_DUMP: {json.dumps(item)[:200]}...", flush=True)
+            return None
         
         # Helper parsers
         def parse_metric(val):
