@@ -37,8 +37,10 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                  log(f">> Keyword Search: '{TARGET_ID}'")
                  res = ApifyService.search_products(TARGET_ID, limit=3)
             else:
+            else:
                  log(f">> ID Lookup: {TARGET_ID}")
-                 res = ApifyService.get_product_details([TARGET_ID])
+                 # Updated signature expects single ID
+                 res = ApifyService.get_product_details(TARGET_ID)
         else:
              # Broad Discovery
              log(">> Broad Discovery Search: 'trending products'")
@@ -95,18 +97,19 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     
                     # Update all fields
                     p.product_name = data['product_name']
-                    p.seller_name = data['seller_name']
+                    p.seller_name = data.get('shop_name') or data.get('seller_name')
                     p.image_url = data['image_url']
                     p.sales = data['sales']
                     p.sales_7d = data['sales_7d']
                     p.sales_30d = data['sales_30d']
                     p.influencer_count = data['influencer_count']
                     p.video_count = data['video_count']
-                    p.live_count = data['live_count']
+                    p.live_count = data.get('stock') or data.get('live_count', 0) # Mapped to stock in service
                     p.price = data['price']
-                    p.original_price = data['original_price']
-                    p.commission_rate = data['commission_rate']
-                    p.product_url = f"https://shop.tiktok.com/view/product/{data['raw_id']}?region=US&locale=en"
+                    p.original_price = data.get('original_price', 0)
+                    p.commission_rate = data.get('commission_rate', 0)
+                    # Use product_id (was raw_id)
+                    p.product_url = f"https://shop.tiktok.com/view/product/{data['product_id']}?region=US&locale=en"
                     
                     p.scan_type = 'apify_shop'
                     p.last_updated = datetime.utcnow()
