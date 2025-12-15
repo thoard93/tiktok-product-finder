@@ -14,7 +14,7 @@ from app import app, db, Product
 def log(msg):
     print(f"[Scanner] {msg}", flush=True)
 
-def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
+    saved_ids = []  # Track saved IDs
     total_saved = 0
     page = 1
     
@@ -110,6 +110,7 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     
                     db.session.add(p)
                     batch_saved += 1
+                    saved_ids.append(pid) # Track ID
                     
                     if batch_saved <= 1:
                         print(f"   Saving: {p.product_name[:30]}... (${p.price})")
@@ -131,6 +132,8 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
         
         page += 1
         time.sleep(2) # Brief pause
+        
+    return saved_ids
 
 def run_apify_scan():
     parser = argparse.ArgumentParser()

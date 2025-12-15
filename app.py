@@ -6497,10 +6497,35 @@ def saas_worker_loop():
                         # Extract Product ID
                         pid = extract_product_id(job.input_query)
                         if pid:
-                            # Use existing logic
-                            res = start_hybrid_scan(pid)
-                            job.result_json = json.dumps(res)
-                            job.status = 'completed'
+                            # Use Direct Sync Scan (Bridge Mode) to ensure data is saved
+                            # Avoids subprocess issues
+                            from apify_shop_scanner import scan_target
+                            
+                            saved_ids = scan_target(pid, 1) # Scan 1 product, returns list of IDs
+                            
+                            if saved_ids and len(saved_ids) > 0:
+                                saved_count = len(saved_ids)
+                                real_id = saved_ids[0]
+                                
+                                # DEDUPLICATE: If we looked up a placeholder (dv_) but saved a real ID
+                                if pid.startswith('dv_') and pid != real_id:
+                                    # Delete the temporary placeholder so user sees the Enriched Real Product
+                                    placeholder = Product.query.get(pid)
+                                    if placeholder:
+                                        db.session.delete(placeholder)
+                                        db.session.commit()
+                                        print(f"   [Bridge] Replaced placeholder {pid} with real product {real_id}")
+                                
+                                job.result_json = json.dumps({
+                                    'success': True, 
+                                    'message': f"Enriched {real_id}", 
+                                    'saved': saved_count,
+                                    'real_id': real_id
+                                })
+                                job.status = 'completed'
+                            else:
+                                job.result_json = json.dumps({'success': False, 'message': f"Apify returned 0 items for {pid}", 'saved': 0})
+                                job.status = 'failed'
                         else:
                             job.result_json = json.dumps({'success': False, 'error': 'Invalid TikTok URL/ID'})
                             job.status = 'failed'
