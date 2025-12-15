@@ -6633,15 +6633,38 @@ def api_scan_manual():
             first_seen=datetime.utcnow(),
             last_updated=datetime.utcnow(),
             sales_7d=0,
-            video_count=0
+            video_count=0,
+            scan_type='manual_bridge'
         )
         db.session.add(new_p)
         db.session.commit()
         
-        # Helper: Trigger background scan using apify_service if available?
-        # For now, we trust the existing background workers or next sync loop
+        # BRIDGE: Immediately fetch data from EchoTik
+        try:
+            print(f"🌉 Bridging Product {product_id} to EchoTik API...")
+            er = requests.get(
+                f"{BASE_URL}/product/detail",
+                params={'product_id': product_id},
+                auth=get_auth(),
+                timeout=15
+            )
+            if er.status_code == 200:
+                ed = er.json().get('data', {})
+                if ed:
+                    new_p.product_name = ed.get('title') or new_p.product_name
+                    new_p.image_url = ed.get('product_img_url') or new_p.image_url
+                    new_p.sales_7d = int(ed.get('total_sale_7d_cnt', 0) or 0)
+                    new_p.sales = int(ed.get('total_sale_cnt', 0) or 0)
+                    new_p.video_count = int(ed.get('total_video_cnt', 0) or 0)
+                    new_p.price = float(ed.get('spu_avg_price', 0) or 0)
+                    new_p.commission_rate = float(ed.get('product_commission_rate', 0) or 0)
+                    new_p.status_note = "Enriched via EchoTik Bridge"
+                    db.session.commit()
+        except Exception as bridge_err:
+            print(f"Bridge Error: {bridge_err}")
+            # Non-blocking, user still gets the product imported
         
-        return jsonify({'success': True, 'message': 'Product imported', 'product_id': product_id})
+        return jsonify({'success': True, 'message': 'Product imported and bridged to EchoTik', 'product_id': product_id})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
