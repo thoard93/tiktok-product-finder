@@ -6589,7 +6589,7 @@ def saas_worker_loop():
 # MUST BE AT END OF FILE so all models are loaded
 with app.app_context():
     try:
-        ensure_db_schema()
+        # ensure_db_schema() # Commented out as potential crash source (if undefined)
         db.create_all()
         check_and_migrate_db()
     except Exception as e:
