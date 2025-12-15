@@ -3074,13 +3074,21 @@ def get_products():
     
     # Apify Shop Scraper filter
     apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
+
+    # Discovery Scraper filter
+    discovery_scan = request.args.get('discovery_scan', 'false').lower() == 'true'
     
     # Build query - exclude unavailable products by default
-    if apify_scan:
-        # Apify Shop scan: Explicitly show shop scraper items
-        # Also apply video count filters if they are set (so user can filter 0-10 etc)
         query = Product.query.filter(
             Product.scan_type == 'apify_shop',
+            db.or_(Product.product_status == None, Product.product_status == 'active'),
+            Product.video_count >= min_videos,
+            Product.video_count <= max_videos
+        )
+    elif discovery_scan:
+        # Discovery scan: products found via broad keyword search
+        query = Product.query.filter(
+            Product.scan_type == 'discovery',
             db.or_(Product.product_status == None, Product.product_status == 'active'),
             Product.video_count >= min_videos,
             Product.video_count <= max_videos
@@ -3177,8 +3185,14 @@ def get_products():
     
     # Apply apify scan filter
     apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
+    # Apply apify scan filter
+    apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
     if apify_scan:
         query = query.filter(Product.scan_type == 'apify_shop')
+
+    # Apply discovery scan filter
+    if discovery_scan:
+        query = query.filter(Product.scan_type == 'discovery')
 
     # Apply trending filter - products with sales growth or high recent sales
     if trending_only:
@@ -3310,6 +3324,11 @@ def get_products():
     apify_count = Product.query.filter(
         Product.scan_type == 'apify_shop'
     ).count()
+
+    # Discovery Trends
+    discovery_count = Product.query.filter(
+        Product.scan_type == 'discovery'
+    ).count()
     
     return jsonify({
         'success': True,
@@ -3328,7 +3347,9 @@ def get_products():
             'trending': trending_count,
             'proven': proven_count,
             'freeship': freeship_count,
+            'freeship': freeship_count,
             'apify_count': apify_count,
+            'discovery_count': discovery_count,
             'all': all_count,
             'untapped': untapped_count,
             'low': low_count,
@@ -3581,16 +3602,13 @@ def get_stats():
                 'freeship': freeship_count,
                 'avg_commission': avg_comm,
                 'ad_winners': Product.query.filter(
-                    db.or_(
-                        db.and_(
-                            Product.sales_7d > 50,
-                            Product.influencer_count < 5,
                             Product.video_count < 5
                         ),
                         Product.scan_type.in_(['apify_ad', 'daily_virals'])
                     )
                 ).count(),
-                'apify_count': Product.query.filter(Product.scan_type == 'apify_shop').count()
+                'apify_count': Product.query.filter(Product.scan_type == 'apify_shop').count(),
+                'discovery_count': Product.query.filter(Product.scan_type == 'discovery').count()
             }
         })
 

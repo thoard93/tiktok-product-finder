@@ -987,6 +987,9 @@
             <div class="quick-filter" id="qf-apify" onclick="quickFilter('apify')">
                 🤖 Shop Scraper <span class="count" id="qf-apify-count">-</span>
             </div>
+            <div class="quick-filter" id="qf-discovery" onclick="quickFilter('discovery')">
+                🚀 Discovery <span class="count" id="qf-discovery-count">0</span>
+            </div>
             <div class="quick-filter" id="qf-untapped" onclick="quickFilter('untapped')">
                 🏆 Untapped <span class="count" id="qf-untapped-count">0</span>
             </div>
@@ -1355,6 +1358,9 @@
                         if (document.getElementById('qf-apify-count')) {
                             document.getElementById('qf-apify-count').textContent = stats.apify_count || 0;
                         }
+                        if (document.getElementById('qf-discovery-count')) {
+                            document.getElementById('qf-discovery-count').textContent = stats.discovery_count || 0;
+                        }
                         if (document.getElementById('qf-ads-count')) {
                             document.getElementById('qf-ads-count').textContent = stats.ad_winners || stats.trending || 0;
                         }
@@ -1402,6 +1408,7 @@
             if (currentFilters.hidden_gems) preservedFilters.hidden_gems = true;
             if (currentFilters.has_free_shipping) preservedFilters.has_free_shipping = true;
             if (currentFilters.apify_scan) preservedFilters.apify_scan = currentFilters.apify_scan; // Preserve Active Tab Context (Correct Key)
+            if (currentFilters.discovery_scan) preservedFilters.discovery_scan = currentFilters.discovery_scan;
 
             currentFilters = { ...preservedFilters };
 
@@ -1469,7 +1476,9 @@
                 'untapped': 'qf-untapped',
                 'freeship': 'qf-freeship',
                 'ads': 'qf-ads',
+                'ads': 'qf-ads',
                 'apify': 'qf-apify',
+                'discovery': 'qf-discovery',
                 'commission': 'qf-commission'
             };
             const targetId = idMap[type] || 'qf-all';
@@ -1504,6 +1513,8 @@
                 currentFilters.likely_ads = 'true';
             } else if (type === 'apify') {
                 currentFilters.apify_scan = 'true';
+            } else if (type === 'discovery') {
+                currentFilters.discovery_scan = 'true';
             }
 
             currentPage = 1;
@@ -1663,7 +1674,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const tab = urlParams.get('tab');
 
-            if (tab && ['gems', 'untapped', 'freeship', 'ads', 'apify'].includes(tab)) {
+            if (tab && ['gems', 'untapped', 'freeship', 'ads', 'apify', 'discovery'].includes(tab)) {
                 quickFilter(tab);
             } else {
                 loadProducts(1, {});
