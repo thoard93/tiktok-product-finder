@@ -542,6 +542,10 @@ def login_required(f):
     """Decorator to require login for routes"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Health Check Bypass: Allow HEAD requests (used by Render/AWS) to pass
+        if request.method == 'HEAD':
+            return "OK", 200
+
         if not session.get('user_id'):
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required', 'login_url': '/login'}), 401
