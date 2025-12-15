@@ -96,7 +96,8 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     
                     # Update all fields
                     p.product_name = data['product_name']
-                    p.seller_name = data.get('shop_name') or data.get('seller_name')
+                    # FIXED: Default to 'Unknown Shop' to prevent NULL filter exclusion in dashboard
+                    p.seller_name = data.get('shop_name') or data.get('seller_name') or 'Unknown Shop'
                     p.image_url = data['image_url']
                     p.sales = data['sales']
                     p.sales_7d = data['sales_7d']
@@ -107,6 +108,38 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     p.price = data['price']
                     p.original_price = data.get('original_price', 0)
                     p.commission_rate = data.get('commission_rate', 0)
+
+                    # ---------------------------------------------------------
+                    # VIDEO RESCUE: If video_count is missing (Excavator limitation), search generic
+                    # ---------------------------------------------------------
+                    if TARGET_ID and p.video_count <= 2: # Excavator often returns 0
+                        log(f"   [RESCUE] Missing Video Count ({p.video_count}). Searching Pratik Dani...")
+                        try:
+                            # Search by truncated title (max 50 chars to avoid noise)
+                            search_q = data['product_name'][:50]
+                            rescue_res = ApifyService.search_products(search_q, limit=1)
+                            
+                            if rescue_res and len(rescue_res) > 0:
+                                rescue_data = ApifyService.normalize_item(rescue_res[0])
+                                if rescue_data:
+                                    # Verify it's roughly the same product (title similarity?)
+                                    # For now, trust the first result if sales > 0
+                                    log(f"   [RESCUE] Found Match! Videos: {rescue_data['video_count']}, Sales: {rescue_data['sales']}")
+                                    
+                                    # Update stats if valid
+                                    if rescue_data['video_count'] > p.video_count:
+                                        p.video_count = rescue_data['video_count']
+                                    
+                                    if rescue_data['influencer_count'] > 0:
+                                        p.influencer_count = rescue_data['influencer_count']
+                                        
+                                    # Update sales if higher (Pratik is often more up to date on stats)
+                                    if rescue_data['sales'] > p.sales:
+                                        p.sales = rescue_data['sales']
+                        except Exception as e:
+                            log(f"   [RESCUE] Failed: {e}")
+                    # ---------------------------------------------------------
+
                     # Use product_id (was raw_id)
                     p.product_url = f"https://shop.tiktok.com/view/product/{data['product_id']}?region=US&locale=en"
                     

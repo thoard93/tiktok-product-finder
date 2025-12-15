@@ -1,19 +1,30 @@
 from app import app, db, Product
-import sys
+from sqlalchemy import func
 
-PID = "1729500353778978879"
-
-print(f"--- Verifying Product {PID} ---")
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/products.db'
+print("--- Product Scan Type Breakdown ---")
+print(f"DB URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
 with app.app_context():
-    p = Product.query.get(PID)
-    if not p:
-        print("Product NOT FOUND in DB.")
-    else:
-        print(f"Product Found: {p.product_name}")
-        print(f"Sales: {p.sales}")
-        print(f"Sales 7d: {p.sales_7d}")
-        print(f"Sales 30d: {p.sales_30d}")
+    # Group by scan_type and count
+    results = db.session.query(Product.scan_type, func.count(Product.product_id)).group_by(Product.scan_type).all()
+    
+    print(f"{'scan_type':<20} | {'count':<5}")
+    print("-" * 30)
+    total = 0
+    for scan_type, count in results:
+        print(f"{str(scan_type):<20} | {count:<5}")
+        total += count
+    print("-" * 30)
+    print(f"{'Total':<20} | {total:<5}")
+
+    # Also check specific ID user mentioned: 1729500353778978879
+    pid = "1729500353778978879"
+    p = Product.query.get(pid)
+    if p:
+        print(f"\nTarget Product {pid}: Found!")
+        print(f"Scan Type: {p.scan_type}")
+        print(f"Seller: {p.seller_name}")
         print(f"Videos: {p.video_count}")
-        print(f"Stock: {p.live_count}") # mapped to stock
-        print(f"Shop: {p.seller_name}")
-        print(f"Last Updated: {p.last_updated}")
+        print(f"Status: {p.product_status}")
+    else:
+        print(f"\nTarget Product {pid}: NOT FOUND")
