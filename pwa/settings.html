@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings | Vantage</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0F172A;
+            color: #F8FAFC;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+
+<body class="p-8 flex flex-col items-center justify-center min-h-screen">
+    <div class="glass-panel p-10 rounded-2xl max-w-lg w-full text-center">
+        <h1 class="text-3xl font-bold mb-4 font-heading">Settings</h1>
+        <p class="text-slate-400 mb-8">Manage your API keys and Preferences here.</p>
+
+        <div class="text-left space-y-4">
+            <div>
+                <label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">EchoTik API Key</label>
+                <input type="password" value="****************"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300" disabled>
+            </div>
+            <div>
+                <label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">Scraper Mode</label>
+                <select class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white">
+                    <option>Vantage Cloud (Default)</option>
+                    <option disabled>Local Browser (Coming V2.1)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mt-8 flex justify-center gap-4">
+            <a href="/" class="px-6 py-2 rounded-lg text-slate-400 hover:text-white transition-colors">Back</a>
+            <button class="px-6 py-2 bg-cyan-600 rounded-lg text-white font-medium hover:bg-cyan-500">Save
+                Changes</button>
+        </div>
+    </div>
+</body>
+
+</html>

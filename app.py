@@ -5159,15 +5159,54 @@ def index():
     # If logged in, show Dashboard
     return send_from_directory('pwa', 'dashboard_v4.html')
 
-@app.route('/product')
+@app.route('/product/<path:product_id>')
 @login_required
-def product_page():
-    return send_from_directory('pwa', 'product_detail.html')
+def product_detail(product_id):
+    return send_from_directory('pwa', 'product_detail_v4.html')
+
+@app.route('/settings')
+@login_required
+def settings_page():
+    return send_from_directory('pwa', 'settings.html')
+
+@app.route('/admin')
+@login_required
+def admin_page():
+    return send_from_directory('pwa', 'admin.html')
+
+@app.route('/developer')
+@login_required
+def developer_page():
+    # Placeholder for developer tools
+    return "<h1>Developer Dashboard Preview</h1><p>Coming Soon</p><a href='/'>Back</a>"
+
+@app.route('/api/debug/check-product/<path:product_id>')
+@login_required
+def api_product_detail(product_id):
+    """API Endpoint for Single Product Details (Vantage V2)"""
+    p = Product.query.filter_by(product_id=product_id).first()
+    if not p:
+        return jsonify({'error': 'Not found'}), 404
+    
+    return jsonify({
+        'product_id': p.product_id,
+        'name': p.product_name,
+        'image_url': p.image_url,
+        'product_url': p.product_url,
+        'sales': p.sales,
+        'sales_7d': p.sales_7d,
+        'price': p.price,
+        'commission_rate': p.commission_rate,
+        'video_count': p.video_count,
+        'seller_name': p.seller_name,
+        'is_ad_driven': p.is_ad_driven,
+        'is_favorite': p.is_favorite
+    })
 
 @app.route('/pwa/<path:filename>')
 def pwa_files(filename):
-    # Allow login.html and admin.html without auth
-    if filename in ['login.html', 'admin.html']:
+    # Allow login.html without auth
+    if filename in ['login.html']:
         return send_from_directory('pwa', filename)
     # Other PWA files need auth check
     if not session.get('user_id'):

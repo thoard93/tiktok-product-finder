@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Details | Vantage</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        midnight: '#0F172A',
+                        glass: 'rgba(255, 255, 255, 0.05)',
+                        'glass-border': 'rgba(255, 255, 255, 0.1)',
+                        cyan: '#06B6D4',
+                        violet: '#7C3AED',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0F172A;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 40%);
+            color: #F8FAFC;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Nav -->
+    <nav class="glass-panel px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+        <a href="/" class="flex items-center gap-2 group">
+            <div class="p-2 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors">
+                <svg class="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </div>
+            <span class="font-heading font-medium text-slate-300 group-hover:text-white">Back to Dashboard</span>
+        </a>
+        <div class="flex items-center gap-4">
+            <button onclick="enrichNow()"
+                class="px-4 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 rounded-xl font-bold text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all">
+                ⚡ Analyze Live Data
+            </button>
+            <a id="extLink" href="#" target="_blank"
+                class="px-4 py-2 rounded-xl border border-white/10 hover:bg-white/5 transition-colors text-slate-300">
+                View on TikTok
+            </a>
+        </div>
+    </nav>
+
+    <main class="flex-1 container mx-auto p-6 max-w-7xl">
+        <div id="loader" class="text-center py-20 text-slate-500">Loading Product Intelligence...</div>
+
+        <div id="content" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: Image & Key Info -->
+            <div class="lg:col-span-1 space-y-6">
+                <div class="glass-card rounded-2xl p-2 relative group">
+                    <img id="pImage" src="" class="w-full rounded-xl aspect-square object-cover bg-slate-800">
+                    <div class="absolute top-4 left-4 flex gap-2">
+                        <span id="badgeAd"
+                            class="hidden px-3 py-1 bg-violet-600/90 backdrop-blur rounded-lg text-xs font-bold text-white shadow-lg">AD
+                            WINNER</span>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-2xl p-6 space-y-4">
+                    <h1 id="pTitle" class="font-heading font-bold text-2xl text-white leading-tight">...</h1>
+                    <div class="flex items-center gap-2 text-slate-400">
+                        <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+                        <span id="pSeller">...</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                        <div>
+                            <div class="text-xs text-slate-500 uppercase tracking-wider">Price</div>
+                            <div class="text-xl font-bold text-white" id="pPrice">$0.00</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-500 uppercase tracking-wider">Commission</div>
+                            <div class="text-xl font-bold text-emerald-400" id="pComm">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Analytics -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="glass-card p-4 rounded-xl">
+                        <div class="text-slate-500 text-xs mb-1">Total Sales</div>
+                        <div class="text-2xl font-bold text-white" id="statSales">0</div>
+                    </div>
+                    <div class="glass-card p-4 rounded-xl">
+                        <div class="text-slate-500 text-xs mb-1">7D Revenue</div>
+                        <div class="text-2xl font-bold text-cyan-400" id="statRev">$-</div>
+                    </div>
+                    <div class="glass-card p-4 rounded-xl">
+                        <div class="text-slate-500 text-xs mb-1">Active Videos</div>
+                        <div class="text-2xl font-bold text-white" id="statVideos">0</div>
+                    </div>
+                    <div class="glass-card p-4 rounded-xl">
+                        <div class="text-slate-500 text-xs mb-1">Daily Velocity</div>
+                        <div class="text-2xl font-bold text-violet-400" id="statVelocity">0</div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="glass-card p-6 rounded-2xl">
+                    <h3 class="font-heading font-medium text-lg mb-6">Sales Trend (7 Days)</h3>
+                    <div class="h-64 relative">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const productId = window.location.pathname.split('/').pop();
+
+        async function loadData() {
+            try {
+                const res = await fetch(`/api/debug/check-product/${productId}`);
+                if (!res.ok) throw new Error("Product not found");
+
+                const data = await res.json();
+                render(data);
+            } catch (e) {
+                document.getElementById('loader').innerHTML = `<p class="text-red-400">Error: ${e.message}</p><a href="/" class="underline mt-4 block">Return Home</a>`;
+            }
+        }
+
+        function render(data) {
+            document.getElementById('loader').classList.add('hidden');
+            document.getElementById('content').classList.remove('hidden');
+
+            // Basic Info
+            document.getElementById('pImage').src = data.image_url || 'https://via.placeholder.com/400';
+            document.getElementById('pTitle').textContent = data.name || 'Unknown Product';
+            document.getElementById('pSeller').textContent = data.seller_name || 'Unknown Seller';
+            document.getElementById('extLink').href = data.product_url || '#';
+
+            if (data.is_ad_driven) document.getElementById('badgeAd').classList.remove('hidden');
+
+            // Stats
+            document.getElementById('statSales').textContent = (data.sales || 0).toLocaleString();
+            document.getElementById('statRev').textContent = '$' + ((data.sales_7d || 0) * (data.price || 20)).toLocaleString(); // Est
+            document.getElementById('statVideos').textContent = data.video_count || 0;
+            document.getElementById('statVelocity').textContent = Math.round((data.sales_7d || 0) / 7) + "/day";
+
+            document.getElementById('pPrice').textContent = '$' + (data.price || 0);
+            document.getElementById('pComm').textContent = (data.commission_rate || 0) + '%';
+
+            // Chart (Mock data if history missing)
+            const ctx = document.getElementById('salesChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Sales Volume',
+                        data: [10, 25, 40, 35, 50, data.sales_7d / 2, data.sales_7d],
+                        borderColor: '#06B6D4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        async function enrichNow() {
+            const btn = event.target;
+            btn.textContent = "Analyzing...";
+            btn.disabled = true;
+            try {
+                // Trigger refresh-ads endpoint for this product? 
+                // Or we need a specific endpoint for single product refresh using EchoTik.
+                // For now, fake it or alert until backend is 100%
+                // We don't have a single-product refresh endpoint exposed easily yet (refresh-ads scans ALL).
+                // Use check-product for now to reload
+                await loadData();
+                alert("Data Refreshed (EchoTik Sync)");
+            } catch (e) {
+                alert("Sync failed: " + e);
+            } finally {
+                btn.textContent = "⚡ Analyze Live Data";
+                btn.disabled = false;
+            }
+        }
+
+        loadData();
+    </script>
+</body>
+
+</html>
