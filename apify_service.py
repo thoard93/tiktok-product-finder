@@ -130,10 +130,19 @@ class ApifyService:
 
         # 3. Fallback: Excavator (Detail Scraper) -- SLOW but official
         print("DEBUG: Fallback to Excavator...")
-        return cls.run_actor(cls.ACTOR_DETAIL, {
+        items = cls.run_actor(ApifyService.ACTOR_DETAIL, {
             "urls": [{"url": target_url}],
             "maxItems": 1
         })
+        
+        # INJECT ID if missing (Excavator often omits it, but we know it from input)
+        if items and is_id:
+            for item in items:
+                if not item.get('id') and not item.get('product_id'):
+                    print(f"DEBUG: Injecting missing ID {url_or_id} into Excavator result")
+                    item['product_id'] = url_or_id
+        
+        return items
 
     @staticmethod
     def normalize_item(item):
@@ -177,12 +186,16 @@ class ApifyService:
         # Name
         data['product_name'] = (item.get('product_name') or item.get('title') or item.get('name') or "Unknown")[:200]
         
-        # Images (Prioritize cover_url for Pratik)
-        data['image_url'] = (
-            item.get('cover_url') or 
-            item.get('main_image', {}).get('url') if isinstance(item.get('main_image'), dict) else item.get('main_image') or
-            item.get('image_url')
-        )
+        # Images (Prioritize cover_url for Pratik, images[0] for Excavator)
+        img_url = None
+        if item.get('cover_url'): img_url = item.get('cover_url')
+        elif isinstance(item.get('main_image'), dict): img_url = item.get('main_image', {}).get('url')
+        elif item.get('main_image'): img_url = item.get('main_image')
+        elif item.get('image_url'): img_url = item.get('image_url')
+        elif item.get('images') and isinstance(item['images'], list) and len(item['images']) > 0:
+            img_url = item['images'][0] # Excavator fallback
+            
+        data['image_url'] = img_url
 
         # Metrics (Pratik Dani Keys + Fallbacks)
         # Pratik: total_sale_cnt, total_sale_gmv_amt, etc.
