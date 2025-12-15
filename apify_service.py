@@ -11,13 +11,11 @@ t_part3 = "SHYSQXn47W0sE7Uf"
 APIFY_API_TOKEN = os.environ.get('APIFY_API_TOKEN', t_part1 + t_part2 + t_part3)
 
 # Actor IDs
-ACTOR_SEARCH = "pratikdani~tiktok-shop-search-scraper"
-ACTOR_DETAIL = "excavator~tiktok-shop-product"
-
-def log(msg):
-    print(f"[ApifyService] {msg}", flush=True)
-
 class ApifyService:
+    # Actor IDs
+    ACTOR_SEARCH = "pratikdani~tiktok-shop-search-scraper"
+    ACTOR_DETAIL = "excavator~tiktok-shop-product"
+
     @staticmethod
     def get_token():
         return APIFY_API_TOKEN
