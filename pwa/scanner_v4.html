@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner | Vantage</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        midnight: '#0F172A',
+                        glass: 'rgba(255, 255, 255, 0.05)',
+                        'glass-border': 'rgba(255, 255, 255, 0.1)',
+                        cyan: '#06B6D4',
+                        violet: '#7C3AED',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0F172A;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 40%);
+            color: #F8FAFC;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-item {
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover,
+        .nav-item.active {
+            background: rgba(6, 182, 212, 0.1);
+            color: #06B6D4;
+            border-right: 3px solid #06B6D4;
+        }
+
+        .scan-tab {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .scan-tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .scan-tab.active {
+            background: rgba(6, 182, 212, 0.1);
+            border-color: #06B6D4;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.1);
+        }
+
+        .log-entry {
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 2px 0;
+        }
+
+        .log-info {
+            color: #94a3b8;
+        }
+
+        .log-success {
+            color: #4ade80;
+        }
+
+        .log-error {
+            color: #ef4444;
+        }
+
+        .log-warn {
+            color: #f59e0b;
+        }
+    </style>
+</head>
+
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 glass-panel border-r border-slate-800 flex flex-col z-20">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800/50">
+            <div class="flex items-center gap-2">
+                <div
+                    class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-violet-600 flex items-center justify-center font-bold text-white">
+                    V</div>
+                <span class="font-heading font-bold text-xl tracking-tight">Vantage</span>
+            </div>
+        </div>
+
+        <nav class="flex-1 py-6 space-y-1">
+            <a href="/" class="nav-item flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
+                <i class="fas fa-grid-2"></i> Dashboard
+            </a>
+            <a href="/scanner"
+                class="nav-item active flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
+                <i class="fas fa-radar"></i> Scanners
+                <span class="ml-auto text-xs bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full">V2</span>
+            </a>
+            <a href="/live-feed" class="nav-item flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
+                <i class="fas fa-bolt"></i> Live Feed
+            </a>
+            <a href="/manual-import" onclick="alert('Use the Dashboard + Import Button!'); return false;"
+                class="nav-item flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
+                <i class="fas fa-upload"></i> Manual Import
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800/50">
+            <a href="/admin"
+                class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50">
+                <i class="fas fa-cog"></i> Admin
+            </a>
+            <a href="/developer"
+                class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50">
+                <i class="fas fa-code"></i> Developer
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-900/50">
+        <!-- Top Bar -->
+        <header class="h-16 glass-panel border-b border-slate-800/50 flex items-center justify-between px-8 z-10">
+            <h2 class="font-heading font-semibold text-lg text-white">System Scanners</h2>
+        </header>
+
+        <!-- Scanner UI -->
+        <div class="flex-1 overflow-y-auto p-8">
+            <div class="max-w-5xl mx-auto space-y-8">
+
+                <!-- Scanner Selectors -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="scan-tab active glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+                        onclick="setMode('quick', this)">
+                        <i class="fas fa-bolt text-2xl text-yellow-400"></i>
+                        <div class="font-medium">Quick Scan</div>
+                        <div class="text-xs text-slate-500">Top Brands (EchoTik)</div>
+                    </div>
+                    <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+                        onclick="setMode('brand', this)">
+                        <i class="fas fa-tag text-2xl text-cyan-400"></i>
+                        <div class="font-medium">Brand Hunter</div>
+                        <div class="text-xs text-slate-500">Specific Seller ID</div>
+                    </div>
+                    <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+                        onclick="setMode('apify', this)">
+                        <i class="fas fa-magic text-2xl text-violet-400"></i>
+                        <div class="font-medium">Ad Hunter</div>
+                        <div class="text-xs text-slate-500">Apify Scraper</div>
+                    </div>
+                    <!-- Restoration Link for DV -->
+                    <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+                        onclick="setMode('dailyvirals', this)">
+                        <i class="fas fa-file-import text-2xl text-emerald-400"></i>
+                        <div class="font-medium">DailyVirals</div>
+                        <div class="text-xs text-slate-500">Import JSON</div>
+                    </div>
+                </div>
+
+                <!-- Config Panel -->
+                <div class="glass-card p-8 rounded-2xl border border-slate-700/50" id="configPanel">
+                    <!-- Injected via JS -->
+                </div>
+
+                <!-- Console Output -->
+                <div class="glass-card p-6 rounded-2xl border border-slate-700/50 h-64 overflow-hidden flex flex-col">
+                    <div class="text-xs font-mono text-slate-500 mb-2 uppercase tracking-wider">System Log</div>
+                    <div id="consoleLog" class="flex-1 overflow-y-auto space-y-1 font-mono text-sm">
+                        <div class="log-entry log-info">> System initialized. Select a scanner to begin.</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentMode = 'quick';
+        let isScanning = false;
+
+        const CONFIGS = {
+            'quick': `
+                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-bolt text-yellow-400"></i> Quick Scan Configuration</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Start Rank (Global Brands)</label>
+                        <input type="number" id="start-rank" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Brands to Scan</label>
+                        <input type="number" id="num-brands" value="5" max="20" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Min Sales (7 Days)</label>
+                        <input type="number" id="min-sales" value="50" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Max Video Count (Hidden Gem)</label>
+                        <input type="number" id="max-videos" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                </div>
+                <button onclick="runQuickScan(this)" class="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all">
+                    Start EchoTik Quick Scan
+                </button>
+            `,
+            'brand': `
+                 <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-tag text-cyan-400"></i> Brand Hunter Configuration</h3>
+                 <div class="mb-6">
+                    <label class="block text-sm text-slate-400 mb-2">Seller ID / Shop ID</label>
+                    <input type="text" id="brand-id" placeholder="e.g. 74939281..." class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none font-mono">
+                 </div>
+                 <div class="grid grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Start Page</label>
+                        <input type="number" id="brand-start" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">End Page</label>
+                        <input type="number" id="brand-end" value="5" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                 </div>
+                 <button onclick="runBrandScan(this)" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all">
+                    Start Brand Scan
+                </button>
+            `,
+            'apify': `
+                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-magic text-violet-400"></i> Ad Hunter (Apify)</h3>
+                <div class="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl mb-6 text-sm text-violet-200">
+                    ℹ️ Uses Apify tokens. Searches for ads/products using keywords or broad discovery.
+                </div>
+                 <div class="mb-8">
+                    <label class="block text-sm text-slate-400 mb-2">Keywords (Comma Separated)</label>
+                    <input type="text" id="apify-keywords" placeholder="e.g. summer dress, wireless charger..." class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                 </div>
+                 <button onclick="log('Apify UI Coming Soon - Use Dashboard Import for specific items for now.', 'warn')" class="w-full bg-slate-700 text-slate-400 font-bold py-4 rounded-xl cursor-not-allowed">
+                    Start Apify Scan (Coming Soon to V2)
+                </button>
+            `,
+            'dailyvirals': `
+                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-file-import text-emerald-400"></i> DailyVirals Import</h3>
+                <div class="mb-8">
+                    <label class="block text-sm text-slate-400 mb-2">Paste JSON Logic</label>
+                    <textarea id="dv-json" rows="6" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none font-mono text-xs"></textarea>
+                    <div class="text-xs text-slate-500 mt-2">Paste raw JSON from DV network request to import products.</div>
+                 </div>
+                 <button onclick="runDVImport(this)" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all">
+                    Import Data
+                </button>
+            `
+        };
+
+        function setMode(mode, el) {
+            currentMode = mode;
+            document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active', 'border-cyan-500', 'bg-slate-800'));
+            el.classList.add('active');
+            document.getElementById('configPanel').innerHTML = CONFIGS[mode];
+        }
+
+        function log(msg, type = 'info') {
+            const c = document.getElementById('consoleLog');
+            const d = document.createElement('div');
+            d.className = `log-entry log-${type}`;
+            d.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            c.appendChild(d);
+            c.scrollTop = c.scrollHeight;
+        }
+
+        async function runQuickScan(btn) {
+            const startRank = document.getElementById('start-rank').value;
+            const numBrands = document.getElementById('num-brands').value;
+
+            btn.disabled = true;
+            btn.innerText = "Scanning...";
+            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands)...`);
+
+            try {
+                // Loop simulation for UI feedback
+                for (let i = 0; i < numBrands; i++) {
+                    const rank = parseInt(startRank) + i;
+                    log(`Scanning Brand Rank #${rank}...`);
+
+                    const res = await fetch(`/api/quick-scan?brand_rank=${rank}&pages=3`); // hardcoded pages for speed
+                    const data = await res.json();
+
+                    if (data.result) {
+                        log(`Brand #${rank}: Found ${data.result.products_found}, Saved ${data.result.products_saved}`, data.result.products_saved > 0 ? 'success' : 'info');
+                    } else {
+                        log(`Brand #${rank} Error: ${data.error || 'Unknown'}`, 'error');
+                    }
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+                log("Scan Batch Complete.", 'success');
+            } catch (e) {
+                log(`Error: ${e.message}`, 'error');
+            }
+            btn.disabled = false;
+            btn.innerText = "Start EchoTik Quick Scan";
+        }
+
+        async function runBrandScan(btn) {
+            const id = document.getElementById('brand-id').value;
+            if (!id) return log("Enter a Seller ID!", 'error');
+
+            btn.disabled = true;
+            btn.innerText = "Scanning...";
+            log(`Scanning Seller ${id}...`);
+
+            try {
+                const res = await fetch(`/api/scan-pages/${id}?start=1&end=5`);
+                const data = await res.json();
+
+                if (data.products_found !== undefined) {
+                    log(`Complete: Found ${data.products_found}, Saved ${data.products_saved}`, 'success');
+                } else {
+                    log(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log(`Error: ${e.message}`, 'error');
+            }
+            btn.disabled = false;
+            btn.innerText = "Start Brand Scan";
+        }
+
+        async function runDVImport(btn) {
+            const jsonStr = document.getElementById('dv-json').value;
+            if (!jsonStr) return log("Paste JSON first", 'error');
+
+            log("Parsing JSON...");
+            try {
+                // Mock wrapper for existing manual import endpoint
+                const res = await fetch(`/api/scan/manual`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ json_data: jsonStr, url: 'dv_import' }) // url fallback
+                });
+                const data = await res.json();
+                if (data.success) log(`Imported: ${data.product_id}`, 'success');
+                else log(`Import Failed: ${data.error}`, 'error');
+            } catch (e) {
+                log(`Error: ${e.message}`, 'error');
+            }
+        }
+
+        // Init
+        setMode('quick', document.querySelector('.scan-tab'));
+    </script>
+</body>
+
+</html>

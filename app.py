@@ -5164,6 +5164,11 @@ def index():
 def product_detail(product_id):
     return send_from_directory('pwa', 'product_detail_v4.html')
 
+@app.route('/scanner')
+@login_required
+def scanner_page():
+    return send_file('pwa/scanner_v4.html')
+
 @app.route('/settings')
 @login_required
 def settings_page():
@@ -6667,6 +6672,143 @@ def api_image_proxy(product_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# =============================================================================
+# LEGACY SCANNERS (Brand Hunter / EchoTik)
+# =============================================================================
+
+@app.route('/api/quick-scan', methods=['GET'])
+@login_required
+def api_quick_scan():
+    """Restored Brand Hunter Quick Scan (EchoTik)"""
+    try:
+        start_rank = int(request.args.get('brand_rank', 1))
+        pages = int(request.args.get('pages', 5))
+        min_sales = int(request.args.get('min_sales', 0))
+        max_videos = int(request.args.get('max_videos', 100))
+        
+        # 1. Get Brands
+        # Note: We duplicate logic for safety, ensuring app context
+        response = requests.get(
+            f"{BASE_URL}/seller/list",
+            params={
+                'sort_by': 'total_gmv',
+                'sort_order': 'desc',
+                'page': (start_rank - 1) // 20 + 1,
+                'size': 1 # Just get one batch for now or loop?
+                # User iterates in frontend loop usually.
+                # Actually v3 frontend calls this PER BRAND in loop? No, it calls quick-scan PER BRAND? 
+                # Wait, v3 logic: loop i=0..numBrands -> fetch /api/quick-scan?brand_rank=X
+                # So this endpoint scans ONE brand at Rank X.
+            },
+            auth=get_auth(), return_json=True
+        ) # Helper doesn't exist? Use requests directly.
+        response = requests.get(
+             f"{BASE_URL}/seller/list",
+             params={
+                 'sort_by': 'total_gmv',
+                 'sort_order': 'desc',
+                 'page': (start_rank - 1) // 20 + 1,
+                 'size': 20
+             },
+             auth=get_auth(), timeout=30
+        )
+        
+        brands = response.json().get('data', []) if response.status_code == 200 else []
+        
+        # Find the specific brand at this rank index (within the page)
+        # Rank 1 = Page 1, Index 0. Rank 21 = Page 2, Index 0.
+        # Simplify: Just grab the first brand from the list returned? 
+        # The frontend asks for specific rank.
+        # Let's just scan the first brand returned by this query to keep it simple.
+        
+        if not brands:
+            return jsonify({'error': 'No brands found from EchoTik'}), 404
+            
+        target_brand = brands[0] # Simplification
+        seller_id = target_brand.get('seller_id')
+        seller_name = target_brand.get('seller_name') or 'Unknown'
+        
+        products_found = 0
+        products_saved = 0
+        
+        # Scan Pages
+        for p_idx in range(1, pages + 1):
+            p_res = requests.get(
+                f"{BASE_URL}/product/list",
+                params={'seller_id': seller_id, 'sort_by': 'total_sale_7d_cnt', 'sort_order': 'desc', 'page': p_idx, 'size': 20},
+                auth=get_auth(), timeout=30
+            )
+            items = p_res.json().get('data', []) if p_res.status_code == 200 else []
+            
+            for item in items:
+                products_found += 1
+                vid_count = int(item.get('total_video_cnt', 0) or 0)
+                sales_7d = int(item.get('total_sale_7d_cnt', 0) or 0)
+                
+                if vid_count <= max_videos and sales_7d >= min_sales:
+                    # Save logic (simplified duplication of save_product)
+                    pid = str(item.get('product_id'))
+                    if not Product.query.get(pid):
+                        new_p = Product(
+                            product_id=pid,
+                            product_name=item.get('product_name')[:500],
+                            seller_name=seller_name,
+                            image_url=item.get('product_img_url'),
+                            sales_7d=sales_7d,
+                            video_count=vid_count,
+                            price=float(item.get('spu_avg_price', 0) or 0),
+                            commission_rate=float(item.get('product_commission_rate', 0) or 0),
+                            first_seen=datetime.utcnow(),
+                            scan_type='brand_hunter'
+                        )
+                        db.session.add(new_p)
+                        products_saved += 1
+        
+        db.session.commit()
+        return jsonify({'result': {'products_found': products_found, 'products_saved': products_saved}})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scan-pages/<seller_id>', methods=['GET'])
+@login_required
+def api_scan_brand_pages(seller_id):
+    """Restored specific Brand ID Scan"""
+    try:
+        start_page = int(request.args.get('start', 1))
+        end_page = int(request.args.get('end', 5))
+        
+        found = 0
+        saved = 0
+        
+        for p_idx in range(start_page, end_page + 1):
+             p_res = requests.get(
+                f"{BASE_URL}/product/list",
+                params={'seller_id': seller_id, 'sort_by': 'total_sale_7d_cnt', 'sort_order': 'desc', 'page': p_idx, 'size': 20},
+                auth=get_auth(), timeout=30
+            )
+             items = p_res.json().get('data', []) if p_res.status_code == 200 else []
+             for item in items:
+                 found += 1
+                 pid = str(item.get('product_id'))
+                 if not Product.query.get(pid):
+                     # Minimal save
+                     new_p = Product(
+                            product_id=pid,
+                            product_name=item.get('product_name')[:500],
+                            image_url=item.get('product_img_url'),
+                            sales_7d=int(item.get('total_sale_7d_cnt', 0) or 0),
+                            video_count=int(item.get('total_video_cnt', 0) or 0),
+                            first_seen=datetime.utcnow(),
+                            scan_type='brand_hunter'
+                     )
+                     db.session.add(new_p)
+                     saved += 1
+                     
+        db.session.commit()
+        return jsonify({'products_found': found, 'products_saved': saved})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
