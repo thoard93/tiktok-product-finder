@@ -9,11 +9,14 @@ import time
 import argparse
 from datetime import datetime
 from apify_service import ApifyService
-from app import app, db, Product
 
 def log(msg):
     print(f"[Scanner] {msg}", flush=True)
 
+def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
+    # LAZY IMPORT to avoid Circular Dependency with app.py
+    from app import app, db, Product
+    
     saved_ids = []  # Track saved IDs
     total_saved = 0
     page = 1
@@ -136,6 +139,9 @@ def log(msg):
     return saved_ids
 
 def run_apify_scan():
+    # LAZY IMPORT here too
+    from app import app, db, Product
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('--max_products', type=int, default=50)
     parser.add_argument('--product_id', type=str, default=None, help="Specific Product ID/Keyword to scan")
