@@ -85,13 +85,20 @@ class ApifyService:
     def get_product_details(urls_or_ids):
         """
         Get details for specific product IDs or URLs.
-        input: list of strings (urls or ids)
+        Optimized to use SEARCH Actor (Pratik Dani) for IDs as it's faster/reliable.
         """
+        # 1. Try Search-By-ID (Preferred for Bridge)
+        if len(urls_or_ids) == 1 and str(urls_or_ids[0]).isdigit():
+            # User reported Excavator is slow/broken. Using Pratik Dani Search instead.
+            # Searching by ID usually returns the exact product as first result.
+            return ApifyService.search_products(str(urls_or_ids[0]), limit=1)
+
+        # 2. Fallback to URL Scraper (Excavator) for full links
         urls = []
         for x in urls_or_ids:
             if 'shop.tiktok.com' in x:
                 urls.append({"url": x})
-            elif x.isdigit():
+            elif str(x).isdigit():
                 urls.append({"url": f"https://shop.tiktok.com/view/product/{x}?region=US&locale=en"})
         
         if not urls: return []
