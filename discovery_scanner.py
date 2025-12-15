@@ -7,7 +7,7 @@ import time
 import argparse
 from datetime import datetime
 from apify_service import ApifyService
-from app import app, db, Product
+from app import app, db, Product, check_and_migrate_db, ensure_db_schema
 
 KEYWORDS = [
     "tiktokmademebuyit",
@@ -23,6 +23,12 @@ def log(msg):
     print(f"[Discovery] {msg}", flush=True)
 
 def run_discovery(max_per_keyword=5):
+    # Ensure DB exists
+    with app.app_context():
+        ensure_db_schema()
+        db.create_all()
+        check_and_migrate_db()
+        
     log("Starting Discovery Scan...")
     
     total_new = 0
