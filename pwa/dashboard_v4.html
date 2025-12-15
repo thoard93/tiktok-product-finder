@@ -171,11 +171,10 @@
         <!-- Top Bar (Mobile Only) -->
         <header class="md:hidden glass-panel p-4 flex justify-between items-center z-30 sticky top-0">
             <div class="flex items-center gap-2">
-                <div
-                    class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-violet-600 flex items-center justify-center">
-                    <span class="font-heading font-bold text-white">V</span>
+                <div class="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-cyan-500/20">
+                    <img src="vantage_logo.png" class="w-full h-full object-cover">
                 </div>
-                <span class="font-heading font-bold text-xl">Vantage</span>
+                <h1 class="font-heading font-bold text-2xl tracking-tight">Vantage</h1>
             </div>
             <button class="text-slate-300">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -220,26 +219,28 @@
             <!-- Toolbar -->
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div class="flex gap-2 bg-slate-900/50 p-1 rounded-xl glass-panel">
-                    <button class="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-white shadow-sm">All
+                    <button onclick="filterGrid('all')"
+                        class="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-white shadow-sm hover:bg-slate-700 transition-colors">All
                         Products</button>
-                    <button
+                    <button onclick="filterGrid('gems')"
                         class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors">Hidden
                         Gems</button>
-                    <button
+                    <button onclick="filterGrid('favorites')"
                         class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors">Favorites</button>
                 </div>
 
                 <div class="flex gap-3 w-full md:w-auto">
                     <div class="relative flex-1 md:w-64">
                         <input type="text" placeholder="Search products..."
-                            class="w-full bg-slate-900/50 border border-slate-700 text-white px-4 py-2.5 rounded-xl focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder-slate-500">
+                            class="w-full bg-slate-900/50 border border-slate-700 text-white px-4 py-2.5 rounded-xl focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder-slate-500"
+                            onkeyup="searchProducts(this.value)">
                         <svg class="w-4 h-4 text-slate-500 absolute right-3 top-3.5" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
                     </div>
-                    <button
+                    <button onclick="document.getElementById('importModal').classList.remove('hidden')"
                         class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-cyan-500/20 whitespace-nowrap">
                         + Import URL
                     </button>
@@ -257,10 +258,32 @@
 
             <!-- Pagination -->
             <div class="mt-8 flex justify-center gap-2">
-                <button class="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white disabled:opacity-50">
+                <button onclick="changePage(-1)"
+                    class="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white disabled:opacity-50">
                     << /button>
-                        <div class="px-4 py-2 bg-slate-800 rounded-lg text-sm text-white">Page 1</div>
-                        <button class="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white">></button>
+                        <div id="pageIndicator" class="px-4 py-2 bg-slate-800 rounded-lg text-sm text-white">Page 1
+                        </div>
+                        <button onclick="changePage(1)"
+                            class="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white">></button>
+            </div>
+        </div>
+
+        <!-- Import Modal -->
+        <div id="importModal"
+            class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+            onclick="if(event.target===this) this.classList.add('hidden')">
+            <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative">
+                <h2 class="font-heading font-bold text-xl mb-4">Import Product</h2>
+                <p class="text-slate-400 text-sm mb-4">Paste a TikTok Shop product URL or video link to track it.</p>
+                <textarea id="importInput"
+                    class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white mb-4 focus:border-cyan-500 outline-none"
+                    rows="4" placeholder="https://..."></textarea>
+                <div class="flex justify-end gap-3">
+                    <button onclick="document.getElementById('importModal').classList.add('hidden')"
+                        class="px-4 py-2 rounded-lg text-slate-300 hover:text-white">Cancel</button>
+                    <button onclick="runImport()"
+                        class="px-4 py-2 bg-cyan-600 rounded-lg text-white font-medium hover:bg-cyan-500">Import</button>
+                </div>
             </div>
         </div>
 
@@ -275,7 +298,8 @@
                 </svg>
                 <span class="text-[10px] mt-1 font-medium">Dash</span>
             </a>
-            <a href="#" class="flex flex-col items-center text-slate-500 hover:text-slate-300">
+            <a href="#" onclick="document.getElementById('importModal').classList.remove('hidden')"
+                class="flex flex-col items-center text-slate-500 hover:text-slate-300">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
@@ -294,7 +318,8 @@
     </main>
 
     <script>
-        // --- API Integration (Mirroring v3 logic but clean) ---
+        let curPage = 1;
+        let curFilter = {};
 
         async function loadDashboard() {
             try {
@@ -305,29 +330,52 @@
                     document.getElementById('userName').textContent = me.discord_username;
                     if (me.avatar) document.getElementById('userAvatar').src = `https://cdn.discordapp.com/avatars/${me.discord_id}/${me.avatar}.png`;
                 }
-
-                // 2. Load Products
-                const res = await fetch('/api/products?page=1&limit=20');
-                const data = await res.json();
-
-                // Update Stats
-                document.getElementById('statTotal').textContent = data.total || 0;
-                document.getElementById('statSales').textContent = "Wait"; // Need backend agg for this
-                document.getElementById('statGems').textContent = "Wait";  // Need backend agg for this
-
-                renderGrid(data.products);
-
+                loadProducts(1);
             } catch (e) {
                 console.error("Dashboard Load Error", e);
             }
         }
 
+        async function loadProducts(page, filterParams = {}) {
+            curPage = page;
+            if (Object.keys(filterParams).length > 0) curFilter = filterParams;
+
+            // Build Query
+            const params = new URLSearchParams({ page: page, limit: 20, ...curFilter });
+            document.getElementById('productGrid').innerHTML = '<div class="col-span-full py-20 flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><div>Loading...</div></div>';
+
+            try {
+                const res = await fetch(`/api/products?${params.toString()}`);
+                const data = await res.json();
+
+                // Stats
+                document.getElementById('statTotal').textContent = data.total || 0;
+                // Calculate simple stats for demo
+                const totalSales = data.products.reduce((acc, p) => acc + (p.sales_7d || 0), 0);
+                document.getElementById('statSales').textContent = totalSales.toLocaleString();
+                document.getElementById('statGems').textContent = data.products.filter(p => !p.is_ad_driven && (p.video_count || 0) < 10).length;
+
+                renderGrid(data.products);
+                document.getElementById('pageIndicator').innerText = `Page ${page}`;
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function filterGrid(type) {
+            let f = {};
+            if (type === 'gems') f = { max_videos: 20, min_videos: 1, gems_only: 'true' };
+            if (type === 'favorites') f = { favorites_only: 'true' };
+            loadProducts(1, f);
+        }
+
         function renderGrid(products) {
             const grid = document.getElementById('productGrid');
-            grid.innerHTML = ''; // Clear loader
+            grid.innerHTML = '';
 
             if (!products || products.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center text-slate-500 py-10">No products found. Import something!</div>`;
+                grid.innerHTML = `<div class="col-span-full text-center text-slate-500 py-10">No products found.</div>`;
                 return;
             }
 
@@ -335,27 +383,24 @@
                 const card = document.createElement('div');
                 card.className = 'glass-card rounded-2xl overflow-hidden flex flex-col group relative';
 
-                // Image
                 const imgUrl = p.cached_image_url || p.image_url || 'https://via.placeholder.com/300x300?text=No+Image';
 
+                // Ensure clickable overlay works by placing it clear on top
                 card.innerHTML = `
                     <div class="relative aspect-square overflow-hidden bg-slate-800">
                         <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy">
                         
-                        <!-- Floating Badges -->
-                        <div class="absolute top-3 left-3 flex flex-col gap-1">
+                        <!-- Badges -->
+                        <div class="absolute top-3 left-3 flex flex-col gap-1 z-10">
                             ${p.is_ad_driven ? '<span class="px-2 py-1 bg-violet-600/90 backdrop-blur-md rounded-lg text-xs font-bold text-white shadow-lg shadow-violet-500/20">AD WINNER</span>' : ''}
                             ${p.is_favorite ? '<span class="px-2 py-1 bg-pink-500/90 backdrop-blur-md rounded-lg text-xs font-bold text-white">♥</span>' : ''}
                         </div>
                         
-                        <!-- Hover Actions -->
-                        <div class="absolute inset-0 bg-black/60 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
-                            <a href="${p.product_url}" target="_blank" class="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors" title="View on TikTok">
-                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                        <!-- Actions Overlay -->
+                        <div class="absolute inset-0 bg-black/60 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm z-20">
+                            <a href="${p.product_url || '#'}" target="_blank" class="p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors shadow-xl" title="View">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
                             </a>
-                            <button class="p-2 bg-white/10 hover:bg-white/20 text-cyan-400 rounded-xl border border-cyan-500/30 transition-colors" title="Analyze">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                            </button>
                         </div>
                     </div>
                     
@@ -382,9 +427,40 @@
             });
         }
 
+        function changePage(delta) {
+            if (curPage + delta < 1) return;
+            loadProducts(curPage + delta, curFilter);
+        }
+
+        async function runImport() {
+            const input = document.getElementById('importInput').value;
+            if (!input) return;
+
+            // Simple basic import call for now
+            try {
+                const res = await fetch('/api/scan/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ json_data: JSON.stringify({ list: [{ product: { url: input } }] }) }) // Mocking the DV structure wrapper
+                });
+                if (res.ok) {
+                    alert('Imported!');
+                    document.getElementById('importModal').classList.add('hidden');
+                    loadProducts(1);
+                } else {
+                    alert('Import failed');
+                }
+            } catch (e) {
+                alert('Error: ' + e);
+            }
+        }
+
         // Init
         document.addEventListener('DOMContentLoaded', loadDashboard);
     </script>
+</body>
+
+</html>
 </body>
 
 </html>
