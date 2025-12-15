@@ -191,9 +191,17 @@ def run_apify_scan():
     if args.refresh_all:
         log(">> Bulk Refresh Mode (Using DB Targets)")
         with app.app_context():
-            products = Product.query.filter(Product.scan_type.in_(['apify_shop', 'imported'])).all()
+            # Include 'daily_virals' (Ad Winners) so they get enriched!
+            products = Product.query.filter(Product.scan_type.in_(['apify_shop', 'imported', 'daily_virals'])).all()
+            log(f">> Found {len(products)} products to refresh.")
             for p in products:
-                target = p.product_name if (p.product_name and "Unknown" not in p.product_name) else p.product_id.replace('shop_','')
+                # Use ID for Daily Virals (more accurate), Name for others if ID is placeholder
+                if p.scan_type == 'daily_virals' and p.product_id and not p.product_id.startswith('dv_'):
+                    target = p.product_id
+                else:
+                    target = p.product_name if (p.product_name and "Unknown" not in p.product_name) else p.product_id.replace('shop_','')
+                
+                log(f">> Refreshing: {target}")
                 scan_target(target, 1)
                 time.sleep(2)
     elif args.product_id:
