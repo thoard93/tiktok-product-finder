@@ -5171,7 +5171,7 @@ def settings_page():
 
 @app.route('/admin')
 @login_required
-def admin_page():
+def admin_dashboard_page():
     return send_from_directory('pwa', 'admin.html')
 
 @app.route('/developer')
