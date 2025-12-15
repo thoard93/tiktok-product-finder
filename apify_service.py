@@ -77,7 +77,7 @@ class ApifyService:
             "country_code": "US",
             "sort_type": "relevance_desc" # or 1/desc
         }
-        return ApifyService.run_actor(ACTOR_SEARCH, run_input)
+        return ApifyService.run_actor(ApifyService.ACTOR_SEARCH, run_input)
 
     @classmethod
     def get_product_details(cls, url_or_id):
