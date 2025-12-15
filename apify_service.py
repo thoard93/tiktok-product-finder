@@ -214,4 +214,4 @@ class ApifyService:
         data['product_url'] = item.get('product_url') or item.get('url') or f"https://shop.tiktok.com/view/product/{pid_raw}?region=US&locale=en"
         
         return data
-```
+
