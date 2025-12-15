@@ -2782,7 +2782,23 @@ def scan_manual_import():
             time.sleep(1.5)
             
             # Attempt Enrichment
-            enrich_success, msg = enrich_product_data(p, f"Item {i}: ")
+            # Bridge to Apify: Queue for Background Scanning (Async)
+            # This replaces synchronous Echotik enrichment while Echotik is unavailable
+            import uuid
+            if p.get('url') or p.get('product_id'):
+                job_id = str(uuid.uuid4())
+                # Use URL if available, else ID
+                q_input = p.get('url') or p.get('product_id')
+                
+                # Create Job
+                job = ScanJob(id=job_id, status='queued', input_query=q_input, api_key_id=None)
+                db.session.add(job)
+                
+                enrich_success = True
+                msg = f"Queued Bridge Job {job_id[:8]}"
+            else:
+                enrich_success = False
+                msg = "No ID/URL for Bridge"
             
             if not p.get('product_id'): 
                 p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
@@ -6340,32 +6356,7 @@ def user_generate_key():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/scan/discovery', methods=['POST'])
-@login_required
-def trigger_discovery_scan():
-    """Trigger the background Discovery Scanner script"""
-    try:
-        # Prevent spamming? (Optional: Check lock)
-        # if not acquire_scan_lock(current_user.id, 'discovery'):
-        #    return jsonify({'error': 'Scanner is busy. Try again later.'}), 423
-            
-        # Run script in background (detached)
-        # subprocess.Popen([sys.executable, 'discovery_scanner.py'])
-        
-        # Windows/Linux compatible way to run detached?
-        # On Render (Linux), simple Popen works.
-        import subprocess
-        
-        # Use full path to be safe
-        script_path = os.path.join(basedir, 'discovery_scanner.py')
-        
-        proc = subprocess.Popen([sys.executable, script_path], 
-                                stdout=subprocess.DEVNULL, 
-                                stderr=subprocess.DEVNULL)
-                                
-        return jsonify({'success': True, 'pid': proc.pid})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # =============================================================================
 # STRIPE PAYMENT ROUTES

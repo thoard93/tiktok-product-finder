@@ -434,11 +434,7 @@
                 <div class="title">Viral Trends</div>
                 <div class="desc">Apify #tiktokshop Scan</div>
             </div>
-            <div class="scan-tab" onclick="setMode('discovery')">
-                <i class="fas fa-globe-americas"></i>
-                <div class="title">Discovery</div>
-                <div class="desc">Broad Market Scan</div>
-            </div>
+
         </div>
 
         <!-- Configuration Panel -->
@@ -614,18 +610,7 @@
                 </div>
                 <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🔍 Lookup Product</button>
             `,
-            'discovery': `
-                 <div class="config-grid">
-                    <div class="form-group" style="grid-column: span 2">
-                        <div class="log-entry log-success">
-                            <h3>🌍 Discovery Scanner</h3>
-                            <p>Scans broad keywords (trending, gadgets, etc.) to find hidden gems.</p>
-                            <p><strong>Note:</strong> This runs in the background and may take a few minutes.</p>
-                        </div>
-                    </div>
-                </div>
-                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🚀 Start Discovery Scan</button>
-            `
+
         };
 
         function setMode(mode) {
