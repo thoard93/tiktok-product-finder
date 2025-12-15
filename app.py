@@ -3079,6 +3079,9 @@ def get_products():
     discovery_scan = request.args.get('discovery_scan', 'false').lower() == 'true'
     
     # Build query - exclude unavailable products by default
+    if apify_scan:
+        # Apify Shop scan: Explicitly show shop scraper items
+        # Also apply video count filters if they are set (so user can filter 0-10 etc)
         query = Product.query.filter(
             Product.scan_type == 'apify_shop',
             db.or_(Product.product_status == None, Product.product_status == 'active'),
@@ -3183,16 +3186,17 @@ def get_products():
             Product.sales_7d >= 10  # At least some sales to show it works
         )
     
-    # Apply apify scan filter
-    apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
-    # Apply apify scan filter
-    apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
-    if apify_scan:
-        query = query.filter(Product.scan_type == 'apify_shop')
-
+    # Apply discovery scan filter (Specific override logic removed here, handled in initial query build)
+    # The scan type filters are already handled in the initial block or via logic above
+    # We DO NOT need to check apify_scan here again as it's the first logic block
+    # However, 'discovery_scan' was handled in the first block too.
+    # The original code had apify_scan checked TWICE. We are removing the redundancy.
+            
     # Apply discovery scan filter
     if discovery_scan:
-        query = query.filter(Product.scan_type == 'discovery')
+        # Redundant if handled in initial block but safe to keep if we switch away from pure exclusive logic
+        # For now, since we used an if/elif structure at to start, we don't need to re-filter here
+        pass
 
     # Apply trending filter - products with sales growth or high recent sales
     if trending_only:
