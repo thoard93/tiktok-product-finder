@@ -81,10 +81,6 @@ class ApifyService:
         }
         return ApifyService.run_actor(ACTOR_SEARCH, run_input)
 
-    @staticmethod
-    def get_product_details(urls_or_ids):
-        """
-        Get details for specific product IDs or URLs.
     @classmethod
     def get_product_details(cls, url_or_id):
         """
