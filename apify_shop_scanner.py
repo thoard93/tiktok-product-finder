@@ -69,6 +69,11 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     
                     pid = data['product_id']
                     
+                    # SAFETY CHECK: Reject "Unknown" garbage (failed scrape)
+                    if data.get('product_name') == 'Unknown':
+                        log(f"   [SKIP] Rejected 'Unknown' garbage data for {pid}")
+                        continue
+                    
                     # ---------------------------------------------------------
                     # SMART FILTERS (Discovery Mode Only)
                     # ---------------------------------------------------------

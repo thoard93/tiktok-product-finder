@@ -3018,14 +3018,21 @@ def cleanup_garbage():
         q1.delete(synchronize_session=False)
         deleted_count += c1
         
-        # 2. Delete generic "Unknown" products with 0 sales
-        q2 = db.session.query(Product).filter(
-            Product.product_name.like('Unknown%'), 
-            Product.sales == 0
-        )
+        # 2. Delete generic "Unknown" products (Garbage data from failed scrapes)
+        # FIXED: Removed sales==0 check because some garbage has fake stats (e.g. 133 sales)
+        q2 = db.session.query(Product).filter(Product.product_name == 'Unknown')
         c2 = q2.count()
         q2.delete(synchronize_session=False)
         deleted_count += c2
+        
+        # 2b. Delete "Unknown%" starting variants if sales are 0 (safeguard)
+        q2b = db.session.query(Product).filter(
+            Product.product_name.like('Unknown %'), 
+            Product.sales == 0
+        )
+        c2b = q2b.count()
+        q2b.delete(synchronize_session=False)
+        deleted_count += c2b
 
         # 3. Delete explicit Debug artifacts
         q3 = db.session.query(Product).filter(
