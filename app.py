@@ -5164,8 +5164,13 @@ def debug_api():
 # =============================================================================
 
 @app.route('/')
-@login_required
+# @login_required - REMOVED to allow Health Checks (GET /) to pass with 200 OK
 def index():
+    # If user is NOT logged in, return 200 OK with Login Page (Satisfies Render Health Check)
+    if not session.get('user_id'):
+        return send_from_directory(app.static_folder, 'login.html')
+        
+    # If logged in, show Dashboard
     return send_from_directory('pwa', 'dashboard_v3.html')
 
 @app.route('/product')
