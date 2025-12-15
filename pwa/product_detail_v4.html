@@ -84,8 +84,10 @@
         <div id="content" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Left Column: Image & Key Info -->
             <div class="lg:col-span-1 space-y-6">
-                <div class="glass-card rounded-2xl p-2 relative group">
-                    <img id="pImage" src="" class="w-full rounded-xl aspect-square object-cover bg-slate-800">
+                <div
+                    class="glass-card rounded-2xl p-2 relative group flex items-center justify-center bg-slate-800 min-h-[300px]">
+                    <img id="pImage" src="" class="w-full rounded-xl object-contain max-h-[500px]"
+                        onerror="this.onerror=null; this.src='https://placehold.co/400x600/1e293b/white?text=No+Image'">
                     <div class="absolute top-4 left-4 flex gap-2">
                         <span id="badgeAd"
                             class="hidden px-3 py-1 bg-violet-600/90 backdrop-blur rounded-lg text-xs font-bold text-white shadow-lg">AD
@@ -101,12 +103,12 @@
                     </div>
 
                     <div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
-                        <div>
-                            <div class="text-xs text-slate-500 uppercase tracking-wider">Price</div>
+                        <div class="p-3 bg-slate-800/50 rounded-xl">
+                            <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Price</div>
                             <div class="text-xl font-bold text-white" id="pPrice">$0.00</div>
                         </div>
-                        <div>
-                            <div class="text-xs text-slate-500 uppercase tracking-wider">Commission</div>
+                        <div class="p-3 bg-slate-800/50 rounded-xl">
+                            <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Commission</div>
                             <div class="text-xl font-bold text-emerald-400" id="pComm">0%</div>
                         </div>
                     </div>
@@ -117,28 +119,46 @@
             <div class="lg:col-span-2 space-y-6">
                 <!-- Stats Grid -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="glass-card p-4 rounded-xl">
-                        <div class="text-slate-500 text-xs mb-1">Total Sales</div>
-                        <div class="text-2xl font-bold text-white" id="statSales">0</div>
+                    <div class="glass-card p-4 rounded-xl relative overflow-hidden group">
+                        <div
+                            class="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                        </div>
+                        <div class="text-slate-500 text-xs mb-1 uppercase tracking-wider">Total Sales</div>
+                        <div class="text-2xl font-bold text-white relative z-10" id="statSales">0</div>
                     </div>
-                    <div class="glass-card p-4 rounded-xl">
-                        <div class="text-slate-500 text-xs mb-1">7D Revenue</div>
-                        <div class="text-2xl font-bold text-cyan-400" id="statRev">$-</div>
+                    <div class="glass-card p-4 rounded-xl relative overflow-hidden group">
+                        <div
+                            class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                        </div>
+                        <div class="text-slate-500 text-xs mb-1 uppercase tracking-wider">7D Revenue</div>
+                        <div class="text-2xl font-bold text-emerald-400 relative z-10" id="statRev">$-</div>
                     </div>
-                    <div class="glass-card p-4 rounded-xl">
-                        <div class="text-slate-500 text-xs mb-1">Active Videos</div>
-                        <div class="text-2xl font-bold text-white" id="statVideos">0</div>
+                    <div class="glass-card p-4 rounded-xl relative overflow-hidden group">
+                        <div
+                            class="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                        </div>
+                        <div class="text-slate-500 text-xs mb-1 uppercase tracking-wider">Active Videos</div>
+                        <div class="text-2xl font-bold text-violet-400 relative z-10" id="statVideos">0</div>
                     </div>
-                    <div class="glass-card p-4 rounded-xl">
-                        <div class="text-slate-500 text-xs mb-1">Daily Velocity</div>
-                        <div class="text-2xl font-bold text-violet-400" id="statVelocity">0</div>
+                    <div class="glass-card p-4 rounded-xl relative overflow-hidden group">
+                        <div
+                            class="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                        </div>
+                        <div class="text-slate-500 text-xs mb-1 uppercase tracking-wider">Daily Velocity</div>
+                        <div class="text-2xl font-bold text-orange-400 relative z-10" id="statVelocity">0</div>
                     </div>
                 </div>
 
                 <!-- Charts -->
-                <div class="glass-card p-6 rounded-2xl">
-                    <h3 class="font-heading font-medium text-lg mb-6">Sales Trend (7 Days)</h3>
-                    <div class="h-64 relative">
+                <div class="glass-card p-6 rounded-2xl border-t border-white/5">
+                    <h3 class="font-heading font-medium text-lg mb-6 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                        Sales Trend (7 Days)
+                    </h3>
+                    <div class="h-80 relative">
                         <canvas id="salesChart"></canvas>
                     </div>
                 </div>

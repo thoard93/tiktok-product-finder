@@ -6567,6 +6567,106 @@ with app.app_context():
 # if os.environ.get('RENDER') or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 #     t = threading.Thread(target=saas_worker_loop, daemon=True)
 #     t.start()
+# =============================================================================
+# MANUAL SCAN & UTILS (Restored for V2)
+# =============================================================================
+
+@app.route('/api/scan/manual', methods=['POST'])
+@login_required
+def api_scan_manual():
+    """Manual Import Endpoint (Restored)"""
+    try:
+        data = request.json
+        if not data:
+             return jsonify({'error': 'No data provided'}), 400
+             
+        # Support both 'url' direct input AND the DV 'json_data' wrapper
+        url = data.get('url')
+        
+        # Handle DV wrapper if present
+        if data.get('json_data'):
+            try:
+                inner = json.loads(data['json_data'])
+                if inner.get('list') and len(inner['list']) > 0:
+                    url = inner['list'][0].get('product', {}).get('url')
+            except:
+                pass
+                
+        if not url:
+            return jsonify({'error': 'No URL found'}), 400
+            
+        # Basic ID extraction
+        import re
+        product_id = None
+        match = re.search(r'/product/(\d+)', url)
+        if match:
+            product_id = match.group(1)
+        else:
+            # Fallback for other URL formats
+            match = re.search(r'id=(\d+)', url)
+            if match:
+                product_id = match.group(1)
+        
+        if not product_id:
+             return jsonify({'error': 'Could not extract Product ID from URL'}), 400
+             
+        # Add to DB
+        existing = Product.query.filter_by(product_id=product_id).first()
+        if not existing:
+            # Try with shop_ prefix just in case
+            existing = Product.query.filter_by(product_id=f"shop_{product_id}").first()
+            
+        if existing:
+            return jsonify({'success': True, 'message': 'Product already exists', 'product_id': existing.product_id})
+            
+        # Create new placeholder product
+        new_p = Product(
+            product_id=product_id,
+            product_status='active',
+            product_url=url,
+            product_name=f"New Import ({product_id})",
+            first_seen=datetime.utcnow(),
+            last_updated=datetime.utcnow(),
+            sales_7d=0,
+            video_count=0
+        )
+        db.session.add(new_p)
+        db.session.commit()
+        
+        # Helper: Trigger background scan using apify_service if available?
+        # For now, we trust the existing background workers or next sync loop
+        
+        return jsonify({'success': True, 'message': 'Product imported', 'product_id': product_id})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/image-proxy/<path:product_id>')
+def api_image_proxy(product_id):
+    """Simple proxy for product images to avoid CORS/Hotlink issues"""
+    # 1. Get product URL from DB
+    p = Product.query.filter_by(product_id=product_id).first()
+    if not p and product_id.isdigit():
+        p = Product.query.filter_by(product_id=f"shop_{product_id}").first()
+    if not p and product_id.startswith('shop_'):
+        p = Product.query.filter_by(product_id=product_id.replace('shop_', '')).first()
+        
+    if not p or not p.image_url:
+        return jsonify({'error': 'Image not found'}), 404
+        
+    img_url = p.image_url
+    
+    # 2. Fetch and Stream
+    try:
+        if img_url.startswith('data:'):
+            # It's base64, serve it decoding? No, too complex.
+            return jsonify({'error': 'Base64 image, use direct link'}), 400
+            
+        r = requests.get(img_url, stream=True, timeout=10)
+        return Response(r.content, content_type=r.headers.get('content-type', 'image/jpeg'))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
     
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
