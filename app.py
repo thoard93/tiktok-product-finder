@@ -5172,7 +5172,7 @@ def settings_page():
 @app.route('/admin')
 @login_required
 def admin_dashboard_page():
-    return send_from_directory('pwa', 'admin.html')
+    return send_from_directory('pwa', 'admin_v4.html')
 
 @app.route('/developer')
 @login_required
@@ -5184,14 +5184,29 @@ def developer_page():
 @login_required
 def api_product_detail(product_id):
     """API Endpoint for Single Product Details (Vantage V2)"""
+    # 1. Try exact match
     p = Product.query.filter_by(product_id=product_id).first()
+    
+    # 2. Try with 'shop_' prefix if digits only
+    if not p and product_id.isdigit():
+         p = Product.query.filter_by(product_id=f"shop_{product_id}").first()
+         
+    # 3. Try removing 'shop_' prefix
+    if not p and product_id.startswith('shop_'):
+         p = Product.query.filter_by(product_id=product_id.replace('shop_', '')).first()
+         
     if not p:
         return jsonify({'error': 'Not found'}), 404
     
+    # Image Logic: Use Cached > Proxy > Original
+    img = p.cached_image_url
+    if not img:
+        img = f"/api/image-proxy/{p.product_id}" # Fallback to proxy
+        
     return jsonify({
-        'product_id': p.product_id,
+        'product_id': p.product_id, # return the REAL ID from DB
         'name': p.product_name,
-        'image_url': p.image_url,
+        'image_url': img,
         'product_url': p.product_url,
         'sales': p.sales,
         'sales_7d': p.sales_7d,
@@ -5200,7 +5215,8 @@ def api_product_detail(product_id):
         'video_count': p.video_count,
         'seller_name': p.seller_name,
         'is_ad_driven': p.is_ad_driven,
-        'is_favorite': p.is_favorite
+        'is_favorite': p.is_favorite,
+        'gmv': p.gmv or 0
     })
 
 @app.route('/pwa/<path:filename>')
@@ -5697,6 +5713,46 @@ def api_trending_products():
         'products': [p.to_dict() for p in products]
     })
 
+
+@app.route('/api/products', methods=['GET'])
+def api_products():
+    """Get all products with pagination, sorting, and filtering"""
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 20))
+    offset = (page - 1) * limit
+    
+    query = Product.query
+    
+    # Filters
+    if request.args.get('favorites_only') == 'true':
+        query = query.filter_by(is_favorite=True)
+        
+    if request.args.get('gems_only') == 'true':
+        # Default gem definition if not specified
+        query = query.filter(Product.is_hidden_gem == True)
+        
+    # Sorting
+    sort_by = request.args.get('sort_by', 'sales_7d')
+    if sort_by == 'sales_7d':
+        query = query.order_by(Product.sales_7d.desc())
+    elif sort_by == 'video_count':
+        query = query.order_by(Product.video_count.desc())
+    elif sort_by == 'commission_rate':
+        query = query.order_by(Product.commission_rate.desc())
+    elif sort_by == 'first_seen':
+        query = query.order_by(Product.first_seen.desc())
+    else:
+        query = query.order_by(Product.sales_7d.desc())
+    
+    total = query.count()
+    products = query.offset(offset).limit(limit).all()
+    
+    return jsonify({
+        'success': True,
+        'count': total,
+        'page': page,
+        'products': [p.to_dict() for p in products]
+    })
 
 @app.route('/api/hidden-gems', methods=['GET'])
 def api_hidden_gems():

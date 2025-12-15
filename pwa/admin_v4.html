@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard | Vantage</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        midnight: '#0F172A',
+                        glass: 'rgba(255, 255, 255, 0.05)',
+                        'glass-border': 'rgba(255, 255, 255, 0.1)',
+                        cyan: '#06B6D4',
+                        violet: '#7C3AED',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0F172A;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 40%);
+            color: #F8FAFC;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Nav -->
+    <nav class="glass-panel px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+        <a href="/" class="flex items-center gap-2 group">
+            <div class="p-2 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors">
+                <svg class="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </div>
+            <span class="font-heading font-medium text-slate-300 group-hover:text-white">Back to Dashboard</span>
+        </a>
+        <div class="font-heading font-bold text-xl text-white">Vantage Admin</div>
+    </nav>
+
+    <main class="flex-1 container mx-auto p-6 max-w-7xl">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="glass-card p-6 rounded-2xl">
+                <div class="text-slate-400 text-sm mb-1 uppercase tracking-wider">Total Users</div>
+                <div class="text-3xl font-bold text-white" id="statUsers">--</div>
+            </div>
+            <div class="glass-card p-6 rounded-2xl">
+                <div class="text-slate-400 text-sm mb-1 uppercase tracking-wider">Total Products</div>
+                <div class="text-3xl font-bold text-cyan-400" id="statProducts">--</div>
+            </div>
+            <div class="glass-card p-6 rounded-2xl">
+                <div class="text-slate-400 text-sm mb-1 uppercase tracking-wider">System Status</div>
+                <div class="text-3xl font-bold text-emerald-400">Online</div>
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-2xl p-6">
+            <h2 class="font-heading font-bold text-xl mb-6 flex items-center gap-2">
+                <svg class="w-6 h-6 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
+                    </path>
+                </svg>
+                User Management
+            </h2>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-slate-500 text-xs uppercase tracking-wider border-b border-white/5">
+                            <th class="pb-3 px-4">User</th>
+                            <th class="pb-3 px-4">Role</th>
+                            <th class="pb-3 px-4">Status</th>
+                            <th class="pb-3 px-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTable" class="text-sm">
+                        <tr>
+                            <td colspan="4" class="py-4 text-center text-slate-500">Loading users...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-8 flex justify-end">
+            <button onclick="runCleanup()"
+                class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors">
+                🗑️ Cleanup Invalid Products
+            </button>
+        </div>
+    </main>
+
+    <script>
+        async function loadAdmin() {
+            try {
+                // Fetch Stats (Mocked or Real if API exists)
+                // We'll use product stats API
+                const pRes = await fetch('/api/oos-stats'); // Reuse this for total products
+                if (pRes.ok) {
+                    const data = await pRes.json();
+                    document.getElementById('statProducts').textContent = data.stats.total_products;
+                }
+
+                // Fetch Users (We might not have a public user list API, so mocking cur user)
+                const meRes = await fetch('/api/me');
+                if (meRes.ok) {
+                    const me = await meRes.json();
+                    document.getElementById('statUsers').textContent = "1 (You)";
+
+                    document.getElementById('userTable').innerHTML = `
+                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td class="py-3 px-4 flex items-center gap-3">
+                                <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.avatar}.png" class="w-8 h-8 rounded-full bg-slate-700">
+                                <span class="text-white font-medium">${me.discord_username}</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">Admin</td>
+                            <td class="py-3 px-4"><span class="px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold">Active</span></td>
+                            <td class="py-3 px-4 text-right">
+                                <button class="text-slate-400 hover:text-white">Edit</button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function runCleanup() {
+            if (!confirm("Run cleanup? This deletes 0% commission products.")) return;
+            // Call API
+            try {
+                const res = await fetch('/api/cleanup', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+                loadAdmin();
+            } catch (e) { alert("Error: " + e); }
+        }
+
+        loadAdmin();
+    </script>
+</body>
+
+</html>

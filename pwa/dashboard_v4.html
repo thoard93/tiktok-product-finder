@@ -253,6 +253,25 @@
                                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
                     </div>
+
+                    <!-- Sort Dropdown -->
+                    <select onchange="filterGrid('sort', this.value)"
+                        class="bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-300 outline-none hover:border-slate-600 focus:border-cyan-500 transition-colors cursor-pointer appearance-none">
+                        <option value="sales_7d">🔥 Top Sales (7 Days)</option>
+                        <option value="video_count">🎥 Most Videos</option>
+                        <option value="first_seen">🆕 Newest Added</option>
+                        <option value="commission_rate">💰 Highest Commission</option>
+                    </select>
+
+                    <!-- Sort Dropdown -->
+                    <select onchange="filterGrid('sort', this.value)"
+                        class="bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-300 outline-none hover:border-slate-600 focus:border-cyan-500 transition-colors cursor-pointer appearance-none">
+                        <option value="sales_7d">🔥 Top Sales (7 Days)</option>
+                        <option value="video_count">🎥 Most Videos</option>
+                        <option value="first_seen">🆕 Newest Added</option>
+                        <option value="commission_rate">💰 Highest Commission</option>
+                    </select>
+
                     <button onclick="document.getElementById('importModal').classList.remove('hidden')"
                         class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-cyan-500/20 whitespace-nowrap">
                         + Import URL
@@ -270,14 +289,21 @@
             </div>
 
             <!-- Pagination -->
-            <div class="mt-8 flex justify-center gap-2">
-                <button onclick="changePage(-1)"
-                    class="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white disabled:opacity-50">
-                    << /button>
-                        <div id="pageIndicator" class="px-4 py-2 bg-slate-800 rounded-lg text-sm text-white">Page 1
-                        </div>
-                        <button onclick="changePage(1)"
-                            class="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white">></button>
+            <div class="mt-8 flex justify-center gap-4 items-center">
+                <button id="btnPrev" onclick="changePage(-1)"
+                    class="p-3 rounded-xl bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-white/5">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7">
+                        </path>
+                    </svg>
+                </button>
+                <div id="pageIndicator" class="font-heading font-medium text-slate-300">Page 1</div>
+                <button id="btnNext" onclick="changePage(1)"
+                    class="p-3 rounded-xl bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-white/5">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
             </div>
         </div>
 
@@ -362,24 +388,36 @@
                 const data = await res.json();
 
                 // Stats
-                document.getElementById('statTotal').textContent = data.total || 0;
-                // Ad Winners Stat
-                document.getElementById('statAdWinners').textContent = data.products.filter(p => p.is_ad_driven).length;
-                document.getElementById('statGems').textContent = data.products.filter(p => !p.is_ad_driven && (p.video_count || 0) < 10).length;
+                // Stats
+                document.getElementById('statTotal').textContent = data.count || 0;
+                // Ad Winners & Gems - Mocked for now (Frontend) or backend need to return stats object 
+                // Currently API returns PAGINATED list, so filter on frontend only counts current page.
+                // Ideal: Backend returns 'stats' object. For now, keep as is or improve if possible.
 
                 renderGrid(data.products);
-                document.getElementById('pageIndicator').innerText = `Page ${page}`;
+
+                // Pagination Update
+                const totalPages = Math.ceil((data.count || 0) / 20);
+                document.getElementById('pageIndicator').innerText = `Page ${page} of ${totalPages || 1}`;
+                document.getElementById('btnPrev').disabled = page <= 1;
+                document.getElementById('btnNext').disabled = page >= totalPages;
 
             } catch (e) {
                 console.error(e);
             }
         }
 
-        function filterGrid(type) {
-            let f = {};
-            if (type === 'gems') f = { max_videos: 20, min_videos: 1, gems_only: 'true' };
-            if (type === 'favorites') f = { favorites_only: 'true' };
-            loadProducts(1, f);
+        function filterGrid(type, value) {
+            if (type === 'sort') {
+                curFilter.sort_by = value;
+            } else if (type === 'gems') {
+                curFilter = { max_videos: 20, min_videos: 1, gems_only: 'true' };
+            } else if (type === 'favorites') {
+                curFilter = { favorites_only: 'true' };
+            } else if (type === 'all') {
+                curFilter = {};
+            }
+            loadProducts(1, curFilter);
         }
 
         function renderGrid(products) {
