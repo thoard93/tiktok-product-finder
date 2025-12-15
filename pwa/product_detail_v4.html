@@ -186,7 +186,14 @@
             document.getElementById('content').classList.remove('hidden');
 
             // Basic Info
-            document.getElementById('pImage').src = data.image_url || 'https://via.placeholder.com/400';
+            // Use local proxy to avoid TikTok 403 hotlink protection
+            const imgProxy = `/api/image-proxy/${data.id}`;
+            document.getElementById('pImage').src = imgProxy;
+            // Fallback handled by onerror in HTML, but let's double check
+            document.getElementById('pImage').onerror = function () {
+                this.src = data.image_url || 'https://via.placeholder.com/400?text=Image+Load+Failed';
+            };
+
             document.getElementById('pTitle').textContent = data.name || 'Unknown Product';
             document.getElementById('pSeller').textContent = data.seller_name || 'Unknown Seller';
             document.getElementById('extLink').href = data.product_url || '#';

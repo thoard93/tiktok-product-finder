@@ -5167,7 +5167,7 @@ def product_detail(product_id):
 @app.route('/scanner')
 @login_required
 def scanner_page():
-    return send_file('pwa/scanner_v4.html')
+    return send_from_directory('pwa', 'scanner_v4.html')
 
 @app.route('/settings')
 @login_required
