@@ -85,29 +85,48 @@ class ApifyService:
     def get_product_details(urls_or_ids):
         """
         Get details for specific product IDs or URLs.
-        Optimized to use SEARCH Actor (Pratik Dani) for IDs as it's faster/reliable.
+    @classmethod
+    def get_product_details(cls, url_or_id):
         """
-        # 1. Try Search-By-ID (Preferred for Bridge)
-        if len(urls_or_ids) == 1 and str(urls_or_ids[0]).isdigit():
-            # User reported Excavator is slow/broken. Using Pratik Dani Search instead.
-            # Searching by ID usually returns the exact product as first result.
-            return ApifyService.search_products(str(urls_or_ids[0]), limit=1)
-
-        # 2. Fallback to URL Scraper (Excavator) for full links
-        urls = []
-        for x in urls_or_ids:
-            if 'shop.tiktok.com' in x:
-                urls.append({"url": x})
-            elif str(x).isdigit():
-                urls.append({"url": f"https://shop.tiktok.com/view/product/{x}?region=US&locale=en"})
+        Fetches details for a single product. 
+        Auto-detects if input is ID or URL.
+        Uses Pratik Dani's 'Search' actor via startUrls for fast lookup.
+        Fallback to Excavator if needed.
+        """
+        is_id = url_or_id.isdigit()
         
-        if not urls: return []
+        # 1. Construct URL if ID
+        if is_id:
+            target_url = f"https://shop.tiktok.com/view/product/{url_or_id}?region=US&locale=en"
+            print(f"DEBUG: Converting ID {url_or_id} to URL: {target_url}")
+        else:
+            target_url = url_or_id
+        
+        # 2. Try Pratik Dani (Search Actor supports startUrls for details) -- FAST & RELIABLE
+        print(f"DEBUG: Attempting Pratik Dani lookup for {target_url}")
+        try:
+            # Pratik Dani Search Actor requires 'country_code' with startUrls
+            run_input = {
+                "startUrls": [{"url": target_url}],
+                "country_code": "US",
+                "maxItems": 1
+            }
+            # Use 'search' actor but in detail mode
+            items = cls.run_actor(cls.ACTOR_SEARCH, run_input, wait_sec=45)
+            if items:
+                print(f"DEBUG: Pratik Dani returned {len(items)} items.")
+                return items
+            else:
+                print("DEBUG: Pratik Dani returned 0 items.")
+        except Exception as e:
+            print(f"DEBUG: Pratik Dani failed: {e}")
 
-        run_input = {
-            "urls": urls,
-            "maxItems": len(urls)
-        }
-        return ApifyService.run_actor(ACTOR_DETAIL, run_input)
+        # 3. Fallback: Excavator (Detail Scraper) -- SLOW but official
+        print("DEBUG: Fallback to Excavator...")
+        return cls.run_actor(cls.ACTOR_DETAIL, {
+            "urls": [{"url": target_url}],
+            "maxItems": 1
+        })
 
     @staticmethod
     def normalize_item(item):
@@ -117,19 +136,6 @@ class ApifyService:
         """
         if not item or item.get('error'): return None
 
-        # UNWRAP: Pratik Dani's Search Scraper often nests data in 'product' or 'item'
-        if 'product' in item and isinstance(item['product'], dict):
-            item = item['product']
-        
-        # DEBUG: Print keys for diagnosis
-        # print(f"DEBUG NORMALIZE KEYS: {list(item.keys())}", flush=True)
-
-        pid_raw = str(item.get('id') or item.get('product_id') or item.get('item_id'))
-        if not pid_raw or 'None' in pid_raw: 
-            # LOG FAILURE for debugging
-            print(f"DEBUG: Mapping Failed. KEYS: {list(item.keys())}, RAW_DUMP: {json.dumps(item)[:200]}...", flush=True)
-            return None
-        
         # Helper parsers
         def parse_metric(val):
             if not val: return 0
@@ -139,68 +145,77 @@ class ApifyService:
             elif 'M' in val: mult = 1000000; val = val.replace('M','')
             try: return int(float(val) * mult)
             except: return 0
-
+            
         def parse_float(val):
             if not val: return 0.0
             val = str(val).replace('$', '').replace(',', '').strip()
             try: return float(val)
             except: return 0.0
             
+        # UNWRAP: Pratik Dani's Search Scraper often nests data in 'product' or 'item'
+        if 'product' in item and isinstance(item['product'], dict):
+            wrapper = item
+            item = item['product']
+            if 'stats' in wrapper: item['stats'] = wrapper['stats']
+
+        # ID Check
+        pid_raw = str(item.get('product_id') or item.get('id') or item.get('item_id') or '')
+        if not pid_raw: 
+            return None        
+
         data = {}
-        data['product_id'] = f"shop_{pid_raw}"
+        data['product_id'] = pid_raw
         data['raw_id'] = pid_raw
         
         # Name
         data['product_name'] = (item.get('product_name') or item.get('title') or item.get('name') or "Unknown")[:200]
         
-        # Images
-        data['image_url'] = None
-        if item.get('images') and len(item.get('images')) > 0:
-            data['image_url'] = item.get('images')[0]
-        if not data['image_url']:
-            data['image_url'] = item.get('cover_url') or item.get('main_images', [None])[0]
+        # Images (Prioritize cover_url for Pratik)
+        data['image_url'] = (
+            item.get('cover_url') or 
+            item.get('main_image', {}).get('url') if isinstance(item.get('main_image'), dict) else item.get('main_image') or
+            item.get('image_url')
+        )
 
-        # Seller
-        seller = item.get('seller') or {}
-        if isinstance(seller, dict):
-            data['seller_name'] = seller.get('seller_name') or item.get('shop_name')
-        else:
-            data['seller_name'] = item.get('seller_name') or item.get('shop_name')
-
-        # Metrics
+        # Metrics (Pratik Dani Keys + Fallbacks)
+        # Pratik: total_sale_cnt, total_sale_gmv_amt, etc.
         data['sales'] = parse_metric(item.get('total_sale_cnt') or item.get('sales') or item.get('sold'))
-        data['sales_7d'] = parse_metric(item.get('total_sale_7d_cnt')) # Often missing in search scraper
+        data['sales_7d'] = parse_metric(item.get('sales_7d') or item.get('sales_7d_count') or 0)
         data['sales_30d'] = parse_metric(item.get('total_sale_30d_cnt') or item.get('sales_30d'))
-        data['influencer_count'] = parse_metric(item.get('total_ifl_cnt'))
+        data['gmv'] = parse_float(item.get('total_sale_gmv_amt') or item.get('gmv'))
         data['video_count'] = parse_metric(item.get('total_video_count') or item.get('videos_count'))
+        data['influencer_count'] = parse_metric(item.get('total_ifl_cnt') or item.get('influencer_count'))
         
         # Price
         data['price'] = parse_float(item.get('avg_price') or item.get('real_price') or item.get('price'))
-        data['original_price'] = parse_float(item.get('original_price') or item.get('market_price') or item.get('list_price'))
+        data['currency'] = item.get('currency', 'USD')
         
-        # Fallback for orig price from SKU
-        if not data['original_price'] and item.get('skus'):
-             try:
-                sku = item.get('skus')[0] if isinstance(item.get('skus'), list) else list(item.get('skus').values())[0]
-                data['original_price'] = parse_float(sku.get('original_price'))
-             except: pass
+        # Stock: Pratik sometimes uses 'skus' or 'stock'
+        if 'stock' in item:
+            data['stock'] = parse_metric(item['stock'])
+        else:
+            # Sum SKUs if available
+            stock = 0
+            skus = item.get('skus')
+            if isinstance(skus, list):
+                for s in skus: stock += int(s.get('stock', 0))
+            elif isinstance(skus, dict):
+                for v in skus.values(): stock += int(v.get('stock', 0))
+            data['stock'] = stock
 
-        # Commission
-        raw_comm = item.get('affiliate_commission_rate') or item.get('commission_rate')
-        if raw_comm:
-             try:
-                 c = float(str(raw_comm).replace('%',''))
-                 if c < 1: c = c * 100
-                 data['commission_rate'] = c
-             except: data['commission_rate'] = 0
-        
-        # Stock (Sum SKUs)
-        stock = 0
-        skus = item.get('skus') or {}
-        if isinstance(skus, dict):
-             for k,v in skus.items(): stock += int(v.get('stock',0))
-        elif isinstance(skus, list):
-             for s in skus: stock += int(s.get('stock',0))
-        data['live_count'] = stock
+        data['has_free_shipping'] = bool(item.get('is_free_shipping'))
+
+        # Seller
+        seller = item.get('seller') or item.get('shop_info') or {}
+        if isinstance(seller, dict):
+            data['shop_name'] = seller.get('shop_name') or seller.get('name')
+            data['shop_id'] = str(seller.get('shop_id') or seller.get('id') or '')
+            data['shop_url'] = seller.get('url')
+        else:
+            data['shop_name'] = str(seller) if seller else None
+
+        # URL
+        data['product_url'] = item.get('product_url') or item.get('url') or f"https://shop.tiktok.com/view/product/{pid_raw}?region=US&locale=en"
         
         return data
+```
