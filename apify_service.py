@@ -103,13 +103,14 @@ class ApifyService:
             run_input = {
                 "startUrls": [{"url": target_url}],
                 "country_code": "US",
-                "maxItems": 1
+                "maxItems": 1,
+                "limit": 1 # Explicitly request 1 item to save cost
             }
             # Use 'search' actor but in detail mode
             items = cls.run_actor(cls.ACTOR_SEARCH, run_input, wait_sec=45)
             if items:
-                print(f"DEBUG: Pratik Dani returned {len(items)} items.")
-                return items
+                print(f"DEBUG: Pratik Dani returned {len(items)} items. Taking top 1.")
+                return items[:1] # Force single result
             else:
                 print("DEBUG: Pratik Dani returned 0 items.")
         except Exception as e:
