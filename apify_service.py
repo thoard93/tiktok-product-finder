@@ -82,12 +82,10 @@ class ApifyService:
     @classmethod
     def get_product_details(cls, url_or_id):
         """
-        Fetches details for a single product. 
-        Auto-detects if input is ID or URL.
-        Uses Pratik Dani's 'Search' actor via startUrls for fast lookup.
-        Fallback to Excavator if needed.
+        Fetches details using Excavator (Detail Scraper).
+        Direct, Cheaper ($0.01), and Reliable for single ID/URL.
         """
-        is_id = url_or_id.isdigit()
+        is_id = str(url_or_id).isdigit()
         
         # 1. Construct URL if ID
         if is_id:
@@ -96,40 +94,8 @@ class ApifyService:
         else:
             target_url = url_or_id
         
-        # 2. Try Pratik Dani (Search Actor supports startUrls for details) -- FAST & RELIABLE
-        print(f"DEBUG: Attempting Pratik Dani lookup for {target_url}")
-        try:
-            # Pratik Dani Search Actor requires 'country_code' with startUrls
-            run_input = {
-                "startUrls": [{"url": target_url}],
-                "country_code": "US",
-                "maxItems": 1 # Try cheap/fast lookup first
-            }
-            # Use 'search' actor but in detail mode
-            items = cls.run_actor(ApifyService.ACTOR_SEARCH, run_input, wait_sec=45)
-            
-            if items:
-                # FILTER: Find the exact product ID we asked for
-                if is_id:
-                    for i in items:
-                        # Handle nested product key if present
-                        p_data = i.get('product', i)
-                        pid = str(p_data.get('product_id') or p_data.get('id') or '')
-                        if pid == str(url_or_id):
-                            print(f"DEBUG: Found MATCHING Product ID {pid}")
-                            return [i]
-                    
-                    print(f"DEBUG: ID {url_or_id} not found in Pratik results. Falling back...")
-                    # Do NOT return [] here; let it fall through to Excavator
-                else:
-                    return items[:1] # URL mode: return first result
-            else:
-                print("DEBUG: Pratik Dani returned 0 items. Falling back...")
-        except Exception as e:
-            print(f"DEBUG: Pratik Dani failed: {e}")
-
-        # 3. Fallback: Excavator (Detail Scraper) -- SLOW but official
-        print("DEBUG: Fallback to Excavator...")
+        # 2. Run Excavator Directly
+        print("DEBUG: Running Excavator (Detail Scraper)...")
         items = cls.run_actor(ApifyService.ACTOR_DETAIL, {
             "urls": [{"url": target_url}],
             "maxItems": 1
@@ -193,7 +159,12 @@ class ApifyService:
         elif item.get('main_image'): img_url = item.get('main_image')
         elif item.get('image_url'): img_url = item.get('image_url')
         elif item.get('images') and isinstance(item['images'], list) and len(item['images']) > 0:
-            img_url = item['images'][0] # Excavator fallback
+            # Handle list of strings or list of dicts
+            first_img = item['images'][0]
+            if isinstance(first_img, dict):
+                img_url = first_img.get('url') or first_img.get('original_url')
+            elif isinstance(first_img, str):
+                img_url = first_img
             
         data['image_url'] = img_url
 
