@@ -103,14 +103,26 @@ class ApifyService:
             run_input = {
                 "startUrls": [{"url": target_url}],
                 "country_code": "US",
-                "maxItems": 1,
-                "limit": 1 # Explicitly request 1 item to save cost
+                "maxItems": 20 # Fetch enough to include the real product (avoiding 'suggested' taking top spot)
             }
             # Use 'search' actor but in detail mode
-            items = cls.run_actor(cls.ACTOR_SEARCH, run_input, wait_sec=45)
+            items = cls.run_actor(ApifyService.ACTOR_SEARCH, run_input, wait_sec=45)
+            
             if items:
-                print(f"DEBUG: Pratik Dani returned {len(items)} items. Taking top 1.")
-                return items[:1] # Force single result
+                # FILTER: Find the exact product ID we asked for
+                if is_id:
+                    for i in items:
+                        # Handle nested product key if present
+                        p_data = i.get('product', i)
+                        pid = str(p_data.get('product_id') or p_data.get('id') or '')
+                        if pid == str(url_or_id):
+                            print(f"DEBUG: Found MATCHING Product ID {pid}")
+                            return [i]
+                    
+                    print(f"DEBUG: ID {url_or_id} not found in {len(items)} results. (Top ID: {items[0].get('product_id')})")
+                    return [] # Strict matching failed
+                else:
+                    return items[:1] # URL mode: hope for best
             else:
                 print("DEBUG: Pratik Dani returned 0 items.")
         except Exception as e:
