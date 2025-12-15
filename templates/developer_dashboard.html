@@ -512,108 +512,136 @@
                 </div>
             </div>
 
-            <!-- Pricing -->
-            <h2 style="margin-bottom: 1.5rem; font-weight: 600;">Top Up Credits 💎</h2>
-            <div class="grid">
-                <div class="card pricing-card">
-                    <h3>Starter</h3>
-                    <div class="price">$5 <span>/ 100</span></div>
-                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Perfect for testing & prototypes</p>
-                    <button class="btn-primary" onclick="buyCredits('starter')">Purchase</button>
+            <!-- Background Scans Monitor -->
+            <div class="card" style="grid-column: span 2; margin-top: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Recent Background Scans (Bridge/API)</h3>
+                    <button class="btn-sm" onclick="loadJobs()">Refresh ↻</button>
                 </div>
-
-                <div class="card pricing-card"
-                    style="border: 1px solid var(--accent); box-shadow: 0 0 20px rgba(244, 63, 94, 0.1);">
-                    <div
-                        style="position: absolute; top:0; right:0; background: var(--accent); color: white; padding: 0.25rem 1rem; font-size: 0.75rem; border-bottom-left-radius: 0.75rem; font-weight: bold;">
-                        POPULAR</div>
-                    <h3>Pro</h3>
-                    <div class="price">$20 <span>/ 500</span></div>
-                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Best value for serious tools</p>
-                    <button class="btn-primary" onclick="buyCredits('pro')">Purchase</button>
-                </div>
-
-                <div class="card pricing-card">
-                    <h3>Enterprise</h3>
-                    <div class="price">$50 <span>/ 1.5k</span></div>
-                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">For high-volume agencies</p>
-                    <button class="btn-primary" onclick="buyCredits('enterprise')">Purchase</button>
+                <div class="code-block" style="max-height: 300px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left;">
+                                <th style="padding: 0.5rem;">Time</th>
+                                <th style="padding: 0.5rem;">ID</th>
+                                <th style="padding: 0.5rem;">Input</th>
+                                <th style="padding: 0.5rem;">Status</th>
+                                <th style="padding: 0.5rem;">Result</th>
+                            </tr>
+                        </thead>
+                        <tbody id="jobsTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 1rem; color: #64748b;">Loading...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
 
-        <!-- VIEW: DOCS -->
-        <div id="docs-section" class="view-section">
-            <div class="card" style="margin-bottom: 2rem;">
-                <h2 style="margin-bottom: 1rem;">Quick Start Implementation</h2>
-                <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">
-                    Our asynchronous API allows you to submit scan jobs and retrieve results when ready.
-                    Follow this pattern for reliable integration.
-                </p>
-
-                <ul class="step-list">
-                    <li>
-                        <div class="step-title">Submit a Scan Job</div>
-                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                            POST a URL to the <code>/api/extern/scan</code> endpoint.
-                        </p>
-                        <div class="code-block">
-                            <span class="keyword">import</span> requests<br>
-                            <br>
-                            url = <span class="string">"https://{{ request.host }}/api/extern/scan"</span><br>
-                            headers = {<br>
-                            &nbsp;&nbsp;<span class="string">"X-API-KEY"</span>: <span class="string">"{{ api_key.key if
-                                api_key else 'YOUR_KEY' }}"</span><br>
-                            }<br>
-                            payload = { <span class="string">"url"</span>: <span
-                                class="string">"https://shop.tiktok.com/..."</span> }<br>
-                            <br>
-                            resp = requests.post(url, json=payload, headers=headers)<br>
-                            job_data = resp.json()<br>
-                            job_id = job_data.get(<span class="string">'job_id'</span>)<br>
-                            <span class="function">print</span>(f<span class="string">"Job Started: {job_id}"</span>)
-                        </div>
-                    </li>
-
-                    <li>
-                        <div class="step-title">Poll for Status</div>
-                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                            Check the status endpoint until <code>status</code> is 'completed'.
-                        </p>
-                        <div class="code-block">
-                            <span class="keyword">import</span> time<br>
-                            <br>
-                            status_url = f<span class="string">"https://{{ request.host
-                                }}/api/extern/jobs/{job_id}"</span><br>
-                            <br>
-                            <span class="keyword">while</span> <span class="keyword">True</span>:<br>
-                            &nbsp;&nbsp;r = requests.get(status_url, headers=headers)<br>
-                            &nbsp;&nbsp;data = r.json()<br>
-                            &nbsp;&nbsp;<span class="keyword">if</span> data[<span class="string">'status'</span>] ==
-                            <span class="string">'completed'</span>:<br>
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="function">print</span>(data[<span
-                                class="string">'result'</span>])<br>
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">break</span><br>
-                            &nbsp;&nbsp;<span class="keyword">elif</span> data[<span class="string">'status'</span>] ==
-                            <span class="string">'failed'</span>:<br>
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="function">print</span>(<span class="string">"Error
-                                processsing"</span>)<br>
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">break</span><br>
-                            &nbsp;&nbsp;time.sleep(2)
-                        </div>
-                    </li>
-                </ul>
+        <!-- Pricing -->
+        <h2 style="margin-bottom: 1.5rem; font-weight: 600;">Top Up Credits 💎</h2>
+        <div class="grid">
+            <div class="card pricing-card">
+                <h3>Starter</h3>
+                <div class="price">$5 <span>/ 100</span></div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Perfect for testing & prototypes</p>
+                <button class="btn-primary" onclick="buyCredits('starter')">Purchase</button>
             </div>
 
-            <div class="card">
-                <h3>Rate Limits & Best Practices</h3>
-                <p style="color: var(--text-secondary); margin-top: 1rem; line-height: 1.6;">
-                    • <strong>Concurrency:</strong> Please limit to 5 concurrent requests.<br>
-                    • <strong>Timeouts:</strong> Scans can take up to 60 seconds. Set your timeouts accordingly.<br>
-                    • <strong>Caching:</strong> Results are cached for 24 hours.
-                </p>
+            <div class="card pricing-card"
+                style="border: 1px solid var(--accent); box-shadow: 0 0 20px rgba(244, 63, 94, 0.1);">
+                <div
+                    style="position: absolute; top:0; right:0; background: var(--accent); color: white; padding: 0.25rem 1rem; font-size: 0.75rem; border-bottom-left-radius: 0.75rem; font-weight: bold;">
+                    POPULAR</div>
+                <h3>Pro</h3>
+                <div class="price">$20 <span>/ 500</span></div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Best value for serious tools</p>
+                <button class="btn-primary" onclick="buyCredits('pro')">Purchase</button>
+            </div>
+
+            <div class="card pricing-card">
+                <h3>Enterprise</h3>
+                <div class="price">$50 <span>/ 1.5k</span></div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">For high-volume agencies</p>
+                <button class="btn-primary" onclick="buyCredits('enterprise')">Purchase</button>
             </div>
         </div>
+    </div>
+
+    <!-- VIEW: DOCS -->
+    <div id="docs-section" class="view-section">
+        <div class="card" style="margin-bottom: 2rem;">
+            <h2 style="margin-bottom: 1rem;">Quick Start Implementation</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">
+                Our asynchronous API allows you to submit scan jobs and retrieve results when ready.
+                Follow this pattern for reliable integration.
+            </p>
+
+            <ul class="step-list">
+                <li>
+                    <div class="step-title">Submit a Scan Job</div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        POST a URL to the <code>/api/extern/scan</code> endpoint.
+                    </p>
+                    <div class="code-block">
+                        <span class="keyword">import</span> requests<br>
+                        <br>
+                        url = <span class="string">"https://{{ request.host }}/api/extern/scan"</span><br>
+                        headers = {<br>
+                        &nbsp;&nbsp;<span class="string">"X-API-KEY"</span>: <span class="string">"{{ api_key.key if
+                            api_key else 'YOUR_KEY' }}"</span><br>
+                        }<br>
+                        payload = { <span class="string">"url"</span>: <span
+                            class="string">"https://shop.tiktok.com/..."</span> }<br>
+                        <br>
+                        resp = requests.post(url, json=payload, headers=headers)<br>
+                        job_data = resp.json()<br>
+                        job_id = job_data.get(<span class="string">'job_id'</span>)<br>
+                        <span class="function">print</span>(f<span class="string">"Job Started: {job_id}"</span>)
+                    </div>
+                </li>
+
+                <li>
+                    <div class="step-title">Poll for Status</div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Check the status endpoint until <code>status</code> is 'completed'.
+                    </p>
+                    <div class="code-block">
+                        <span class="keyword">import</span> time<br>
+                        <br>
+                        status_url = f<span class="string">"https://{{ request.host
+                            }}/api/extern/jobs/{job_id}"</span><br>
+                        <br>
+                        <span class="keyword">while</span> <span class="keyword">True</span>:<br>
+                        &nbsp;&nbsp;r = requests.get(status_url, headers=headers)<br>
+                        &nbsp;&nbsp;data = r.json()<br>
+                        &nbsp;&nbsp;<span class="keyword">if</span> data[<span class="string">'status'</span>] ==
+                        <span class="string">'completed'</span>:<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="function">print</span>(data[<span
+                            class="string">'result'</span>])<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">break</span><br>
+                        &nbsp;&nbsp;<span class="keyword">elif</span> data[<span class="string">'status'</span>] ==
+                        <span class="string">'failed'</span>:<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="function">print</span>(<span class="string">"Error
+                            processsing"</span>)<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">break</span><br>
+                        &nbsp;&nbsp;time.sleep(2)
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Rate Limits & Best Practices</h3>
+            <p style="color: var(--text-secondary); margin-top: 1rem; line-height: 1.6;">
+                • <strong>Concurrency:</strong> Please limit to 5 concurrent requests.<br>
+                • <strong>Timeouts:</strong> Scans can take up to 60 seconds. Set your timeouts accordingly.<br>
+                • <strong>Caching:</strong> Results are cached for 24 hours.
+            </p>
+        </div>
+    </div>
 
     </div>
 
@@ -691,6 +719,8 @@
             document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
             document.getElementById(viewName + '-section').classList.add('active');
 
+            if (viewName === 'overview') loadJobs();
+
             // Update Headers
             const title = document.getElementById('pageTitle');
             const subtitle = document.getElementById('pageSubtitle');
@@ -703,6 +733,48 @@
                 subtitle.innerText = "Manage your API Keys and Integration";
             }
         }
+
+        async function loadJobs() {
+            const table = document.getElementById('jobsTableBody');
+            table.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1rem; color: #64748b;">Loading...</td></tr>';
+
+            try {
+                const res = await fetch('/api/admin/jobs');
+                const data = await res.json();
+
+                if (data.success && data.jobs.length > 0) {
+                    table.innerHTML = data.jobs.map(j => {
+                        let statusColor = '#94a3b8';
+                        if (j.status === 'completed') statusColor = '#10b981';
+                        if (j.status === 'failed') statusColor = '#f43f5e';
+                        if (j.status === 'processing') statusColor = '#f59e0b';
+
+                        let resultText = JSON.stringify(j.result || {}).slice(0, 50);
+                        if (j.result && j.result.message) resultText = j.result.message;
+                        if (j.result && j.result.error) resultText = "Error: " + j.result.error;
+
+                        return `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 0.5rem; color: #64748b;">${new Date(j.created_at).toLocaleTimeString()}</td>
+                            <td style="padding: 0.5rem; font-family: monospace;">${j.id.slice(0, 8)}</td>
+                            <td style="padding: 0.5rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${j.input}">${j.input}</td>
+                            <td style="padding: 0.5rem; color: ${statusColor}; font-weight: bold;">${j.status}</td>
+                            <td style="padding: 0.5rem; color: #ccc;" title='${JSON.stringify(j.result)}'>${resultText}</td>
+                        </tr>
+                        `;
+                    }).join('');
+                } else {
+                    table.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1rem; color: #64748b;">No recent jobs found.</td></tr>';
+                }
+            } catch (e) {
+                table.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #f43f5e;">Error loading jobs: ${e.message}</td></tr>`;
+            }
+        }
+
+        // Load initially
+        loadJobs();
+
+
 
         // Check for Success Params
         window.onload = function () {

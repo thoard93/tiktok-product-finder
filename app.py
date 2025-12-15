@@ -6267,6 +6267,30 @@ def extern_job_status(job_id):
             
     return jsonify(resp)
 
+@app.route('/api/admin/jobs', methods=['GET'])
+@login_required
+def admin_list_jobs():
+    """Debug: List recent scan jobs"""
+    try:
+        jobs = ScanJob.query.order_by(ScanJob.created_at.desc()).limit(20).all()
+        results = []
+        for j in jobs:
+            res = None
+            if j.result_json:
+                try: res = json.loads(j.result_json)
+                except: res = j.result_json
+                
+            results.append({
+                'id': j.id,
+                'status': j.status,
+                'input': j.input_query,
+                'result': res,
+                'created_at': j.created_at.isoformat()
+            })
+        return jsonify({'success': True, 'jobs': results})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/admin/create-key', methods=['POST'])
 @login_required
 def admin_create_key():
