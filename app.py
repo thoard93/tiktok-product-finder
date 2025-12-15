@@ -61,12 +61,23 @@ if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
     app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
 
 # Connection pool settings to handle Render's connection drops
-# Connection pool settings to handle Render's connection drops
 # Use NullPool to force fresh connections every time (prevents stale connection errors)
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'poolclass': NullPool,
 }
+
+# --- GLOBAL SCAN LOCK ---
+SCAN_LOCK = {
+    'locked': False,
+    'locked_by': None,
+    'scan_type': None,
+    'start_time': None
+}
+
+def get_scan_status():
+    return SCAN_LOCK
+
 
 @app.route('/api/debug/check-product/<product_id>')
 def check_product_debug(product_id):
