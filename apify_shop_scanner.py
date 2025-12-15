@@ -37,7 +37,6 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                  log(f">> Keyword Search: '{TARGET_ID}'")
                  res = ApifyService.search_products(TARGET_ID, limit=3)
             else:
-            else:
                  log(f">> ID Lookup: {TARGET_ID}")
                  # Updated signature expects single ID
                  res = ApifyService.get_product_details(TARGET_ID)
