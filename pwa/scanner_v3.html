@@ -434,10 +434,10 @@
                 <div class="title">Viral Trends</div>
                 <div class="desc">Apify #tiktokshop Scan</div>
             </div>
-            <div class="scan-tab" onclick="setMode('lookup')">
-                <i class="fas fa-microscope"></i>
-                <div class="title">Product Lookup</div>
-                <div class="desc">Scan Specific Product</div>
+            <div class="scan-tab" onclick="setMode('discovery')">
+                <i class="fas fa-globe-americas"></i>
+                <div class="title">Discovery</div>
+                <div class="desc">Broad Market Scan</div>
             </div>
         </div>
 
@@ -613,6 +613,18 @@
                     </div>
                 </div>
                 <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🔍 Lookup Product</button>
+            `,
+            'discovery': `
+                 <div class="config-grid">
+                    <div class="form-group" style="grid-column: span 2">
+                        <div class="log-entry log-success">
+                            <h3>🌍 Discovery Scanner</h3>
+                            <p>Scans broad keywords (trending, gadgets, etc.) to find hidden gems.</p>
+                            <p><strong>Note:</strong> This runs in the background and may take a few minutes.</p>
+                        </div>
+                    </div>
+                </div>
+                <button class="scan-btn" id="scanBtn" onclick="toggleScan()">🚀 Start Discovery Scan</button>
             `
         };
 
@@ -663,6 +675,7 @@
                 else if (currentMode === 'dailyvirals') await runDailyViralsScan(btn);
                 else if (currentMode === 'viral_trends') await runViralTrendsScan(btn);
                 else if (currentMode === 'lookup') await runSingleProductScan(btn);
+                else if (currentMode === 'discovery') await runDiscoveryScan(btn);
 
                 // Reset state when scan function returns (finished or error)
                 isScanning = false;
@@ -674,6 +687,28 @@
                 btn.disabled = true; // Disable until fully stopped
                 log('Aborting scan...', 'warn');
             }
+        }
+
+        async function runDiscoveryScan(btn) {
+            const originalText = btn.innerText;
+            btn.innerText = "⏳ Starting...";
+            log("Launching Discovery Scanner...", 'info');
+
+            try {
+                const res = await fetch('/api/scan/discovery', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    log(`Discovery Scan Started! Process ID: ${data.pid || 'N/A'}. Check logs separately.`, 'success');
+                    log("You can leave this page. Results will appear in Dashboard > Discovery tab.", 'info');
+                } else {
+                    log(`Error starting scan: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log(`Network error: ${e.message}`, 'error');
+            }
+            btn.innerText = "Scan Launched";
+            setTimeout(() => btn.innerText = originalText, 3000);
         }
 
         // ================= SCAN LOGIC =================

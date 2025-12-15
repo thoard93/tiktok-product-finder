@@ -6340,6 +6340,33 @@ def user_generate_key():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/scan/discovery', methods=['POST'])
+@login_required
+def trigger_discovery_scan():
+    """Trigger the background Discovery Scanner script"""
+    try:
+        # Prevent spamming? (Optional: Check lock)
+        # if not acquire_scan_lock(current_user.id, 'discovery'):
+        #    return jsonify({'error': 'Scanner is busy. Try again later.'}), 423
+            
+        # Run script in background (detached)
+        # subprocess.Popen([sys.executable, 'discovery_scanner.py'])
+        
+        # Windows/Linux compatible way to run detached?
+        # On Render (Linux), simple Popen works.
+        import subprocess
+        
+        # Use full path to be safe
+        script_path = os.path.join(basedir, 'discovery_scanner.py')
+        
+        proc = subprocess.Popen([sys.executable, script_path], 
+                                stdout=subprocess.DEVNULL, 
+                                stderr=subprocess.DEVNULL)
+                                
+        return jsonify({'success': True, 'pid': proc.pid})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # =============================================================================
 # STRIPE PAYMENT ROUTES
 # =============================================================================
