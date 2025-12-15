@@ -148,7 +148,22 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10):
                     # Use product_id (was raw_id)
                     p.product_url = f"https://shop.tiktok.com/view/product/{data['product_id']}?region=US&locale=en"
                     
-                    p.scan_type = 'apify_shop'
+                    # INTELLIGENT TAB MANAGEMENT:
+                    # If this scan was triggered by a 'daily_virals' item (Ad Winner), keep it in that tab!
+                    # Otherwise, default to 'apify_shop'
+                    if TARGET_ID and (TARGET_ID.startswith('dv_') or p.scan_type == 'daily_virals'):
+                         p.scan_type = 'daily_virals'
+                         
+                         # CLEANUP: If we just saved a Real ID (shop_X), but the Target was a Placeholder (dv_Y)
+                         # We should delete the Placeholder so we don't have duplicates
+                         if TARGET_ID.startswith('dv_') and pid != TARGET_ID:
+                             old_placeholder = Product.query.get(TARGET_ID)
+                             if old_placeholder:
+                                 db.session.delete(old_placeholder)
+                                 log(f"   [Cleanup] Replaced placeholder {TARGET_ID} with enriched {pid}")
+                    else:
+                         p.scan_type = 'apify_shop'
+                         
                     p.last_updated = datetime.utcnow()
                     
                     db.session.add(p)
