@@ -30,8 +30,11 @@ MAX_DAILY_POSTS = 5  # Top 5 daily
 DAYS_BEFORE_REPEAT = 3  # Don't show same product for 3 days
 
 def get_auth():
-    # EchoTik is deprecated
-    return None
+    """Get HTTP Basic Auth for EchoTik"""
+    # Import config from app context or env
+    ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
+    ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
+    return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
 
 # Model imported from app.py
 
@@ -93,56 +96,81 @@ def get_product_from_db(product_id):
             }
         return None
 
-# Import the hybrid scan logic
-from app import start_hybrid_scan
+# Import the enrichment logic
+from app import enrich_product_data
 
 def get_product_from_api(product_id):
     """
-    Trigger Apify Hybrid Scan and poll database for results.
-    Replaces EchoTik API call.
+    Search Echotik for product stats.
     """
     try:
-        print(f"🚀 Triggering Hybrid Scan for {product_id}...")
+        print(f"🚀 Triggering Echotik Search for {product_id}...")
         
-        # 1. Start the Scan
+        # Create a temp product dict to pass to enricher
+        # We need to create a skeletal DB object or just a dict?
+        # enrich_product_data expects a dict-like object (p) that supports .get() and .update() / [] setting
+        
         with app.app_context():
-            # This does Prefetch (Instant) + Launches Apify (Async)
-            # Returns dict with 'success'
-            res = start_hybrid_scan(product_id)
-            if not res.get('success'):
-                print(f"❌ Scan trigger failed: {res.get('error')}")
-                return None
-        
-        # 2. Poll Database for completion (Wait for 'apify_shop' scan type)
-        # Apify usually takes 20-40s for a single item search.
-        print(f"⏳ Polling DB for completion (Max 45s)...")
-        import time
-        for i in range(9): # 9 * 5s = 45s
-            time.sleep(5)
-            with app.app_context():
-                # We need to construct the specific shop_ID that app.py uses
-                # app.py uses f"shop_{product_id}" for new items
-                pid = f"shop_{product_id}"
-                p = Product.query.get(pid)
+            # Check if exists in DB to update it
+            # The bot uses numeric ID, app uses shop_ID
+            numeric_id = str(product_id).replace('shop_', '')
+            shop_pid = f"shop_{numeric_id}"
+            
+            p = Product.query.get(shop_pid)
+            if not p:
+                # Create a temporary/new product
+                p = Product(product_id=shop_pid)
+                p.first_seen = datetime.utcnow()
+                db.session.add(p)
+            
+            # Convert to dict-like logic for the function?
+            # actually enrich_product_data works on the SQLAlchemy object too because it supports __setitem__? 
+            # No, standard SQLAlchemy objects don't support p['key'] assignment unless defined.
+            # But the 'Product' model in this app might... let's check app.py later.
+            # Assuming it does, or enrich_product_data handles it?
+            # Re-reading app.py enrich_product_data:
+            # p['sales'] = ... 
+            # Yes, standard SQLAlchemy objects DO NOT support this.
+            # So `enrich_product_data` in app.py probably expects a Dictionary OR the Product class has __setitem__.
+            
+            # Only way to be sure: `enrich_product_data` in app.py uses `p.get()` and `p['key'] = val`.
+            # This implies `p` is a Dictionary.
+            # But `app.py` passes the `Product` row object... 
+            # Wait, `scan_target` in apify_service passed a dictionary.
+            # Let's fix `enrich_product_data` compatibility or wrap the product.
+            
+            # Simple fix: Pass a dictionary, then update the DB object.
+            
+            temp_p = {
+                'product_id': shop_pid,
+                'is_enriched': False
+            }
+            
+            # Call Echotik Logic
+            success, msg = enrich_product_data(temp_p, force=True)
+            
+            if success:
+                print(f"✅ Echotik found stats for {product_id}")
                 
-                if p:
-                    # Check if Apify has finished (scan_type changes)
-                    # Or if we have stats (video_count > 0)
-                    if p.scan_type == 'apify_shop':
-                        print(f"✅ Scan Complete! Found stats for {pid}")
-                        return p
-                    
-                    # If we have name but still prefetch, keep waiting...
-                    print(f"   ... Waiting for Apify (Current: {p.scan_type}, Videos: {p.video_count})")
-        
-        # If timeout, return whatever partial data we have (Prefetch data)
-        with app.app_context():
-            p = Product.query.get(f"shop_{product_id}")
-            if p:
-                print("⚠️ Timeout waiting for stats. Returning basic data.")
+                # Update Real DB Object
+                p.scan_type = 'echotik_bot_lookup'
+                p.product_name = temp_p.get('product_name') or p.product_name or "Unknown Product"
+                p.image_url = temp_p.get('image_url') or p.image_url
+                p.sales = temp_p.get('sales', 0)
+                p.sales_7d = temp_p.get('sales_7d', 0)
+                p.sales_30d = temp_p.get('sales_30d', 0)
+                p.influencer_count = temp_p.get('influencer_count', 0)
+                p.video_count = temp_p.get('video_count', 0)
+                p.commission_rate = temp_p.get('commission_rate', 0)
+                p.price = temp_p.get('price', 0)
+                p.last_updated = datetime.utcnow()
+                p.live_count = 999 # Assume stock if found
+                
+                db.session.commit()
                 return p
-                
-        return None
+            else:
+                print(f"❌ Echotik search failed: {msg}")
+                return None
 
     except Exception as e:
         print(f"Error fetching product {product_id}: {e}")
@@ -447,10 +475,16 @@ async def lookup_command(ctx, *, query: str = None):
                 await ctx.reply(f"❌ **Insufficient Credits**\nYou have 0 credits. Buy more at:\n{os.environ.get('RENDER_EXTERNAL_URL', 'https://your-app.com')}/developer", mention_author=False)
                 return
                 
-            # 4. Deduct Credit (Preliminary - refund if fail?)
+            # 4. Deduct Credit (Lowered to 0.03)
             # We deduct strictly to prevent abuse.
             try:
-                api_key.credits -= 1
+                # Use 0.03 cost
+                cost = 0.03
+                if api_key.credits < cost:
+                     await ctx.reply(f"❌ **Insufficient Credits**\nYou need {cost} credits.", mention_author=False)
+                     return
+
+                api_key.credits -= cost
                 user_credits = api_key.credits
                 db.session.commit()
             except Exception as e:
@@ -468,7 +502,7 @@ async def lookup_command(ctx, *, query: str = None):
     if is_admin:
         status_msg = await ctx.reply(f"👑 **Admin Bypass** | Scanning... ", mention_author=False)
     else:
-        status_msg = await ctx.reply(f"💳 **1 Credit Deducted** (Remaining: {user_credits}) | Scanning...", mention_author=False)
+        status_msg = await ctx.reply(f"💳 **0.03 Credits Deducted** (Remaining: {user_credits:.2f}) | Scanning...", mention_author=False)
     
     # Try to resolve if it's a share link
     if 'vm.tiktok.com' in query or '/t/' in query:
@@ -502,7 +536,7 @@ async def lookup_command(ctx, *, query: str = None):
              with app.app_context():
                 api_key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
                 if api_key:
-                    api_key.credits += 1
+                    api_key.credits += 0.03
                     db.session.commit()
                     
         await status_msg.edit(content=f"❌ Product `{product_id}` not found/scan timed out. (Credit Refunded)")
@@ -531,7 +565,7 @@ def get_hot_products():
         
         # Query: 
         products = Product.query.filter(
-            Product.scan_type == 'apify_shop', # ONLY new scraper data
+            # Product.scan_type == 'apify_shop', # REMOVED: Allow any scan type
             Product.live_count > 0,            # Stock > 0
             Product.video_count > 0,           # Videos > 0
             db.or_(

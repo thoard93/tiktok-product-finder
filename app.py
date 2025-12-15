@@ -191,10 +191,13 @@ def parse_cover_url(url):
     if not url: return ""
     return url
 
+def get_auth():
+    """Get HTTP Basic Auth for EchoTik"""
+    return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
+
 def enrich_product_data(p, i_log_prefix="", force=False):
     """
-    Global Helper: Search Apify for product stats based on Title then Brand.
-    Refactored to remove Echotik dependency.
+    Global Helper: Search Echotik for product stats based on Title then Brand.
     """
     # Helper: Clean title
     def clean_title_for_search(t):
@@ -207,12 +210,27 @@ def enrich_product_data(p, i_log_prefix="", force=False):
     pid = p.get('product_id')
     if pid and not pid.startswith('ad_') and (force or not p.get('is_enriched')):
         target_id = pid.replace('shop_', '') if pid.startswith('shop_') else pid
+        
         try:
-            items = ApifyService.get_product_details([target_id])
-            if isinstance(items, list) and items:
-                data = ApifyService.normalize_item(items[0])
-                if data:
-                    p.update(data)
+            res = requests.get(
+                f"{BASE_URL}/product/detail",
+                params={'product_ids': target_id},
+                auth=get_auth(),
+                timeout=15
+            )
+            
+            if res.status_code == 200:
+                data = res.json()
+                if data.get('data'):
+                    d = data['data'][0]
+                    # Update product
+                    p['sales'] = int(d.get('total_sale_cnt', 0))
+                    p['sales_7d'] = int(d.get('total_sale_7d_cnt', 0))
+                    p['sales_30d'] = int(d.get('total_sale_30d_cnt', 0))
+                    p['influencer_count'] = int(d.get('total_ifl_cnt', 0))
+                    p['video_count'] = int(d.get('total_video_cnt', 0))
+                    p['commission_rate'] = float(d.get('product_commission_rate', 0))
+                    p['price'] = float(d.get('spu_avg_price', 0))
                     p['is_enriched'] = True
                     return True, f"Success: Direct ID {pid}"
         except Exception: pass
@@ -220,37 +238,45 @@ def enrich_product_data(p, i_log_prefix="", force=False):
     # 2. Search by Title
     title_raw = p.get('title') or p.get('product_name') or ""
     search_term = clean_title_for_search(title_raw)
-    brand_raw = (p.get('advertiser') or p.get('seller_name') or "Unknown").lower()
     
     if len(search_term) > 5:
         try:
-            # Search top 3 results
-            items = ApifyService.search_products(search_term, limit=3)
-            if isinstance(items, dict) and 'error' in items: return False, items['error']
-            if not isinstance(items, list): items = []
+            res = requests.get(
+                f"{BASE_URL}/product/search",
+                params={'keyword': search_term, 'size': 5},
+                auth=get_auth(),
+                timeout=15,
+                headers={'Content-Type': 'application/json'}
+            )
             
-            best_match = None
-            for cand in items:
-                cand_shop = (cand.get('shop_name') or cand.get('seller',{}).get('seller_name') or "").lower()
+            if res.status_code == 200:
+                data = res.json()
+                candidates = data.get('data', {}).get('list', [])
                 
-                # Strict Brand Match
-                if brand_raw != 'unknown' and (brand_raw in cand_shop or cand_shop in brand_raw):
-                    best_match = cand
-                    break
-            
-            # 3. Smart Fallback: Truncated Search
-            if not best_match and len(search_term.split()) > 5:
-                trunc_term = " ".join(search_term.split()[:5])
-                t_items = ApifyService.search_products(trunc_term, limit=1)
-                if isinstance(t_items, list) and t_items:
-                    best_match = t_items[0]
-
-            if best_match:
-                data = ApifyService.normalize_item(best_match)
-                if data:
-                    p.update(data)
+                best_match = None
+                brand_raw = (p.get('advertiser') or p.get('seller_name') or "Unknown").lower()
+                
+                # Check for brand match
+                for cand in candidates:
+                    cand_shop = (cand.get('shop_name') or cand.get('shop_info',{}).get('name') or "").lower()
+                    
+                    if brand_raw != 'unknown' and (brand_raw in cand_shop or cand_shop in brand_raw):
+                        best_match = cand
+                        break
+                
+                # If no brand match, define a "good enough" match? 
+                # For safety, let's just take the first result if we are confident (e.g., exact title match)
+                # But typically ads have generic titles. 
+                # Let's fallback to the first result if the title is very similar?
+                # For now, stick to brand match to be safe.
+                
+                if best_match:
+                    p['sales'] = int(best_match.get('total_sale_cnt', 0))
+                    p['sales_7d'] = int(best_match.get('total_sale_7d_cnt', 0))
+                    p['influencer_count'] = int(best_match.get('total_ifl_cnt', 0))
+                    p['video_count'] = int(best_match.get('total_video_cnt', 0))
                     p['is_enriched'] = True
-                    return True, f"Success: Found '{data['product_name'][:20]}...'"
+                    return True, f"Success: Found '{best_match.get('title')[:20]}...'"
                     
         except Exception as e:
             return False, f"Error: {str(e)}"
@@ -3606,6 +3632,10 @@ def get_stats():
                 'freeship': freeship_count,
                 'avg_commission': avg_comm,
                 'ad_winners': Product.query.filter(
+                    db.or_(
+                        db.and_(
+                            Product.sales_7d > 50,
+                            Product.influencer_count < 5,
                             Product.video_count < 5
                         ),
                         Product.scan_type.in_(['apify_ad', 'daily_virals'])
