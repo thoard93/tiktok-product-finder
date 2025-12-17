@@ -86,6 +86,25 @@ def resolve_tiktok_share_link(url):
     except Exception as e:
         print(f"API Resolution Error: {e}")
     
+    # Fallback: Manual Redirect Follow (Standard HTTP)
+    try:
+        print(f"Fallback: Resolving redirect manually for {url}")
+        # Use a real user agent to avoid bot blocking
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        res = requests.head(url, allow_redirects=True, headers=headers, timeout=10)
+        final_url = res.url
+        print(f"Resolved URL: {final_url}")
+        
+        # Extract ID from final URL
+        match = re.search(r'product/(\d+)', final_url)
+        if match: return match.group(1)
+        
+        match = re.search(r'view/product/(\d+)', final_url)
+        if match: return match.group(1)
+        
+    except Exception as e:
+        print(f"Manual Resolution Error: {e}")
+
     return None
 
 def get_product_from_db(product_id):
