@@ -463,11 +463,29 @@ async def on_message(message):
                 return
             
             # Fetch product (database first, then API)
+            # Fetch product (database first, then API)
             product = get_product_data(product_id)
             
+            # If not in DB, try to fetch from API
+            if not product:
+                status_msg = await message.reply(f"🔎 Fetching fresh data from EchoTik for `{product_id}`...", mention_author=False)
+                
+                # We need a dummy dict to pass to enrich_product_data since it expects a dict
+                dummy_p = {'product_id': product_id}
+                success, msg = enrich_product_data(dummy_p, i_log_prefix="[BotAutoLookup]", force=True)
+                
+                await status_msg.delete() # Remove searching message
+                
+                if success:
+                    # Save it to DB so get_product_data works
+                    new_prod = save_product_to_db(dummy_p) 
+                    if new_prod:
+                        db.session.commit()
+                        product = get_product_data(product_id)
+
             if not product:
                 await message.add_reaction('❌')
-                await message.reply(f"❌ Could not find product `{product_id}` in the database.", mention_author=False)
+                await message.reply(f"❌ Could not find product `{product_id}` in database or EchoTik.", mention_author=False)
                 return
             
             # Create and send embed
