@@ -297,7 +297,14 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                                     print(f"DEBUG: Extraction Error: {e}")
                                 
                                 break
+                                break
                     
+                    # Validation: If stats are still 0, consider it a parse failure
+                    if p['price'] == 0.0 and p['sales'] == 0:
+                        keys_found = list(d.keys())
+                        debug_raw = json.dumps(d, default=str)[:500]
+                        return False, f"Empty Data (200 OK). Keys: {keys_found}. Sample: {debug_raw}"
+
                     # Name & Image
                     p['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or p.get('product_name')
                     p['image_url'] = d.get('cover') or d.get('image_url') or p.get('image_url')
