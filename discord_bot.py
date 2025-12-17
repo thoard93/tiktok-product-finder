@@ -542,7 +542,6 @@ async def on_message(message):
                 else:
                     await message.reply(f"❌ Echotik search failed: {msg}", mention_author=False)
                     return
-                        product = get_product_data(product_id)
 
             if not product:
                 await message.add_reaction('❌')
@@ -618,7 +617,10 @@ async def lookup_command(ctx, *, query: str = None):
             # Save it to DB so get_product_data works
             new_prod = save_product_to_db(dummy_p) 
             if new_prod:
-                product = get_product_data(product_id)
+                product = new_prod
+        else:
+             await status_msg.edit(content=f"❌ Echotik search failed: {msg}")
+             return
     
     if not product:
         await ctx.message.add_reaction('❌')
