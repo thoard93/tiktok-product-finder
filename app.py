@@ -244,6 +244,8 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     p['video_count'] = int(d.get('total_video_cnt', 0))
                     p['commission_rate'] = float(d.get('product_commission_rate', 0))
                     p['price'] = float(d.get('spu_avg_price', 0))
+                    p['product_name'] = d.get('title') or d.get('product_title') or p.get('product_name') # Catch name
+                    p['image_url'] = d.get('cover') or d.get('image_url') or p.get('image_url') # Catch image
                     p['is_enriched'] = True
                     return True, f"Success: Direct ID {pid}"
         except Exception: pass
@@ -5198,7 +5200,11 @@ def settings_page():
 @app.route('/admin')
 @login_required
 def admin_dashboard_page():
-    return send_from_directory('pwa', 'admin_v4.html')
+    resp = make_response(send_from_directory('pwa', 'admin_v4.html'))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 
 
