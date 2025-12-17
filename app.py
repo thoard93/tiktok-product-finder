@@ -1309,10 +1309,11 @@ def get_seller_products(seller_id, page=1, page_size=10):
             f"{BASE_URL}/product/list", # Fixed endpoint
             params={
                 "seller_id": seller_id,
-                "page": page,
-                "size": page_size,
-                "sort_by": "total_sale_7d_cnt",  # 7-day Sales
-                "sort_order": "desc"             # Descending
+                "page_num": page,              # Updated param name
+                "page_size": page_size,        # Updated param name
+                "region": "US",                # Required field
+                "sort_by": "total_sale_7d_cnt",  
+                "sort_order": "desc"             
             },
             auth=get_auth(),
             timeout=30
