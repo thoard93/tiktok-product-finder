@@ -346,9 +346,12 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     return True, "Enriched via Realtime v3"
                 else:
                     # API returned 200 but no data (ID invalid or not tracked yet)
-                    if force: return False, f"EchoTik ID Not Found: {res.json()}"
+                    print(f"DEBUG: Realtime ID invalid/notfound, trying DB API just in case...")
+                    return fetch_cached_product_data(p, i_log_prefix)
             else:
-                if force: return False, f"EchoTik Error {res.status_code}: {res.text}"
+                 # Any non-200 status (500, 429, etc) -> Fallback to DB
+                 print(f"DEBUG: Realtime API status {res.status_code}, falling back to DB...")
+                 return fetch_cached_product_data(p, i_log_prefix)
 
         except Exception as e: 
             print(f"Enrichment Error: {e}")
