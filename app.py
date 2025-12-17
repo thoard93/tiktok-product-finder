@@ -4951,12 +4951,14 @@ def image_proxy(product_id):
 @app.route('/api/products', methods=['GET'])
 @login_required
 def api_products():
-    """Main product listing API with filtering, sorting, and pagination"""
+    """Unified product listing API with filtering, sorting, and pagination"""
     try:
-        # 1. Parsing Parameters
+        # 1. Parsing Parameters (Supporting aliases for frontend compatibility)
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 24, type=int)
-        sort_by = request.args.get('sort', 'newest')
+        if 'limit' in request.args: per_page = request.args.get('limit', type=int)
+        
+        sort_by = request.args.get('sort') or request.args.get('sort_by') or 'newest'
         
         # Filters
         min_sales = request.args.get('min_sales', type=int)
@@ -4967,7 +4969,13 @@ def api_products():
         scan_type = request.args.get('scan_type')
         seller_id = request.args.get('seller_id')
         keyword = request.args.get('keyword')
-        is_favorite = request.args.get('favorite', 'false').lower() == 'true'
+        
+        # Favorite alias
+        is_favorite = (request.args.get('favorite', 'false').lower() == 'true' or 
+                       request.args.get('favorites_only', 'false').lower() == 'true')
+
+        # Gems alias
+        is_gems = request.args.get('gems_only', 'false').lower() == 'true'
 
         # 2. Build Query
         query = Product.query
@@ -4975,15 +4983,20 @@ def api_products():
         if is_favorite:
             query = query.filter(Product.is_favorite == True)
         
+        if is_gems:
+            # Selling well, low competition
+            query = query.filter(
+                Product.sales_7d >= 20,
+                Product.influencer_count <= 30,
+                Product.influencer_count >= 1,
+                Product.video_count >= 1
+            )
+
         if seller_id:
             query = query.filter(Product.seller_id == seller_id)
             
         if scan_type:
-            if scan_type == 'daily_virals':
-                 # Specific hack for DV if needed, otherwise general filter
-                 query = query.filter(Product.scan_type == 'daily_virals')
-            else:
-                 query = query.filter(Product.scan_type == scan_type)
+             query = query.filter(Product.scan_type == scan_type)
 
         if keyword:
             query = query.filter(db.or_(
@@ -5007,18 +5020,20 @@ def api_products():
             query = query.filter(Product.video_count <= max_vids)
 
         # 3. Apply Sorting
-        if sort_by == 'sales_desc':
+        if sort_by in ['sales_desc', 'sales_7d']:
             query = query.order_by(Product.sales_7d.desc())
         elif sort_by == 'sales_asc':
             query = query.order_by(Product.sales_7d.asc())
         elif sort_by == 'inf_asc':
             query = query.order_by(Product.influencer_count.asc())
-        elif sort_by == 'inf_desc':
+        elif sort_by in ['inf_desc', 'influencer_count']:
             query = query.order_by(Product.influencer_count.desc())
-        elif sort_by == 'commission':
+        elif sort_by in ['commission', 'commission_rate']:
             query = query.order_by(Product.commission_rate.desc())
-        elif sort_by == 'newest':
+        elif sort_by in ['newest', 'first_seen']:
             query = query.order_by(Product.first_seen.desc())
+        elif sort_by == 'video_count':
+            query = query.order_by(Product.video_count.desc())
         else:
             query = query.order_by(Product.first_seen.desc())
 
@@ -5029,6 +5044,7 @@ def api_products():
         return jsonify({
             'success': True,
             'total': total,
+            'count': total, # Compatibility
             'page': page,
             'per_page': per_page,
             'products': [p.to_dict() for p in products]
@@ -5536,59 +5552,6 @@ def api_get_stats():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/products', methods=['GET'])
-@login_required
-def api_products():
-    """Unified Products API with robust filtering and pagination"""
-    page = int(request.args.get('page', 1))
-    limit = int(request.args.get('limit', 20))
-    offset = (page - 1) * limit
-    
-    query = Product.query
-    
-    # Garbage Filter (exclude debug/filler data)
-    query = query.filter(
-        ~Product.product_name.ilike('%not for sale%'),
-        ~Product.product_name.ilike('%live only%'),
-        ~Product.seller_name.ilike('Debug%'),
-        ~Product.seller_name.ilike('Keys%')
-    )
-    
-    # Logic Filters
-    if request.args.get('favorites_only') == 'true':
-        query = query.filter_by(is_favorite=True)
-        
-    if request.args.get('gems_only') == 'true':
-        # Selling well, low competition
-        query = query.filter(
-            Product.sales_7d >= 20,
-            Product.influencer_count <= 30,
-            Product.influencer_count >= 1,
-            Product.video_count >= 1
-        )
-        
-    # Sorting
-    sort_by = request.args.get('sort_by', 'sales_7d')
-    if sort_by == 'sales_7d':
-        query = query.order_by(Product.sales_7d.desc())
-    elif sort_by == 'video_count':
-        query = query.order_by(Product.video_count.desc())
-    elif sort_by == 'commission_rate':
-        query = query.order_by(Product.commission_rate.desc())
-    elif sort_by == 'first_seen':
-        query = query.order_by(Product.first_seen.desc())
-    else:
-        query = query.order_by(Product.sales_7d.desc())
-    
-    total = query.count()
-    products = query.offset(offset).limit(limit).all()
-    
-    return jsonify({
-        'success': True,
-        'count': total,
-        'page': page,
-        'products': [p.to_dict() for p in products]
-    })
 
 # Aliases for compatibility
 @app.route('/api/debug/check-product/<path:product_id>')
