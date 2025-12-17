@@ -5825,39 +5825,7 @@ def api_oos_products():
     })
 
 
-@app.route('/api/admin/products/nuke', methods=['POST'])
-@login_required
-@admin_required
-def admin_nuke_products():
-    """⚠️ DANGER: Delete ALL products from database"""
-    try:
-        data = request.get_json() or {}
-        keep_favorites = data.get('keep_favorites', False)
-        
-        if keep_favorites:
-            deleted = Product.query.filter(Product.is_favorite == False).delete()
-        else:
-            deleted = Product.query.delete()
-            
-        db.session.commit()
-        log_activity(session.get('user_id'), 'admin_nuke', {'count': deleted, 'kept_favorites': keep_favorites})
-        return jsonify({'success': True, 'deleted': deleted})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/admin/stats', methods=['GET'])
-@login_required
-@admin_required
-def admin_stats():
-    """Get admin dashboard stats"""
-    user_count = User.query.count()
-    product_count = Product.query.count()
-    return jsonify({
-        'users': user_count,
-        'products': product_count,
-        'status': 'online' 
-    })
 
 @app.route('/api/refresh-all-products', methods=['GET', 'POST'])
 def refresh_all_products():
