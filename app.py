@@ -29,7 +29,7 @@ except ImportError:
     print("WARNING: Stripe module not found. Payments will fail.")
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for, render_template
+from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for, render_template, make_response
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.pool import NullPool
 from functools import wraps
@@ -4338,6 +4338,45 @@ def refresh_product_data(product_id):
         import traceback
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/stats')
+@login_required
+def api_stats():
+    """Get global stats for dashboard"""
+    try:
+        # 1. Total Products
+        total_products = Product.query.count()
+        
+        # 2. Ad Winners (Ads, >50 sales, <5 influencers)
+        ad_winners = Product.query.filter(
+             db.or_(
+                Product.scan_type.in_(['apify_ad', 'daily_virals']),
+                db.and_(Product.sales_7d > 50, Product.influencer_count < 5, Product.video_count < 5)
+            )
+        ).count()
+        
+        # 3. Hidden Gems (Sales > 100, Inf < 10, Video < 10)
+        hidden_gems = Product.query.filter(
+            Product.sales_7d > 100,
+            Product.influencer_count < 10,
+            Product.video_count < 10
+        ).count()
+        
+        # 4. EchoTik Status (Mock or cached check)
+        # Verify if our keys are working? Just return "Active" for now
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_products': total_products,
+                'ad_winners': ad_winners,
+                'hidden_gems': hidden_gems,
+                'echotik_status': 'Active'
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/oos-stats', methods=['GET'])

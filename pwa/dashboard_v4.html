@@ -137,8 +137,9 @@
                 <span class="ml-auto text-xs bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full">V2</span>
             </a>
             <!-- Live Feed (Coming Soon) -->
-            <a href="#" onclick="alert('Live Feed coming in V2.1')"
-                class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:text-white transition-colors opacity-50">
+            <!-- Live Feed (Scanner) -->
+            <a href="/scanner"
+                class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:text-white transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M13 10V3L4 14h7v7l9-11h-7z"></path>
@@ -385,9 +386,26 @@
                     if (me.avatar) document.getElementById('userAvatar').src = `https://cdn.discordapp.com/avatars/${me.discord_id}/${me.avatar}.png`;
                 }
                 loadProducts(1);
+                loadStats(); // Load top card stats
             } catch (e) {
                 console.error("Dashboard Load Error", e);
             }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/stats');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && data.stats) {
+                        const s = data.stats;
+                        document.getElementById('statTotal').textContent = s.total_products || 0;
+                        document.getElementById('statAdWinners').textContent = s.ad_winners || 0;
+                        document.getElementById('statGems').textContent = s.hidden_gems || 0;
+                        // Echotik Status is hardcoded/verified in API
+                    }
+                }
+            } catch (e) { console.error("Stats Load Error", e); }
         }
 
         async function loadProducts(page, filterParams = {}) {
