@@ -157,24 +157,23 @@
                 alert('❌ Network Error: ' + e);
             }
         }
-    </script>
-    async function loadAdmin() {
-    try {
-    // Fetch Stats (Mocked or Real if API exists)
-    // We'll use product stats API
-    const pRes = await fetch('/api/oos-stats'); // Reuse this for total products
-    if (pRes.ok) {
-    const data = await pRes.json();
-    document.getElementById('statProducts').textContent = data.stats.total_products;
-    }
 
-    // Fetch Users (We might not have a public user list API, so mocking cur user)
-    const meRes = await fetch('/api/me');
-    if (meRes.ok) {
-    const me = await meRes.json();
-    document.getElementById('statUsers').textContent = "1 (You)";
+        try {
+            // Fetch Stats (Mocked or Real if API exists)
+            // We'll use product stats API
+            const pRes = await fetch('/api/oos-stats'); // Reuse this for total products
+            if (pRes.ok) {
+                const data = await pRes.json();
+                document.getElementById('statProducts').textContent = data.stats.total_products;
+            }
 
-    document.getElementById('userTable').innerHTML = `
+            // Fetch Users (We might not have a public user list API, so mocking cur user)
+            const meRes = await fetch('/api/me');
+            if (meRes.ok) {
+                const me = await meRes.json();
+                document.getElementById('statUsers').textContent = "1 (You)";
+
+                document.getElementById('userTable').innerHTML = `
     <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
         <td class="py-3 px-4 flex items-center gap-3">
             <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.avatar}.png"
@@ -189,24 +188,24 @@
         </td>
     </tr>
     `;
-    }
-    } catch (e) {
-    console.error(e);
-    }
-    }
-
-    async function runCleanup() {
-    if (!confirm("Run cleanup? This deletes 0% commission products.")) return;
-    // Call API
-    try {
-    const res = await fetch('/api/cleanup', { method: 'POST' });
-    const data = await res.json();
-    alert(data.message);
-    loadAdmin();
-    } catch (e) { alert("Error: " + e); }
+            }
+        } catch (e) {
+            console.error(e);
+        }
     }
 
-    loadAdmin();
+        async function runCleanup() {
+            if (!confirm("Run cleanup? This deletes 0% commission products.")) return;
+            // Call API
+            try {
+                const res = await fetch('/api/cleanup', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+                loadAdmin();
+            } catch (e) { alert("Error: " + e); }
+        }
+
+        loadAdmin();
     </script>
 </body>
 
