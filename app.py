@@ -1306,13 +1306,13 @@ def get_seller_products(seller_id, page=1, page_size=10):
     """
     try:
         response = requests.get(
-            f"{BASE_URL}/shop/product/list", # Updated to standard v3 path
+            f"{BASE_URL}/product/list", # Fixed endpoint
             params={
-                "shop_id": seller_id, # v3 usually uses shop_id
-                "page_num": page,
-                "page_size": page_size,
-                "shop_product_sort_field": 4,  # 7-day Sales
-                "sort_type": 1                    # Descending
+                "seller_id": seller_id,
+                "page": page,
+                "size": page_size,
+                "sort_by": "total_sale_7d_cnt",  # 7-day Sales
+                "sort_order": "desc"             # Descending
             },
             auth=get_auth(),
             timeout=30
