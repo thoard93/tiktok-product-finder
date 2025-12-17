@@ -1638,18 +1638,19 @@ def scan_top_brands():
                         continue
                     
                     # Get influencer count and sales
-                    influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
-                    total_sales = int(p.get('total_sale_cnt', 0) or 0)
-                    sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
-                    sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+                    # Get influencer count and sales (support V3 CamelCase)
+                    influencer_count = int(p.get('total_ifl_cnt') or p.get('totalIflCnt') or 0)
+                    total_sales = int(p.get('total_sale_cnt') or p.get('totalSaleCnt') or 0)
+                    sales_7d = int(p.get('total_sale_7d_cnt') or p.get('totalSale7dCnt') or 0)
+                    sales_30d = int(p.get('total_sale_30d_cnt') or p.get('totalSale30dCnt') or 0)
                     
                     # Get commission and video stats
-                    commission_rate = float(p.get('product_commission_rate', 0) or 0)
-                    video_count = int(p.get('total_video_cnt', 0) or 0)
-                    video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
-                    video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
-                    live_count = int(p.get('total_live_cnt', 0) or 0)
-                    views_count = int(p.get('total_views_cnt', 0) or 0)
+                    commission_rate = float(p.get('product_commission_rate') or p.get('productCommissionRate') or 0)
+                    video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
+                    video_7d = int(p.get('total_video_7d_cnt') or p.get('totalVideo7dCnt') or 0)
+                    video_30d = int(p.get('total_video_30d_cnt') or p.get('totalVideo30dCnt') or 0)
+                    live_count = int(p.get('total_live_cnt') or p.get('totalLiveCnt') or 0)
+                    views_count = int(p.get('total_views_cnt') or p.get('totalViewsCnt') or 0)
                     
                     # Filter: Must be in target influencer range AND have recent sales
                     if influencer_count < min_influencers or influencer_count > max_influencers:
@@ -1868,16 +1869,16 @@ def quick_scan():
                 if not product_id:
                     continue
                 
-                influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
-                total_sales = int(p.get('total_sale_cnt', 0) or 0)
-                sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
-                sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
-                commission_rate = float(p.get('product_commission_rate', 0) or 0)
-                video_count = int(p.get('total_video_cnt', 0) or 0)
-                video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
-                video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
-                live_count = int(p.get('total_live_cnt', 0) or 0)
-                views_count = int(p.get('total_views_cnt', 0) or 0)
+                influencer_count = int(p.get('total_ifl_cnt') or p.get('totalIflCnt') or 0)
+                total_sales = int(p.get('total_sale_cnt') or p.get('totalSaleCnt') or 0)
+                sales_7d = int(p.get('total_sale_7d_cnt') or p.get('totalSale7dCnt') or 0)
+                sales_30d = int(p.get('total_sale_30d_cnt') or p.get('totalSale30dCnt') or 0)
+                commission_rate = float(p.get('product_commission_rate') or p.get('productCommissionRate') or 0)
+                video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
+                video_7d = int(p.get('total_video_7d_cnt') or p.get('totalVideo7dCnt') or 0)
+                video_30d = int(p.get('total_video_30d_cnt') or p.get('totalVideo30dCnt') or 0)
+                live_count = int(p.get('total_live_cnt') or p.get('totalLiveCnt') or 0)
+                views_count = int(p.get('total_views_cnt') or p.get('totalViewsCnt') or 0)
                 
                 # Filters
                 if influencer_count < min_influencers or influencer_count > max_influencers:
@@ -1918,15 +1919,15 @@ def quick_scan():
                         product_name=p.get('product_name', ''),
                         seller_id=seller_id,
                         seller_name=seller_name,
-                        gmv=float(p.get('total_sale_gmv_amt', 0) or 0),
-                        gmv_30d=float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+                        gmv=float(p.get('total_sale_gmv_amt') or p.get('totalSaleGmvAmt') or 0),
+                        gmv_30d=float(p.get('total_sale_gmv_30d_amt') or p.get('totalSaleGmv30dAmt') or 0),
                         sales=total_sales,
                         sales_7d=sales_7d,
                         sales_30d=sales_30d,
                         influencer_count=influencer_count,
                         commission_rate=commission_rate,
-                        price=float(p.get('spu_avg_price', 0) or 0),
-                        image_url=image_url,
+                        price=float(p.get('spu_avg_price') or p.get('spuAvgPrice') or 0),
+                        image_url=parse_cover_url(p.get('cover_url') or p.get('cover') or p.get('item_img')),
                         video_count=video_count,
                         video_7d=video_7d,
                         video_30d=video_30d,
@@ -2301,20 +2302,21 @@ def scan_page_range(seller_id):
                         product_name=p.get('product_name', ''),
                         seller_id=seller_id,
                         seller_name=seller_name,
-                        gmv=float(p.get('total_sale_gmv_amt', 0) or 0),
-                        gmv_30d=float(p.get('total_sale_gmv_30d_amt', 0) or 0),
+                        gmv=float(p.get('total_sale_gmv_amt') or p.get('totalSaleGmvAmt') or 0),
+                        gmv_30d=float(p.get('total_sale_gmv_30d_amt') or p.get('totalSaleGmv30dAmt') or 0),
                         sales=total_sales,
                         sales_7d=sales_7d,
                         sales_30d=sales_30d,
                         influencer_count=influencer_count,
                         commission_rate=commission_rate,
-                        price=float(p.get('spu_avg_price', 0) or 0),
-                        image_url=image_url,
+                        price=float(p.get('spu_avg_price') or p.get('spuAvgPrice') or 0),
+                        image_url=parse_cover_url(p.get('cover_url') or p.get('cover') or p.get('item_img')),
                         video_count=video_count,
                         video_7d=video_7d,
                         video_30d=video_30d,
                         live_count=live_count,
                         views_count=views_count,
+                        has_free_shipping=p.get('free_shipping', 0) == 1,
                         scan_type='page_range'
                     )
                     db.session.add(product)
