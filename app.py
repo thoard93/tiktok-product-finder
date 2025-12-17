@@ -298,10 +298,18 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                                 
                                 break
                                 break
+                                    print(f"DEBUG: Extraction Error: {e}")
+                                
+                                break
                     
-                    # Validation: If stats are still 0, consider it a parse failure
+                    # Validation: Check for common failure modes
                     if p['price'] == 0.0 and p['sales'] == 0:
                         keys_found = list(d.keys())
+                        # Check for WAF (Web Application Firewall) Block
+                        for k, v in d.items():
+                             if isinstance(v, dict) and 'waf_decision' in v:
+                                 return False, "TikTok Blocked Request (WAF/Captcha Catch). Try again later or use a different link."
+
                         debug_raw = json.dumps(d, default=str)[:500]
                         return False, f"Empty Data (200 OK). Keys: {keys_found}. Sample: {debug_raw}"
 
