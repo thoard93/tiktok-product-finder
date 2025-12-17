@@ -449,50 +449,14 @@ async def lookup_command(ctx, *, query: str = None):
         return
 
     # =========================================================================
-    # CREDIT SYSTEM CHECK
+    # CREDIT SYSTEM CHECK (DISABLED - FREE MODE)
     # =========================================================================
     ADMIN_IDS = [274339622119669760]
-    discord_id = str(ctx.author.id)
-    user_credits = 0
     is_admin = ctx.author.id in ADMIN_IDS
+    user_credits = "Unlimited" # Free mode
     
-    if not is_admin:
-        with app.app_context():
-            # 1. Check if user exists (Linked via Discord Login)
-            user = User.query.filter_by(discord_id=discord_id).first()
-            if not user:
-                await ctx.reply(f"❌ **Unregistered User**\nPlease log in to the web dashboard first to link your account:\n{os.environ.get('RENDER_EXTERNAL_URL', 'https://your-app.com')}/login", mention_author=False)
-                return
-
-            # 2. Check for Active API Key
-            api_key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
-            if not api_key:
-                await ctx.reply(f"❌ **No API Key Found**\nPlease generate a key at:\n{os.environ.get('RENDER_EXTERNAL_URL', 'https://your-app.com')}/developer", mention_author=False)
-                return
-            
-            # 3. Check Credits
-            if api_key.credits < 1:
-                await ctx.reply(f"❌ **Insufficient Credits**\nYou have 0 credits. Buy more at:\n{os.environ.get('RENDER_EXTERNAL_URL', 'https://your-app.com')}/developer", mention_author=False)
-                return
-                
-            # 4. Deduct Credit (Lowered to 0.03)
-            # We deduct strictly to prevent abuse.
-            try:
-                # Use 0.03 cost
-                cost = 0.03
-                if api_key.credits < cost:
-                     await ctx.reply(f"❌ **Insufficient Credits**\nYou need {cost} credits.", mention_author=False)
-                     return
-
-                api_key.credits -= cost
-                user_credits = api_key.credits
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                await ctx.reply("❌ Database error checking credits.", mention_author=False)
-                return
-    else:
-        user_credits = 999999 # Admin
+    # Logic bypassed - Bot is now free for everyone
+    # if not is_admin: ... (removed)
         
     # =========================================================================
     # EXECUTE SCAN
@@ -502,7 +466,7 @@ async def lookup_command(ctx, *, query: str = None):
     if is_admin:
         status_msg = await ctx.reply(f"👑 **Admin Bypass** | Scanning... ", mention_author=False)
     else:
-        status_msg = await ctx.reply(f"💳 **0.03 Credits Deducted** (Remaining: {user_credits:.2f}) | Scanning...", mention_author=False)
+        status_msg = await ctx.reply(f"🎁 **Free Product Lookup** | Scanning...", mention_author=False)
     
     # Try to resolve if it's a share link
     if 'vm.tiktok.com' in query or '/t/' in query:
@@ -514,32 +478,14 @@ async def lookup_command(ctx, *, query: str = None):
     
     if not product_id:
         await ctx.message.add_reaction('❌')
-        # REFUND if extraction failed?
-        # Simpler: Don't refund for bad input to discourage spam, OR refund. 
-        # Let's refund for bad input if not admin.
-        if not is_admin:
-             with app.app_context():
-                api_key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
-                if api_key:
-                    api_key.credits += 1
-                    db.session.commit()
-                    
-        await status_msg.edit(content="❌ Could not extract product ID from your input. (Credit Refunded)")
+        await status_msg.edit(content="❌ Could not extract product ID from your input.")
         return
     
     product = get_product_data(product_id)
     
     if not product:
         await ctx.message.add_reaction('❌')
-         # REFUND if scan failed
-        if not is_admin:
-             with app.app_context():
-                api_key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
-                if api_key:
-                    api_key.credits += 0.03
-                    db.session.commit()
-                    
-        await status_msg.edit(content=f"❌ Product `{product_id}` not found/scan timed out. (Credit Refunded)")
+        await status_msg.edit(content=f"❌ Product `{product_id}` not found or scan timed out.")
         return
     
     await status_msg.delete()
