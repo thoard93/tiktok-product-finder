@@ -304,17 +304,46 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                         # Check for WAF (Web Application Firewall) Block
                         for k, v in d.items():
                              if isinstance(v, dict) and 'waf_decision' in v:
-                                 return False, "TikTok Blocked Request (WAF/Captcha Catch). Try again later or use a different link."
+                                 # Smart Retry: WAF is often region-specific. Try rotating region.
+                                 current_region = p.get('region', 'US')
+                                 fallback_map = {'US': 'GB', 'GB': 'DE'}
+                                 next_region = fallback_map.get(current_region)
+                                 
+                                 if next_region:
+                                     print(f"DEBUG: WAF blocked {current_region}, failing over to {next_region}...")
+                                     p['region'] = next_region
+                                     # Recursive retry with new region
+                                     return enrich_product_data(p, i_log_prefix, force=True)
+
+                                 # If WAF persists or no next region, FALLBACK TO DB API
+                                 print(f"DEBUG: Realtime WAF blocked. Attempting Cache DB API...")
+                                 return fetch_cached_product_data(p, i_log_prefix)
 
                         debug_raw = json.dumps(d, default=str)[:500]
                         return False, f"Empty Data (200 OK). Keys: {keys_found}. Sample: {debug_raw}"
-
+                    
+                    # ---------------------------------------------------------
+                    # PARSER for REALTIME V3 "Page Props" Structure
+                    # ---------------------------------------------------------
                     # Name & Image
                     p['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or p.get('product_name')
                     p['image_url'] = d.get('cover') or d.get('image_url') or p.get('image_url')
+                    
+                    if p.get('is_mobile'):
+                         # Mobile structure is usually simpler or flat
+                         p['sales'] = int(d.get('item_sold_count', 0))
+                         p['price'] = float(d.get('price', {}).get('real_price', {}).get('price_val', 0))
+                    else:
+                        # Desktop/Universal Parse
+                        pass # relying on common keys extracted above or failing validation
+                    
+                    # Final Validation
+                    if p['price'] == 0.0 and p['sales'] == 0:
+                         # Try fallback DB if parser failed but no WAF
+                         return fetch_cached_product_data(p, i_log_prefix)
 
                     p['is_enriched'] = True
-                    return True, f"Success: Direct ID {pid}"
+                    return True, "Enriched via Realtime v3"
                 else:
                     # API returned 200 but no data (ID invalid or not tracked yet)
                     if force: return False, f"EchoTik ID Not Found: {res.json()}"
@@ -326,9 +355,70 @@ def enrich_product_data(p, i_log_prefix="", force=False):
             if force: return False, f"Enrichment Exception: {str(e)}"
             pass
 
+    # If Realtime failed/skipped, Try DB API (but only if we have a PID)
+    if pid:
+        return fetch_cached_product_data(p, i_log_prefix)
+
     # 2. Search by Title
     title_raw = p.get('title') or p.get('product_name') or ""
     search_term = clean_title_for_search(title_raw)
+
+def fetch_cached_product_data(p, i_log_prefix):
+    """Fallback: Fetch from EchoTik Cached Database API"""
+    pid = p.get('product_id')
+    if not pid: return False, "No Product ID"
+    
+    # Strip prefixes for DB API
+    target_id = pid
+    if target_id.startswith('shop_'): target_id = target_id.replace('shop_', '')
+    
+    print(f"{i_log_prefix}Fallback: Fetching from DB API for {target_id}")
+    
+    try:
+        # Docs: GET /api/v3/echotik/product/detail?product_ids=...
+        res = requests.get(
+            f"{ECHOTIK_V3_BASE}/product/detail",
+            params={'product_ids': target_id},
+            auth=get_auth(),
+            timeout=20
+        )
+        
+        if res.status_code == 200:
+            data = res.json()
+            if data.get('data'):
+                # DB API returns a list of objects
+                d_list = data['data']
+                if isinstance(d_list, list) and len(d_list) > 0:
+                    d = d_list[0]
+                    # Map DB API fields -> Our Model
+                    # Docs: total_sale_cnt, spu_avg_price, product_name, cover_url
+                    p['product_name'] = d.get('product_name')
+                    p['image_url'] = d.get('cover_url')
+                    if p['image_url'] and p['image_url'].startswith('['):
+                         # Often returns JSON string for images
+                         try:
+                             import json
+                             imgs = json.loads(p['image_url'])
+                             if imgs and len(imgs) > 0: p['image_url'] = imgs[0].get('url')
+                         except: pass
+
+                    p['price'] = float(d.get('spu_avg_price', 0))
+                    p['sales'] = int(d.get('total_sale_cnt', 0))
+                    p['sales_7d'] = int(d.get('total_sale_7d_cnt', 0))
+                    p['revenue'] = float(d.get('total_sale_gmv_amt', 0))
+                    p['commission_rate'] = float(d.get('product_commission_rate', 0)) / 100.0 
+                    
+                    # Extra stats
+                    p['video_count'] = int(d.get('total_video_cnt', 0))
+                    p['influencer_count'] = int(d.get('total_ifl_cnt', 0))
+
+                    print(f"DEBUG: Extracted DB Data - {p['product_name']} S:{p['sales']} P:{p['price']}")
+                    p['is_enriched'] = True
+                    return True, "Enriched via Database v3"
+    except Exception as e:
+        print(f"DEBUG: DB API Error: {e}")
+        
+    return False, "All enrichment methods failed"
     
     if len(search_term) > 5:
         try:
