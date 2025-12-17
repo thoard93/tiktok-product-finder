@@ -1877,7 +1877,7 @@ def quick_scan():
     try:
         brand_rank = request.args.get('brand_rank', 1, type=int)
         pages = min(request.args.get('pages', 3, type=int), 10) # Default to 3, cap at 10 to avoid timeout
-        min_influencers = request.args.get('min_influencers', 1, type=int) # Default to 1 for safety net
+        min_influencers = request.args.get('min_influencers', 0, type=int) # Default to 0 for maximum discovery
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
         max_videos = request.args.get('max_videos', None, type=int)
@@ -1937,16 +1937,16 @@ def quick_scan():
                 
                 # Filters
                 if influencer_count < min_influencers or influencer_count > max_influencers:
-                    print(f"DEBUG: Skipping {product_id} - Inf count {influencer_count} out of range ({min_influencers}-{max_influencers})")
+                    print(f"DEBUG: Skipping {product_id} - Inf count {influencer_count} out of range ({min_influencers}-{max_influencers}) | Videos: {video_count}")
                     continue
                 if sales_7d < min_sales:
-                    print(f"DEBUG: Skipping {product_id} - Sales 7d {sales_7d} < {min_sales}")
+                    print(f"DEBUG: Skipping {product_id} - Sales 7d {sales_7d} < {min_sales} | Videos: {video_count}")
                     continue
                 # commission_rate filter REMOVED per user request to allow 0% items
                 
                 # Require at least 3 videos (Stronger safety net per user request)
                 if video_count < 3:
-                    print(f"DEBUG: Skipping {product_id} - Video count {video_count} < 3")
+                    print(f"DEBUG: Skipping {product_id} - Video count {video_count} < 3 | Inf: {influencer_count}")
                     continue
                 
                 # Video count max filter (if set)

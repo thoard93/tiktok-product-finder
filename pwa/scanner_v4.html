@@ -219,8 +219,12 @@
                         <input type="number" id="min-sales" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Min Influencers (Safety Net)</label>
-                        <input type="number" id="min-influencers" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-sm text-slate-400 mb-2">Min Influencers</label>
+                        <input type="number" id="min-influencers" value="0" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Max Influencers</label>
+                        <input type="number" id="max-influencers" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                     <div>
                         <label class="block text-sm text-slate-400 mb-2">Max Video Count (Hidden Gem)</label>
@@ -289,11 +293,13 @@
             const numBrands = document.getElementById('num-brands').value;
             const minSales = document.getElementById('min-sales').value;
             const maxVideos = document.getElementById('max-videos').value;
+            const minInfluencers = document.getElementById('min-influencers').value;
+            const maxInfluencers = document.getElementById('max-influencers').value;
             const pages = document.getElementById('pages-per-brand').value;
 
             btn.disabled = true;
             btn.innerText = "Scanning...";
-            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands, Min Sales ${minSales}, Max Videos ${maxVideos})...`);
+            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands, Min Sales ${minSales}, Max Videos ${maxVideos}, Min Inf ${minInfluencers}, Max Inf ${maxInfluencers})...`);
 
             try {
                 // Loop simulation for UI feedback
@@ -301,7 +307,7 @@
                     const rank = parseInt(startRank) + i;
                     log(`Scanning Brand Rank #${rank}...`);
 
-                    const res = await fetch(`/api/quick-scan?brand_rank=${rank}&pages=${pages}&min_sales=${minSales}&max_videos=${maxVideos}`);
+                    const res = await fetch(`/api/quick-scan?brand_rank=${rank}&pages=${pages}&min_sales=${minSales}&max_videos=${maxVideos}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}`);
                     const data = await res.json();
 
                     if (data.result) {
