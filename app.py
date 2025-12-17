@@ -5200,11 +5200,7 @@ def settings_page():
 def admin_dashboard_page():
     return send_from_directory('pwa', 'admin_v4.html')
 
-@app.route('/developer')
-@login_required
-def developer_page():
-    # Placeholder for developer tools
-    return "<h1>Developer Dashboard Preview</h1><p>Coming Soon</p><a href='/'>Back</a>"
+
 
 @app.route('/api/debug/check-product/<path:product_id>')
 @login_required
@@ -6381,17 +6377,11 @@ def admin_create_key():
             'success': True,
             'api_key': new_key_str,
             'credits': credits,
-            'message': 'Key generated! Save it now, it cannot be retrieved later (hashed? no, stored plain for now for simplicity)'
+            'message': 'Key generated! Save it now, it cannot be retrieved later'
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# =============================================================================
-# USER DEVELOPER ROUTES
-# =============================================================================
 # =============================================================================
 # USER DEVELOPER ROUTES
 # =============================================================================
