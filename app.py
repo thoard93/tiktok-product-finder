@@ -253,14 +253,18 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     # Name & Image
                     p['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or p.get('product_name')
                     p['image_url'] = d.get('cover') or d.get('image_url') or p.get('image_url')
-                    
-                    # Stock Removed as requested
-                    # p['live_count'] = ...
-                    
+
                     p['is_enriched'] = True
                     return True, f"Success: Direct ID {pid}"
+                else:
+                    # API returned 200 but no data (ID invalid or not tracked yet)
+                    if force: return False, f"EchoTik ID Not Found: {res.json()}"
+            else:
+                if force: return False, f"EchoTik Error {res.status_code}: {res.text}"
+
         except Exception as e: 
             print(f"Enrichment Error: {e}")
+            if force: return False, f"Enrichment Exception: {str(e)}"
             pass
 
     # 2. Search by Title
