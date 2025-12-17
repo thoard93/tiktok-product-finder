@@ -1320,7 +1320,13 @@ def get_seller_products(seller_id, page=1, page_size=10):
         )
         data = response.json()
         if data.get('code') == 0:
-            return data.get('data', [])
+            items = data.get('data', [])
+            if items and len(items) > 0:
+                print(f"DEBUG: [get_seller_products] Sample Item Keys: {list(items[0].keys())}")
+                # Log a small sample of the first item to verify values
+                import json
+                print(f"DEBUG: [get_seller_products] Sample Item: {json.dumps(items[0], default=str)[:300]}...")
+            return items
         print(f"Seller products error for {seller_id}: {data}")
         return []
     except Exception as e:
@@ -1633,11 +1639,12 @@ def scan_top_brands():
                 brand_result['products_scanned'] += len(products)
                 
                 for p in products:
-                    product_id = p.get('product_id', '')
+                    # Support both productId (V3) and product_id (Legacy)
+                    product_id = p.get('product_id') or p.get('productId') or p.get('id')
                     if not product_id:
                         continue
+                    product_id = str(product_id)
                     
-                    # Get influencer count and sales
                     # Get influencer count and sales (support V3 CamelCase)
                     influencer_count = int(p.get('total_ifl_cnt') or p.get('totalIflCnt') or 0)
                     total_sales = int(p.get('total_sale_cnt') or p.get('totalSaleCnt') or 0)
@@ -1645,7 +1652,10 @@ def scan_top_brands():
                     sales_30d = int(p.get('total_sale_30d_cnt') or p.get('totalSale30dCnt') or 0)
                     
                     # Get commission and video stats
-                    commission_rate = float(p.get('product_commission_rate') or p.get('productCommissionRate') or 0)
+                    # EchoTik V3 often returns commission as 15 for 15%
+                    raw_commission = float(p.get('product_commission_rate') or p.get('productCommissionRate') or 0)
+                    commission_rate = (raw_commission / 100.0) if raw_commission > 1 else raw_commission
+                    
                     video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
                     video_7d = int(p.get('total_video_7d_cnt') or p.get('totalVideo7dCnt') or 0)
                     video_30d = int(p.get('total_video_30d_cnt') or p.get('totalVideo30dCnt') or 0)
@@ -1865,15 +1875,21 @@ def quick_scan():
             result['products_scanned'] += len(products)
             
             for p in products:
-                product_id = p.get('product_id', '')
+                # Support both productId (V3) and product_id (Legacy)
+                product_id = p.get('product_id') or p.get('productId') or p.get('id')
                 if not product_id:
                     continue
+                product_id = str(product_id)
                 
                 influencer_count = int(p.get('total_ifl_cnt') or p.get('totalIflCnt') or 0)
                 total_sales = int(p.get('total_sale_cnt') or p.get('totalSaleCnt') or 0)
                 sales_7d = int(p.get('total_sale_7d_cnt') or p.get('totalSale7dCnt') or 0)
                 sales_30d = int(p.get('total_sale_30d_cnt') or p.get('totalSale30dCnt') or 0)
-                commission_rate = float(p.get('product_commission_rate') or p.get('productCommissionRate') or 0)
+                
+                # Normalize Commission (divide by 100 if whole number)
+                raw_commission = float(p.get('product_commission_rate') or p.get('productCommissionRate') or 0)
+                commission_rate = (raw_commission / 100.0) if raw_commission > 1 else raw_commission
+                
                 video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
                 video_7d = int(p.get('total_video_7d_cnt') or p.get('totalVideo7dCnt') or 0)
                 video_30d = int(p.get('total_video_30d_cnt') or p.get('totalVideo30dCnt') or 0)
@@ -6965,99 +6981,7 @@ def api_image_proxy(product_id):
 # LEGACY SCANNERS (Brand Hunter / EchoTik)
 # =============================================================================
 
-@app.route('/api/quick-scan', methods=['GET'])
-@login_required
-def api_quick_scan():
-    """Restored Brand Hunter Quick Scan (EchoTik)"""
-    try:
-        start_rank = int(request.args.get('brand_rank', 1))
-        pages = int(request.args.get('pages', 5))
-        min_sales = int(request.args.get('min_sales', 0))
-        max_videos = int(request.args.get('max_videos', 100))
-        
-        # 1. Get Brands
-        # Note: We duplicate logic for safety, ensuring app context
-        response = requests.get(
-            f"{BASE_URL}/seller/list",
-            params={
-                'sort_by': 'total_gmv',
-                'sort_order': 'desc',
-                'page': (start_rank - 1) // 20 + 1,
-                'size': 1 # Just get one batch for now or loop?
-                # User iterates in frontend loop usually.
-                # Actually v3 frontend calls this PER BRAND in loop? No, it calls quick-scan PER BRAND? 
-                # Wait, v3 logic: loop i=0..numBrands -> fetch /api/quick-scan?brand_rank=X
-                # So this endpoint scans ONE brand at Rank X.
-            },
-            auth=get_auth(), return_json=True
-        ) # Helper doesn't exist? Use requests directly.
-        response = requests.get(
-             f"{BASE_URL}/seller/list",
-             params={
-                 'sort_by': 'total_gmv',
-                 'sort_order': 'desc',
-                 'page': (start_rank - 1) // 20 + 1,
-                 'size': 20
-             },
-             auth=get_auth(), timeout=30
-        )
-        
-        brands = response.json().get('data', []) if response.status_code == 200 else []
-        
-        # Find the specific brand at this rank index (within the page)
-        # Rank 1 = Page 1, Index 0. Rank 21 = Page 2, Index 0.
-        # Simplify: Just grab the first brand from the list returned? 
-        # The frontend asks for specific rank.
-        # Let's just scan the first brand returned by this query to keep it simple.
-        
-        if not brands:
-            return jsonify({'error': 'No brands found from EchoTik'}), 404
-            
-        target_brand = brands[0] # Simplification
-        seller_id = target_brand.get('seller_id')
-        seller_name = target_brand.get('seller_name') or 'Unknown'
-        
-        products_found = 0
-        products_saved = 0
-        
-        # Scan Pages
-        for p_idx in range(1, pages + 1):
-            p_res = requests.get(
-                f"{BASE_URL}/product/list",
-                params={'seller_id': seller_id, 'sort_by': 'total_sale_7d_cnt', 'sort_order': 'desc', 'page': p_idx, 'size': 20},
-                auth=get_auth(), timeout=30
-            )
-            items = p_res.json().get('data', []) if p_res.status_code == 200 else []
-            
-            for item in items:
-                products_found += 1
-                vid_count = int(item.get('total_video_cnt', 0) or 0)
-                sales_7d = int(item.get('total_sale_7d_cnt', 0) or 0)
-                
-                if vid_count <= max_videos and sales_7d >= min_sales:
-                    # Save logic (simplified duplication of save_product)
-                    pid = str(item.get('product_id'))
-                    if not Product.query.get(pid):
-                        new_p = Product(
-                            product_id=pid,
-                            product_name=item.get('product_name')[:500],
-                            seller_name=seller_name,
-                            image_url=item.get('product_img_url'),
-                            sales_7d=sales_7d,
-                            video_count=vid_count,
-                            price=float(item.get('spu_avg_price', 0) or 0),
-                            commission_rate=float(item.get('product_commission_rate', 0) or 0),
-                            first_seen=datetime.utcnow(),
-                            scan_type='brand_hunter'
-                        )
-                        db.session.add(new_p)
-                        products_saved += 1
-        
-        db.session.commit()
-        return jsonify({'result': {'products_found': products_found, 'products_saved': products_saved}})
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/scan-pages/<seller_id>', methods=['GET'])
 @login_required
