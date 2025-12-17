@@ -538,6 +538,10 @@ async def on_message(message):
                     # Save it to DB so get_product_data works
                     new_prod = save_product_to_db(dummy_p) 
                     if new_prod:
+                         product = new_prod
+                else:
+                    await message.reply(f"❌ Echotik search failed: {msg}", mention_author=False)
+                    return
                         product = get_product_data(product_id)
 
             if not product:
