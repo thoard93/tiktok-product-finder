@@ -504,7 +504,7 @@ async def on_message(message):
 
             if not product:
                 await message.add_reaction('❌')
-                await message.reply(f"❌ Could not find product `{product_id}` in database or EchoTik.", mention_author=False)
+                await message.reply(f"❌ Lookup Failed: {msg or 'Unknown Error'} (ID: {product_id})", mention_author=False)
                 return
             
             # Create and send embed
@@ -579,7 +579,9 @@ async def lookup_command(ctx, *, query: str = None):
     
     if not product:
         await ctx.message.add_reaction('❌')
-        await status_msg.edit(content=f"❌ Product `{product_id}` not found on EchoTik or Database.")
+        # Use simple variable 'msg' which might capture the error from the enrich call above
+        # Note: 'msg' scope needs care. Initializing it safely.
+        await status_msg.edit(content=f"❌ Lookup Failed: {locals().get('msg', 'Product not found in DB/API')} (ID: {product_id})")
         return
     
     await status_msg.delete()
