@@ -216,11 +216,15 @@
                     </div>
                     <div>
                         <label class="block text-sm text-slate-400 mb-2">Min Sales (7 Days)</label>
-                        <input type="number" id="min-sales" value="50" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <input type="number" id="min-sales" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                     <div>
                         <label class="block text-sm text-slate-400 mb-2">Max Video Count (Hidden Gem)</label>
-                        <input type="number" id="max-videos" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <input type="number" id="max-videos" value="25" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Pages per Brand (Max 10)</label>
+                        <input type="number" id="pages-per-brand" value="3" max="10" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                 </div>
                 <button onclick="runQuickScan(this)" class="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all">
@@ -279,10 +283,13 @@
         async function runQuickScan(btn) {
             const startRank = document.getElementById('start-rank').value;
             const numBrands = document.getElementById('num-brands').value;
+            const minSales = document.getElementById('min-sales').value;
+            const maxVideos = document.getElementById('max-videos').value;
+            const pages = document.getElementById('pages-per-brand').value;
 
             btn.disabled = true;
             btn.innerText = "Scanning...";
-            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands)...`);
+            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands, Min Sales ${minSales}, Max Videos ${maxVideos})...`);
 
             try {
                 // Loop simulation for UI feedback
@@ -290,7 +297,7 @@
                     const rank = parseInt(startRank) + i;
                     log(`Scanning Brand Rank #${rank}...`);
 
-                    const res = await fetch(`/api/quick-scan?brand_rank=${rank}&pages=3`); // hardcoded pages for speed
+                    const res = await fetch(`/api/quick-scan?brand_rank=${rank}&pages=${pages}&min_sales=${minSales}&max_videos=${maxVideos}`);
                     const data = await res.json();
 
                     if (data.result) {

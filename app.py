@@ -1876,11 +1876,11 @@ def quick_scan():
     
     try:
         brand_rank = request.args.get('brand_rank', 1, type=int)
-        pages = min(request.args.get('pages', 10, type=int), 10)  # Cap at 10 pages to avoid timeout
-        min_influencers = request.args.get('min_influencers', 1, type=int)
+        pages = min(request.args.get('pages', 3, type=int), 10) # Default to 3, cap at 10 to avoid timeout
+        min_influencers = request.args.get('min_influencers', 0, type=int) # Default to 0 for hidden gems
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
-        max_videos = request.args.get('max_videos', None, type=int)  # None = no limit
+        max_videos = request.args.get('max_videos', None, type=int)
         
         # Get the specific brand
         brand_page = (brand_rank - 1) // 10 + 1
@@ -1937,14 +1937,18 @@ def quick_scan():
                 
                 # Filters
                 if influencer_count < min_influencers or influencer_count > max_influencers:
+                    # print(f"DEBUG: Skipping {product_id} - Inf count {influencer_count} out of range ({min_influencers}-{max_influencers})")
                     continue
                 if sales_7d < min_sales:
+                    # print(f"DEBUG: Skipping {product_id} - Sales 7d {sales_7d} < {min_sales}")
                     continue
                 if commission_rate <= 0:
+                    # print(f"DEBUG: Skipping {product_id} - Commission {commission_rate} <= 0")
                     continue
                 
                 # Require at least 2 videos (filtered out 0-1 video products per user request)
                 if video_count < 2:
+                    # print(f"DEBUG: Skipping {product_id} - Video count {video_count} < 2")
                     continue
                 
                 # Video count max filter (if set)
