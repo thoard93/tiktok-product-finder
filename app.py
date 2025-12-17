@@ -22,7 +22,11 @@ import secrets
 import sys
 import subprocess
 import requests
-import stripe
+try:
+    import stripe
+except ImportError:
+    stripe = None
+    print("WARNING: Stripe module not found. Payments will fail.")
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for, render_template
@@ -5804,6 +5808,40 @@ def api_oos_products():
     })
 
 
+@app.route('/api/admin/products/nuke', methods=['POST'])
+@login_required
+@admin_required
+def admin_nuke_products():
+    """⚠️ DANGER: Delete ALL products from database"""
+    try:
+        data = request.get_json() or {}
+        keep_favorites = data.get('keep_favorites', False)
+        
+        if keep_favorites:
+            deleted = Product.query.filter(Product.is_favorite == False).delete()
+        else:
+            deleted = Product.query.delete()
+            
+        db.session.commit()
+        log_activity(session.get('user_id'), 'admin_nuke', {'count': deleted, 'kept_favorites': keep_favorites})
+        return jsonify({'success': True, 'deleted': deleted})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/stats', methods=['GET'])
+@login_required
+@admin_required
+def admin_stats():
+    """Get admin dashboard stats"""
+    user_count = User.query.count()
+    product_count = Product.query.count()
+    return jsonify({
+        'users': user_count,
+        'products': product_count,
+        'status': 'online' 
+    })
+
 @app.route('/api/refresh-all-products', methods=['GET', 'POST'])
 def refresh_all_products():
     """
@@ -5843,7 +5881,48 @@ def refresh_all_products():
                     timeout=30
                 )
                 
-                if response.status_code != 200:
+@app.route('/api/admin/products/nuke', methods=['POST'])
+@login_required
+@admin_required
+def admin_nuke_products():
+    """⚠️ DANGER: Delete ALL products from database"""
+    try:
+        # Optional: Keep favorites? User said "clean fresh slate", so maybe delete everything.
+        # But let's check if they passed a flag.
+        data = request.get_json() or {}
+        keep_favorites = data.get('keep_favorites', False)
+        
+        if keep_favorites:
+            deleted = Product.query.filter(Product.is_favorite == False).delete()
+        else:
+            deleted = Product.query.delete()
+            
+        db.session.commit()
+        
+        # Reset IDs sequence if using Postgres? No, app uses String IDs usually or mixed. 
+        # (Product.product_id is String, so no sequence to reset).
+        
+        # Log this destructive action
+        log_activity(session.get('user_id'), 'admin_nuke', {'count': deleted, 'kept_favorites': keep_favorites})
+        
+        return jsonify({'success': True, 'deleted': deleted})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/stats', methods=['GET'])
+@login_required
+@admin_required
+def admin_stats():
+    """Get admin dashboard stats"""
+    user_count = User.query.count()
+    product_count = Product.query.count()
+    
+    return jsonify({
+        'users': user_count,
+        'products': product_count,
+        'status': 'online' 
+    })
                     failed += 1
                     if len(errors) < 5:
                         errors.append(f"Product {product.product_id}: HTTP {response.status_code}")
@@ -6377,44 +6456,42 @@ def admin_create_key():
 # =============================================================================
 # USER DEVELOPER ROUTES
 # =============================================================================
+# =============================================================================
+# USER DEVELOPER ROUTES
+# =============================================================================
+
 @app.route('/developer')
 @login_required
-def developer_portal():
-    """Render Developer Portal"""
-    try:
-        user = get_current_user()
-        # Get User's Key
-        key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
-        return render_template('developer_dashboard.html', api_key=key, user=user)
-    except Exception as e:
-        return f"Error loading portal: {e}", 500
+def developer_page():
+    return send_from_directory('pwa', 'developer_v4.html')
 
-@app.route('/api/user/generate-key', methods=['POST'])
+@app.route('/api/developer/me')
 @login_required
-def user_generate_key():
-    """User generates or rotates their own key"""
+def api_dev_me():
+    user = get_current_user()
+    key = ApiKey.query.filter_by(user_id=user.id, is_active=True).first()
+    return jsonify({
+        'key': key.key if key else None,
+        'credits': key.credits if key else 0.0
+    })
+
+@app.route('/api/developer/keygen', methods=['POST'])
+@login_required
+def api_dev_keygen():
     try:
         user = get_current_user()
         # Deactivate old keys
         old_keys = ApiKey.query.filter_by(user_id=user.id, is_active=True).all()
+        existing_credits = sum([k.credits for k in old_keys])
+        
         for k in old_keys:
             k.is_active = False
             
-        # Create new key
-        new_key_str = secrets.token_hex(16)
-        # Give 5 free credits on first generation attempt if total usage is 0? 
-        # Or just 0. Let's start with 0.
-        
-        # Check if they had credits on old key?
-        # If rotating, transfer credits.
-        existing_credits = 0
-        if old_keys:
-            existing_credits = sum([k.credits for k in old_keys])
+        # Bonus for new users (if no credits existed)
+        if existing_credits == 0 and not old_keys:
+             existing_credits = 5.0 # 5 Free Scans
             
-        # Bonus for new users?
-        if not old_keys:
-            existing_credits = 5 # 5 Free Scans
-        
+        new_key_str = secrets.token_hex(16)
         new_key = ApiKey(
             key=new_key_str,
             user_id=user.id,
@@ -6424,26 +6501,55 @@ def user_generate_key():
         db.session.add(new_key)
         db.session.commit()
         
-        return jsonify({'success': True, 'key': new_key_str})
+        return jsonify({'success': True, 'key': new_key_str, 'credits': existing_credits})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-        return jsonify({'success': True, 'key': new_key_str})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 
 # =============================================================================
 # STRIPE PAYMENT ROUTES
 # =============================================================================
-stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
-endpoint_secret = os.environ.get('STRIPE_WEBHOOK_SECRET')
 
-@app.route('/api/stripe/create-checkout-session', methods=['POST'])
+# Guard Stripe Init
+if stripe:
+    stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+    endpoint_secret = os.environ.get('STRIPE_WEBHOOK_SECRET')
+
+@app.route('/api/developer/checkout', methods=['POST'])
 @login_required
-def create_checkout_session():
-    """Create Stripe Session for Credits"""
+def api_dev_checkout():
+    if not stripe:
+        return jsonify({'error': 'Payment system not available (Stripe missing)'}), 503
+        
+    try:
+        user = get_current_user()
+        data = request.get_json()
+        amount_cents = data.get('amount', 1500) # Default $15.00
+        credits_to_add = data.get('credits', 500)
+        
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': f'{credits_to_add} API Credits',
+                    },
+                    'unit_amount': amount_cents,
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=url_for('developer_page', _external=True) + '?success=true',
+            cancel_url=url_for('developer_page', _external=True) + '?canceled=true',
+            metadata={
+                'user_id': user.id,
+                'credits': credits_to_add
+            }
+        )
+        return jsonify({'url': session.url})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
     try:
         user = get_current_user()
         data = request.get_json() or {}

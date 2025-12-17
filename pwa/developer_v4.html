@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Portal | Vantage</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        midnight: '#0F172A',
+                        glass: 'rgba(255, 255, 255, 0.05)',
+                        'glass-border': 'rgba(255, 255, 255, 0.1)',
+                        cyan: '#06B6D4',
+                        violet: '#7C3AED',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0F172A;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 40%);
+            color: #F8FAFC;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Nav -->
+    <nav class="glass-panel px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+        <a href="/" class="flex items-center gap-2 group">
+            <div class="p-2 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors">
+                <svg class="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </div>
+            <span class="font-heading font-medium text-slate-300 group-hover:text-white">Back to Dashboard</span>
+        </a>
+        <h1
+            class="font-heading font-bold text-lg text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-400">
+            Developer Cloud</h1>
+    </nav>
+
+    <main class="flex-1 container mx-auto p-6 max-w-4xl space-y-8">
+
+        <!-- Header -->
+        <div class="space-y-2">
+            <h2 class="font-heading font-bold text-3xl">API & Integrations</h2>
+            <p class="text-slate-400">Manage your API keys and usage credits for the Discord Bot and external tools.</p>
+        </div>
+
+        <!-- API Key Section -->
+        <div class="glass-card rounded-2xl p-8 border border-white/5">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-1">Your API Key</h3>
+                    <p class="text-sm text-slate-400">Keep this key secret. Do not share it.</p>
+                </div>
+                <div
+                    class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Active
+                </div>
+            </div>
+
+            <div class="bg-slate-900/50 rounded-xl p-4 flex items-center gap-4 mb-6 border border-slate-700/50">
+                <div class="flex-1 font-mono text-slate-300 text-sm break-all" id="apiKeyDisplay">
+                    ••••••••••••••••••••••••••••••••
+                </div>
+                <button onclick="toggleKey()" class="p-2 text-slate-400 hover:text-white transition-colors"
+                    title="Toggle Visibility">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z">
+                        </path>
+                    </svg>
+                </button>
+                <button onclick="copyKey()" class="p-2 text-slate-400 hover:text-cyan-400 transition-colors"
+                    title="Copy to Clipboard">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex gap-4">
+                <button onclick="regenerateKey()"
+                    class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-medium transition-colors border border-white/5 disabled:opacity-50">
+                    🔄 Regenerate Key
+                </button>
+            </div>
+        </div>
+
+        <!-- Credits Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="glass-card rounded-2xl p-6 border border-white/5 relative overflow-hidden">
+                <div class="relative z-10">
+                    <h3 class="text-slate-400 text-sm font-medium mb-2 upppercase tracking-wider">Available Credits</h3>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-4xl font-bold text-white" id="creditBalance">...</span>
+                        <span class="text-slate-500 text-sm">scans</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">1 Credit = 1 Lookup (Bot or Web)</p>
+                </div>
+                <div class="absolute right-0 top-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6 border border-white/5 flex flex-col justify-center">
+                <button onclick="startTopUp()"
+                    class="w-full px-6 py-4 bg-gradient-to-r from-cyan-600 to-violet-600 hover:from-cyan-500 hover:to-violet-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-900/20 transition-all transform hover:scale-[1.02]">
+                    💎 Top Up Credits
+                </button>
+                <div class="text-center mt-3 text-xs text-slate-500">
+                    Secure payment via Stripe
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs / Usage (Placeholder) -->
+        <div class="glass-card rounded-2xl p-6 border border-white/5">
+            <h3 class="font-heading font-bold text-lg mb-4">Pricing</h3>
+            <div class="space-y-3 text-sm text-slate-300">
+                <div class="flex justify-between items-center bg-slate-800/30 p-3 rounded-lg">
+                    <span>Discord Bot Lookup</span>
+                    <span class="font-bold text-emerald-400">0.03 Credits</span>
+                </div>
+                <div class="flex justify-between items-center bg-slate-800/30 p-3 rounded-lg">
+                    <span>Web Scanner (Quick Scan)</span>
+                    <span class="font-bold text-emerald-400">0.03 Credits</span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        let fullKey = "";
+
+        async function loadData() {
+            try {
+                const res = await fetch('/api/developer/me');
+                const data = await res.json();
+
+                if (data.key) {
+                    fullKey = data.key;
+                    document.getElementById('creditBalance').textContent = data.credits.toFixed(2);
+                    // Mask key initially
+                    document.getElementById('apiKeyDisplay').textContent = "••••••••••••••••" + fullKey.slice(-4);
+                } else {
+                    fullKey = "No active key";
+                    document.getElementById('apiKeyDisplay').textContent = "No active key";
+                    document.getElementById('creditBalance').textContent = "0.00";
+                }
+            } catch (e) {
+                console.error("Load failed", e);
+            }
+        }
+
+        function toggleKey() {
+            const el = document.getElementById('apiKeyDisplay');
+            if (el.textContent.includes('•••')) {
+                el.textContent = fullKey;
+            } else {
+                el.textContent = "••••••••••••••••" + fullKey.slice(-4);
+            }
+        }
+
+        async function regenerateKey() {
+            if (!confirm("Are you sure? This will invalidate your old key immediately.")) return;
+
+            try {
+                const res = await fetch('/api/developer/keygen', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    fullKey = data.key;
+                    document.getElementById('apiKeyDisplay').textContent = fullKey; // Show new key once
+                    document.getElementById('creditBalance').textContent = data.credits.toFixed(2);
+                    alert("New key generated!");
+                } else {
+                    alert("Error: " + data.error);
+                }
+            } catch (e) {
+                alert("Failed to regenerate key");
+            }
+        }
+
+        function copyKey() {
+            if (!fullKey) return;
+            navigator.clipboard.writeText(fullKey);
+            alert("Copied to clipboard");
+        }
+
+        async function startTopUp() {
+            // Placeholder for Stripe logic
+            // In a real app, we'd redirect to Stripe Checkout
+            if (confirm("Redirect to payment provider for 500 Credits ($15.00)?")) {
+                try {
+                    const res = await fetch('/api/developer/checkout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount: 1500, credits: 500 })
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                        window.location.href = data.url;
+                    } else {
+                        alert("Payment setup failed: " + (data.error || "Unknown Error"));
+                    }
+                } catch (e) {
+                    alert("Payment system offline (check console).");
+                    console.error(e);
+                }
+            }
+        }
+
+        // Init
+        loadData();
+    </script>
+</body>
+
+</html>
