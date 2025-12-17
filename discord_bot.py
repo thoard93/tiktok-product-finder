@@ -159,6 +159,12 @@ def save_product_to_db(product_data):
         p.live_count = 999 
         p.is_enriched = True
         
+        try:
+            db.session.commit()
+        except Exception as e:
+            print(f"DB Error in save_product_to_db: {e}")
+            db.session.rollback()
+
         return p
 
 def get_product_from_api(product_id):
@@ -530,7 +536,6 @@ async def on_message(message):
                     # Save it to DB so get_product_data works
                     new_prod = save_product_to_db(dummy_p) 
                     if new_prod:
-                        db.session.commit()
                         product = get_product_data(product_id)
 
             if not product:
@@ -605,7 +610,6 @@ async def lookup_command(ctx, *, query: str = None):
             # Save it to DB so get_product_data works
             new_prod = save_product_to_db(dummy_p) 
             if new_prod:
-                db.session.commit()
                 product = get_product_data(product_id)
     
     if not product:
