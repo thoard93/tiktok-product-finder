@@ -83,30 +83,6 @@ def get_scan_status():
     return SCAN_LOCK
 
 
-@app.route('/api/debug/check-product/<product_id>')
-def check_product_debug(product_id):
-    """Debug endpoint to inspect RAW DB values for a product"""
-    try:
-        # Try both ID formats (raw and shop_ prefixed)
-        p = Product.query.get(product_id)
-        if not p and not product_id.startswith('shop_'):
-             p = Product.query.get(f"shop_{product_id}")
-        
-        if not p:
-            return jsonify({'found': False, 'message': f'Product {product_id} not found'}), 404
-            
-        return jsonify({
-            'found': True,
-            'id': p.product_id,
-            'name': p.product_name,
-            'scan_type': p.scan_type,
-            'live_count_db_value': p.live_count,
-            'stock_in_to_dict': p.to_dict().get('stock'),
-            'product_url': p.product_url,
-            'db_uri_used': app.config['SQLALCHEMY_DATABASE_URI']
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/debug-products')
 def debug_products_dump():
@@ -268,6 +244,15 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
         existing.live_count = int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or existing.live_count or 0)
         existing.views_count = int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
         
+        # Update seller info if missing
+        new_seller_name = p_data.get('seller_name') or p_data.get('shop_name') or p_data.get('shopName')
+        if new_seller_name and (not existing.seller_name or existing.seller_name == 'Unknown'):
+            existing.seller_name = new_seller_name
+        
+        new_seller_id = p_data.get('seller_id') or p_data.get('shop_id')
+        if new_seller_id and (not existing.seller_id):
+            existing.seller_id = new_seller_id
+
         existing.last_updated = datetime.utcnow()
         return False # False = Updated
     else:
@@ -287,8 +272,8 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
             video_30d=int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or 0),
             live_count=int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or 0),
             views_count=int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or 0),
-            seller_id=p_data.get('seller_id'),
-            seller_name=p_data.get('seller_name'),
+            seller_id=p_data.get('seller_id') or p_data.get('shop_id'),
+            seller_name=p_data.get('seller_name') or p_data.get('shop_name') or p_data.get('shopName'),
             scan_type=scan_type,
             first_seen=datetime.utcnow()
         )
@@ -3138,435 +3123,10 @@ def cleanup_garbage():
 # PRODUCTS ENDPOINTS
 # =============================================================================
 
-@app.route('/api/products', methods=['GET'])
-def get_products():
-    """Get all saved products with filtering and pagination options"""
-    # Legacy influencer filters (kept for backwards compatibility)
-    min_influencers = request.args.get('min_influencers', 0, type=int)
-    max_influencers = request.args.get('max_influencers', 99999, type=int)
-    
-    # Video-based competition filters (primary)
-    min_videos = request.args.get('min_videos', 0, type=int)
-    max_videos = request.args.get('max_videos', 99999, type=int)
-    
-    # Pagination parameters
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
-    per_page = min(per_page, 100)  # Cap at 100 per page
     
     # Sort options
     sort_by = request.args.get('sort', 'sales_7d')
     sort_order = request.args.get('order', 'desc')
-    
-    # Date filter: today, yesterday, 7days, all
-    date_filter = request.args.get('date', 'all')
-    
-    # Brand/seller search
-    brand_search = request.args.get('brand', '').strip()
-    
-    # Favorites only
-    favorites_only = request.args.get('favorites', 'false').lower() == 'true'
-    
-    # Show out-of-stock products (default: hide them)
-    show_oos = request.args.get('show_oos', 'false').lower() == 'true'
-    
-    # Show ONLY out-of-stock products
-    oos_only = request.args.get('oos_only', 'false').lower() == 'true'
-    
-    # Hidden gems filter
-    gems_only = request.args.get('gems_only', 'false').lower() == 'true'
-    
-    # Untapped filter (low video/influencer ratio)
-    untapped_only = request.args.get('untapped_only', 'false').lower() == 'true'
-    
-    # Trending filter
-    trending_only = request.args.get('trending_only', 'false').lower() == 'true'
-    
-    # Proven sellers filter (products with 50+ total sales)
-    proven_only = request.args.get('proven_only', 'false').lower() == 'true'
-    
-    # Apify Shop Scraper filter
-    apify_scan = request.args.get('apify_scan', 'false').lower() == 'true'
-
-    # Discovery Scraper filter
-    discovery_scan = request.args.get('discovery_scan', 'false').lower() == 'true'
-    
-    # Build query - exclude unavailable products by default
-    if apify_scan:
-        # Apify Shop scan: Explicitly show shop scraper items
-        # Also apply video count filters if they are set (so user can filter 0-10 etc)
-        query = Product.query.filter(
-            Product.scan_type == 'apify_shop',
-            db.or_(Product.product_status == None, Product.product_status == 'active'),
-            Product.video_count >= min_videos,
-            Product.video_count <= max_videos
-        )
-    elif discovery_scan:
-        # Discovery scan: products found via broad keyword search
-        query = Product.query.filter(
-            Product.scan_type == 'discovery',
-            db.or_(Product.product_status == None, Product.product_status == 'active'),
-            Product.video_count >= min_videos,
-            Product.video_count <= max_videos
-        )
-    elif oos_only:
-        # Show only likely OOS products
-        query = Product.query.filter(
-            Product.video_count >= min_videos,
-            Product.video_count <= max_videos,
-            Product.product_status == 'likely_oos'
-        )
-    elif show_oos:
-        # Show all including OOS
-        query = Product.query.filter(
-            Product.video_count >= min_videos,
-            Product.video_count <= max_videos,
-            db.or_(Product.product_status == None, Product.product_status.in_(['active', 'likely_oos']))
-        )
-    else:
-        # Default: hide OOS products
-        query = Product.query.filter(
-            Product.video_count >= min_videos,
-            Product.video_count <= max_videos,
-            db.or_(Product.product_status == None, Product.product_status == 'active')
-        )
-    
-    # ALWAYS exclude non-promotable products (not for sale, live only, etc.)
-    # Also exclude Debug/Garbage data from previous runs
-    query = query.filter(
-        ~Product.product_name.ilike('%not for sale%'),
-        ~Product.product_name.ilike('%live only%'),
-        ~Product.seller_name.like('Debug%'), # Hide debug artifacts
-        ~Product.seller_name.like('Keys%'),  # Hide debug keys
-        ~Product.product_name.like('Unknown%raw keys%') 
-    )
-    
-    # Apply date filter
-    now = datetime.utcnow()
-    if date_filter == 'today':
-        # Use last 24 hours (rolling window) fixes timezone confusion
-        start_time = now - timedelta(hours=24)
-        query = query.filter(Product.first_seen >= start_time)
-    elif date_filter == 'yesterday':
-        start_of_yesterday = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        end_of_yesterday = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        query = query.filter(Product.first_seen >= start_of_yesterday, Product.first_seen < end_of_yesterday)
-    elif date_filter == '7days':
-        week_ago = now - timedelta(days=7)
-        query = query.filter(Product.first_seen >= week_ago)
-    
-    # Apply brand search
-    if brand_search:
-        query = query.filter(Product.seller_name.ilike(f'%{brand_search}%'))
-    
-    # Apply favorites filter
-    if favorites_only:
-        query = query.filter(Product.is_favorite == True)
-    
-    # Apply hidden gems filter (high sales, low influencers)
-    if gems_only:
-        # Hidden gems: selling well with low competition
-        query = query.filter(
-            Product.sales_7d >= 20,  # Decent weekly sales
-            Product.influencer_count <= 30,  # Low competition
-            Product.influencer_count >= 1,  # At least 1 (shows it's promotable)
-            Product.video_count >= 1  # At least 1 video (proven product)
-        )
-    
-    # Apply likely_ads filter (Ad Winners tab)
-    likely_ads = request.args.get('likely_ads', 'false').lower() == 'true'
-    if likely_ads:
-        query = query.filter(
-            db.or_(
-                # Logic A: Heuristic (High Sales, Low Influencers)
-                db.and_(
-                    Product.sales_7d > 50,
-                    Product.influencer_count < 5,
-                    Product.video_count < 5
-                ),
-                # Logic B: Explicit Apify Ads (Always ad winners)
-                Product.scan_type.in_(['apify_ad', 'daily_virals'])
-            )
-        )
-
-    # Apply untapped filter - products with low video/influencer ratio
-    # These are products where influencers added to showcase but didn't make videos
-    if untapped_only:
-        query = query.filter(
-            Product.influencer_count >= 5,  # Has some influencers
-            Product.video_count >= 1,  # At least 1 video (not totally fresh)
-            Product.video_count <= Product.influencer_count * 0.5,  # Less than 0.5 videos per influencer
-            Product.sales_7d >= 10  # At least some sales to show it works
-        )
-    
-    # Apply discovery scan filter (Specific override logic removed here, handled in initial query build)
-    # The scan type filters are already handled in the initial block or via logic above
-    # We DO NOT need to check apify_scan here again as it's the first logic block
-    # However, 'discovery_scan' was handled in the first block too.
-    # The original code had apify_scan checked TWICE. We are removing the redundancy.
-            
-    # Apply discovery scan filter
-    if discovery_scan:
-        # Redundant if handled in initial block but safe to keep if we switch away from pure exclusive logic
-        # For now, since we used an if/elif structure at to start, we don't need to re-filter here
-        pass
-
-    # Apply trending filter - products with sales growth or high recent sales
-    if trending_only:
-        try:
-            # Products with positive velocity OR high 7-day sales (as fallback)
-            query = query.filter(
-                db.or_(
-                    Product.sales_velocity >= 10,  # Lowered from 20
-                    Product.sales_7d >= 100  # Fallback: high recent sales = trending
-                )
-            )
-        except Exception:
-            pass  # Column might not exist yet
-    
-    # Apply proven sellers filter - products with significant total sales history
-    if proven_only:
-        query = query.filter(Product.sales >= 50)
-    
-    # Apply free shipping filter
-    free_shipping_filter = request.args.get('free_shipping', 'false').lower() == 'true'
-    if free_shipping_filter:
-        query = query.filter(Product.has_free_shipping == True)
-    
-    # Get total count before pagination
-    total_count = query.count()
-    
-    # Apply sorting
-    if sort_by == 'new':
-        sort_column = Product.first_seen
-    else:
-        sort_column = getattr(Product, sort_by, Product.sales_7d)
-        
-    if sort_order == 'asc':
-        query = query.order_by(sort_column.asc())
-    else:
-        query = query.order_by(sort_column.desc())
-    
-    # Apply pagination
-    total_pages = (total_count + per_page - 1) // per_page
-    offset = (page - 1) * per_page
-    products = query.offset(offset).limit(per_page).all()
-    
-    # Count OOS products for UI
-    oos_count = Product.query.filter(Product.product_status == 'likely_oos').count()
-    
-    # Count gems (products selling well with low competition, with at least 1 video)
-    gems_count = Product.query.filter(
-        Product.sales_7d >= 20,
-        Product.influencer_count <= 30,
-        Product.influencer_count >= 1,
-        Product.video_count >= 1,
-        db.or_(Product.product_status == None, Product.product_status == 'active')
-    ).count()
-    
-    # Count trending - products with velocity or high recent sales
-    try:
-        trending_count = Product.query.filter(
-            db.or_(
-                Product.sales_velocity >= 10,
-                Product.sales_7d >= 100
-            ),
-            db.or_(Product.product_status == None, Product.product_status == 'active')
-        ).count()
-    except Exception:
-        trending_count = 0
-    
-    # Count untapped - products with low video/influencer ratio
-    try:
-        untapped_count = Product.query.filter(
-            Product.influencer_count >= 5,
-            Product.video_count >= 1,
-            Product.video_count <= Product.influencer_count * 0.5,
-            Product.sales_7d >= 10,
-            db.or_(Product.product_status == None, Product.product_status == 'active')
-        ).count()
-    except Exception:
-        untapped_count = 0
-    
-    # Get video competition category counts for filter pills
-    # Apply same exclusions as main query (non-promotable products)
-    base_filter = db.and_(
-        ~Product.product_name.ilike('%not for sale%'),
-        ~Product.product_name.ilike('%live only%'),
-        ~Product.product_name.ilike('%sample%not for sale%'),
-        ~Product.product_name.ilike('%display only%'),
-        ~Product.product_name.ilike('%coming soon%'),
-        db.or_(Product.product_status == None, Product.product_status == 'active')
-    )
-    
-    untapped_count = Product.query.filter(
-        base_filter,
-        Product.video_count >= 1,
-        Product.video_count <= 10
-    ).count()
-    
-    low_count = Product.query.filter(
-        base_filter,
-        Product.video_count >= 11,
-        Product.video_count <= 30
-    ).count()
-    
-    medium_count = Product.query.filter(
-        base_filter,
-        Product.video_count >= 31,
-        Product.video_count <= 60
-    ).count()
-    
-    good_count = Product.query.filter(
-        base_filter,
-        Product.video_count >= 61,
-        Product.video_count <= 100
-    ).count()
-    
-    all_count = untapped_count + low_count + medium_count + good_count
-    
-    # Count proven sellers (50+ total sales)
-    proven_count = Product.query.filter(
-        base_filter,
-        Product.sales >= 50
-    ).count()
-    
-    # Count free shipping products
-    freeship_count = Product.query.filter(
-        base_filter,
-        Product.has_free_shipping == True
-    ).count()
-
-    # Apify Trends (Paid Shop Scan)
-    apify_count = Product.query.filter(
-        Product.scan_type == 'apify_shop'
-    ).count()
-
-    # Discovery Trends
-    discovery_count = Product.query.filter(
-        Product.scan_type == 'discovery'
-    ).count()
-    
-    return jsonify({
-        'success': True,
-        'products': [p.to_dict() for p in products],
-        'pagination': {
-            'page': page,
-            'per_page': per_page,
-            'total_count': total_count,
-            'total_pages': total_pages,
-            'has_next': page < total_pages,
-            'has_prev': page > 1
-        },
-        'counts': {
-            'oos': oos_count,
-            'gems': gems_count,
-            'trending': trending_count,
-            'proven': proven_count,
-            'freeship': freeship_count,
-            'freeship': freeship_count,
-            'apify_count': apify_count,
-            'discovery_count': discovery_count,
-            'all': all_count,
-            'untapped': untapped_count,
-            'low': low_count,
-            'medium': medium_count,
-            'good': good_count
-        },
-        'filters': {
-            'date': date_filter,
-            'brand': brand_search,
-            'favorites_only': favorites_only,
-            'show_oos': show_oos,
-            'oos_only': oos_only,
-            'gems_only': gems_only,
-            'trending_only': trending_only,
-            'proven_only': proven_only,
-            'sort_by': sort_by,
-            'sort_order': sort_order
-        }
-    })
-
-@app.route('/product')
-def product_detail_page():
-    """Product detail page - serve from pwa folder"""
-    return send_from_directory('pwa', 'product_detail.html')
-
-
-@app.route('/api/product/<product_id>')
-def get_product_detail(product_id):
-    """Get detailed info for a single product"""
-    try:
-        product = Product.query.get(product_id)
-        
-        if not product:
-            return jsonify({'success': False, 'error': 'Product not found'}), 404
-        
-        # Use cached image if available, otherwise fall back to proxy
-        image_url = product.cached_image_url or f'/api/image-proxy/{product_id}'
-        
-        data = {
-            'product_id': product.product_id,
-            'product_name': product.product_name or '',
-            'seller_id': product.seller_id,
-            'seller_name': product.seller_name or 'Unknown',
-            
-            # Sales data
-            'gmv': float(product.gmv or 0),
-            'gmv_30d': float(product.gmv_30d or 0),
-            'sales': int(product.sales or 0),
-            'sales_7d': int(product.sales_7d or 0),
-            'sales_30d': int(product.sales_30d or 0),
-            
-            # Commission
-            'commission_rate': float(product.commission_rate or 0),
-            
-            # Competition
-            'influencer_count': int(product.influencer_count or 0),
-            
-            # Product info
-            'price': float(product.price or 0),
-            
-            # Video/Live stats
-            'video_count': int(product.video_count or 0),
-            'video_7d': int(product.video_7d or 0),
-            'video_30d': int(product.video_30d or 0),
-            'live_count': int(product.live_count or 0),
-            'stock': int(product.live_count or 0), # Fix: Map live_count to stock for frontend
-            'views_count': int(product.views_count or 0),
-            'product_rating': float(product.product_rating or 0),
-            'review_count': int(product.review_count or 0),
-            
-            # Favorites
-            'is_favorite': product.is_favorite or False,
-            
-            # Status
-            'product_status': product.product_status or 'active',
-            'status_note': product.status_note,
-            
-            # Media - use cached URL for instant loading
-            'image_url': image_url,
-            'cached_image_url': image_url,
-            
-            # Links
-            # Fix: Use saved product_url if available (contains correct shop.tiktok.com format)
-            'product_url': product.product_url or f'https://shop.tiktok.com/view/product/{product.product_id}?region=US&locale=en',
-            'tiktok_url': product.product_url or f'https://shop.tiktok.com/view/product/{product.product_id}?region=US&locale=en',
-            'affiliate_url': f'https://affiliate.tiktok.com/product/{product.product_id}',
-            
-            # Timestamps
-            'first_seen': product.first_seen.isoformat() if product.first_seen else None,
-            'last_updated': product.last_updated.isoformat() if product.last_updated else None,
-            
-            # User permissions (for showing/hiding features)
-            'is_admin': session.get('is_admin', False),
-        }
-        
-        return jsonify({'success': True, 'product': data})
-        
-    except Exception as e:
-        import traceback
-        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
 @app.route('/api/mark-unavailable/<product_id>')
@@ -5296,26 +4856,37 @@ def api_product_detail(product_id):
     if not p:
         return jsonify({'error': 'Not found'}), 404
     
-    # Image Logic: Use Cached > Proxy > Original
-    img = p.cached_image_url
-    if not img:
-        img = f"/api/image-proxy/{p.product_id}" # Fallback to proxy
-        
+    # Return full data dict
     return jsonify({
-        'product_id': p.product_id, # return the REAL ID from DB
-        'name': p.product_name,
-        'image_url': img,
-        'product_url': p.product_url,
-        'sales': p.sales,
-        'sales_7d': p.sales_7d,
-        'price': p.price,
-        'commission_rate': p.commission_rate,
-        'video_count': p.video_count,
-        'seller_name': p.seller_name,
-        'is_ad_driven': p.is_ad_driven,
-        'is_favorite': p.is_favorite,
-        'gmv': p.gmv or 0
+        'success': True,
+        'id': p.product_id, # for frontend compat
+        **p.to_dict()
     })
+
+@app.route('/api/product/enrich/<path:product_id>')
+@login_required
+def api_enrich_product(product_id):
+    """Enforce fresh enrichment from EchoTik for a single product"""
+    # 1. Resolve ID
+    p = Product.query.get(product_id)
+    if not p and product_id.isdigit():
+        p = Product.query.get(f"shop_{product_id}")
+    if not p and product_id.startswith('shop_'):
+        p = Product.query.get(product_id.replace('shop_', ''))
+        
+    if not p:
+        return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+    try:
+        # Trigger enrichment logic
+        success = enrich_product_data(p, i_log_prefix="⚡[LiveSync]", force=True)
+        if success:
+            db.session.commit()
+            return jsonify({'success': True, 'product': p.to_dict()})
+        else:
+            return jsonify({'success': False, 'error': 'Enrichment failed or no new data found'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/pwa/<path:filename>')
 def pwa_files(filename):
@@ -5812,22 +5383,75 @@ def api_trending_products():
     })
 
 
+@app.route('/api/stats', methods=['GET'])
+@login_required
+def api_get_stats():
+    """Get high-level statistics for the dashboard cards"""
+    try:
+        total_products = Product.query.count()
+        
+        # Ad Winners count (heuristic + scan type)
+        ad_winners = Product.query.filter(
+            db.or_(
+                db.and_(
+                    Product.sales_7d > 50,
+                    Product.influencer_count < 5,
+                    Product.video_count < 5
+                ),
+                Product.scan_type.in_(['apify_ad', 'daily_virals'])
+            )
+        ).count()
+        
+        # Hidden Gems count
+        hidden_gems = Product.query.filter(
+            Product.sales_7d >= 20,
+            Product.influencer_count <= 30,
+            Product.influencer_count >= 1,
+            Product.video_count >= 1
+        ).count()
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_products': total_products,
+                'ad_winners': ad_winners,
+                'hidden_gems': hidden_gems,
+                'status': 'Active'
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/products', methods=['GET'])
+@login_required
 def api_products():
-    """Get all products with pagination, sorting, and filtering"""
+    """Unified Products API with robust filtering and pagination"""
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 20))
     offset = (page - 1) * limit
     
     query = Product.query
     
-    # Filters
+    # Garbage Filter (exclude debug/filler data)
+    query = query.filter(
+        ~Product.product_name.ilike('%not for sale%'),
+        ~Product.product_name.ilike('%live only%'),
+        ~Product.seller_name.ilike('Debug%'),
+        ~Product.seller_name.ilike('Keys%')
+    )
+    
+    # Logic Filters
     if request.args.get('favorites_only') == 'true':
         query = query.filter_by(is_favorite=True)
         
     if request.args.get('gems_only') == 'true':
-        # Default gem definition if not specified
-        query = query.filter(Product.is_hidden_gem == True)
+        # Selling well, low competition
+        query = query.filter(
+            Product.sales_7d >= 20,
+            Product.influencer_count <= 30,
+            Product.influencer_count >= 1,
+            Product.video_count >= 1
+        )
         
     # Sorting
     sort_by = request.args.get('sort_by', 'sales_7d')
@@ -5850,6 +5474,27 @@ def api_products():
         'count': total,
         'page': page,
         'products': [p.to_dict() for p in products]
+    })
+
+# Aliases for compatibility
+@app.route('/api/debug/check-product/<path:product_id>')
+@app.route('/api/product/<path:product_id>')
+@login_required
+def unified_product_detail(product_id):
+    """Unified helper for product details"""
+    p = Product.query.get(product_id)
+    if not p and product_id.isdigit():
+        p = Product.query.get(f"shop_{product_id}")
+    if not p and product_id.startswith('shop_'):
+        p = Product.query.get(product_id.replace('shop_', ''))
+        
+    if not p:
+        return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+    return jsonify({
+        'success': True,
+        'id': p.product_id,
+        **p.to_dict()
     })
 
 @app.route('/api/hidden-gems', methods=['GET'])

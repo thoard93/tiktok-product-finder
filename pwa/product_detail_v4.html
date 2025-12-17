@@ -171,11 +171,15 @@
 
         async function loadData() {
             try {
-                const res = await fetch(`/api/debug/check-product/${productId}`);
+                const res = await fetch(`/api/product/${productId}`);
                 if (!res.ok) throw new Error("Product not found");
 
                 const data = await res.json();
-                render(data);
+                if (data.success) {
+                    render(data);
+                } else {
+                    throw new Error(data.error || "Unknown error");
+                }
             } catch (e) {
                 document.getElementById('loader').innerHTML = `<p class="text-red-400">Error: ${e.message}</p><a href="/" class="underline mt-4 block">Return Home</a>`;
             }
@@ -194,7 +198,7 @@
                 this.src = data.image_url || 'https://via.placeholder.com/400?text=Image+Load+Failed';
             };
 
-            document.getElementById('pTitle').textContent = data.name || 'Unknown Product';
+            document.getElementById('pTitle').textContent = data.product_name || 'Unknown Product';
             document.getElementById('pSeller').textContent = data.seller_name || 'Unknown Seller';
             document.getElementById('extLink').href = data.product_url || '#';
 
@@ -202,12 +206,12 @@
 
             // Stats
             document.getElementById('statSales').textContent = (data.sales || 0).toLocaleString();
-            document.getElementById('statRev').textContent = '$' + ((data.sales_7d || 0) * (data.price || 20)).toLocaleString(); // Est
+            document.getElementById('statRev').textContent = '$' + (data.gmv_30d || (data.sales_7d || 0) * (data.price || 20)).toLocaleString();
             document.getElementById('statVideos').textContent = data.video_count || 0;
-            document.getElementById('statVelocity').textContent = Math.round((data.sales_7d || 0) / 7) + "/day";
+            document.getElementById('statVelocity').textContent = (data.average_sales_daily || Math.round((data.sales_7d || 0) / 7)) + "/day";
 
             document.getElementById('pPrice').textContent = '$' + (data.price || 0);
-            document.getElementById('pComm').textContent = (data.commission_rate || 0) + '%';
+            document.getElementById('pComm').textContent = Math.round((data.commission_rate || 0) * 100) + '%';
 
             // Chart (Mock data if history missing)
             const ctx = document.getElementById('salesChart').getContext('2d');
@@ -237,21 +241,28 @@
         }
 
         async function enrichNow() {
-            const btn = event.target;
-            btn.textContent = "Analyzing...";
+            const btn = document.querySelector('button[onclick="enrichNow()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg> Syncing...
+            `;
             btn.disabled = true;
             try {
-                // Trigger refresh-ads endpoint for this product? 
-                // Or we need a specific endpoint for single product refresh using EchoTik.
-                // For now, fake it or alert until backend is 100%
-                // We don't have a single-product refresh endpoint exposed easily yet (refresh-ads scans ALL).
-                // Use check-product for now to reload
-                await loadData();
-                alert("Data Refreshed (EchoTik Sync)");
+                const res = await fetch(`/api/product/enrich/${productId}`);
+                const resData = await res.json();
+
+                if (resData.success) {
+                    render(resData.product);
+                } else {
+                    alert("Enrichment Issue: " + (resData.error || "Check API limits"));
+                }
             } catch (e) {
-                alert("Sync failed: " + e);
+                alert("Network Error: " + e.message);
             } finally {
-                btn.textContent = "⚡ Analyze Live Data";
+                btn.innerHTML = originalText;
                 btn.disabled = false;
             }
         }

@@ -413,12 +413,9 @@
                 const res = await fetch(`/api/products?${params.toString()}`);
                 const data = await res.json();
 
-                // Stats
-                // Stats
-                document.getElementById('statTotal').textContent = data.count || 0;
-                // Ad Winners & Gems - Mocked for now (Frontend) or backend need to return stats object 
-                // Currently API returns PAGINATED list, so filter on frontend only counts current page.
-                // Ideal: Backend returns 'stats' object. For now, keep as is or improve if possible.
+                // Pagination and list results
+                // We no longer overwrite statTotal here because loadStats() handles global counts
+                renderGrid(data.products);
 
                 renderGrid(data.products);
 
@@ -487,12 +484,15 @@
                     }
                 };
 
-                const imgUrl = p.cached_image_url || p.image_url || 'https://via.placeholder.com/300x300?text=No+Image';
+                const imgUrl = p.cached_image_url || p.image_url || 'https://via.placeholder.com/400?text=No+Image';
 
                 // Ensure clickable overlay works by placing it clear on top
                 card.innerHTML = `
                     <div class="relative aspect-square overflow-hidden bg-slate-800">
-                        <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy">
+                        <img src="${imgUrl}" 
+                             onerror="this.onerror=null; this.src='https://via.placeholder.com/400?text=Image+Load+Error';"
+                             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                             loading="lazy">
                         
                         <!-- Badges -->
                         <div class="absolute top-3 left-3 flex flex-col gap-1 z-10">
