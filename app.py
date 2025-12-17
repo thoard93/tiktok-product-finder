@@ -258,14 +258,26 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     p['commission_rate'] = float(d.get('productCommissionRate') or d.get('product_commission_rate', 0))
                     p['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price', 0))
                     
-                    # DEBUG: If parsing failed (all 0), return error with raw data to debug via Discord
-                    if p['sales'] == 0 and p['video_count'] == 0:
-                         import json
-                         debug_raw = json.dumps(d, default=str)
-                         print(f"DEBUG: Parse Failed, Raw Data: {debug_raw}")
-                         if force: 
-                             # limit to 1900 chars for Discord
-                             return False, f"Parse Error. JSON: {debug_raw[:1900]}"
+                    # Fallback: Check for Raw Page Props (shop/pdp/...)
+                    if p['sales'] == 0:
+                        # Iterate keys to find the one with product_info
+                        for k, v in d.items():
+                            if isinstance(v, dict) and 'product_info' in v:
+                                pi = v['product_info']
+                                p['sales'] = int(pi.get('sold_count', 0))
+                                # sales_7d not available in this view, keep 0 or estimate? Keep 0.
+                                p['price'] = float(str(pi.get('price', {}).get('real_price', '0')).replace('$',''))
+                                
+                                base = pi.get('product_base', {})
+                                p['product_name'] = base.get('title')
+                                
+                                images = base.get('images', [])
+                                if images and len(images) > 0:
+                                     # Try thumb_url_list or url_list
+                                     p['image_url'] = images[0].get('url_list', [None])[0]
+
+                                print(f"DEBUG: Extracted from Page Props - Sales: {p['sales']}")
+                                break
                     
                     # Name & Image
                     p['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or p.get('product_name')
