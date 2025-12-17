@@ -297,10 +297,6 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                                     print(f"DEBUG: Extraction Error: {e}")
                                 
                                 break
-                                break
-                                    print(f"DEBUG: Extraction Error: {e}")
-                                
-                                break
                     
                     # Validation: Check for common failure modes
                     if p['price'] == 0.0 and p['sales'] == 0:
