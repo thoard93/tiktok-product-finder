@@ -155,8 +155,9 @@ def save_product_to_db(product_data):
         p.video_count = product_data.get('video_count', 0)
         p.commission_rate = product_data.get('commission_rate', 0)
         p.price = product_data.get('price', 0)
+        p.price = product_data.get('price', 0)
         p.last_updated = datetime.now(timezone.utc)
-        p.live_count = 999 
+        # p.live_count = 999 
         p.is_enriched = True
         
         try:
@@ -231,8 +232,9 @@ def get_product_from_api(product_id):
                 p.video_count = temp_p.get('video_count', 0)
                 p.commission_rate = temp_p.get('commission_rate', 0)
                 p.price = temp_p.get('price', 0)
-                p.last_updated = datetime.utcnow()
-                p.live_count = 999 # Assume stock if found
+                p.price = temp_p.get('price', 0)
+                p.last_updated = datetime.now(timezone.utc)
+                # p.live_count = 999 # Assume stock if found
                 
                 db.session.commit()
                 
@@ -372,7 +374,7 @@ def create_product_embed(p, title_prefix=""):
     
     # Add stats fields
     embed.add_field(name="📦 Stock", value=f"{stock:,}", inline=True)
-    embed.add_field(name="📉 Total Sales", value=f"{total_sales:,}", inline=True)
+    embed.add_field(name="📉 7 Day Sales", value=f"{sales_7d:,}", inline=True)
     embed.add_field(name="💰 Price", value=price_display, inline=True)
     embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
     embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
@@ -384,7 +386,7 @@ def create_product_embed(p, title_prefix=""):
         embed.set_thumbnail(url=image_url)
     
     embed.set_footer(text=f"Product ID: {product_id}")
-    embed.timestamp = datetime.utcnow()
+    embed.timestamp = datetime.now(timezone.utc)
     
     return embed
 
@@ -642,7 +644,7 @@ def get_hot_products():
     
     with app.app_context():
         # Calculate cutoff date for repeat prevention
-        cutoff_date = datetime.utcnow() - timedelta(days=DAYS_BEFORE_REPEAT)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
         # Query: 
         products = Product.query.filter(
@@ -680,7 +682,7 @@ def get_hot_products():
             product_dicts.append(p_dict)
             
             # Mark products as shown today
-            p.last_shown_hot = datetime.utcnow()
+            p.last_shown_hot = datetime.now(timezone.utc)
         
         try:
             db.session.commit()
