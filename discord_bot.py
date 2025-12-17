@@ -10,7 +10,7 @@ import re
 import discord
 from discord.ext import commands, tasks
 from discord import Embed
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 import requests
 from requests.auth import HTTPBasicAuth
 import asyncio
@@ -141,7 +141,7 @@ def save_product_to_db(product_data):
         p = db.session.get(Product, shop_pid)
         if not p:
             p = Product(product_id=shop_pid)
-            p.first_seen = datetime.now(datetime.timezone.utc)
+            p.first_seen = datetime.now(timezone.utc)
             db.session.add(p)
             
         # Update fields
@@ -155,7 +155,7 @@ def save_product_to_db(product_data):
         p.video_count = product_data.get('video_count', 0)
         p.commission_rate = product_data.get('commission_rate', 0)
         p.price = product_data.get('price', 0)
-        p.last_updated = datetime.now(datetime.timezone.utc)
+        p.last_updated = datetime.now(timezone.utc)
         p.live_count = 999 
         p.is_enriched = True
         
