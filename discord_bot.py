@@ -16,7 +16,8 @@ from requests.auth import HTTPBasicAuth
 import asyncio
 
 # Database setup - Import from main application to ensure model consistency
-from app import app, db, Product, User, ApiKey
+# Database setup - Import from main application to ensure model consistency
+from app import app, db, Product, User, ApiKey, ECHOTIK_REALTIME_BASE, get_auth
 
 # Discord Config
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
@@ -66,16 +67,26 @@ def extract_product_id(text):
     return None
 
 def resolve_tiktok_share_link(url):
-    """Resolve TikTok share link to get the real URL"""
+    """Resolve TikTok share link to get Product ID via EchoTik Realtime API"""
+    print(f"Resolving share link via API: {url}")
     try:
-        response = requests.head(url, allow_redirects=True, timeout=10)
-        return response.url
-    except:
-        try:
-            response = requests.get(url, allow_redirects=True, timeout=10)
-            return response.url
-        except:
-            return None
+        res = requests.get(
+            f"{ECHOTIK_REALTIME_BASE}/extract_product_id",
+            params={'share_url': url},
+            auth=get_auth(),
+            timeout=15
+        )
+        if res.status_code == 200:
+            data = res.json()
+            # Response: {code: 0, data: {productId: "...", ...}}
+            if data.get('data'):
+                # Handle camelCase
+                d = data['data']
+                return d.get('productId') or d.get('product_id')
+    except Exception as e:
+        print(f"API Resolution Error: {e}")
+    
+    return None
 
 def get_product_from_db(product_id):
     """Check if product exists in database first"""
@@ -498,10 +509,11 @@ async def lookup_command(ctx, *, query: str = None):
         status_msg = await ctx.reply(f"🎁 **Free Product Lookup** | Scanning...", mention_author=False)
     
     # Try to resolve if it's a share link
-    if 'vm.tiktok.com' in query or '/t/' in query:
-        resolved = resolve_tiktok_share_link(query)
-        if resolved:
-            query = resolved
+    if 'vm.tiktok.com' in query or '/t/' in query or 'tiktok.com' in query:
+        # Use API to get ID directly
+        extracted_id = resolve_tiktok_share_link(query)
+        if extracted_id:
+            query = extracted_id # Query is now the ID
     
     product_id = extract_product_id(query)
     
@@ -541,7 +553,7 @@ def get_hot_products():
         # Query: 
         products = Product.query.filter(
             # Product.scan_type == 'apify_shop', # REMOVED: Allow any scan type
-            Product.live_count > 0,            # Stock > 0
+            # Product.live_count > 0,          # REMOVED: Stock logic deleted
             Product.video_count > 0,           # Videos > 0
             db.or_(
                 Product.last_shown_hot == None,  # Never shown

@@ -174,7 +174,9 @@ DEV_PASSKEY = os.environ.get('DEV_PASSKEY', 'change-this-passkey-123')
 ADMIN_DISCORD_IDS = os.environ.get('ADMIN_DISCORD_IDS', '').split(',')
 
 # EchoTik API Config - v3 API with HTTPBasicAuth
-BASE_URL = "https://open.echotik.live/api/v3/echotik"
+ECHOTIK_V3_BASE = "https://open.echotik.live/api/v3/echotik"
+ECHOTIK_REALTIME_BASE = "https://open.echotik.live/api/v3/realtime"
+BASE_URL = ECHOTIK_V3_BASE # Default for shop lists etc.
 ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
 ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
 
@@ -219,36 +221,47 @@ def enrich_product_data(p, i_log_prefix="", force=False):
         t = re.sub(r'[^\w\s]', '', t) # Remove emojis/punctuation
         return t.strip()
 
-    # 1. Direct ID Check
+    # 1. Direct ID Check (Realtime v3)
     pid = p.get('product_id')
     if pid and not pid.startswith('ad_') and (force or not p.get('is_enriched')):
         target_id = pid.replace('shop_', '') if pid.startswith('shop_') else pid
         
         try:
             res = requests.get(
-                f"{BASE_URL}/product/detail",
-                params={'product_ids': target_id},
+                f"{ECHOTIK_REALTIME_BASE}/product/detail",
+                params={'product_id': target_id}, # v3 uses singular 'product_id'
                 auth=get_auth(),
-                timeout=15
+                timeout=20
             )
             
             if res.status_code == 200:
                 data = res.json()
+                # Check for v3 response structure usually {code:0, data: {...}}
                 if data.get('data'):
-                    d = data['data'][0]
-                    # Update product
-                    p['sales'] = int(d.get('total_sale_cnt', 0))
-                    p['sales_7d'] = int(d.get('total_sale_7d_cnt', 0))
-                    p['sales_30d'] = int(d.get('total_sale_30d_cnt', 0))
-                    p['influencer_count'] = int(d.get('total_ifl_cnt', 0))
-                    p['video_count'] = int(d.get('total_video_cnt', 0))
-                    p['commission_rate'] = float(d.get('product_commission_rate', 0))
-                    p['price'] = float(d.get('spu_avg_price', 0))
-                    p['product_name'] = d.get('title') or d.get('product_title') or p.get('product_name') # Catch name
-                    p['image_url'] = d.get('cover') or d.get('image_url') or p.get('image_url') # Catch image
+                    d = data['data'] # Realtime v3 returns strictly one object usually
+                    if isinstance(d, list): d = d[0] # Handle if it returns list
+                    
+                    # Update product - Try CamelCase (v3) then SnakeCase (v2) fallback
+                    p['sales'] = int(d.get('totalSaleCnt') or d.get('total_sale_cnt', 0))
+                    p['sales_7d'] = int(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt', 0))
+                    p['sales_30d'] = int(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt', 0))
+                    p['influencer_count'] = int(d.get('totalIflCnt') or d.get('total_ifl_cnt', 0))
+                    p['video_count'] = int(d.get('totalVideoCnt') or d.get('total_video_cnt', 0))
+                    p['commission_rate'] = float(d.get('productCommissionRate') or d.get('product_commission_rate', 0))
+                    p['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price', 0))
+                    
+                    # Name & Image
+                    p['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or p.get('product_name')
+                    p['image_url'] = d.get('cover') or d.get('image_url') or p.get('image_url')
+                    
+                    # Stock Removed as requested
+                    # p['live_count'] = ...
+                    
                     p['is_enriched'] = True
                     return True, f"Success: Direct ID {pid}"
-        except Exception: pass
+        except Exception as e: 
+            print(f"Enrichment Error: {e}")
+            pass
 
     # 2. Search by Title
     title_raw = p.get('title') or p.get('product_name') or ""
@@ -802,7 +815,11 @@ def api_scan_status():
 @admin_required
 def admin_page():
     """Admin dashboard"""
-    return send_from_directory(app.static_folder, 'admin.html')
+    resp = make_response(send_from_directory('pwa', 'admin_v4.html'))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 @app.route('/api/admin/users')
 @login_required
@@ -1058,13 +1075,21 @@ def get_cached_image_urls(cover_urls):
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == 0 and data.get('data'):
+                # V3 Batch Cover returns DICT: {orig: new, ...} based on user screenshot
+                imgs = data['data']
+                if isinstance(imgs, dict):
+                     return imgs # Direct mapping
+                
+                # Fallback for List format if API behaves like V2
                 result = {}
-                for item in data['data']:
-                    if isinstance(item, dict):
-                        for orig_url, signed_url in item.items():
-                            if signed_url and signed_url.startswith('http'):
-                                result[orig_url] = signed_url
-                return result
+                if isinstance(imgs, list):
+                    for item in imgs:
+                        if isinstance(item, dict):
+                            for orig_url, signed_url in item.items():
+                                if signed_url and signed_url.startswith('http'):
+                                    result[orig_url] = signed_url
+                    return result
+                return {}
         
         return {}
         
@@ -1125,12 +1150,12 @@ def get_seller_products(seller_id, page=1, page_size=10):
     """
     try:
         response = requests.get(
-            f"{BASE_URL}/seller/product/list",
+            f"{BASE_URL}/shop/product/list", # Updated to standard v3 path
             params={
-                "seller_id": seller_id,
+                "shop_id": seller_id, # v3 usually uses shop_id
                 "page_num": page,
                 "page_size": page_size,
-                "seller_product_sort_field": 4,  # 7-day Sales
+                "shop_product_sort_field": 4,  # 7-day Sales
                 "sort_type": 1                    # Descending
             },
             auth=get_auth(),
@@ -5196,15 +5221,6 @@ def scanner_page():
 @login_required
 def settings_page():
     return send_from_directory('pwa', 'settings.html')
-
-@app.route('/admin')
-@login_required
-def admin_dashboard_page():
-    resp = make_response(send_from_directory('pwa', 'admin_v4.html'))
-    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    resp.headers['Pragma'] = 'no-cache'
-    resp.headers['Expires'] = '0'
-    return resp
 
 
 
