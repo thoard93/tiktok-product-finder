@@ -241,6 +241,14 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     d = data['data'] # Realtime v3 returns strictly one object usually
                     if isinstance(d, list): d = d[0] # Handle if it returns list
                     
+                    # DEBUG LOGGING
+                    print(f"DEBUG: EchoTik Data Keys: {list(d.keys())}")
+                    import json
+                    try:
+                        print(f"DEBUG: EchoTik Data Sample: {json.dumps(d, default=str)[:1000]}")
+                    except:
+                        print(f"DEBUG: EchoTik Data (Raw): {d}")
+
                     # Update product - Try CamelCase (v3) then SnakeCase (v2) fallback
                     p['sales'] = int(d.get('totalSaleCnt') or d.get('total_sale_cnt', 0))
                     p['sales_7d'] = int(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt', 0))
