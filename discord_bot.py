@@ -482,7 +482,6 @@ async def on_message(message):
                 return
             
             # Fetch product (database first, then API)
-            # Fetch product (database first, then API)
             product = get_product_data(product_id)
             
             # If not in DB, try to fetch from API
