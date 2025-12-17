@@ -1470,15 +1470,32 @@ def scan_top_brands():
                     # Filter: Must be in target influencer range AND have recent sales
                     if influencer_count < min_influencers or influencer_count > max_influencers:
                         continue
-                    if sales_7d < min_sales:  # Filter by 7-day sales, not total
+                    
+                    # STRICT CRITERIA (User Request Dec 2025)
+                    # 1. Sales Requirement: Must have SOME sales
+                    if sales_7d <= 0:
                         continue
+                        
+                    if sales_7d < min_sales: # Apply UI filter if stricter
+                        continue
+                    
+                    # 2. Video Count Logic
+                    # - Reject < 4 (Low traction/placeholder)
+                    # - Accept 4-50 (Standard)
+                    # - Accept 51-150 ONLY if Sales 7d >= 5000 (High Traction Exception)
+                    # - Reject > 150 (Too saturated)
+                    
+                    if video_count < 4:
+                        continue
+                    
+                    if video_count > 150:
+                         continue
+                         
+                    if video_count > 50 and sales_7d < 5000:
+                        continue # Too many videos for this sales volume
                     
                     # SKIP products with 0% commission - not available for affiliates
                     if commission_rate <= 0:
-                        continue
-                    
-                    # Filter: Require at least 2 videos per user request
-                    if video_count < 2:
                         continue
                     
                     brand_result['products_found'] += 1
@@ -5881,14 +5898,58 @@ def refresh_all_products():
                     timeout=30
                 )
                 
+                if response.status_code != 200:
+                    failed += 1
+                    if len(errors) < 5:
+                        errors.append(f"Product {product.product_id}: HTTP {response.status_code}")
+                else:
+                    data = response.json().get('data')
+                    if data:
+                        d = data[0]
+                        # Update fields
+                        product.sales = int(d.get('total_sale_cnt', 0))
+                        product.sales_7d = int(d.get('total_sale_7d_cnt', 0))
+                        product.sales_30d = int(d.get('total_sale_30d_cnt', 0))
+                        product.influencer_count = int(d.get('total_ifl_cnt', 0))
+                        product.video_count = int(d.get('total_video_cnt', 0))
+                        product.commission_rate = float(d.get('product_commission_rate', 0))
+                        product.price = float(d.get('spu_avg_price', 0))
+                        product.last_updated = datetime.utcnow()
+                        product.product_status = 'active' # Mark active
+                        updated += 1
+                    else:
+                         # Product might be gone
+                         product.product_status = 'likely_oos'
+            
+            except Exception as e:
+                failed += 1
+                if len(errors) < 5:
+                    errors.append(f"Product {product.product_id}: {str(e)}")
+            
+            # Rate limiting
+            time.sleep(delay)
+            if i % 10 == 0:
+                db.session.commit() # Periodic commit
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'updated': updated,
+            'failed': failed,
+            'errors': errors
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/products/nuke', methods=['POST'])
 @login_required
 @admin_required
 def admin_nuke_products():
     """⚠️ DANGER: Delete ALL products from database"""
     try:
-        # Optional: Keep favorites? User said "clean fresh slate", so maybe delete everything.
-        # But let's check if they passed a flag.
         data = request.get_json() or {}
         keep_favorites = data.get('keep_favorites', False)
         
@@ -5898,6 +5959,24 @@ def admin_nuke_products():
             deleted = Product.query.delete()
             
         db.session.commit()
+        log_activity(session.get('user_id'), 'admin_nuke', {'count': deleted, 'kept_favorites': keep_favorites})
+        return jsonify({'success': True, 'deleted': deleted})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/stats', methods=['GET'])
+@login_required
+@admin_required
+def admin_stats():
+    """Get admin dashboard stats"""
+    user_count = User.query.count()
+    product_count = Product.query.count()
+    return jsonify({
+        'users': user_count,
+        'products': product_count,
+        'status': 'online' 
+    })
         
         # Reset IDs sequence if using Postgres? No, app uses String IDs usually or mixed. 
         # (Product.product_id is String, so no sequence to reset).
