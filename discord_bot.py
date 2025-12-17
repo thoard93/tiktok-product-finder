@@ -155,9 +155,8 @@ def save_product_to_db(product_data):
         p.video_count = product_data.get('video_count', 0)
         p.commission_rate = product_data.get('commission_rate', 0)
         p.price = product_data.get('price', 0)
-        p.price = product_data.get('price', 0)
         p.last_updated = datetime.now(timezone.utc)
-        # p.live_count = 999 
+        p.live_count = product_data.get('live_count', 0)
         p.is_enriched = True
         
         try:
@@ -232,9 +231,8 @@ def get_product_from_api(product_id):
                 p.video_count = temp_p.get('video_count', 0)
                 p.commission_rate = temp_p.get('commission_rate', 0)
                 p.price = temp_p.get('price', 0)
-                p.price = temp_p.get('price', 0)
                 p.last_updated = datetime.now(timezone.utc)
-                # p.live_count = 999 # Assume stock if found
+                p.live_count = temp_p.get('live_count', 0)
                 
                 db.session.commit()
                 
