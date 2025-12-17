@@ -522,11 +522,27 @@ async def lookup_command(ctx, *, query: str = None):
         await status_msg.edit(content="❌ Could not extract product ID from your input.")
         return
     
+    
     product = get_product_data(product_id)
+    
+    # If not in DB, try to fetch from API
+    if not product:
+        status_msg = await status_msg.edit(content=f"🔎 Fetching fresh data from EchoTik for `{product_id}`...")
+        
+        # We need a dummy dict to pass to enrich_product_data since it expects a dict
+        dummy_p = {'product_id': product_id}
+        success, msg = enrich_product_data(dummy_p, i_log_prefix="[BotLookup]", force=True)
+        
+        if success:
+            # Save it to DB so get_product_data works
+            new_prod = save_product_to_db(dummy_p) 
+            if new_prod:
+                db.session.commit()
+                product = get_product_data(product_id)
     
     if not product:
         await ctx.message.add_reaction('❌')
-        await status_msg.edit(content=f"❌ Product `{product_id}` not found or scan timed out.")
+        await status_msg.edit(content=f"❌ Product `{product_id}` not found on EchoTik or Database.")
         return
     
     await status_msg.delete()

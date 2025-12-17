@@ -6003,6 +6003,20 @@ def admin_stats():
         'status': 'online' 
     })
 
+@app.route('/api/admin/activity')
+@login_required
+@admin_required
+def admin_activity_logs():
+    """Get system activity logs"""
+    try:
+        logs = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(50).all()
+        return jsonify({
+            'success': True,
+            'logs': [l.to_dict() for l in logs]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/detect-oos', methods=['GET', 'POST'])
 def detect_out_of_stock():
     """Run out-of-stock detection on all existing products."""

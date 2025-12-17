@@ -105,8 +105,35 @@
                         </tr>
                     </thead>
                     <tbody id="userTable" class="text-sm">
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Activity Logs -->
+        <div class="glass-panel rounded-2xl p-6 mt-8">
+            <h2 class="font-heading font-bold text-xl mb-6 flex items-center gap-2">
+                <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
+                    </path>
+                </svg>
+                System Logs
+            </h2>
+            <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                <table class="w-full text-left">
+                    <thead class="sticky top-0 bg-slate-900/90 backdrop-blur-md z-10">
+                        <tr class="text-slate-500 text-xs uppercase tracking-wider border-b border-white/5">
+                            <th class="py-3 px-4">Time (EST)</th>
+                            <th class="py-3 px-4">User</th>
+                            <th class="py-3 px-4">Action</th>
+                            <th class="py-3 px-4">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody" class="text-sm font-mono">
                         <tr>
-                            <td colspan="4" class="py-4 text-center text-slate-500">Loading users...</td>
+                            <td colspan="4" class="py-4 text-center text-slate-500">Loading logs...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -144,7 +171,7 @@
                 const res = await fetch('/api/admin/products/nuke', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keep_favorites: true }) // Default to keeping favorites safe? User said "Delete all", let's ask or just do plain nuke. Backend supports current param.
+                    body: JSON.stringify({ keep_favorites: false }) // Force full wipe including favorites
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -178,9 +205,9 @@
                     document.getElementById('userTable').innerHTML = `
     <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
         <td class="py-3 px-4 flex items-center gap-3">
-            <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.avatar}.png"
+            <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.discord_avatar}.png"
                 class="w-8 h-8 rounded-full bg-slate-700">
-            <span class="text-white font-medium">${me.discord_username}</span>
+            <span class="text-white font-medium">${me.discord_username || 'Unknown'}</span>
         </td>
         <td class="py-3 px-4 text-slate-300">Admin</td>
         <td class="py-3 px-4"><span
@@ -190,6 +217,21 @@
         </td>
     </tr>
     `;
+                }
+
+                // Fetch Logs
+                const logRes = await fetch('/api/admin/activity');
+                if (logRes.ok) {
+                    const lData = await logRes.json();
+                    const rows = lData.logs.map(l => `
+                        <tr class="border-b border-white/5 font-mono text-xs">
+                            <td class="py-2 px-4 text-slate-400">${l.created_at_est || l.created_at}</td>
+                            <td class="py-2 px-4 text-cyan-400">${l.username}</td>
+                            <td class="py-2 px-4 text-white">${l.action}</td>
+                            <td class="py-2 px-4 text-slate-500 truncate max-w-xs" title='${l.details || ""}'>${l.details || "-"}</td>
+                        </tr>
+                    `).join('');
+                    document.getElementById('logTableBody').innerHTML = rows;
                 }
             } catch (e) {
                 console.error(e);
