@@ -4900,31 +4900,33 @@ def pwa_files(filename):
         return redirect('/login')
     return send_from_directory('pwa', filename)
 
-@app.route('/api/image-proxy/<product_id>')
+@app.route('/api/image-proxy/<path:product_id>')
 def image_proxy(product_id):
-    """Proxy product images - fast version without EchoTik API call"""
-    product = Product.query.get(product_id)
-    if not product or not product.image_url:
-        return '', 404
+    """Proxy product images to avoid 403 hotlink issues and handle normalized IDs."""
+    from models import Product
     
-    image_url = product.image_url
+    # Normalize ID (handle shop_ prefix)
+    raw_id = product_id.replace('shop_', '')
+    p = Product.query.get(f"shop_{raw_id}")
+    if not p:
+        p = Product.query.get(raw_id)
+        
+    if not p or not p.image_url:
+        return jsonify({'error': 'Image not found'}), 404
+        
+    img_url = p.image_url
     
-    # Try to fetch the image directly (works for some URLs)
     try:
-        response = requests.get(image_url, timeout=5, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Referer': 'https://www.tiktok.com/'
-        })
-        if response.status_code == 200:
-            return response.content, 200, {
-                'Content-Type': response.headers.get('Content-Type', 'image/jpeg'),
-                'Cache-Control': 'public, max-age=86400'
-            }
-    except:
-        pass
-    
-    # If direct fetch fails, return 404 (frontend will show placeholder)
-    return '', 404
+        }
+        r = requests.get(img_url, headers=headers, stream=True, timeout=10)
+        r.raise_for_status()
+        return Response(r.content, content_type=r.headers.get('content-type', 'image/jpeg'))
+    except Exception as e:
+        print(f"Proxy Error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # =============================================================================
@@ -6438,31 +6440,7 @@ def api_scan_manual():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/image-proxy/<path:product_id>')
-def api_image_proxy(product_id):
-    """Simple proxy for product images to avoid CORS/Hotlink issues"""
-    # 1. Get product URL from DB
-    p = Product.query.filter_by(product_id=product_id).first()
-    if not p and product_id.isdigit():
-        p = Product.query.filter_by(product_id=f"shop_{product_id}").first()
-    if not p and product_id.startswith('shop_'):
-        p = Product.query.filter_by(product_id=product_id.replace('shop_', '')).first()
-        
-    if not p or not p.image_url:
-        return jsonify({'error': 'Image not found'}), 404
-        
-    img_url = p.image_url
-    
-    # 2. Fetch and Stream
-    try:
-        if img_url.startswith('data:'):
-            # It's base64, serve it decoding? No, too complex.
-            return jsonify({'error': 'Base64 image, use direct link'}), 400
-            
-        r = requests.get(img_url, stream=True, timeout=10)
-        return Response(r.content, content_type=r.headers.get('content-type', 'image/jpeg'))
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# Consolidated with /api/image-proxy/<path:product_id> above
 
 # =============================================================================
 # LEGACY SCANNERS (Brand Hunter / EchoTik)
