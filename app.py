@@ -2790,6 +2790,8 @@ def scan_manual_import():
             advertiser = "Unknown"
             if isinstance(p_obj, dict):
                  advertiser = p_obj.get('shopName') or p_obj.get('shop_name') or advertiser
+            
+            # If still unknown, fallback to creator
             if advertiser == "Unknown":
                 creator = item.get('creator')
                 if isinstance(creator, dict):
@@ -4902,31 +4904,139 @@ def pwa_files(filename):
 
 @app.route('/api/image-proxy/<path:product_id>')
 def image_proxy(product_id):
-    """Proxy product images to avoid 403 hotlink issues and handle normalized IDs."""
-    from models import Product
-    
-    # Normalize ID (handle shop_ prefix)
-    raw_id = product_id.replace('shop_', '')
-    p = Product.query.get(f"shop_{raw_id}")
-    if not p:
-        p = Product.query.get(raw_id)
-        
-    if not p or not p.image_url:
-        return jsonify({'error': 'Image not found'}), 404
-        
-    img_url = p.image_url
-    
+    """Proxy image requests to bypass TikTok direct-link blocks and fix metadata."""
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Referer': 'https://www.tiktok.com/'
-        }
-        r = requests.get(img_url, headers=headers, stream=True, timeout=10)
-        r.raise_for_status()
-        return Response(r.content, content_type=r.headers.get('content-type', 'image/jpeg'))
+        raw_id = product_id.replace('shop_', '')
+        
+        # We need the app context for database queries if this is called from outside the main app thread
+        # (though usually routes are within context, let's be safe and also use the correct Model)
+        with app.app_context():
+            # Try to find the product in DB to get the original image URL
+            p = Product.query.get(f"shop_{raw_id}")
+            if not p:
+                p = Product.query.get(raw_id)
+            
+            target_url = None
+            if p and p.image_url:
+                target_url = p.image_url
+            elif p and p.cached_image_url:
+                target_url = p.cached_image_url
+            
+            # Fallback for manual IDs passed directly
+            if not target_url:
+                # If product_id looks like a URL already
+                if product_id.startswith('http'):
+                    target_url = product_id
+                else:
+                    return jsonify({'error': 'Image Source Not Found'}), 404
+
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+                "Referer": "https://www.tiktok.com/"
+            }
+            
+            resp = requests.get(target_url, headers=headers, stream=True, timeout=10)
+            
+            # Exclude some problematic headers
+            excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+            headers = [(name, value) for (name, value) in resp.raw.headers.items()
+                       if name.lower() not in excluded_headers]
+
+            return Response(resp.content, resp.status_code, headers)
+
     except Exception as e:
         print(f"Proxy Error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/products', methods=['GET'])
+@login_required
+def api_products():
+    """Main product listing API with filtering, sorting, and pagination"""
+    try:
+        # 1. Parsing Parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 24, type=int)
+        sort_by = request.args.get('sort', 'newest')
+        
+        # Filters
+        min_sales = request.args.get('min_sales', type=int)
+        max_inf = request.args.get('max_inf', type=int)
+        min_inf = request.args.get('min_inf', type=int)
+        min_vids = request.args.get('min_vids', type=int)
+        max_vids = request.args.get('max_vids', type=int)
+        scan_type = request.args.get('scan_type')
+        seller_id = request.args.get('seller_id')
+        keyword = request.args.get('keyword')
+        is_favorite = request.args.get('favorite', 'false').lower() == 'true'
+
+        # 2. Build Query
+        query = Product.query
+
+        if is_favorite:
+            query = query.filter(Product.is_favorite == True)
+        
+        if seller_id:
+            query = query.filter(Product.seller_id == seller_id)
+            
+        if scan_type:
+            if scan_type == 'daily_virals':
+                 # Specific hack for DV if needed, otherwise general filter
+                 query = query.filter(Product.scan_type == 'daily_virals')
+            else:
+                 query = query.filter(Product.scan_type == scan_type)
+
+        if keyword:
+            query = query.filter(db.or_(
+                Product.product_name.ilike(f'%{keyword}%'),
+                Product.seller_name.ilike(f'%{keyword}%')
+            ))
+
+        if min_sales is not None:
+            query = query.filter(Product.sales_7d >= min_sales)
+        
+        if min_inf is not None:
+            query = query.filter(Product.influencer_count >= min_inf)
+            
+        if max_inf is not None:
+            query = query.filter(Product.influencer_count <= max_inf)
+            
+        if min_vids is not None:
+            query = query.filter(Product.video_count >= min_vids)
+            
+        if max_vids is not None:
+            query = query.filter(Product.video_count <= max_vids)
+
+        # 3. Apply Sorting
+        if sort_by == 'sales_desc':
+            query = query.order_by(Product.sales_7d.desc())
+        elif sort_by == 'sales_asc':
+            query = query.order_by(Product.sales_7d.asc())
+        elif sort_by == 'inf_asc':
+            query = query.order_by(Product.influencer_count.asc())
+        elif sort_by == 'inf_desc':
+            query = query.order_by(Product.influencer_count.desc())
+        elif sort_by == 'commission':
+            query = query.order_by(Product.commission_rate.desc())
+        elif sort_by == 'newest':
+            query = query.order_by(Product.first_seen.desc())
+        else:
+            query = query.order_by(Product.first_seen.desc())
+
+        # 4. Pagination & Execution
+        total = query.count()
+        products = query.offset((page - 1) * per_page).limit(per_page).all()
+
+        return jsonify({
+            'success': True,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'products': [p.to_dict() for p in products]
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # =============================================================================
@@ -6347,98 +6457,6 @@ with app.app_context():
 # MANUAL SCAN & UTILS (Restored for V2)
 # =============================================================================
 
-@app.route('/api/scan/manual', methods=['POST'])
-@login_required
-def api_scan_manual():
-    """Manual Import Endpoint (Restored)"""
-    try:
-        data = request.json
-        if not data:
-             return jsonify({'error': 'No data provided'}), 400
-             
-        # Support both 'url' direct input AND the DV 'json_data' wrapper
-        url = data.get('url')
-        
-        # Handle DV wrapper if present
-        if data.get('json_data'):
-            try:
-                inner = json.loads(data['json_data'])
-                if inner.get('list') and len(inner['list']) > 0:
-                    url = inner['list'][0].get('product', {}).get('url')
-            except:
-                pass
-                
-        if not url:
-            return jsonify({'error': 'No URL found'}), 400
-            
-        # Basic ID extraction
-        import re
-        product_id = None
-        match = re.search(r'/product/(\d+)', url)
-        if match:
-            product_id = match.group(1)
-        else:
-            # Fallback for other URL formats
-            match = re.search(r'id=(\d+)', url)
-            if match:
-                product_id = match.group(1)
-        
-        if not product_id:
-             return jsonify({'error': 'Could not extract Product ID from URL'}), 400
-             
-        # Add to DB
-        existing = Product.query.filter_by(product_id=product_id).first()
-        if not existing:
-            # Try with shop_ prefix just in case
-            existing = Product.query.filter_by(product_id=f"shop_{product_id}").first()
-            
-        if existing:
-            return jsonify({'success': True, 'message': 'Product already exists', 'product_id': existing.product_id})
-            
-        # Create new placeholder product
-        new_p = Product(
-            product_id=product_id,
-            product_status='active',
-            product_url=url,
-            product_name=f"New Import ({product_id})",
-            first_seen=datetime.utcnow(),
-            last_updated=datetime.utcnow(),
-            sales_7d=0,
-            video_count=0,
-            scan_type='manual_bridge'
-        )
-        db.session.add(new_p)
-        db.session.commit()
-        
-        # BRIDGE: Immediately fetch data from EchoTik
-        try:
-            print(f"🌉 Bridging Product {product_id} to EchoTik API...")
-            er = requests.get(
-                f"{BASE_URL}/product/detail",
-                params={'product_id': product_id},
-                auth=get_auth(),
-                timeout=15
-            )
-            if er.status_code == 200:
-                ed = er.json().get('data', {})
-                if ed:
-                    new_p.product_name = ed.get('title') or new_p.product_name
-                    new_p.image_url = ed.get('product_img_url') or new_p.image_url
-                    new_p.sales_7d = int(ed.get('total_sale_7d_cnt', 0) or 0)
-                    new_p.sales = int(ed.get('total_sale_cnt', 0) or 0)
-                    new_p.video_count = int(ed.get('total_video_cnt', 0) or 0)
-                    new_p.price = float(ed.get('spu_avg_price', 0) or 0)
-                    new_p.commission_rate = float(ed.get('product_commission_rate', 0) or 0)
-                    new_p.status_note = "Enriched via EchoTik Bridge"
-                    db.session.commit()
-        except Exception as bridge_err:
-            print(f"Bridge Error: {bridge_err}")
-            # Non-blocking, user still gets the product imported
-        
-        return jsonify({'success': True, 'message': 'Product imported and bridged to EchoTik', 'product_id': product_id})
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 # Consolidated with /api/image-proxy/<path:product_id> above
 
