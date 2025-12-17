@@ -165,7 +165,22 @@ def save_product_to_db(product_data):
             print(f"DB Error in save_product_to_db: {e}")
             db.session.rollback()
 
-        return p
+        # Return DICT to avoid DetachedInstanceError
+        return {
+            'product_id': p.product_id,
+            'product_name': p.product_name,
+            'image_url': p.image_url,
+            'sales': p.sales,
+            'sales_7d': p.sales_7d,
+            'sales_30d': p.sales_30d,
+            'influencer_count': p.influencer_count,
+            'video_count': p.video_count,
+            'commission_rate': p.commission_rate,
+            'price': p.price,
+            'live_count': p.live_count,
+            'has_free_shipping': p.has_free_shipping,
+            'cached_image_url': p.cached_image_url
+        }
 
 def get_product_from_api(product_id):
     """
@@ -379,7 +394,7 @@ def create_product_embed(p, title_prefix=""):
     embed.add_field(name="📉 7 Day Sales", value=f"{sales_7d:,}", inline=True)
     embed.add_field(name="💰 Price", value=price_display, inline=True)
     embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
-    embed.add_field(name="✨ Total Sales", value=f"{p.sales:,}", inline=True) # Added Total Sales
+    embed.add_field(name="✨ Total Sales", value=f"{total_sales:,}", inline=True) # Added Total Sales
     embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
     embed.add_field(name="👥 Creators", value=f"{influencer_count:,}", inline=True)
     embed.add_field(name="🎯 Opportunity", value=f"**{opportunity}**", inline=False)
