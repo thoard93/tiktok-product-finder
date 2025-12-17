@@ -364,17 +364,22 @@ def create_product_embed(p, title_prefix=""):
     if has_free_shipping:
         title = "🎁 " + title
     
+    # Strip 'shop_' prefix for the clean TikTok View URL
+    view_id = product_id.replace('shop_', '') if product_id else ''
+
     embed = Embed(
         title=title,
-        url=f"https://www.tiktok.com/shop/pdp/{product_id}",
+        url=f"https://www.tiktok.com/t/{view_id}" if len(view_id) < 15 else f"https://shop.tiktok.com/view/product/{view_id}?region=US&locale=en-US",
         color=color
     )
     
-    # Add stats fields
-    embed.add_field(name="📦 Stock", value=f"{stock:,}", inline=True)
+    # Add stats fields (Stock Removed per user request)
+    # embed.add_field(name="📦 Stock", value=f"{stock:,}", inline=True) <-- REMOVED
+    
     embed.add_field(name="📉 7 Day Sales", value=f"{sales_7d:,}", inline=True)
     embed.add_field(name="💰 Price", value=price_display, inline=True)
     embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
+    embed.add_field(name="✨ Total Sales", value=f"{p.sales:,}", inline=True) # Added Total Sales
     embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
     embed.add_field(name="👥 Creators", value=f"{influencer_count:,}", inline=True)
     embed.add_field(name="🎯 Opportunity", value=f"**{opportunity}**", inline=False)
