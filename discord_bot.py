@@ -167,7 +167,22 @@ def get_product_from_api(product_id):
                 p.live_count = 999 # Assume stock if found
                 
                 db.session.commit()
-                return p
+                
+                # Convert to dict before returning!
+                return {
+                    'product_id': p.product_id,
+                    'product_name': p.product_name,
+                    'sales': p.sales,
+                    'sales_7d': p.sales_7d,
+                    'sales_30d': p.sales_30d,
+                    'influencer_count': p.influencer_count,
+                    'video_count': p.video_count,
+                    'commission_rate': p.commission_rate,
+                    'price': p.price,
+                    'image_url': p.cached_image_url or p.image_url,
+                    'live_count': p.live_count,
+                    'from_api': True
+                }
             else:
                 print(f"❌ Echotik search failed: {msg}")
                 return None
@@ -189,7 +204,21 @@ def get_product_data(product_id):
         # We trust 'sales_7d' > 0 as a sign of having data
         if db_product and (db_product.sales_7d > 0 or db_product.video_count > 0):
             print(f"✅ Product {product_id} found in database (Cached)")
-            return db_product
+            # Return as DICT to survive session close
+            return {
+                'product_id': db_product.product_id,
+                'product_name': db_product.product_name,
+                'sales': db_product.sales,
+                'sales_7d': db_product.sales_7d,
+                'sales_30d': db_product.sales_30d,
+                'influencer_count': db_product.influencer_count,
+                'video_count': db_product.video_count,
+                'commission_rate': db_product.commission_rate,
+                'price': db_product.price,
+                'image_url': db_product.cached_image_url or db_product.image_url,
+                'has_free_shipping': db_product.has_free_shipping,
+                'live_count': db_product.live_count
+            }
     
     # Not found OR needs upgrade -> Call Scanner
     print(f"🔍 Product {product_id} needs scan/upgrade, calling EchoTik...")

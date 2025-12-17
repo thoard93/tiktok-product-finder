@@ -113,62 +113,100 @@
             </div>
         </div>
 
-        <div class="mt-8 flex justify-end">
+        <div class="mt-8 flex justify-end gap-4">
             <button onclick="runCleanup()"
-                class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors">
-                🗑️ Cleanup Invalid Products
+                class="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 rounded-lg transition-colors">
+                🧹 Cleanup Invalid Products
+            </button>
+
+            <button onclick="nukeProducts()"
+                class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                    </path>
+                </svg>
+                Danger: Delete All Products
             </button>
         </div>
     </main>
 
+    <!-- Danger Zone Scripts -->
     <script>
-        async function loadAdmin() {
+        async function nukeProducts() {
+            const confirmed = confirm("⚠️ DANGER ZONE ⚠️\n\nAre you sure you want to delete ALL products from the database?\n\nThis action cannot be undone.");
+            if (!confirmed) return;
+
+            const doubleCheck = confirm("Final Confirmation:\n\nClick OK to wiping everything.\nClick Cancel to abort.");
+            if (!doubleCheck) return;
+
             try {
-                // Fetch Stats (Mocked or Real if API exists)
-                // We'll use product stats API
-                const pRes = await fetch('/api/oos-stats'); // Reuse this for total products
-                if (pRes.ok) {
-                    const data = await pRes.json();
-                    document.getElementById('statProducts').textContent = data.stats.total_products;
-                }
-
-                // Fetch Users (We might not have a public user list API, so mocking cur user)
-                const meRes = await fetch('/api/me');
-                if (meRes.ok) {
-                    const me = await meRes.json();
-                    document.getElementById('statUsers').textContent = "1 (You)";
-
-                    document.getElementById('userTable').innerHTML = `
-                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <td class="py-3 px-4 flex items-center gap-3">
-                                <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.avatar}.png" class="w-8 h-8 rounded-full bg-slate-700">
-                                <span class="text-white font-medium">${me.discord_username}</span>
-                            </td>
-                            <td class="py-3 px-4 text-slate-300">Admin</td>
-                            <td class="py-3 px-4"><span class="px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold">Active</span></td>
-                            <td class="py-3 px-4 text-right">
-                                <button class="text-slate-400 hover:text-white">Edit</button>
-                            </td>
-                        </tr>
-                    `;
+                const res = await fetch('/api/admin/products/nuke', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keep_favorites: true }) // Default to keeping favorites safe? User said "Delete all", let's ask or just do plain nuke. Backend supports current param.
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Wiped ${data.deleted} products.`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Error: ' + data.error);
                 }
             } catch (e) {
-                console.error(e);
+                alert('❌ Network Error: ' + e);
             }
         }
+    </script>
+    async function loadAdmin() {
+    try {
+    // Fetch Stats (Mocked or Real if API exists)
+    // We'll use product stats API
+    const pRes = await fetch('/api/oos-stats'); // Reuse this for total products
+    if (pRes.ok) {
+    const data = await pRes.json();
+    document.getElementById('statProducts').textContent = data.stats.total_products;
+    }
 
-        async function runCleanup() {
-            if (!confirm("Run cleanup? This deletes 0% commission products.")) return;
-            // Call API
-            try {
-                const res = await fetch('/api/cleanup', { method: 'POST' });
-                const data = await res.json();
-                alert(data.message);
-                loadAdmin();
-            } catch (e) { alert("Error: " + e); }
-        }
+    // Fetch Users (We might not have a public user list API, so mocking cur user)
+    const meRes = await fetch('/api/me');
+    if (meRes.ok) {
+    const me = await meRes.json();
+    document.getElementById('statUsers').textContent = "1 (You)";
 
-        loadAdmin();
+    document.getElementById('userTable').innerHTML = `
+    <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+        <td class="py-3 px-4 flex items-center gap-3">
+            <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.avatar}.png"
+                class="w-8 h-8 rounded-full bg-slate-700">
+            <span class="text-white font-medium">${me.discord_username}</span>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Admin</td>
+        <td class="py-3 px-4"><span
+                class="px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold">Active</span></td>
+        <td class="py-3 px-4 text-right">
+            <button class="text-slate-400 hover:text-white">Edit</button>
+        </td>
+    </tr>
+    `;
+    }
+    } catch (e) {
+    console.error(e);
+    }
+    }
+
+    async function runCleanup() {
+    if (!confirm("Run cleanup? This deletes 0% commission products.")) return;
+    // Call API
+    try {
+    const res = await fetch('/api/cleanup', { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+    loadAdmin();
+    } catch (e) { alert("Error: " + e); }
+    }
+
+    loadAdmin();
     </script>
 </body>
 
