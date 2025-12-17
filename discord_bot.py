@@ -185,13 +185,14 @@ def get_product_data(product_id):
         # We need to handle both lookups.
         db_product = Product.query.get(product_id) or Product.query.get(f"shop_{product_id}")
         
-        # If found AND has stats (apify_shop), return it immediately
-        if db_product and db_product.scan_type == 'apify_shop':
+        # If found AND has valid stats (any source), return it
+        # We trust 'sales_7d' > 0 as a sign of having data
+        if db_product and (db_product.sales_7d > 0 or db_product.video_count > 0):
             print(f"✅ Product {product_id} found in database (Cached)")
             return db_product
     
-    # Not found OR needs upgrade -> Call Scan
-    print(f"🔍 Product {product_id} needs scan/upgrade, calling Scanner...")
+    # Not found OR needs upgrade -> Call Scanner
+    print(f"🔍 Product {product_id} needs scan/upgrade, calling EchoTik...")
     return get_product_from_api(product_id)
 
 
@@ -291,7 +292,7 @@ def create_product_embed(p, title_prefix=""):
     return embed
 
 def get_hot_products():
-    """Get Top Products from the New Scraper Tab (Apify Shop)"""
+    """Get Top Products from ANY source (EchoTik/Manual/etc)"""
     from datetime import timedelta
     
     with app.app_context():
@@ -299,13 +300,11 @@ def get_hot_products():
         cutoff_date = datetime.utcnow() - timedelta(days=DAYS_BEFORE_REPEAT)
         
         # Query: 
-        # 1. New Scraper Data (scan_type='apify_shop')
-        # 2. Has Stock (live_count > 0)
-        # 3. Has Videos (video_count > 0)
-        # 4. Not shown recently
+        # 1. Has Stock (live_count > 0) OR Sales (sales_7d > 0)
+        # 2. Has Videos (video_count > 0) - ensure verified product
+        # 3. Not shown recently
         products = Product.query.filter(
-            Product.scan_type == 'apify_shop', # ONLY new scraper data
-            Product.live_count > 0,            # Stock > 0
+            Product.sales_7d >= MIN_SALES_7D,  # Use global constant
             Product.video_count > 0,           # Videos > 0
             db.or_(
                 Product.last_shown_hot == None,  # Never shown
@@ -318,6 +317,7 @@ def get_hot_products():
         # Mark products as shown today
         for p in products:
             p.last_shown_hot = datetime.utcnow()
+
         
         try:
             db.session.commit()
