@@ -1937,18 +1937,18 @@ def quick_scan():
                 
                 # Filters
                 if influencer_count < min_influencers or influencer_count > max_influencers:
-                    # print(f"DEBUG: Skipping {product_id} - Inf count {influencer_count} out of range ({min_influencers}-{max_influencers})")
+                    print(f"DEBUG: Skipping {product_id} - Inf count {influencer_count} out of range ({min_influencers}-{max_influencers})")
                     continue
                 if sales_7d < min_sales:
-                    # print(f"DEBUG: Skipping {product_id} - Sales 7d {sales_7d} < {min_sales}")
+                    print(f"DEBUG: Skipping {product_id} - Sales 7d {sales_7d} < {min_sales}")
                     continue
                 if commission_rate <= 0:
-                    # print(f"DEBUG: Skipping {product_id} - Commission {commission_rate} <= 0")
+                    print(f"DEBUG: Skipping {product_id} - Commission {commission_rate} <= 0")
                     continue
                 
                 # Require at least 2 videos (filtered out 0-1 video products per user request)
                 if video_count < 2:
-                    # print(f"DEBUG: Skipping {product_id} - Video count {video_count} < 2")
+                    print(f"DEBUG: Skipping {product_id} - Video count {video_count} < 2")
                     continue
                 
                 # Video count max filter (if set)
