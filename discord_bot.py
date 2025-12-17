@@ -131,7 +131,7 @@ def get_product_from_api(product_id):
             if not p:
                 # Create a temporary/new product
                 p = Product(product_id=shop_pid)
-                p.first_seen = datetime.utcnow()
+                p.first_seen = datetime.now(datetime.timezone.utc)
                 db.session.add(p)
             
             # Convert to dict-like logic for the function?
@@ -209,7 +209,7 @@ def get_product_data(product_id):
         # Check DB
         # Note: The bot logic uses numeric ID, but app uses 'shop_' prefix.
         # We need to handle both lookups.
-        db_product = Product.query.get(product_id) or Product.query.get(f"shop_{product_id}")
+        db_product = db.session.get(Product, product_id) or db.session.get(Product, f"shop_{product_id}")
         
         # If found AND has valid stats (any source), return it
         # We trust 'sales_7d' > 0 as a sign of having data
