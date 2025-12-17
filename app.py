@@ -229,7 +229,7 @@ def enrich_product_data(p, i_log_prefix="", force=False):
         try:
             res = requests.get(
                 f"{ECHOTIK_REALTIME_BASE}/product/detail",
-                params={'product_id': target_id, 'region': 'US'}, # v3 uses singular 'product_id', required region
+                params={'product_id': target_id}, # v3 uses singular 'product_id'
                 auth=get_auth(),
                 timeout=20
             )
