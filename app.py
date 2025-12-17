@@ -202,9 +202,99 @@ KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product st
 # =============================================================================
 
 def parse_cover_url(url):
-    """Clean up cover URL"""
+    """Clean up cover URL which may be a JSON array string or list."""
     if not url: return ""
-    return url
+    # If already a list (from some parsers)
+    if isinstance(url, list):
+        if len(url) > 0:
+            item = url[0]
+            if isinstance(item, dict): return item.get('url') or item.get('url_list', [None])[0] or ""
+            return str(item)
+        return ""
+    # If JSON string
+    if isinstance(url, str) and (url.startswith('[') or url.startswith('{')):
+        try:
+            import json
+            data = json.loads(url)
+            if isinstance(data, list) and len(data) > 0:
+                item = data[0]
+                if isinstance(item, dict): return item.get('url') or item.get('url_list', [None])[0] or ""
+                return str(item)
+            if isinstance(data, dict):
+                return data.get('url') or data.get('url_list', [None])[0] or ""
+        except: pass
+    return str(url)
+
+def save_or_update_product(p_data, scan_type='brand_hunter'):
+    """
+    Unified helper to save or update a product in the DB.
+    Ensures normalized shop_ prefix and comprehensive field updates.
+    """
+    raw_id = str(p_data.get('product_id') or p_data.get('productId') or p_data.get('id')).replace('shop_', '')
+    product_id = f"shop_{raw_id}"
+    
+    existing = Product.query.get(product_id)
+    
+    # Extract & Normalize Stats
+    inf_count = int(p_data.get('total_ifl_cnt') or p_data.get('totalIflCnt') or 0)
+    sales = int(p_data.get('total_sale_cnt') or p_data.get('totalSaleCnt') or p_data.get('sales', 0))
+    s7d = int(p_data.get('total_sale_7d_cnt') or p_data.get('totalSale7dCnt') or p_data.get('sales_7d', 0))
+    s30d = int(p_data.get('total_sale_30d_cnt') or p_data.get('totalSale30dCnt') or p_data.get('sales_30d', 0))
+    
+    raw_comm = float(p_data.get('product_commission_rate') or p_data.get('productCommissionRate') or p_data.get('commission_rate', 0))
+    comm = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
+    
+    price = float(p_data.get('spu_avg_price') or p_data.get('spuAvgPrice') or p_data.get('price', 0))
+    v_count = int(p_data.get('total_video_cnt') or p_data.get('totalVideoCnt') or p_data.get('video_count', 0))
+    
+    img = parse_cover_url(p_data.get('cover_url') or p_data.get('cover') or p_data.get('image_url') or p_data.get('item_img'))
+    name = p_data.get('product_name') or p_data.get('productName') or p_data.get('title') or ""
+
+    if existing:
+        # Update existing record
+        existing.product_name = name or existing.product_name
+        existing.image_url = img or existing.image_url
+        existing.price = price if price > 0 else existing.price
+        existing.sales = sales if sales > 0 else existing.sales
+        existing.sales_7d = s7d if s7d > 0 else existing.sales_7d
+        existing.sales_30d = s30d if s30d > 0 else existing.sales_30d
+        existing.influencer_count = inf_count if inf_count > 0 else existing.influencer_count
+        existing.commission_rate = comm if comm > 0 else existing.commission_rate
+        existing.video_count = v_count if v_count > 0 else existing.video_count
+        
+        # Merge other stats if available
+        existing.video_7d = int(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or existing.video_7d or 0)
+        existing.video_30d = int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or existing.video_30d or 0)
+        existing.live_count = int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or existing.live_count or 0)
+        existing.views_count = int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
+        
+        existing.last_updated = datetime.utcnow()
+        return False # False = Updated
+    else:
+        # Create new record
+        product = Product(
+            product_id=product_id,
+            product_name=name,
+            image_url=img,
+            price=price,
+            sales=sales,
+            sales_7d=s7d,
+            sales_30d=s30d,
+            influencer_count=inf_count,
+            commission_rate=comm,
+            video_count=v_count,
+            video_7d=int(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or 0),
+            video_30d=int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or 0),
+            live_count=int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or 0),
+            views_count=int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or 0),
+            seller_id=p_data.get('seller_id'),
+            seller_name=p_data.get('seller_name'),
+            scan_type=scan_type,
+            first_seen=datetime.utcnow()
+        )
+        db.session.add(product)
+        return True # True = New
+
 
 def get_auth():
     """Get HTTP Basic Auth for EchoTik"""
@@ -1738,54 +1828,18 @@ def scan_top_brands():
             
             # Now save products to database with signed images
             for pdata in products_to_save:
-                product_id = pdata['product_id']
-                image_url = pdata['image_url']
-                cached_url = signed_urls.get(image_url) if image_url else None
-                
-                existing = Product.query.get(product_id)
-                if existing:
-                    existing.influencer_count = pdata['influencer_count']
-                    existing.sales = pdata['total_sales']
-                    existing.sales_30d = pdata['sales_30d']
-                    existing.sales_7d = pdata['sales_7d']
-                    existing.commission_rate = pdata['commission_rate']
-                    existing.video_count = pdata['video_count']
-                    existing.video_7d = pdata['video_7d']
-                    existing.video_30d = pdata['video_30d']
-                    existing.live_count = pdata['live_count']
-                    existing.views_count = pdata['views_count']
-                    existing.last_updated = datetime.utcnow()
-                    # Update image if we got a new signed URL
-                    if cached_url:
-                        existing.image_url = image_url
-                        existing.cached_image_url = cached_url
-                        existing.image_cached_at = datetime.utcnow()
-                else:
-                    product = Product(
-                        product_id=product_id,
-                        product_name=pdata['product_name'],
-                        seller_id=pdata['seller_id'],
-                        seller_name=pdata['seller_name'],
-                        gmv=pdata['gmv'],
-                        gmv_30d=pdata['gmv_30d'],
-                        sales=pdata['total_sales'],
-                        sales_7d=pdata['sales_7d'],
-                        sales_30d=pdata['sales_30d'],
-                        influencer_count=pdata['influencer_count'],
-                        commission_rate=pdata['commission_rate'],
-                        price=pdata['price'],
-                        image_url=image_url,
-                        cached_image_url=cached_url,
-                        image_cached_at=datetime.utcnow() if cached_url else None,
-                        video_count=pdata['video_count'],
-                        video_7d=pdata['video_7d'],
-                        video_30d=pdata['video_30d'],
-                        live_count=pdata['live_count'],
-                        views_count=pdata['views_count'],
-                        scan_type='brand_hunter'
-                    )
-                    db.session.add(product)
+                # Normalize ID inside the helper
+                is_new = save_or_update_product(pdata, scan_type='top_brands')
+                if is_new:
                     brand_result['products_saved'] += 1
+                
+                # Handle image caching updates separately if needed
+                if signed_urls.get(pdata['image_url']):
+                     product_id = f"shop_{str(pdata['product_id']).replace('shop_','')}"
+                     p_obj = Product.query.get(product_id)
+                     if p_obj:
+                         p_obj.cached_image_url = signed_urls[pdata['image_url']]
+                         p_obj.image_cached_at = datetime.utcnow()
             
             # Commit after each brand to avoid losing progress
             db.session.commit()
@@ -1914,45 +1968,11 @@ def quick_scan():
                 
                 result['products_found'] += 1
                 
-                image_url = parse_cover_url(p.get('cover_url', ''))
-                
-                existing = Product.query.get(product_id)
-                if existing:
-                    existing.influencer_count = influencer_count
-                    existing.sales = total_sales
-                    existing.sales_30d = sales_30d
-                    existing.sales_7d = sales_7d
-                    existing.commission_rate = commission_rate
-                    existing.video_count = video_count
-                    existing.video_7d = video_7d
-                    existing.video_30d = video_30d
-                    existing.live_count = live_count
-                    existing.views_count = views_count
-                    existing.last_updated = datetime.utcnow()
-                else:
-                    product = Product(
-                        product_id=product_id,
-                        product_name=p.get('product_name', ''),
-                        seller_id=seller_id,
-                        seller_name=seller_name,
-                        gmv=float(p.get('total_sale_gmv_amt') or p.get('totalSaleGmvAmt') or 0),
-                        gmv_30d=float(p.get('total_sale_gmv_30d_amt') or p.get('totalSaleGmv30dAmt') or 0),
-                        sales=total_sales,
-                        sales_7d=sales_7d,
-                        sales_30d=sales_30d,
-                        influencer_count=influencer_count,
-                        commission_rate=commission_rate,
-                        price=float(p.get('spu_avg_price') or p.get('spuAvgPrice') or 0),
-                        image_url=parse_cover_url(p.get('cover_url') or p.get('cover') or p.get('item_img')),
-                        video_count=video_count,
-                        video_7d=video_7d,
-                        video_30d=video_30d,
-                        live_count=live_count,
-                        views_count=views_count,
-                        has_free_shipping=p.get('free_shipping', 0) == 1,
-                        scan_type='brand_hunter'
-                    )
-                    db.session.add(product)
+                # Unified Save/Update
+                p['seller_id'] = seller_id
+                p['seller_name'] = seller_name
+                is_new = save_or_update_product(p, scan_type='brand_hunter')
+                if is_new:
                     result['products_saved'] += 1
             
             time.sleep(0.1)
@@ -2119,57 +2139,19 @@ def scan_deals():
         
         # Save products to database
         for pdata in products_to_save:
-            product_id = pdata['product_id']
-            image_url = pdata['image_url']
-            cached_url = signed_urls.get(image_url) if image_url else None
-            
-            existing = Product.query.get(product_id)
-            if existing:
-                # Update existing product
-                existing.influencer_count = pdata['influencer_count']
-                existing.sales = pdata['total_sales']
-                existing.sales_30d = pdata['sales_30d']
-                existing.sales_7d = pdata['sales_7d']
-                existing.commission_rate = pdata['commission_rate']
-                existing.video_count = pdata['video_count']
-                existing.video_7d = pdata['video_7d']
-                existing.video_30d = pdata['video_30d']
-                existing.live_count = pdata['live_count']
-                existing.views_count = pdata['views_count']
-                existing.has_free_shipping = True
-                existing.last_updated = datetime.utcnow()
-                if cached_url:
-                    existing.image_url = image_url
-                    existing.cached_image_url = cached_url
-                    existing.image_cached_at = datetime.utcnow()
-            else:
-                # Create new product
-                product = Product(
-                    product_id=product_id,
-                    product_name=pdata['product_name'],
-                    seller_id=pdata['seller_id'],
-                    seller_name=pdata['seller_name'],
-                    gmv=pdata['gmv'],
-                    gmv_30d=pdata['gmv_30d'],
-                    sales=pdata['total_sales'],
-                    sales_7d=pdata['sales_7d'],
-                    sales_30d=pdata['sales_30d'],
-                    influencer_count=pdata['influencer_count'],
-                    commission_rate=pdata['commission_rate'],
-                    price=pdata['price'],
-                    image_url=image_url,
-                    cached_image_url=cached_url,
-                    image_cached_at=datetime.utcnow() if cached_url else None,
-                    video_count=pdata['video_count'],
-                    video_7d=pdata['video_7d'],
-                    video_30d=pdata['video_30d'],
-                    live_count=pdata['live_count'],
-                    views_count=pdata['views_count'],
-                    has_free_shipping=True,
-                    scan_type='deal_hunter'
-                )
-                db.session.add(product)
+            # Normalize ID inside the helper
+            is_new = save_or_update_product(pdata, scan_type='deal_hunter')
+            if is_new:
                 result['products_saved'] += 1
+            
+            # Handle image caching updates separately if needed
+            img = parse_cover_url(pdata.get('cover_url', ''))
+            if signed_urls.get(img):
+                 product_id = f"shop_{str(pdata.get('product_id') or pdata.get('productId')).replace('shop_','')}"
+                 p_obj = Product.query.get(product_id)
+                 if p_obj:
+                     p_obj.cached_image_url = signed_urls[img]
+                     p_obj.image_cached_at = datetime.utcnow()
         
         db.session.commit()
         
@@ -2201,238 +2183,96 @@ def scan_deals():
 
 
 @app.route('/api/scan-pages/<seller_id>', methods=['GET'])
+@login_required
 def scan_page_range(seller_id):
-    """
-    Scan a specific page range from a seller.
-    Useful for getting deep pages (100-200) where gems hide.
-    
-    Parameters:
-        start: Starting page (default: 1)
-        end: Ending page (default: 50)
-        max_influencers: Max influencer filter (default: 100)
-        min_sales: Min 7-day sales (default: 0)
-        max_videos: Max video count filter (optional)
-        seller_name: Optional seller name to use (for brand scan)
-    """
+    """Scan a specific page range from a seller."""
     try:
         start_page = request.args.get('start', 1, type=int)
-        end_page = request.args.get('end', 50, type=int)
+        end_page = request.args.get('end', 5, type=int)
         min_influencers = request.args.get('min_influencers', 1, type=int)
-        max_influencers = request.args.get('max_influencers', 100, type=int)
+        max_influencers = request.args.get('max_influencers', 1000, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
         max_videos = request.args.get('max_videos', None, type=int)
-        seller_name_param = request.args.get('seller_name', '')
+        seller_name = request.args.get('seller_name', 'Unknown')
         
         products_scanned = 0
         products_found = 0
         products_saved = 0
-        seller_name = seller_name_param or ""
-        
-        # If no seller_name provided, try to get it from seller detail API
-        if not seller_name:
-            try:
-                seller_response = requests.get(
-                    f"{BASE_URL}/seller/detail",
-                    params={"seller_id": seller_id},
-                    auth=get_auth(),
-                    timeout=10
-                )
-                if seller_response.status_code == 200:
-                    seller_data = seller_response.json()
-                    if seller_data.get('code') == 0 and seller_data.get('data'):
-                        # API returns a list, get first item
-                        data = seller_data['data']
-                        if isinstance(data, list) and len(data) > 0:
-                            data = data[0]
-                        seller_name = data.get('seller_name', '') or data.get('shop_name', '')
-            except:
-                pass
-        
-        if not seller_name:
-            seller_name = "Unknown"
         
         for page in range(start_page, end_page + 1):
             products = get_seller_products(seller_id, page=page)
-            
-            if not products:
-                continue
+            if not products: break
             
             for p in products:
                 products_scanned += 1
-                product_id = p.get('product_id', '')
-                if not product_id:
-                    continue
+                inf_count = int(p.get('total_ifl_cnt') or p.get('totalIflCnt') or 0)
+                sales_7d = int(p.get('total_sale_7d_cnt') or p.get('totalSale7dCnt') or 0)
+                video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
                 
-                # Try to get seller_name from product if we still don't have it
-                if seller_name == "Unknown":
-                    seller_name = p.get('seller_name', '') or p.get('shop_name', '') or p.get('seller', {}).get('name', '') or "Unknown"
-                
-                influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
-                sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
-                total_sales = int(p.get('total_sale_cnt', 0) or 0)
-                sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
-                commission_rate = float(p.get('product_commission_rate', 0) or 0)
-                
-                # Get video stats
-                video_count = int(p.get('total_video_cnt', 0) or 0)
-                video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
-                video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
-                live_count = int(p.get('total_live_cnt', 0) or 0)
-                views_count = int(p.get('total_views_cnt', 0) or 0)
-                
-                # Filters
-                if influencer_count < min_influencers or influencer_count > max_influencers:
-                    continue
-                if sales_7d < min_sales:
-                    continue
-                # NOTE: Not filtering 0% commission here - seller/product/list API may not return commission
-                # Require at least 2 videos (filtered out 0-1 video products per user request)
-                if video_count < 2:
-                    continue
-                
-                # Video count max filter (if set)
-                if max_videos is not None and video_count > max_videos:
-                    continue
+                if inf_count < min_influencers or inf_count > max_influencers: continue
+                if sales_7d < min_sales: continue
+                if video_count < 2: continue
+                if max_videos is not None and video_count > max_videos: continue
                 
                 products_found += 1
-                image_url = parse_cover_url(p.get('cover_url', ''))
-                
-                existing = Product.query.get(product_id)
-                if existing:
-                    # Update existing product
-                    existing.influencer_count = influencer_count
-                    existing.sales = total_sales
-                    existing.sales_7d = sales_7d
-                    existing.sales_30d = sales_30d
-                    existing.commission_rate = commission_rate
-                    existing.video_count = video_count
-                    existing.video_7d = video_7d
-                    existing.video_30d = video_30d
-                    existing.live_count = live_count
-                    existing.views_count = views_count
-                    if seller_name != "Unknown":
-                        existing.seller_name = seller_name
-                    existing.last_updated = datetime.utcnow()
-                else:
-                    product = Product(
-                        product_name=p.get('product_name', ''),
-                        seller_id=seller_id,
-                        seller_name=seller_name,
-                        gmv=float(p.get('total_sale_gmv_amt') or p.get('totalSaleGmvAmt') or 0),
-                        gmv_30d=float(p.get('total_sale_gmv_30d_amt') or p.get('totalSaleGmv30dAmt') or 0),
-                        sales=total_sales,
-                        sales_7d=sales_7d,
-                        sales_30d=sales_30d,
-                        influencer_count=influencer_count,
-                        commission_rate=commission_rate,
-                        price=float(p.get('spu_avg_price') or p.get('spuAvgPrice') or 0),
-                        image_url=parse_cover_url(p.get('cover_url') or p.get('cover') or p.get('item_img')),
-                        video_count=video_count,
-                        video_7d=video_7d,
-                        video_30d=video_30d,
-                        live_count=live_count,
-                        views_count=views_count,
-                        has_free_shipping=p.get('free_shipping', 0) == 1,
-                        scan_type='page_range'
-                    )
-                    db.session.add(product)
+                p['seller_id'] = seller_id
+                p['seller_name'] = seller_name
+                if save_or_update_product(p, scan_type='page_range'):
                     products_saved += 1
             
             time.sleep(0.1)
         
         db.session.commit()
-        
-        return jsonify({
-            'seller_id': seller_id,
-            'seller_name': seller_name,
-            'pages_scanned': f"{start_page}-{end_page}",
-            'products_scanned': products_scanned,
-            'products_found': products_found,
-            'products_saved': products_saved
-        })
-    
+        return jsonify({'success': True, 'found': products_found, 'saved': products_saved})
     except Exception as e:
-        import traceback
         db.session.rollback()
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/scan-brand/<seller_id>', methods=['GET'])
+@login_required
 def scan_single_brand(seller_id):
     """Deep scan a specific brand by seller_id"""
-    pages = request.args.get('pages', 50, type=int)
-    min_influencers = request.args.get('min_influencers', 1, type=int)
-    max_influencers = request.args.get('max_influencers', 100, type=int)
-    min_sales = request.args.get('min_sales', 10, type=int)
-    
-    products_scanned = 0
-    products_found = 0
-    products_saved = 0
-    seller_name = "Unknown"
-    
-    for page in range(1, pages + 1):
-        if page % 10 == 0:
-            print(f"Scanning page {page}...")
+    try:
+        pages = request.args.get('pages', 20, type=int)
+        min_sales = request.args.get('min_sales', 10, type=int)
+        products_scanned = 0
+        products_found = 0
+        products_saved = 0
+        seller_name = "Unknown"
         
-        products = get_seller_products(seller_id, page=page)
-        
-        if not products:
-            break
-        
-        for p in products:
-            products_scanned += 1
-            product_id = p.get('product_id', '')
-            if not product_id:
-                continue
+        try:
+            seller_res = requests.get(f"{BASE_URL}/seller/detail", params={"seller_id": seller_id}, auth=get_auth(), timeout=10)
+            if seller_res.status_code == 200:
+                sd = seller_res.json().get('data', [])
+                if sd: seller_name = sd[0].get('seller_name') or sd[0].get('shop_name') or "Unknown"
+        except: pass
+
+        for page in range(1, pages + 1):
+            products = get_seller_products(seller_id, page=page)
+            if not products: break
             
-            if seller_name == "Unknown":
-                seller_name = p.get('seller_name', 'Unknown') or "Unknown"
+            for p in products:
+                products_scanned += 1
+                sales_7d = int(p.get('total_sale_7d_cnt') or p.get('totalSale7dCnt') or 0)
+                video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
+                
+                if sales_7d < min_sales: continue
+                if video_count < 2: continue
+                
+                products_found += 1
+                p['seller_id'] = seller_id
+                p['seller_name'] = seller_name
+                if save_or_update_product(p, scan_type='deep_scan'):
+                    products_saved += 1
             
-            influencer_count = int(p.get('total_ifl_cnt', 0) or 0)
-            total_sales = int(p.get('total_sale_cnt', 0) or 0)
-            sales_7d = int(p.get('total_sale_7d_cnt', 0) or 0)
-            sales_30d = int(p.get('total_sale_30d_cnt', 0) or 0)
+            if page % 10 == 0: db.session.commit()
+            time.sleep(0.1)
             
-            if influencer_count < min_influencers or influencer_count > max_influencers:
-                continue
-            if sales_7d < min_sales:  # Filter by 7-day sales
-                continue
-            
-            products_found += 1
-            image_url = parse_cover_url(p.get('cover_url', ''))
-            
-            existing = Product.query.get(product_id)
-            if not existing:
-                product = Product(
-                    product_id=product_id,
-                    product_name=p.get('product_name', ''),
-                    seller_id=seller_id,
-                    seller_name=seller_name,
-                    gmv=float(p.get('total_sale_gmv_amt', 0) or 0),
-                    gmv_30d=float(p.get('total_sale_gmv_30d_amt', 0) or 0),
-                    sales=total_sales,
-                    sales_7d=sales_7d,
-                    sales_30d=sales_30d,
-                    influencer_count=influencer_count,
-                    commission_rate=float(p.get('product_commission_rate', 0) or 0),
-                    price=float(p.get('spu_avg_price', 0) or 0),
-                    image_url=image_url,
-                    scan_type='brand_hunter'
-                )
-                db.session.add(product)
-                products_saved += 1
-        
-        time.sleep(0.3)
-    
-    db.session.commit()
-    
-    return jsonify({
-        'seller_id': seller_id,
-        'seller_name': seller_name,
-        'pages_scanned': page,
-        'products_scanned': products_scanned,
-        'products_found': products_found,
-        'products_saved': products_saved
-    })
+        db.session.commit()
+        return jsonify({'success': True, 'seller_name': seller_name, 'found': products_found, 'saved': products_saved})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # ==================== APIFY INTGERATION (ADS) ====================
 
