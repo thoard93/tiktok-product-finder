@@ -258,6 +258,15 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     p['commission_rate'] = float(d.get('productCommissionRate') or d.get('product_commission_rate', 0))
                     p['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price', 0))
                     
+                    # DEBUG: If parsing failed (all 0), return error with raw data to debug via Discord
+                    if p['sales'] == 0 and p['video_count'] == 0:
+                         import json
+                         debug_raw = json.dumps(d, default=str)
+                         print(f"DEBUG: Parse Failed, Raw Data: {debug_raw}")
+                         if force: 
+                             # limit to 1900 chars for Discord
+                             return False, f"Parse Error. JSON: {debug_raw[:1900]}"
+                    
                     # Name & Image
                     p['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or p.get('product_name')
                     p['image_url'] = d.get('cover') or d.get('image_url') or p.get('image_url')
