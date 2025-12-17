@@ -29,7 +29,7 @@ except ImportError:
     print("WARNING: Stripe module not found. Payments will fail.")
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for, render_template, make_response
+from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for, render_template, make_response, Response
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.pool import NullPool
 from functools import wraps

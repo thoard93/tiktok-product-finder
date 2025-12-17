@@ -354,18 +354,41 @@
             if (!jsonStr) return log("Paste JSON first", 'error');
 
             log("Parsing JSON...");
+            let parsed;
             try {
-                // Mock wrapper for existing manual import endpoint
+                parsed = JSON.parse(jsonStr);
+                log("JSON Parsed successfully.");
+            } catch (e) {
+                return log(`JSON Parse Error: ${e.message}`, 'error');
+            }
+
+            // Diagnostic structure check
+            if (Array.isArray(parsed)) {
+                log(`Found array with ${parsed.length} items.`);
+            } else if (typeof parsed === 'object') {
+                const keys = Object.keys(parsed);
+                log(`Found object with keys: ${keys.join(', ')}`);
+                if (!keys.includes('list') && !keys.includes('videos') && !keys.includes('data')) {
+                    log("Warning: No standard list key ('list', 'videos', 'data') found at top level.", 'info');
+                }
+            }
+
+            log("Sending to server for processing...");
+            try {
                 const res = await fetch(`/api/scan/manual`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ json_data: jsonStr, url: 'dv_import' }) // url fallback
+                    body: JSON.stringify({ json_data: jsonStr, url: 'dv_import' })
                 });
                 const data = await res.json();
-                if (data.success) log(`Imported: ${data.product_id}`, 'success');
-                else log(`Import Failed: ${data.error}`, 'error');
+                if (data.success) {
+                    log(data.message || "Import Successful", 'success');
+                    if (data.debug_info) log(`Debug: ${data.debug_info}`, 'info');
+                } else {
+                    log(`Import Failed: ${data.error}`, 'error');
+                }
             } catch (e) {
-                log(`Error: ${e.message}`, 'error');
+                log(`Network Error: ${e.message}`, 'error');
             }
         }
 
