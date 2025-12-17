@@ -276,7 +276,6 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                                      # Try thumb_url_list or url_list
                                      p['image_url'] = images[0].get('url_list', [None])[0]
 
-                                print(f"DEBUG: Extracted from Page Props - Sales: {p['sales']}")
                                 break
                     
                     # Name & Image
