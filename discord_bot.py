@@ -82,7 +82,7 @@ def resolve_tiktok_share_link(url):
             if data.get('data'):
                 # Handle camelCase
                 d = data['data']
-                return d.get('productId') or d.get('product_id')
+                return d.get('productId') or d.get('product_id'), d.get('region', 'US')
     except Exception as e:
         print(f"API Resolution Error: {e}")
     
@@ -97,15 +97,15 @@ def resolve_tiktok_share_link(url):
         
         # Extract ID from final URL
         match = re.search(r'product/(\d+)', final_url)
-        if match: return match.group(1)
+        if match: return match.group(1), 'US'
         
         match = re.search(r'view/product/(\d+)', final_url)
-        if match: return match.group(1)
+        if match: return match.group(1), 'US'
         
     except Exception as e:
         print(f"Manual Resolution Error: {e}")
 
-    return None
+    return None, 'US'
 
 def get_product_from_db(product_id):
     """Check if product exists in database first"""
@@ -446,7 +446,7 @@ async def daily_hot_products():
         print(f"Could not find channel {HOT_PRODUCTS_CHANNEL_ID}")
         return
     
-    print(f"🎁 Posting daily free shipping deals at {datetime.utcnow().isoformat()}")
+    print(f"🎁 Posting daily free shipping deals at {datetime.now(timezone.utc).isoformat()}")
     
     products = get_hot_products()
     
@@ -455,7 +455,7 @@ async def daily_hot_products():
         return
     
     # Send header message
-    await channel.send(f"# 🎁 Daily Free Shipping Deals - {datetime.utcnow().strftime('%B %d, %Y')}\n"
+    await channel.send(f"# 🎁 Daily Free Shipping Deals - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
                        f"**Criteria:** Free shipping, 50+ weekly sales, <30 videos (low competition)\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"─────────────────────────────")
@@ -504,11 +504,13 @@ async def on_message(message):
             urls = re.findall(url_pattern, content)
             
             resolved_url = content
+            region = 'US'
             for url in urls:
                 if 'vm.tiktok.com' in url or '/t/' in url:
-                    resolved = resolve_tiktok_share_link(url)
+                    resolved, reg = resolve_tiktok_share_link(url)
                     if resolved:
                         resolved_url = resolved
+                        region = reg
                         break
             
             # Extract product ID
@@ -527,7 +529,7 @@ async def on_message(message):
                 status_msg = await message.reply(f"🔎 Fetching fresh data from EchoTik for `{product_id}`...", mention_author=False)
                 
                 # We need a dummy dict to pass to enrich_product_data since it expects a dict
-                dummy_p = {'product_id': product_id}
+                dummy_p = {'product_id': product_id, 'region': region}
                 success, msg = enrich_product_data(dummy_p, i_log_prefix="[BotAutoLookup]", force=True)
                 
                 await status_msg.delete() # Remove searching message
@@ -582,11 +584,13 @@ async def lookup_command(ctx, *, query: str = None):
         status_msg = await ctx.reply(f"🎁 **Free Product Lookup** | Scanning...", mention_author=False)
     
     # Try to resolve if it's a share link
+    region = 'US'
     if 'vm.tiktok.com' in query or '/t/' in query or 'tiktok.com' in query:
         # Use API to get ID directly
-        extracted_id = resolve_tiktok_share_link(query)
+        extracted_id, reg = resolve_tiktok_share_link(query)
         if extracted_id:
             query = extracted_id # Query is now the ID
+            region = reg
     
     product_id = extract_product_id(query)
     
@@ -600,10 +604,10 @@ async def lookup_command(ctx, *, query: str = None):
     
     # If not in DB, try to fetch from API
     if not product:
-        status_msg = await status_msg.edit(content=f"🔎 Fetching fresh data from EchoTik for `{product_id}`...")
+        await status_msg.edit(content=f"🔎 Fetching fresh data from EchoTik for `{product_id}`...")
         
         # We need a dummy dict to pass to enrich_product_data since it expects a dict
-        dummy_p = {'product_id': product_id}
+        dummy_p = {'product_id': product_id, 'region': region}
         success, msg = enrich_product_data(dummy_p, i_log_prefix="[BotLookup]", force=True)
         
         if success:
