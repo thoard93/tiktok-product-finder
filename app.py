@@ -334,6 +334,12 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     p['commission_rate'] = float(d.get('productCommissionRate') or d.get('product_commission_rate', 0))
                     p['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price', 0))
                     
+                    # Capture Seller Name
+                    p['seller_name'] = d.get('seller_name') or d.get('shop_name') or d.get('shopName') or p.get('seller_name')
+                    # Capture Product URL if provided by EchoTik
+                    e_url = d.get('product_url') or d.get('productUrl')
+                    if e_url: p['url'] = e_url
+                    
                     # Fallback: Check for Raw Page Props (shop/pdp/...)
                     if p['sales'] == 0:
                         # Iterate keys to find the one with product_info
@@ -478,6 +484,8 @@ def fetch_cached_product_data(p, i_log_prefix):
                     # Docs: total_sale_cnt, spu_avg_price, product_name, cover_url
                     p['product_name'] = d.get('product_name')
                     p['image_url'] = d.get('cover_url')
+                    p['seller_name'] = d.get('seller_name') or d.get('shop_name') or p.get('seller_name')
+                    p['url'] = d.get('product_url') or p.get('url')
                     if p['image_url'] and p['image_url'].startswith('['):
                          # Often returns JSON string for images
                          try:
@@ -1334,11 +1342,18 @@ def get_cached_image_urls(cover_urls):
         print(f"EchoTik image API exception: {e}")
         return {}
 
-def get_top_brands(page=1):
+def get_top_brands(page=1, sort_field=2):
     """
-    Get top brands/sellers sorted by GMV
+    Get top brands/sellers sorted by GMV or Sales
     
-    seller_sort_field: 1=total_sale_cnt, 2=total_sale_gmv_amt, 3=spu_avg_price
+    seller_sort_field: 
+        1=total_sale_cnt, 
+        2=total_sale_gmv_amt, 
+        3=spu_avg_price,
+        4=total_sale_7d_cnt,
+        5=total_sale_gmv_7d_amt,
+        6=total_sale_30d_cnt,
+        7=total_sale_gmv_30d_amt
     sort_type: 0=asc, 1=desc
     """
     try:
@@ -1348,7 +1363,7 @@ def get_top_brands(page=1):
                 "page_num": page,
                 "page_size": 10,
                 "region": "US",
-                "seller_sort_field": 2,  # GMV
+                "seller_sort_field": sort_field, # Dynamic sort
                 "sort_type": 1           # Descending
             },
             auth=get_auth(),
@@ -1594,15 +1609,17 @@ def search_deal_products(page=1, page_size=10, max_videos=30, min_sales_7d=50):
 @app.route('/api/top-brands', methods=['GET'])
 def get_top_brands_list():
     """
-    Get list of top brands by GMV
+    Get list of top brands by GMV/Sales
     
     Parameters:
         start_rank: Starting rank (1 = top brand)
         count: Number of brands to return
+        sort_field: EchoTik seller_sort_field (default 2=GMV, 6=30d Sales)
     """
     try:
         start_rank = request.args.get('start_rank', 1, type=int)
         count = request.args.get('count', 10, type=int)
+        sort_field = request.args.get('sort_field', 2, type=int)
         
         # Calculate which pages to fetch
         start_page = (start_rank - 1) // 10 + 1
@@ -1612,7 +1629,7 @@ def get_top_brands_list():
         pages_needed = ((start_offset + count - 1) // 10) + 1
         
         for page in range(start_page, start_page + pages_needed):
-            brands_page = get_top_brands(page=page)
+            brands_page = get_top_brands(page=page, sort_field=sort_field)
             if brands_page:
                 all_brands.extend(brands_page)
             time.sleep(0.1)
@@ -1650,6 +1667,7 @@ def scan_top_brands():
         min_influencers = request.args.get('min_influencers', 1, type=int)
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
+        sort_field = request.args.get('sort_field', 2, type=int)
         
         # Calculate which pages of brands to fetch
         # EchoTik returns 10 brands per page
@@ -1661,7 +1679,7 @@ def scan_top_brands():
         pages_needed = ((start_offset + num_brands - 1) // 10) + 1
         
         for page in range(start_page, start_page + pages_needed):
-            brands_page = get_top_brands(page=page)
+            brands_page = get_top_brands(page=page, sort_field=sort_field)
             if brands_page:
                 all_brands.extend(brands_page)
             time.sleep(0.2)
@@ -1887,12 +1905,13 @@ def quick_scan():
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
         max_videos = request.args.get('max_videos', None, type=int)
+        sort_field = request.args.get('sort_field', 2, type=int) # Default to GMV (2)
         
         # Get the specific brand
         brand_page = (brand_rank - 1) // 10 + 1
         brand_offset = (brand_rank - 1) % 10
         
-        brands_response = get_top_brands(page=brand_page)
+        brands_response = get_top_brands(page=brand_page, sort_field=sort_field)
         if not brands_response or len(brands_response) <= brand_offset:
             return jsonify({'error': f'Brand rank {brand_rank} not found'}), 404
         
@@ -2890,6 +2909,7 @@ def scan_manual_import():
                         scan_type='daily_virals',
                         first_seen=datetime.utcnow(),
                         product_status='active',
+                        product_url=p.get('url'),
                         status_note=f"Imported from DailyVirals. Enriched: {res}"
                     )
                     db.session.add(new_prod)
@@ -2918,6 +2938,13 @@ def scan_manual_import():
 
                     if p['commission_rate'] > 0: existing.commission_rate = p['commission_rate']
                     if p['price'] > 0: existing.price = p['price']
+                    if p.get('url'): existing.product_url = p['url']
+                    
+                    # Force update seller name if enrichment gave us a better one
+                    if res and p.get('seller_name'):
+                        existing.seller_name = p['seller_name']
+                    elif p.get('seller_name') and (not existing.seller_name or existing.seller_name == "Unknown"):
+                        existing.seller_name = p['seller_name']
                     
                     if not existing.image_url and (p.get('image_url') or p.get('image')):
                        existing.image_url = p.get('image_url') or p.get('image')
@@ -3017,8 +3044,9 @@ def refresh_daily_virals_ads():
 def list_top_brands():
     """Get list of top brands from EchoTik"""
     page = request.args.get('page', 1, type=int)
+    sort_field = request.args.get('sort_field', 2, type=int) # Default to GMV (2)
     
-    brands = get_top_brands(page=page)
+    brands = get_top_brands(page=page, sort_field=sort_field)
     
     if not brands:
         return jsonify({'error': 'Failed to fetch brands', 'brands': []}), 500
@@ -4865,6 +4893,12 @@ def index():
 def product_detail(product_id):
     return send_from_directory('pwa', 'product_detail_v4.html')
 
+@app.route('/shops')
+@login_required
+def shops_page():
+    """Show Shops Library (Vantage V4)"""
+    return send_from_directory(app.static_folder, 'shops_v4.html')
+
 @app.route('/scanner')
 @login_required
 def scanner_page():
@@ -4971,6 +5005,8 @@ def image_proxy(product_id):
             }
             if "tiktok" in target_url.lower():
                 headers["Referer"] = "https://www.tiktok.com/"
+            elif "volces.com" in target_url.lower() or "echotik" in target_url.lower():
+                headers["Referer"] = "https://echosell.echotik.live/"
             
             resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
             

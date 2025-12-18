@@ -123,6 +123,11 @@
                 <span class="ml-auto text-xs bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full">V2</span>
             </a>
 
+            <!-- Shops Library -->
+            <a href="/shops" class="nav-item flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
+                <i class="fas fa-shopping-bag"></i> Shops Library
+            </a>
+
             <a href="/manual-import" onclick="alert('Use the Dashboard + Import Button!'); return false;"
                 class="nav-item flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
                 <i class="fas fa-upload"></i> Manual Import
@@ -234,6 +239,14 @@
                         <label class="block text-sm text-slate-400 mb-2">Pages per Brand (Max 10)</label>
                         <input type="number" id="pages-per-brand" value="3" max="10" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Sort Brands By</label>
+                        <select id="sort-brands" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none text-slate-300">
+                            <option value="2">GMV (Total)</option>
+                            <option value="6">30-Day Sales</option>
+                            <option value="4">7-Day Sales</option>
+                        </select>
+                    </div>
                 </div>
                 <button onclick="runQuickScan(this)" class="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all">
                     Start EchoTik Quick Scan
@@ -296,10 +309,11 @@
             const minInfluencers = document.getElementById('min-influencers').value;
             const maxInfluencers = document.getElementById('max-influencers').value;
             const pages = document.getElementById('pages-per-brand').value;
+            const sortField = document.getElementById('sort-brands').value || 2;
 
             btn.disabled = true;
             btn.innerText = "Scanning...";
-            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands, Min Sales ${minSales}, Max Videos ${maxVideos}, Min Inf ${minInfluencers}, Max Inf ${maxInfluencers})...`);
+            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands, Min Sales ${minSales}, Max Videos ${maxVideos}, Min Inf ${minInfluencers}, Max Inf ${maxInfluencers}, Sort ${sortField})...`);
 
             try {
                 // Loop simulation for UI feedback
@@ -307,7 +321,7 @@
                     const rank = parseInt(startRank) + i;
                     log(`Scanning Brand Rank #${rank}...`);
 
-                    const res = await fetch(`/api/quick-scan?brand_rank=${rank}&pages=${pages}&min_sales=${minSales}&max_videos=${maxVideos}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}`);
+                    const res = await fetch(`/api/quick-scan?brand_rank=${rank}&pages=${pages}&min_sales=${minSales}&max_videos=${maxVideos}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}&sort_field=${sortField}`);
                     const data = await res.json();
 
                     if (data.result) {
@@ -327,14 +341,17 @@
 
         async function runBrandScan(btn) {
             const id = document.getElementById('brand-id').value;
+            const start = document.getElementById('brand-start').value || 1;
+            const end = document.getElementById('brand-end').value || 5;
+
             if (!id) return log("Enter a Seller ID!", 'error');
 
             btn.disabled = true;
             btn.innerText = "Scanning...";
-            log(`Scanning Seller ${id}...`);
+            log(`Scanning Seller ${id} (Pages ${start}-${end})...`);
 
             try {
-                const res = await fetch(`/api/scan-pages/${id}?start=1&end=5`);
+                const res = await fetch(`/api/scan-pages/${id}?start=${start}&end=${end}`);
                 const data = await res.json();
 
                 if (data.products_found !== undefined) {
@@ -393,7 +410,27 @@
         }
 
         // Init
-        setMode('quick', document.querySelector('.scan-tab'));
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const mode = params.get('mode');
+            const sellerId = params.get('seller_id');
+
+            if (mode) {
+                const tab = Array.from(document.querySelectorAll('.scan-tab'))
+                    .find(t => t.innerText.toLowerCase().includes(mode.toLowerCase()));
+                if (tab) setMode(mode, tab);
+            } else {
+                setMode('quick', document.querySelector('.scan-tab'));
+            }
+
+            if (sellerId && mode === 'brand') {
+                // Wait for DOM update
+                setTimeout(() => {
+                    const input = document.getElementById('brand-id');
+                    if (input) input.value = sellerId;
+                }, 50);
+            }
+        });
     </script>
 </body>
 
