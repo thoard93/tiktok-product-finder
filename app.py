@@ -1370,9 +1370,10 @@ def get_top_brands(page=1, sort_field=2):
             timeout=30
         )
         data = response.json()
-        print(f"Seller list response code: {data.get('code')}, count: {len(data.get('data', []))}")
+        brands_data = data.get('data') or []
+        print(f"Seller list response code: {data.get('code')}, count: {len(brands_data)}")
         if data.get('code') == 0:
-            return data.get('data', [])
+            return brands_data
         print(f"Get brands error: {data}")
         return []
     except Exception as e:
@@ -1962,16 +1963,12 @@ def quick_scan():
                 
                 # Filters
                 if influencer_count < min_influencers or influencer_count > max_influencers:
-                    print(f"DEBUG: Skipping {product_id} - Inf count {influencer_count} out of range ({min_influencers}-{max_influencers}) | Videos: {video_count}")
                     continue
                 if sales_7d < min_sales:
-                    print(f"DEBUG: Skipping {product_id} - Sales 7d {sales_7d} < {min_sales} | Videos: {video_count}")
                     continue
-                # commission_rate filter REMOVED per user request to allow 0% items
                 
                 # Require at least 3 videos (Stronger safety net per user request)
                 if video_count < 3:
-                    print(f"DEBUG: Skipping {product_id} - Video count {video_count} < 3 | Inf: {influencer_count}")
                     continue
                 
                 # Video count max filter (if set)
@@ -1999,9 +1996,6 @@ def quick_scan():
             'saved': result['products_saved']
         })
         
-        # Release lock after successful scan
-        release_scan_lock(user_id)
-        
         return jsonify({
             'success': True,
             'result': result,
@@ -2011,11 +2005,12 @@ def quick_scan():
     except Exception as e:
         import traceback
         db.session.rollback()
-        release_scan_lock(user_id)  # Release lock on error too
         return jsonify({
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+    finally:
+        release_scan_lock(user_id)
 
 @app.route('/api/scan-deals', methods=['GET'])
 @login_required
