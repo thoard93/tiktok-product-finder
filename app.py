@@ -2800,6 +2800,7 @@ def scan_manual_import():
             # Sales / GMV Mappings
             raw_sales = safe_int(p_obj.get('totalUnitsSold') or p_obj.get('soldCount') or p_obj.get('sales') or 0)
             sales_7d = safe_int(p_obj.get('revenueLastSevenDays') or 0)
+            comm_val = p_obj.get('tdv_commission_percentage') or p_obj.get('open_commission_percentage') or 0
              
             # GMV
             gmv = 0
@@ -2817,7 +2818,7 @@ def scan_manual_import():
                 'seller_name': advertiser, 
                 'advertiser': advertiser, 
                 'price': 0,
-                'commission_rate': 0,
+                'commission_rate': float(comm_val) / 100.0 if float(comm_val) > 1 else float(comm_val),
                 'sales': raw_sales,
                 'sales_7d': sales_7d,
                 'gmv': gmv,
@@ -2832,29 +2833,16 @@ def scan_manual_import():
             }
             products.append(p)
             
-            if len(schema_debug) < 1:
-                # Dump the first VALID item key to debug
-                raw_dump = json.dumps(item, default=str)[:500]
-                p_dump = json.dumps(p_obj, default=str)[:500] if p_obj else "None"
-                schema_debug.append(f"KEYS: {list(item.keys())}")
-                schema_debug.append(f"PRODUCT_KEYS: {list(p_obj.keys()) if p_obj else 'None'}")
-                schema_debug.append(f"ITEM_RAW: {raw_dump}")
-                schema_debug.append(f"PRODUCT_RAW: {p_dump}")
-
         # 3. Enrich Candidates
         saved_count = 0
         debug_log = ""
         
         for i, p in enumerate(products):
             # Slow down slightly to effectively use the 'Direct ID' lookup without hitting rate limits
-            time.sleep(1.5)
+            time.sleep(1.0)
             
-            # Attempt Enrichment
-            # Bridge to Apify: Queue for Background Scanning (Async)
-            # This replaces synchronous Echotik enrichment while Echotik is unavailable
-            # Auto-Scraping Removed for V2 (EchoTik transition)
-            enrich_success = False
-            msg = "Imported Raw (Vantage Mode)"
+            # Attempt Enrichment via EchoTik
+            enrich_success, msg = enrich_product_data(p, "[DV-IMPORT]")
             
             if not p.get('product_id'): 
                 p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
@@ -2869,6 +2857,7 @@ def scan_manual_import():
                     sales_7d=p['sales_7d'],
                     gmv=p['gmv'],
                     influencer_count=p['influencer_count'],
+                    video_count=max(1, p['video_count']), # Force at least 1 for visibility
                     commission_rate=p['commission_rate'],
                     price=p['price'],
                     image_url=p.get('image_url') or p.get('image'),
@@ -2880,21 +2869,24 @@ def scan_manual_import():
                 db.session.add(new_prod)
                 saved_count += 1
             else:
+                # Update existing
                 if p['sales'] > 0: existing.sales = max(existing.sales, p['sales'])
-                if p['sales_7d'] > 0: existing.sales_7d = p['sales_7d']
+                if p['sales_7d'] > 0: existing.sales_7d = max(existing.sales_7d, p['sales_7d'])
+                if p['gmv'] > 0: existing.gmv = max(existing.gmv, p['gmv'])
+                if p['influencer_count'] > 0: existing.influencer_count = p['influencer_count']
+                if p.get('video_count', 0) > 0: 
+                    existing.video_count = max(existing.video_count, p['video_count'])
+                if p['commission_rate'] > 0: existing.commission_rate = p['commission_rate']
+                if p['price'] > 0: existing.price = p['price']
                 
-                # FORCE UPDATE
-                if p['product_name'] and p['product_name'] != "Unknown Title":
-                   existing.product_name = p['product_name']
-                # Prioritize Enriched Image (image_url) over Import Image (image)
-                new_img = p.get('image_url') or p.get('image')
-                if new_img:
-                   existing.image_url = new_img
+                if not existing.image_url and (p.get('image_url') or p.get('image')):
+                   existing.image_url = p.get('image_url') or p.get('image')
                    existing.cached_image_url = None 
+                
                 if p.get('seller_name') and p.get('seller_name') != "Unknown":
                    existing.seller_name = p['seller_name']
                 
-                # Ensure at least 1 video count if currently 0
+                # Ensure visibility
                 if existing.video_count < 1:
                      existing.video_count = 1
 
@@ -2909,8 +2901,8 @@ def scan_manual_import():
         
         return jsonify({
             'success': True,
-            'message': f"Processed {len(items)} items. Imported {len(products)} valid products. Skipped {skipped_items} videos.",
-            'debug_info': f"Stats: {schema_debug[:5]}... Logs: {debug_log}"
+            'message': f"Processed {len(items)} items. Imported/Updated {len(products)} products.",
+            'debug_info': f"First 5 results: {debug_log}"
         })
 
     except Exception as e:
