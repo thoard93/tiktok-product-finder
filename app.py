@@ -40,6 +40,7 @@ import secrets
 # import jwt  # Moved inside generate_kling_jwt_token to avoid dependency crash for Bot
 import re   # For parsing product IDs from URLs
 import traceback
+from concurrent.futures import ThreadPoolExecutor # Added for parallel enrichment
 # from apify_service import ApifyService # Apify Service - REMOVED for V2
 from werkzeug.exceptions import HTTPException
 try:
@@ -2833,79 +2834,98 @@ def scan_manual_import():
             }
             products.append(p)
             
-        # 3. Enrich Candidates
+        # 3. Enrich Candidates (Parallelized)
         saved_count = 0
         debug_log = ""
-        start_time_all = time.process_time() if hasattr(time, 'process_time') else time.time()
         start_time_wall = time.time()
         
-        for i, p in enumerate(products):
-            # Global budget: if we've spent more than 45 seconds (wall clock), skip further enrichment
-            # but still save the product with what we have.
-            elapsed = time.time() - start_time_wall
-            if elapsed > 45:
-                debug_log += f" | {p['product_id'][:8]}... skipped (time budget)"
-                enrich_success = False
-                msg = "Skipped (Budget)"
-            else:
-                # Slow down slightly 
-                if i > 0: time.sleep(0.5)
-                
-                # Attempt Enrichment via EchoTik
-                enrich_success, msg = enrich_product_data(p, "[DV-IMPORT]")
-            
-            if not p.get('product_id'): 
-                p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
+        def process_one(p_item):
+            # Attempt Enrichment via EchoTik
+            # Each thread gets its own context/session might be safer for API calls
+            res, msg = enrich_product_data(p_item, "[DV-IMPORT]")
+            return p_item, res, msg
 
-            existing = Product.query.filter_by(product_id=p['product_id']).first()
-            if not existing:
-                new_prod = Product(
-                    product_id=p['product_id'],
-                    product_name=p['product_name'],
-                    seller_name=p['seller_name'],
-                    sales=p['sales'],
-                    sales_7d=p['sales_7d'],
-                    gmv=p['gmv'],
-                    influencer_count=p['influencer_count'],
-                    video_count=max(1, p['video_count']), # Force at least 1 for visibility
-                    commission_rate=p['commission_rate'],
-                    price=p['price'],
-                    image_url=p.get('image_url') or p.get('image'),
-                    scan_type='daily_virals',
-                    first_seen=datetime.utcnow(),
-                    product_status='active',
-                    status_note=f"Imported from DailyVirals. Enriched: {enrich_success}"
-                )
-                db.session.add(new_prod)
-                saved_count += 1
-            else:
-                # Update existing
-                if p['sales'] > 0: existing.sales = max(existing.sales, p['sales'])
-                if p['sales_7d'] > 0: existing.sales_7d = max(existing.sales_7d, p['sales_7d'])
-                if p['gmv'] > 0: existing.gmv = max(existing.gmv, p['gmv'])
-                if p['influencer_count'] > 0: existing.influencer_count = p['influencer_count']
-                if p.get('video_count', 0) > 0: 
-                    existing.video_count = max(existing.video_count, p['video_count'])
-                if p['commission_rate'] > 0: existing.commission_rate = p['commission_rate']
-                if p['price'] > 0: existing.price = p['price']
-                
-                if not existing.image_url and (p.get('image_url') or p.get('image')):
-                   existing.image_url = p.get('image_url') or p.get('image')
-                   existing.cached_image_url = None 
-                
-                if p.get('seller_name') and p.get('seller_name') != "Unknown":
-                   existing.seller_name = p['seller_name']
-                
-                # Ensure visibility
-                if existing.video_count < 1:
-                     existing.video_count = 1
-
-                if existing.scan_type != 'daily_virals':
-                     existing.scan_type = 'daily_virals'
-                
-                existing.first_seen = datetime.utcnow()
+        # Only enrich if within budget
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_prod = {executor.submit(process_one, p): p for p in products}
             
-            if i < 5: debug_log += f" | {msg}"
+            for i, future in enumerate(future_to_prod):
+                p = future_to_prod[future]
+                elapsed = time.time() - start_time_wall
+                
+                if elapsed > 45:
+                    debug_log += f" | {p.get('product_id','?')[:8]} skipped (budget)"
+                    res, msg = False, "Skipped (Budget)"
+                else:
+                    try:
+                        p, res, msg = future.result(timeout=(45 - elapsed))
+                    except Exception as e:
+                        res, msg = False, f"Error: {str(e)}"
+
+                # --- Database Saving / Updating ---
+                # Normalized ID
+                if not p.get('product_id'): 
+                    p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
+
+                existing = Product.query.filter_by(product_id=p['product_id']).first()
+                if not existing:
+                    new_prod = Product(
+                        product_id=p['product_id'],
+                        product_name=p['product_name'],
+                        seller_name=p['seller_name'],
+                        sales=p['sales'],
+                        sales_7d=p['sales_7d'],
+                        gmv=p['gmv'],
+                        influencer_count=p['influencer_count'],
+                        # Use enriched value if success, else use placeholder 1 for visibility
+                        video_count=p.get('video_count', 1) if res else 1,
+                        commission_rate=p['commission_rate'],
+                        price=p['price'],
+                        image_url=p.get('image_url') or p.get('image'),
+                        scan_type='daily_virals',
+                        first_seen=datetime.utcnow(),
+                        product_status='active',
+                        status_note=f"Imported from DailyVirals. Enriched: {res}"
+                    )
+                    db.session.add(new_prod)
+                    saved_count += 1
+                else:
+                    # Update existing - Overwrite placeholders if enriched successfully
+                    if p['sales'] > 0: existing.sales = max(existing.sales, p['sales'])
+                    if p['sales_7d'] > 0: existing.sales_7d = max(existing.sales_7d, p['sales_7d'])
+                    if p['gmv'] > 0: existing.gmv = max(existing.gmv, p['gmv'])
+                    
+                    # If enriched, overwrite influencer/video count even if lower (to fix placeholders)
+                    if res:
+                        existing.influencer_count = p['influencer_count']
+                        existing.video_count = max(1, p['video_count']) # Still force 1 for dashboard visibility if desired
+                        existing.status_note = f"Updated via DailyVirals + EchoTik"
+                    else:
+                        # Fallback: only update if better
+                        if p['influencer_count'] > 0: existing.influencer_count = p['influencer_count']
+                        if p.get('video_count', 0) > 0: 
+                            existing.video_count = max(existing.video_count, p['video_count'])
+
+                    if p['commission_rate'] > 0: existing.commission_rate = p['commission_rate']
+                    if p['price'] > 0: existing.price = p['price']
+                    
+                    if not existing.image_url and (p.get('image_url') or p.get('image')):
+                       existing.image_url = p.get('image_url') or p.get('image')
+                       existing.cached_image_url = None 
+                    
+                    if p.get('seller_name') and p.get('seller_name') != "Unknown":
+                       existing.seller_name = p['seller_name']
+                    
+                    # Ensure visibility
+                    if existing.video_count < 1:
+                         existing.video_count = 1
+
+                    if existing.scan_type != 'daily_virals':
+                         existing.scan_type = 'daily_virals'
+                    
+                    existing.last_updated = datetime.utcnow()
+                
+                if i < 5: debug_log += f" | {msg}"
 
         db.session.commit()
         
