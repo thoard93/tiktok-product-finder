@@ -2836,13 +2836,14 @@ def scan_manual_import():
         # 3. Enrich Candidates
         saved_count = 0
         debug_log = ""
-        start_time_all = time.time()
+        start_time_all = time.process_time() if hasattr(time, 'process_time') else time.time()
+        start_time_wall = time.time()
         
         for i, p in enumerate(products):
-            # Global budget: if we've spent more than 25 seconds, skip further enrichment
+            # Global budget: if we've spent more than 45 seconds (wall clock), skip further enrichment
             # but still save the product with what we have.
-            elapsed = time.time() - start_time_all
-            if elapsed > 25:
+            elapsed = time.time() - start_time_wall
+            if elapsed > 45:
                 debug_log += f" | {p['product_id'][:8]}... skipped (time budget)"
                 enrich_success = False
                 msg = "Skipped (Budget)"
@@ -5051,6 +5052,8 @@ def api_products():
             query = query.order_by(Product.first_seen.desc())
         elif sort_by == 'video_count':
             query = query.order_by(Product.video_count.desc())
+        elif sort_by in ['vids_asc', 'video_asc']:
+            query = query.order_by(Product.video_count.asc())
         else:
             query = query.order_by(Product.first_seen.desc())
 
