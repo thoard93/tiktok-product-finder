@@ -2834,9 +2834,12 @@ def scan_manual_import():
             
             if len(schema_debug) < 1:
                 # Dump the first VALID item key to debug
-                raw_dump = json.dumps(item, default=str)[:200]
+                raw_dump = json.dumps(item, default=str)[:500]
+                p_dump = json.dumps(p_obj, default=str)[:500] if p_obj else "None"
                 schema_debug.append(f"KEYS: {list(item.keys())}")
-                schema_debug.append(f"RAW_DUMP: {raw_dump}")
+                schema_debug.append(f"PRODUCT_KEYS: {list(p_obj.keys()) if p_obj else 'None'}")
+                schema_debug.append(f"ITEM_RAW: {raw_dump}")
+                schema_debug.append(f"PRODUCT_RAW: {p_dump}")
 
         # 3. Enrich Candidates
         saved_count = 0
