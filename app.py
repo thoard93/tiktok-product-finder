@@ -2235,7 +2235,7 @@ def scan_page_range(seller_id):
             time.sleep(0.1)
         
         db.session.commit()
-        return jsonify({'success': True, 'found': products_found, 'saved': products_saved})
+        return jsonify({'success': True, 'products_found': products_found, 'products_saved': products_saved})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
