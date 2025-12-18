@@ -5001,6 +5001,10 @@ def api_products():
             
         if scan_type:
              query = query.filter(Product.scan_type == scan_type)
+        else:
+             # Default view: Exclude Ad Winners to avoid cluttering organic/low-stat feed
+             # This isolates GMV MAX ads to their own tab only
+             query = query.filter(Product.scan_type.notin_(['daily_virals', 'apify_ad']))
 
         if keyword:
             query = query.filter(db.or_(
