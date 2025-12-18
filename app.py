@@ -4925,19 +4925,28 @@ def image_proxy(product_id):
                 else:
                     return jsonify({'error': 'Image Source Not Found'}), 404
 
+            # Dynamic Headers: TikTok is sensitive to Referer and UA
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-                "Referer": "https://www.tiktok.com/"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             }
+            if "tiktok" in target_url.lower():
+                headers["Referer"] = "https://www.tiktok.com/"
             
-            resp = requests.get(target_url, headers=headers, stream=True, timeout=10)
+            resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
             
+            if resp.status_code != 200:
+                print(f"Proxy Error: {resp.status_code} for {target_url}")
+                # Fallback to no-referer if blocked
+                if resp.status_code == 403 and "Referer" in headers:
+                    del headers["Referer"]
+                    resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
+
             # Exclude some problematic headers
             excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-            headers = [(name, value) for (name, value) in resp.raw.headers.items()
-                       if name.lower() not in excluded_headers]
+            proxy_headers = [(name, value) for (name, value) in resp.raw.headers.items()
+                             if name.lower() not in excluded_headers]
 
-            return Response(resp.content, resp.status_code, headers)
+            return Response(resp.content, resp.status_code, proxy_headers)
 
     except Exception as e:
         print(f"Proxy Error: {e}")
