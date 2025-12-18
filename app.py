@@ -306,7 +306,7 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                 f"{ECHOTIK_REALTIME_BASE}/product/detail",
                 params={'product_id': target_id, 'region': p.get('region', 'US')}, # v3 uses singular 'product_id', required region
                 auth=get_auth(),
-                timeout=20
+                timeout=10 # Reduced from 20 to prevent global stalls
             )
             
             if res.status_code == 200:
@@ -2836,13 +2836,22 @@ def scan_manual_import():
         # 3. Enrich Candidates
         saved_count = 0
         debug_log = ""
+        start_time_all = time.time()
         
         for i, p in enumerate(products):
-            # Slow down slightly to effectively use the 'Direct ID' lookup without hitting rate limits
-            time.sleep(1.0)
-            
-            # Attempt Enrichment via EchoTik
-            enrich_success, msg = enrich_product_data(p, "[DV-IMPORT]")
+            # Global budget: if we've spent more than 25 seconds, skip further enrichment
+            # but still save the product with what we have.
+            elapsed = time.time() - start_time_all
+            if elapsed > 25:
+                debug_log += f" | {p['product_id'][:8]}... skipped (time budget)"
+                enrich_success = False
+                msg = "Skipped (Budget)"
+            else:
+                # Slow down slightly 
+                if i > 0: time.sleep(0.5)
+                
+                # Attempt Enrichment via EchoTik
+                enrich_success, msg = enrich_product_data(p, "[DV-IMPORT]")
             
             if not p.get('product_id'): 
                 p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
