@@ -307,7 +307,7 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                 f"{ECHOTIK_REALTIME_BASE}/product/detail",
                 params={'product_id': target_id, 'region': p.get('region', 'US')}, # v3 uses singular 'product_id', required region
                 auth=get_auth(),
-                timeout=10 # Reduced from 20 to prevent global stalls
+                timeout=15 # Increased from 10 to give busy API more time
             )
             
             if res.status_code == 200:
@@ -386,6 +386,11 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                                  next_region = fallback_map.get(current_region)
                                  
                                  if next_region:
+                                     # Optimization: Skip recursive regional failover for batch imports to save time budget
+                                     if "[DV-IMPORT]" in i_log_prefix:
+                                         print(f"DEBUG: WAF blocked {current_region}. Skipping failover for batch.")
+                                         return fetch_cached_product_data(p, i_log_prefix)
+                                     
                                      print(f"DEBUG: WAF blocked {current_region}, failing over to {next_region}...")
                                      p['region'] = next_region
                                      # Recursive retry with new region
@@ -2824,7 +2829,7 @@ def scan_manual_import():
                 'sales_7d': sales_7d,
                 'gmv': gmv,
                 'influencer_count': 0,
-                'video_count': 1, 
+                'video_count': 0, # Start at 0 to detect if enrichment fails
                 'video_views': views,
                 'video_likes': likes,
                 'scan_type': 'daily_virals', 
@@ -2898,13 +2903,18 @@ def scan_manual_import():
                     # If enriched, overwrite influencer/video count even if lower (to fix placeholders)
                     if res:
                         existing.influencer_count = p['influencer_count']
-                        existing.video_count = max(1, p['video_count']) # Still force 1 for dashboard visibility if desired
+                        # Overwrite if we got real data, still maintain min 1 for visibility in UI
+                        existing.video_count = max(1, p['video_count'])
                         existing.status_note = f"Updated via DailyVirals + EchoTik"
                     else:
-                        # Fallback: only update if better
-                        if p['influencer_count'] > 0: existing.influencer_count = p['influencer_count']
-                        if p.get('video_count', 0) > 0: 
-                            existing.video_count = max(existing.video_count, p['video_count'])
+                        # Even if enrichment failed, if existing is a placeholder (<=1), 
+                        # try to update with whatever we have (even 0) or just keep 1 but log it
+                        if existing.video_count <= 1:
+                            if p['influencer_count'] > 0: 
+                                existing.influencer_count = p['influencer_count']
+                            if p.get('video_count', 0) > 0: 
+                                existing.video_count = max(1, p['video_count'])
+                            existing.status_note = f"Updated via DailyVirals (Base Data)"
 
                     if p['commission_rate'] > 0: existing.commission_rate = p['commission_rate']
                     if p['price'] > 0: existing.price = p['price']
