@@ -227,10 +227,17 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
     img = parse_cover_url(p_data.get('cover_url') or p_data.get('cover') or p_data.get('image_url') or p_data.get('item_img'))
     name = p_data.get('product_name') or p_data.get('productName') or p_data.get('title') or ""
 
+    # Generate or extract product URL
+    p_url = p_data.get('product_url') or p_data.get('productUrl') or p_data.get('url')
+    if not p_url or 'tiktok.com' not in p_url:
+        # Standard TikTok Shop URL
+        p_url = f"https://shop.tiktok.com/view/product/{raw_id}?region=US"
+
     if existing:
         # Update existing record
         existing.product_name = name or existing.product_name
         existing.image_url = img or existing.image_url
+        existing.product_url = p_url or existing.product_url
         existing.price = price if price > 0 else existing.price
         existing.sales = sales if sales > 0 else existing.sales
         existing.sales_7d = s7d if s7d > 0 else existing.sales_7d
@@ -262,6 +269,7 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
             product_id=product_id,
             product_name=name,
             image_url=img,
+            product_url=p_url,
             price=price,
             sales=sales,
             sales_7d=s7d,
@@ -2202,6 +2210,20 @@ def scan_page_range(seller_id):
         max_videos = request.args.get('max_videos', None, type=int)
         seller_name = request.args.get('seller_name', 'Unknown')
         
+        # Try to fetch actual seller name if Unknown
+        if seller_name == 'Unknown' or not seller_name:
+            try:
+                s_res = requests.get(
+                    f"{BASE_URL}/seller/detail",
+                    params={"seller_id": seller_id, "region": "US"},
+                    auth=get_auth(),
+                    timeout=10
+                )
+                s_data = s_res.json()
+                if s_data.get('code') == 0:
+                    seller_name = s_data.get('data', {}).get('seller_name') or s_data.get('data', {}).get('shop_name') or 'Unknown'
+            except: pass
+
         products_scanned = 0
         products_found = 0
         products_saved = 0
@@ -4997,18 +5019,21 @@ def image_proxy(product_id):
             # Dynamic Headers: TikTok is sensitive to Referer and UA
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://www.tiktok.com/" # Default Referer works for most
             }
-            if "tiktok" in target_url.lower():
-                headers["Referer"] = "https://www.tiktok.com/"
-            elif "volces.com" in target_url.lower() or "echotik" in target_url.lower():
+            # Specific Referers if needed
+            lower_url = target_url.lower()
+            if "volces.com" in lower_url or "echotik" in lower_url:
                 headers["Referer"] = "https://echosell.echotik.live/"
+            elif "tiktokcdn.com" in lower_url:
+                headers["Referer"] = "https://www.tiktok.com/"
             
             resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
             
             if resp.status_code != 200:
                 print(f"Proxy Error: {resp.status_code} for {target_url}")
-                # Fallback to no-referer if blocked
-                if resp.status_code == 403 and "Referer" in headers:
+                # Try with NO referer if blocked
+                if resp.status_code == 403:
                     del headers["Referer"]
                     resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
 
@@ -6524,30 +6549,22 @@ def api_scan_brand_pages(seller_id):
         for p_idx in range(start_page, end_page + 1):
              p_res = requests.get(
                 f"{BASE_URL}/product/list",
-                params={'seller_id': seller_id, 'sort_by': 'total_sale_7d_cnt', 'sort_order': 'desc', 'page': p_idx, 'size': 20},
+                params={'seller_id': seller_id, 'sort_by': 'total_sale_7d_cnt', 'sort_order': 'desc', 'page_num': p_idx, 'page_size': 20},
                 auth=get_auth(), timeout=30
             )
-             items = p_res.json().get('data', []) if p_res.status_code == 200 else []
-             for item in items:
-                 found += 1
-                 pid = str(item.get('product_id'))
-                 if not Product.query.get(pid):
-                     # Minimal save
-                     new_p = Product(
-                            product_id=pid,
-                            product_name=item.get('product_name')[:500],
-                            image_url=item.get('product_img_url'),
-                            sales_7d=int(item.get('total_sale_7d_cnt', 0) or 0),
-                            video_count=int(item.get('total_video_cnt', 0) or 0),
-                            first_seen=datetime.utcnow(),
-                            scan_type='brand_hunter'
-                     )
-                     db.session.add(new_p)
-                     saved += 1
+             data = p_res.json()
+             if data.get('code') == 0:
+                 items = data.get('data', [])
+                 for item in items:
+                     found += 1
+                     item['seller_id'] = seller_id
+                     if save_or_update_product(item):
+                         saved += 1
                      
         db.session.commit()
         return jsonify({'products_found': found, 'products_saved': saved})
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
     
 if __name__ == '__main__':
