@@ -12,7 +12,7 @@ with app.app_context():
     
     if count > 0:
         for p in products:
-            p.seller_name = "Unknown Shop"
+            p.seller_name = "Unknown"
             print(f"Fixed: {p.product_id} ({p.product_name})")
         
         db.session.commit()

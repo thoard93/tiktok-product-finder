@@ -253,10 +253,19 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
         existing.views_count = int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
         
         # Update seller info if missing
-        new_seller_name = p_data.get('seller_name') or p_data.get('shop_name') or p_data.get('shopName') or p_data.get('advertiser')
-        if new_seller_name and new_seller_name != 'Unknown':
+        new_seller_name = (
+            p_data.get('seller_name') or 
+            p_data.get('shop_name') or 
+            p_data.get('shopName') or 
+            p_data.get('store_name') or
+            p_data.get('brand_name') or
+            p_data.get('brandName') or
+            p_data.get('advertiser') or
+            p_data.get('advertiser_name')
+        )
+        if new_seller_name and str(new_seller_name).strip() not in ['', 'Unknown', 'None']:
             if not existing.seller_name or existing.seller_name == 'Unknown':
-                existing.seller_name = new_seller_name
+                existing.seller_name = str(new_seller_name).strip()
         
         new_seller_id = p_data.get('seller_id') or p_data.get('shop_id')
         if new_seller_id and (not existing.seller_id):
@@ -5801,7 +5810,13 @@ def refresh_all_products():
                         
                         # Fix missing metadata
                         if not product.seller_name or product.seller_name == "Unknown":
-                            product.seller_name = d.get('seller_name') or d.get('shop_name')
+                            product.seller_name = (
+                                d.get('seller_name') or 
+                                d.get('shop_name') or 
+                                d.get('store_name') or 
+                                d.get('brand_name') or
+                                d.get('seller', {}).get('name') if isinstance(d.get('seller'), dict) else None
+                            ) or "Unknown"
                         if not product.image_url:
                             product.image_url = d.get('cover_url') or d.get('product_image')
                             product.cached_image_url = None # Reset cache to force refresh
@@ -5829,6 +5844,7 @@ def refresh_all_products():
             'success': True,
             'updated': updated,
             'failed': failed,
+            'count': len(products),
             'errors': errors
         })
         

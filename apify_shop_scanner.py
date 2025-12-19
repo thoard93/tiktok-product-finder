@@ -105,8 +105,7 @@ def scan_target(TARGET_ID, MAX_PRODUCTS, LIMIT_PER_RUN=10, origin_id=None):
                     
                     # Update all fields
                     p.product_name = data['product_name']
-                    # FIXED: Default to 'Unknown Shop' to prevent NULL filter exclusion in dashboard
-                    p.seller_name = data.get('shop_name') or data.get('seller_name') or 'Unknown Shop'
+                    p.seller_name = data.get('shop_name') or data.get('seller_name') or 'Unknown'
                     p.image_url = data['image_url']
                     p.sales = data['sales']
                     p.sales_7d = data['sales_7d']
