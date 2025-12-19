@@ -253,9 +253,10 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
         existing.views_count = int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
         
         # Update seller info if missing
-        new_seller_name = p_data.get('seller_name') or p_data.get('shop_name') or p_data.get('shopName')
-        if new_seller_name and (not existing.seller_name or existing.seller_name == 'Unknown'):
-            existing.seller_name = new_seller_name
+        new_seller_name = p_data.get('seller_name') or p_data.get('shop_name') or p_data.get('shopName') or p_data.get('advertiser')
+        if new_seller_name and new_seller_name != 'Unknown':
+            if not existing.seller_name or existing.seller_name == 'Unknown':
+                existing.seller_name = new_seller_name
         
         new_seller_id = p_data.get('seller_id') or p_data.get('shop_id')
         if new_seller_id and (not existing.seller_id):
@@ -1308,8 +1309,10 @@ def get_cached_image_urls(cover_urls):
     if not cover_urls:
         return {}
     
-    # Filter for valid EchoTik URLs
-    valid_urls = [url for url in cover_urls if url and 'echosell-images' in str(url)]
+    # Filter for valid URLs (TikTok CDN or already EchoTik images)
+    # Signing turns tiktokcdn.com -> echosell-images.tos...
+    trusted_domains = ['echosell-images', 'tiktokcdn.com', 'p16-shop', 'p77-shop', 'byteimg.com', 'volces.com']
+    valid_urls = [url for url in cover_urls if url and any(dom in str(url) for dom in trusted_domains)]
     
     if not valid_urls:
         return {}
@@ -2909,7 +2912,8 @@ def scan_manual_import():
                 'video_likes': likes,
                 'scan_type': 'daily_virals', 
                 'url': item.get('videoUrl') or item.get('link') or p_obj.get('productUrl') or "",
-                'image': img_url,
+                'image_url': img_url,
+                'cover_url': img_url,
                 'is_enriched': False
             }
             products.append(p)
@@ -2947,78 +2951,19 @@ def scan_manual_import():
                 if not p.get('product_id'): 
                     p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
 
-                existing = Product.query.filter_by(product_id=p['product_id']).first()
-                if not existing:
-                    new_prod = Product(
-                        product_id=p['product_id'],
-                        product_name=p['product_name'],
-                        seller_name=p['seller_name'],
-                        sales=p['sales'],
-                        sales_7d=p['sales_7d'],
-                        gmv=p['gmv'],
-                        influencer_count=p['influencer_count'],
-                        # Use enriched value if success, else use placeholder 1 for visibility
-                        video_count=p.get('video_count', 1) if res else 1,
-                        commission_rate=p['commission_rate'],
-                        price=p['price'],
-                        image_url=p.get('image_url') or p.get('image'),
-                        scan_type='daily_virals',
-                        first_seen=datetime.utcnow(),
-                        product_status='active',
-                        product_url=p.get('url'),
-                        status_note=f"Imported from DailyVirals. Enriched: {res}"
-                    )
-                    db.session.add(new_prod)
-                    saved_count += 1
-                else:
-                    # Update existing - Overwrite placeholders if enriched successfully
-                    if p['sales'] > 0: existing.sales = max(existing.sales, p['sales'])
-                    if p['sales_7d'] > 0: existing.sales_7d = max(existing.sales_7d, p['sales_7d'])
-                    if p['gmv'] > 0: existing.gmv = max(existing.gmv, p['gmv'])
-                    
-                    # If enriched, overwrite influencer/video count even if lower (to fix placeholders)
-                    if res:
-                        existing.influencer_count = p['influencer_count']
-                        # Overwrite if we got real data, still maintain min 1 for visibility in UI
-                        existing.video_count = max(1, p['video_count'])
-                        existing.status_note = f"Updated via DailyVirals + EchoTik"
-                    else:
-                        # Even if enrichment failed, if existing is a placeholder (<=1), 
-                        # try to update with whatever we have (even 0) or just keep 1 but log it
-                        if existing.video_count <= 1:
-                            if p['influencer_count'] > 0: 
-                                existing.influencer_count = p['influencer_count']
-                            if p.get('video_count', 0) > 0: 
-                                existing.video_count = max(1, p['video_count'])
-                            existing.status_note = f"Updated via DailyVirals (Base Data)"
+            # 3. Save or Update Candidates
+            # Use the global helper to ensure consistency
+            from datetime import datetime
+            is_new = save_or_update_product(p, scan_type='daily_virals')
+            
+            if is_new:
+                saved_count += 1
+            
+            if i < 5:
+                # Add a quick note to debug log
+                debug_log += f" | {p['product_id']}: {p['product_name'][:15]}"
 
-                    if p['commission_rate'] > 0: existing.commission_rate = p['commission_rate']
-                    if p['price'] > 0: existing.price = p['price']
-                    if p.get('url'): existing.product_url = p['url']
-                    
-                    # Force update seller name if enrichment gave us a better one
-                    if res and p.get('seller_name'):
-                        existing.seller_name = p['seller_name']
-                    elif p.get('seller_name') and (not existing.seller_name or existing.seller_name == "Unknown"):
-                        existing.seller_name = p['seller_name']
-                    
-                    if not existing.image_url and (p.get('image_url') or p.get('image')):
-                       existing.image_url = p.get('image_url') or p.get('image')
-                       existing.cached_image_url = None 
-                    
-                    if p.get('seller_name') and p.get('seller_name') != "Unknown":
-                       existing.seller_name = p['seller_name']
-                    
-                    # Ensure visibility
-                    if existing.video_count < 1:
-                         existing.video_count = 1
-
-                    if existing.scan_type != 'daily_virals':
-                         existing.scan_type = 'daily_virals'
-                    
-                    existing.last_updated = datetime.utcnow()
-                
-                if i < 5: debug_log += f" | {msg}"
+        db.session.commit()
 
         db.session.commit()
         
@@ -5039,18 +4984,18 @@ def image_proxy(product_id):
                 p = Product.query.get(raw_id)
             
             target_url = None
-            if p and p.image_url:
-                target_url = p.image_url
-            elif p and p.cached_image_url:
+            if p and p.cached_image_url:
                 target_url = p.cached_image_url
+            elif p and p.image_url:
+                target_url = p.image_url
             
             # Fallback for manual IDs passed directly
             if not target_url:
                 # If product_id looks like a URL already
-                if product_id.startswith('http'):
+                if str(product_id).startswith('http'):
                     target_url = product_id
                 else:
-                    return jsonify({'error': 'Image Source Not Found'}), 404
+                    return redirect('/vantage_logo.png') # Internal placeholder fallback
 
             # Dynamic Headers: TikTok/Volcengine are extremely sensitive
             headers = {
@@ -5073,11 +5018,10 @@ def image_proxy(product_id):
                 headers["Referer"] = "https://www.tiktok.com/"
 
             # Logic to try multiple referers and User-Agents if 403
+            # Reduced to 2 most-likely-to-succeed attempts to stay under Render's timeout
             try_configs = [
                 {"Referer": headers.get("Referer"), "UA": headers["User-Agent"]},
-                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"},
-                {"Referer": None, "UA": headers["User-Agent"]},
-                {"Referer": "https://www.google.com/", "UA": headers["User-Agent"]}
+                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"}
             ]
             
             resp = None
@@ -5090,18 +5034,20 @@ def image_proxy(product_id):
                 headers["User-Agent"] = config["UA"]
                 
                 try:
-                    resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
+                    # Timeout reduced to 5s to avoid chain-timeout on Render
+                    resp = requests.get(target_url, headers=headers, stream=True, timeout=5)
                     if resp.status_code == 200:
                         break
-                    if resp.status_code != 403: # If not 403, don't bother retrying with other referers
+                    if resp.status_code != 403: 
                         break
                 except Exception as e:
-                    print(f"Proxy attempt failed: {e}")
+                    print(f"Proxy attempt failed: {target_url[:30]}... | {e}")
                     continue
             
             if not resp or resp.status_code != 200:
                 sc = resp.status_code if resp else "No Response"
                 print(f"Proxy Final Error: {sc} for {target_url}")
+                return redirect('/vantage_logo.png') # Redirect to logo instead of 500
 
             # Exclude some problematic headers
             excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
@@ -5109,7 +5055,7 @@ def image_proxy(product_id):
                              if name.lower() not in excluded_headers]
 
             content = resp.content if resp else b""
-            status_code = resp.status_code if resp else 500
+            status_code = resp.status_code if resp else 302 # Fallback
             return Response(content, status_code, proxy_headers)
 
     except Exception as e:

@@ -317,8 +317,8 @@
             if (!confirmed) return;
 
             try {
-                // Backend handles sign-in and expiry check
-                const res = await fetch('/api/refresh-images?batch=100');
+                // Backend handles sign-in and expiry check. Added force=true to ensure renewals.
+                const res = await fetch('/api/refresh-images?batch=100&force=true');
                 const data = await res.json();
                 if (data.success) {
                     alert(`✅ Done! Processed ${data.processed} images, updated ${data.updated}.`);
