@@ -1913,6 +1913,7 @@ def quick_scan():
         min_influencers = request.args.get('min_influencers', 0, type=int) # Default to 0 for maximum discovery
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
+        min_videos = request.args.get('min_videos', 1, type=int)
         max_videos = request.args.get('max_videos', None, type=int)
         sort_field = request.args.get('sort_field', 2, type=int) # Default to GMV (2)
         
@@ -1975,8 +1976,8 @@ def quick_scan():
                 if sales_7d < min_sales:
                     continue
                 
-                # Require at least 3 videos (Stronger safety net per user request)
-                if video_count < 3:
+                # Dynamic Video Filter
+                if video_count < min_videos:
                     continue
                 
                 # Video count max filter (if set)
@@ -2204,9 +2205,10 @@ def scan_page_range(seller_id):
     try:
         start_page = request.args.get('start', 1, type=int)
         end_page = request.args.get('end', 5, type=int)
-        min_influencers = request.args.get('min_influencers', 1, type=int)
+        min_influencers = request.args.get('min_influencers', 0, type=int)
         max_influencers = request.args.get('max_influencers', 1000, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
+        min_videos = request.args.get('min_videos', 0, type=int)
         max_videos = request.args.get('max_videos', None, type=int)
         seller_name = request.args.get('seller_name', 'Unknown')
         
@@ -2240,7 +2242,7 @@ def scan_page_range(seller_id):
                 
                 if inf_count < min_influencers or inf_count > max_influencers: continue
                 if sales_7d < min_sales: continue
-                if video_count < 2: continue
+                if video_count < min_videos: continue
                 if max_videos is not None and video_count > max_videos: continue
                 
                 products_found += 1
@@ -5016,26 +5018,38 @@ def image_proxy(product_id):
                 else:
                     return jsonify({'error': 'Image Source Not Found'}), 404
 
-            # Dynamic Headers: TikTok is sensitive to Referer and UA
+            # Dynamic Headers: TikTok/Volcengine are extremely sensitive
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Referer": "https://www.tiktok.com/" # Default Referer works for most
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.tiktok.com/"
             }
-            # Specific Referers if needed
+            
             lower_url = target_url.lower()
             if "volces.com" in lower_url or "echotik" in lower_url:
                 headers["Referer"] = "https://echosell.echotik.live/"
             elif "tiktokcdn.com" in lower_url:
                 headers["Referer"] = "https://www.tiktok.com/"
+
+            # Logic to try multiple referers if 403
+            try_referers = [headers["Referer"], "https://www.tiktok.com/", None]
             
-            resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
+            resp = None
+            for ref in try_referers:
+                if ref:
+                    headers["Referer"] = ref
+                else:
+                    if "Referer" in headers: del headers["Referer"]
+                
+                resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
+                if resp.status_code == 200:
+                    break
+                if resp.status_code != 403: # If not 403, don't bother retrying with other referers
+                    break
             
             if resp.status_code != 200:
-                print(f"Proxy Error: {resp.status_code} for {target_url}")
-                # Try with NO referer if blocked
-                if resp.status_code == 403:
-                    del headers["Referer"]
-                    resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
+                print(f"Proxy Final Error: {resp.status_code} for {target_url}")
 
             # Exclude some problematic headers
             excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']

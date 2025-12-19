@@ -258,7 +258,7 @@
                     <label class="block text-sm text-slate-400 mb-2">Seller ID / Shop ID</label>
                     <input type="text" id="brand-id" placeholder="e.g. 74939281..." class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none font-mono">
                  </div>
-                 <div class="grid grid-cols-2 gap-6 mb-8">
+                 <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                     <div>
                         <label class="block text-sm text-slate-400 mb-2">Start Page</label>
                         <input type="number" id="brand-start" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
@@ -266,6 +266,22 @@
                     <div>
                         <label class="block text-sm text-slate-400 mb-2">End Page</label>
                         <input type="number" id="brand-end" value="5" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Min Sales (7d)</label>
+                        <input type="number" id="brand-min-sales" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Min Videos</label>
+                        <input type="number" id="brand-min-videos" value="0" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Min Influencers</label>
+                        <input type="number" id="brand-min-inf" value="0" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Max Influencers</label>
+                        <input type="number" id="brand-max-inf" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                  </div>
                  <button onclick="runBrandScan(this)" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all">
@@ -343,15 +359,19 @@
             const id = document.getElementById('brand-id').value;
             const start = document.getElementById('brand-start').value || 1;
             const end = document.getElementById('brand-end').value || 5;
+            const minSales = document.getElementById('brand-min-sales').value || 0;
+            const minVideos = document.getElementById('brand-min-videos').value || 0;
+            const minInf = document.getElementById('brand-min-inf').value || 0;
+            const maxInf = document.getElementById('brand-max-inf').value || 1000;
 
             if (!id) return log("Enter a Seller ID!", 'error');
 
             btn.disabled = true;
             btn.innerText = "Scanning...";
-            log(`Scanning Seller ${id} (Pages ${start}-${end})...`);
+            log(`Scanning Seller ${id} (Pages ${start}-${end}, Min Sales ${minSales}, Min Videos ${minVideos}, Inf ${minInf}-${maxInf})...`);
 
             try {
-                const res = await fetch(`/api/scan-pages/${id}?start=${start}&end=${end}`);
+                const res = await fetch(`/api/scan-pages/${id}?start=${start}&end=${end}&min_sales=${minSales}&min_videos=${minVideos}&min_influencers=${minInf}&max_influencers=${maxInf}`);
                 const data = await res.json();
 
                 if (data.products_found !== undefined) {
