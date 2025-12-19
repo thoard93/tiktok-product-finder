@@ -2234,6 +2234,7 @@ def scan_page_range(seller_id):
         products_scanned = 0
         products_found = 0
         products_saved = 0
+        filtered_out = 0
         
         for page in range(start_page, end_page + 1):
             products = get_seller_products(seller_id, page=page)
@@ -2246,13 +2247,16 @@ def scan_page_range(seller_id):
                 video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
                 
                 if inf_count < min_influencers or inf_count > max_influencers:
-                    products_found -= 1 # adjust if needed or track separately
+                    filtered_out += 1
                     continue
                 if sales_7d < min_sales:
+                    filtered_out += 1
                     continue
                 if video_count < min_videos:
+                    filtered_out += 1
                     continue
                 if max_videos is not None and video_count > max_videos:
+                    filtered_out += 1
                     continue
                 
                 products_found += 1
@@ -2264,7 +2268,13 @@ def scan_page_range(seller_id):
             time.sleep(0.1)
         
         db.session.commit()
-        return jsonify({'success': True, 'products_found': products_found, 'products_saved': products_saved})
+        return jsonify({
+            'success': True, 
+            'products_found': products_found, 
+            'products_saved': products_saved, 
+            'filtered_out': filtered_out,
+            'products_scanned': products_scanned
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -2809,79 +2819,95 @@ def scan_manual_import():
                 return 0
 
         for item in items:
-            # Map Schema (DailyVirals -> Product)
-            # Keys observed: title, creator.username, latest_view_count, likeCount, product.productId
-            
+            # FLEXIBLE MAPPING: Support both Video-based JSON and Product-based JSON
             p_obj = item.get('product')
+            is_video_based = True
             
-            # STRICT MODE: If no product object, SKIP IT.
-            # This prevents "Video Title" garbage imports.
+            if not isinstance(p_obj, dict):
+                 # Check if the item ITSELF is the product (New DV Product List)
+                 if item.get('productId') or item.get('product_id') or item.get('product_name'):
+                     p_obj = item
+                     is_video_based = False
+            
+            # If still no product object, skip it
             if not isinstance(p_obj, dict):
                 skipped_items += 1
                 continue
 
-            # Product ID & Data from 'product' object
-            pid = p_obj.get('productId') or p_obj.get('product_id')
+            # Product ID - try multiple keys for robustness
+            pid = p_obj.get('productId') or p_obj.get('product_id') or p_obj.get('id')
+            if not pid:
+                skipped_items += 1
+                continue
             
-            # Stats (Re-added)
-            views = safe_int(item.get('latest_view_count') or item.get('playBox') or item.get('views') or item.get('playCount'))
-            likes = safe_int(item.get('likeCount') or item.get('diggCount') or item.get('likes'))
+            # Stats Mapping
+            # For video-based, we want the specific video stats
+            # For product-based, we take the general product stats
+            if is_video_based:
+                views = safe_int(item.get('latest_view_count') or item.get('playBox') or item.get('views') or item.get('playCount'))
+                likes = safe_int(item.get('likeCount') or item.get('diggCount') or item.get('likes'))
+            else:
+                views = safe_int(p_obj.get('totalViewCount') or p_obj.get('views') or 0)
+                likes = safe_int(p_obj.get('totalLikeCount') or p_obj.get('likes') or 0)
             
             # Title Mapping
-            product_title = "Unknown Product"
-            if p_obj.get('productName'):
-                product_title = p_obj.get('productName')
-            elif p_obj.get('title'):
-                product_title = p_obj.get('title')
-            elif p_obj.get('name'):
-                product_title = p_obj.get('name')
+            product_title = p_obj.get('productName') or p_obj.get('product_name') or p_obj.get('title') or p_obj.get('name') or "Unknown Product"
             
-            img_url = ""
-            if p_obj.get('imageUrl') or p_obj.get('image_url'):
-                img_url = p_obj.get('imageUrl') or p_obj.get('image_url')
+            # Image URL
+            img_url = p_obj.get('imageUrl') or p_obj.get('image_url') or p_obj.get('coverUrl') or p_obj.get('cover_url') or ""
+            if not img_url and p_obj.get('images'):
+                imgs = p_obj.get('images')
+                if isinstance(imgs, list) and len(imgs) > 0:
+                    img_url = imgs[0] if isinstance(imgs[0], str) else imgs[0].get('url')
 
-            # Advertiser / Brand / Shop Name
-            advertiser = "Unknown"
-            if isinstance(p_obj, dict):
-                 advertiser = p_obj.get('shopName') or p_obj.get('shop_name') or advertiser
-            
-            # If still unknown, fallback to creator
-            if advertiser == "Unknown":
+            # Advertiser / Shop Name
+            advertiser = p_obj.get('shopName') or p_obj.get('shop_name') or p_obj.get('brandName') or p_obj.get('advertiser_name') or "Unknown"
+            if advertiser == "Unknown" and is_video_based:
                 creator = item.get('creator')
                 if isinstance(creator, dict):
                     advertiser = creator.get('username') or creator.get('nickname') or "Unknown"
 
             # Sales / GMV Mappings
-            raw_sales = safe_int(p_obj.get('totalUnitsSold') or p_obj.get('soldCount') or p_obj.get('sales') or 0)
-            sales_7d = safe_int(p_obj.get('revenueLastSevenDays') or 0)
-            comm_val = p_obj.get('tdv_commission_percentage') or p_obj.get('open_commission_percentage') or 0
+            # Support: totalUnitsSold, unitsSold, soldCount, sales
+            raw_sales = safe_int(p_obj.get('totalUnitsSold') or p_obj.get('unitsSold') or p_obj.get('soldCount') or p_obj.get('sales') or 0)
+            # Support 7d sales: revenueLastSevenDays, sales_7d, etc.
+            sales_7d = safe_int(p_obj.get('unitsSoldLastSevenDays') or p_obj.get('sales_7d') or 0)
+            
+            # Commission
+            comm_val = p_obj.get('tdv_commission_percentage') or p_obj.get('open_commission_percentage') or p_obj.get('commission_rate') or 0
              
-            # GMV
+            # GMV / Revenue
             gmv = 0
             revenue_analytics = p_obj.get('revenueAnalytics')
             if isinstance(revenue_analytics, dict):
                  gmv = safe_int(revenue_analytics.get('totalRevenue') or 0)
             else:
-                 gmv = safe_int(p_obj.get('totalRevenue') or 0)
+                 gmv = safe_int(p_obj.get('totalRevenue') or p_obj.get('revenue') or p_obj.get('gmv') or 0)
+
+            # Rating & Reviews (New from Product List)
+            rating = float(p_obj.get('rating') or p_obj.get('product_rating') or 0)
+            reviews = safe_int(p_obj.get('reviews') or p_obj.get('review_count') or 0)
 
             # Create Candidate
             p = {
-                'product_id': pid, 
-                'product_name': product_title[:100],
+                'product_id': str(pid), 
+                'product_name': product_title[:200], # Increased limit
                 'title': product_title,
                 'seller_name': advertiser, 
                 'advertiser': advertiser, 
-                'price': 0,
+                'price': float(p_obj.get('avgPrice') or p_obj.get('price') or 0),
                 'commission_rate': float(comm_val) / 100.0 if float(comm_val) > 1 else float(comm_val),
                 'sales': raw_sales,
                 'sales_7d': sales_7d,
                 'gmv': gmv,
+                'product_rating': rating,
+                'review_count': reviews,
                 'influencer_count': 0,
-                'video_count': 0, # Start at 0 to detect if enrichment fails
+                'video_count': 0, 
                 'video_views': views,
                 'video_likes': likes,
                 'scan_type': 'daily_virals', 
-                'url': item.get('videoUrl') or item.get('link') or "",
+                'url': item.get('videoUrl') or item.get('link') or p_obj.get('productUrl') or "",
                 'image': img_url,
                 'is_enriched': False
             }
