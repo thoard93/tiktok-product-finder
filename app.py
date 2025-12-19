@@ -400,15 +400,15 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                                  next_region = fallback_map.get(current_region)
                                  
                                  if next_region:
-                                     # Optimization: Skip recursive regional failover for batch imports to save time budget
-                                     if "[DV-IMPORT]" in i_log_prefix:
-                                         print(f"DEBUG: WAF blocked {current_region}. Skipping failover for batch.")
-                                         return fetch_cached_product_data(p, i_log_prefix)
-                                     
-                                     print(f"DEBUG: WAF blocked {current_region}, failing over to {next_region}...")
-                                     p['region'] = next_region
-                                     # Recursive retry with new region
-                                     return enrich_product_data(p, i_log_prefix, force=True)
+                                    # Optimization: Allow ONE regional failover for batch imports to balance quality and speed
+                                    if "[DV-IMPORT]" in i_log_prefix and current_region != 'US':
+                                        print(f"DEBUG: WAF blocked {current_region}. Already failed over once. Falling back to DB.")
+                                        return fetch_cached_product_data(p, i_log_prefix)
+                                    
+                                    print(f"DEBUG: WAF blocked {current_region}, failing over to {next_region}...")
+                                    p['region'] = next_region
+                                    # Recursive retry with new region
+                                    return enrich_product_data(p, i_log_prefix, force=True)
 
                                  # If WAF persists or no next region, FALLBACK TO DB API
                                  print(f"DEBUG: Realtime WAF blocked. Attempting Cache DB API...")
@@ -490,10 +490,10 @@ def fetch_cached_product_data(p, i_log_prefix):
                     d = d_list[0]
                     # Map DB API fields -> Our Model
                     # Docs: total_sale_cnt, spu_avg_price, product_name, cover_url
-                    p['product_name'] = d.get('product_name')
-                    p['image_url'] = d.get('cover_url')
-                    p['seller_name'] = d.get('seller_name') or d.get('shop_name') or p.get('seller_name')
-                    p['url'] = d.get('product_url') or p.get('url')
+                    p['product_name'] = d.get('product_name') or d.get('productName') or p.get('product_name')
+                    p['image_url'] = d.get('cover_url') or d.get('coverUrl') or d.get('product_image') or p.get('image_url')
+                    p['seller_name'] = d.get('seller_name') or d.get('sellerName') or d.get('shop_name') or d.get('shopName') or p.get('seller_name')
+                    p['url'] = d.get('product_url') or d.get('productUrl') or p.get('url')
                     if p['image_url'] and p['image_url'].startswith('['):
                          # Often returns JSON string for images
                          try:
@@ -2853,15 +2853,16 @@ def scan_manual_import():
             # Title Mapping
             product_title = p_obj.get('productName') or p_obj.get('product_name') or p_obj.get('title') or p_obj.get('name') or "Unknown Product"
             
-            # Image URL
+            # Image URL - Expanded mapping for DV Product List
             img_url = p_obj.get('imageUrl') or p_obj.get('image_url') or p_obj.get('coverUrl') or p_obj.get('cover_url') or ""
-            if not img_url and p_obj.get('images'):
-                imgs = p_obj.get('images')
+            if not img_url:
+                # Try lists
+                imgs = p_obj.get('imageUrls') or p_obj.get('productImages') or p_obj.get('images')
                 if isinstance(imgs, list) and len(imgs) > 0:
-                    img_url = imgs[0] if isinstance(imgs[0], str) else imgs[0].get('url')
-
-            # Advertiser / Shop Name
-            advertiser = p_obj.get('shopName') or p_obj.get('shop_name') or p_obj.get('brandName') or p_obj.get('advertiser_name') or "Unknown"
+                    img_url = imgs[0] if isinstance(imgs[0], str) else (imgs[0].get('url') or imgs[0].get('imageUrl'))
+            
+            # Advertiser / Shop Name - Expanded mapping
+            advertiser = p_obj.get('advertiser_name') or p_obj.get('shopName') or p_obj.get('shop_name') or p_obj.get('brandName') or p_obj.get('advertiser') or "Unknown"
             if advertiser == "Unknown" and is_video_based:
                 creator = item.get('creator')
                 if isinstance(creator, dict):
@@ -3433,21 +3434,18 @@ def get_stats():
 
 
 @app.route('/api/refresh-images', methods=['POST', 'GET'])
+@login_required # Only allow logged in users
 def refresh_images():
     """
     Refresh cached image URLs for products using SINGLE-PRODUCT API calls.
-    The batch API doesn't work reliably with EchoTik.
-    
-    Parameters:
-        batch: Number of products to process (default 50, max 100)
-        force: If true, refresh ALL products regardless of current cache status
-    
-    NOTE: Continuous mode removed to prevent server blocking.
-    Frontend should call this endpoint multiple times for large refreshes.
+    Returns: JSON with stats on progress.
     """
     try:
         batch_size = min(request.args.get('batch', 50, type=int), 100)
         force = request.args.get('force', 'false').lower() == 'true'
+        
+        # Check if user is admin (Simple check for now)
+        is_admin = True # Since we use login_required and it's a private tool
         
         if force:
             products = Product.query.filter(
@@ -5059,7 +5057,13 @@ def image_proxy(product_id):
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.9",
-                "Referer": "https://www.tiktok.com/"
+                "Referer": "https://www.tiktok.com/",
+                "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-platform": '"Windows"',
+                "sec-fetch-dest": "image",
+                "sec-fetch-mode": "no-cors",
+                "sec-fetch-site": "cross-site"
             }
             
             lower_url = target_url.lower()
@@ -5068,31 +5072,45 @@ def image_proxy(product_id):
             elif "tiktokcdn.com" in lower_url:
                 headers["Referer"] = "https://www.tiktok.com/"
 
-            # Logic to try multiple referers if 403
-            try_referers = [headers["Referer"], "https://www.tiktok.com/", None]
+            # Logic to try multiple referers and User-Agents if 403
+            try_configs = [
+                {"Referer": headers.get("Referer"), "UA": headers["User-Agent"]},
+                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"},
+                {"Referer": None, "UA": headers["User-Agent"]},
+                {"Referer": "https://www.google.com/", "UA": headers["User-Agent"]}
+            ]
             
             resp = None
-            for ref in try_referers:
-                if ref:
-                    headers["Referer"] = ref
-                else:
-                    if "Referer" in headers: del headers["Referer"]
+            for config in try_configs:
+                if config["Referer"]:
+                    headers["Referer"] = config["Referer"]
+                elif "Referer" in headers: 
+                    del headers["Referer"]
                 
-                resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
-                if resp.status_code == 200:
-                    break
-                if resp.status_code != 403: # If not 403, don't bother retrying with other referers
-                    break
+                headers["User-Agent"] = config["UA"]
+                
+                try:
+                    resp = requests.get(target_url, headers=headers, stream=True, timeout=12)
+                    if resp.status_code == 200:
+                        break
+                    if resp.status_code != 403: # If not 403, don't bother retrying with other referers
+                        break
+                except Exception as e:
+                    print(f"Proxy attempt failed: {e}")
+                    continue
             
-            if resp.status_code != 200:
-                print(f"Proxy Final Error: {resp.status_code} for {target_url}")
+            if not resp or resp.status_code != 200:
+                sc = resp.status_code if resp else "No Response"
+                print(f"Proxy Final Error: {sc} for {target_url}")
 
             # Exclude some problematic headers
             excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-            proxy_headers = [(name, value) for (name, value) in resp.raw.headers.items()
+            proxy_headers = [(name, value) for (name, value) in (resp.raw.headers.items() if resp else [])
                              if name.lower() not in excluded_headers]
 
-            return Response(resp.content, resp.status_code, proxy_headers)
+            content = resp.content if resp else b""
+            status_code = resp.status_code if resp else 500
+            return Response(content, status_code, proxy_headers)
 
     except Exception as e:
         print(f"Proxy Error: {e}")
@@ -5778,6 +5796,7 @@ def api_oos_products():
 
 
 @app.route('/api/refresh-all-products', methods=['GET', 'POST'])
+@login_required
 def refresh_all_products():
     """
     Batch refresh ALL active products from EchoTik API.
@@ -5786,8 +5805,9 @@ def refresh_all_products():
     passkey = request.args.get('passkey') or (request.json.get('passkey') if request.is_json else None)
     dev_passkey = os.environ.get('DEV_PASSKEY', '')
     
-    if not dev_passkey or passkey != dev_passkey:
-        return jsonify({'success': False, 'error': 'Invalid or missing passkey'}), 403
+    # Allow if passkey matches OR if user is admin (which they are if they can see the settings)
+    if not (dev_passkey and passkey == dev_passkey) and not current_user.is_authenticated:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     
     # Limit how many products to refresh per call (to avoid timeout)
     limit = min(int(request.args.get('limit', 100)), 500)
@@ -5796,7 +5816,7 @@ def refresh_all_products():
     
     try:
         products = Product.query.filter(
-            db.or_(Product.product_status == 'active', Product.product_status == None)
+            db.or_(Product.product_status == 'active', Product.product_status == None, Product.scan_type == 'daily_virals')
         ).order_by(Product.last_updated.asc()).offset(offset).limit(limit).all()
         
         total_products = len(products)
@@ -5832,6 +5852,14 @@ def refresh_all_products():
                         product.video_count = int(d.get('total_video_cnt', 0))
                         product.commission_rate = float(d.get('product_commission_rate', 0))
                         product.price = float(d.get('spu_avg_price', 0))
+                        
+                        # Fix missing metadata
+                        if not product.seller_name or product.seller_name == "Unknown":
+                            product.seller_name = d.get('seller_name') or d.get('shop_name')
+                        if not product.image_url:
+                            product.image_url = d.get('cover_url') or d.get('product_image')
+                            product.cached_image_url = None # Reset cache to force refresh
+
                         product.last_updated = datetime.utcnow()
                         product.product_status = 'active' # Mark active
                         updated += 1

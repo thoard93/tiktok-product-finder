@@ -140,10 +140,30 @@
             </div>
         </div>
 
-        <div class="mt-8 flex justify-end gap-4">
+        <div class="mt-8 flex flex-wrap justify-end gap-4">
+            <button onclick="refreshAllStats()"
+                class="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-lg transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                    </path>
+                </svg>
+                🔄 Refresh All Stats (Batch)
+            </button>
+
+            <button onclick="refreshAllImages()"
+                class="px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 border border-violet-500/20 rounded-lg transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                    </path>
+                </svg>
+                🖼️ Refresh All Images
+            </button>
+
             <button onclick="runCleanup()"
-                class="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 rounded-lg transition-colors">
-                🧹 Cleanup Invalid Products
+                class="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 rounded-lg transition-colors flex items-center gap-2">
+                🧹 Cleanup Invalid
             </button>
 
             <button onclick="nukeProducts()"
@@ -153,7 +173,7 @@
                         d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
                     </path>
                 </svg>
-                Danger: Delete All Products
+                Danger: Nuke DB
             </button>
         </div>
     </main>
@@ -247,6 +267,68 @@
                 alert(data.message);
                 loadAdmin();
             } catch (e) { alert("Error: " + e); }
+        }
+
+        async function refreshAllStats() {
+            const confirmed = confirm("This will batch refresh stats for ALL active products by calling the EchoTik API one-by-one.\n\nThis may take several minutes depending on the number of products.\n\nProceed?");
+            if (!confirmed) return;
+
+            // Simple recursive batching if needed, or just one big call if server handles it
+            // The backend /api/refresh-all-products handles a limit of 100 usually.
+            const limit = 100;
+            let offset = 0;
+            let totalProcessed = 0;
+
+            async function runBatch() {
+                try {
+                    console.log(`Refreshing batch with offset ${offset}...`);
+                    const res = await fetch(`/api/refresh-all-products?limit=${limit}&offset=${offset}`);
+                    const data = await res.json();
+
+                    if (data.success) {
+                        totalProcessed += data.count;
+                        if (data.count === limit) {
+                            offset += limit;
+                            // Update UI if possible, for now just log
+                            console.log(`Processed ${totalProcessed}. Continuing...`);
+                            if (confirm(`Processed ${totalProcessed} products. Continue to next batch?`)) {
+                                await runBatch();
+                            } else {
+                                alert(`Stopped. Refreshed ${totalProcessed} products.`);
+                                window.location.reload();
+                            }
+                        } else {
+                            alert(`✅ Finished! Refreshed ${totalProcessed} total products.`);
+                            window.location.reload();
+                        }
+                    } else {
+                        alert('❌ Batch Error: ' + data.error);
+                    }
+                } catch (e) {
+                    alert('❌ Network Error during batch: ' + e);
+                }
+            }
+
+            await runBatch();
+        }
+
+        async function refreshAllImages() {
+            const confirmed = confirm("This will refresh image cache (signed URLs) for all products.\n\nProceed?");
+            if (!confirmed) return;
+
+            try {
+                // Backend handles sign-in and expiry check
+                const res = await fetch('/api/refresh-images?batch=100');
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Done! Processed ${data.processed} images, updated ${data.updated}.`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('❌ Network Error: ' + e);
+            }
         }
 
         loadAdmin();
