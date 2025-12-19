@@ -1913,7 +1913,7 @@ def quick_scan():
         min_influencers = request.args.get('min_influencers', 0, type=int) # Default to 0 for maximum discovery
         max_influencers = request.args.get('max_influencers', 100, type=int)
         min_sales = request.args.get('min_sales', 0, type=int)
-        min_videos = request.args.get('min_videos', 1, type=int)
+        min_videos = request.args.get('min_videos', 0, type=int)
         max_videos = request.args.get('max_videos', None, type=int)
         sort_field = request.args.get('sort_field', 2, type=int) # Default to GMV (2)
         
@@ -1936,7 +1936,8 @@ def quick_scan():
             'pages_scanned': 0,
             'products_scanned': 0,
             'products_found': 0,
-            'products_saved': 0
+            'products_saved': 0,
+            'filtered_out': 0
         }
         
         for page in range(1, pages + 1):
@@ -1972,16 +1973,20 @@ def quick_scan():
                 
                 # Filters
                 if influencer_count < min_influencers or influencer_count > max_influencers:
+                    result['filtered_out'] += 1
                     continue
                 if sales_7d < min_sales:
+                    result['filtered_out'] += 1
                     continue
                 
                 # Dynamic Video Filter
                 if video_count < min_videos:
+                    result['filtered_out'] += 1
                     continue
                 
                 # Video count max filter (if set)
                 if max_videos is not None and video_count > max_videos:
+                    result['filtered_out'] += 1
                     continue
                 
                 result['products_found'] += 1
@@ -2240,10 +2245,15 @@ def scan_page_range(seller_id):
                 sales_7d = int(p.get('total_sale_7d_cnt') or p.get('totalSale7dCnt') or 0)
                 video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
                 
-                if inf_count < min_influencers or inf_count > max_influencers: continue
-                if sales_7d < min_sales: continue
-                if video_count < min_videos: continue
-                if max_videos is not None and video_count > max_videos: continue
+                if inf_count < min_influencers or inf_count > max_influencers:
+                    products_found -= 1 # adjust if needed or track separately
+                    continue
+                if sales_7d < min_sales:
+                    continue
+                if video_count < min_videos:
+                    continue
+                if max_videos is not None and video_count > max_videos:
+                    continue
                 
                 products_found += 1
                 p['seller_id'] = seller_id

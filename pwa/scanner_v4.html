@@ -210,38 +210,42 @@
         const CONFIGS = {
             'quick': `
                 <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-bolt text-yellow-400"></i> Quick Scan Configuration</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Start Rank (Global Brands)</label>
-                        <input type="number" id="start-rank" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-sm text-slate-400 mb-2">Start Rank</label>
+                        <input type="number" id="quick-rank" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Brands to Scan</label>
-                        <input type="number" id="num-brands" value="5" max="20" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-sm text-slate-400 mb-2">Count</label>
+                        <input type="number" id="quick-count" value="5" max="20" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Min Sales (7 Days)</label>
-                        <input type="number" id="min-sales" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-sm text-slate-400 mb-2">Min 7d Sales</label>
+                        <input type="number" id="quick-min-sales" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Min Videos</label>
+                        <input type="number" id="quick-min-videos" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-2">Max Videos</label>
+                        <input type="number" id="quick-max-videos" value="25" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                     <div>
                         <label class="block text-sm text-slate-400 mb-2">Min Influencers</label>
-                        <input type="number" id="min-influencers" value="0" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <input type="number" id="quick-min-inf" value="0" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                     <div>
                         <label class="block text-sm text-slate-400 mb-2">Max Influencers</label>
-                        <input type="number" id="max-influencers" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <input type="number" id="quick-max-inf" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Max Video Count (Hidden Gem)</label>
-                        <input type="number" id="max-videos" value="25" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-sm text-slate-400 mb-2">Pages/Brand</label>
+                        <input type="number" id="quick-pages" value="3" max="10" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
                     </div>
-                    <div>
-                        <label class="block text-sm text-slate-400 mb-2">Pages per Brand (Max 10)</label>
-                        <input type="number" id="pages-per-brand" value="3" max="10" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                    <div>
+                    <div class="md:col-span-2">
                         <label class="block text-sm text-slate-400 mb-2">Sort Brands By</label>
-                        <select id="sort-brands" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none text-slate-300">
+                        <select id="quick-sort" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none text-slate-300">
                             <option value="2">GMV (Total)</option>
                             <option value="6">30-Day Sales</option>
                             <option value="4">7-Day Sales</option>
@@ -318,30 +322,44 @@
         }
 
         async function runQuickScan(btn) {
-            const startRank = document.getElementById('start-rank').value;
-            const numBrands = document.getElementById('num-brands').value;
-            const minSales = document.getElementById('min-sales').value;
-            const maxVideos = document.getElementById('max-videos').value;
-            const minInfluencers = document.getElementById('min-influencers').value;
-            const maxInfluencers = document.getElementById('max-influencers').value;
-            const pages = document.getElementById('pages-per-brand').value;
-            const sortField = document.getElementById('sort-brands').value || 2;
+            const startRank = parseInt(document.getElementById('quick-rank').value) || 1;
+            const numBrands = parseInt(document.getElementById('quick-count').value) || 5;
+            const minSales = parseInt(document.getElementById('quick-min-sales').value) || 0;
+            const minVideos = parseInt(document.getElementById('quick-min-videos').value) || 0;
+            const maxVideos = parseInt(document.getElementById('quick-max-videos').value) || 1000;
+            const minInf = parseInt(document.getElementById('quick-min-inf').value) || 0;
+            const maxInf = parseInt(document.getElementById('quick-max-inf').value) || 1000;
+            const pages = parseInt(document.getElementById('quick-pages').value) || 3;
+            const sortField = document.getElementById('quick-sort').value || 2;
 
             btn.disabled = true;
             btn.innerText = "Scanning...";
-            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands, Min Sales ${minSales}, Max Videos ${maxVideos}, Min Inf ${minInfluencers}, Max Inf ${maxInfluencers}, Sort ${sortField})...`);
+            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands, Sales >${minSales}, Videos ${minVideos}-${maxVideos}, Inf ${minInf}-${maxInf})...`);
 
             try {
-                // Loop simulation for UI feedback
                 for (let i = 0; i < numBrands; i++) {
-                    const rank = parseInt(startRank) + i;
+                    const rank = startRank + i;
                     log(`Scanning Brand Rank #${rank}...`);
 
-                    const res = await fetch(`/api/quick-scan?brand_rank=${rank}&pages=${pages}&min_sales=${minSales}&max_videos=${maxVideos}&min_influencers=${minInfluencers}&max_influencers=${maxInfluencers}&sort_field=${sortField}`);
+                    const query = new URLSearchParams({
+                        brand_rank: rank,
+                        pages: pages,
+                        min_sales: minSales,
+                        min_videos: minVideos,
+                        max_videos: maxVideos,
+                        min_influencers: minInf,
+                        max_influencers: maxInf,
+                        sort_field: sortField
+                    });
+
+                    const res = await fetch(`/api/quick-scan?${query.toString()}`);
                     const data = await res.json();
 
                     if (data.result) {
-                        log(`Brand #${rank}: Found ${data.result.products_found}, Saved ${data.result.products_saved}`, data.result.products_saved > 0 ? 'success' : 'info');
+                        const saved = data.result.products_saved;
+                        const filtered = data.result.filtered_out || 0;
+                        const found = data.result.products_found;
+                        log(`Brand #${rank}: Found ${found} (${filtered} filtered), Saved ${saved}`, saved > 0 ? 'success' : 'info');
                     } else {
                         log(`Brand #${rank} Error: ${data.error || 'Unknown'}`, 'error');
                     }
