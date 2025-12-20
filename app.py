@@ -493,12 +493,33 @@ def enrich_product_data(p, i_log_prefix="", force=False):
             
             # Special Mapping for Cached DB (which has different keys sometimes)
             if source == 'cached_db':
-                p['sales'] = int(d.get('total_sale_cnt', 0))
-                p['sales_7d'] = int(d.get('total_sale_7d_cnt', 0))
-                p['price'] = float(d.get('spu_avg_price', 0))
-                p['image_url'] = d.get('cover_url') or d.get('product_image') or p.get('image_url')
+                # Debug: Log the raw response to see what keys are available
+                print(f"DEBUG: Cached DB keys for {pid}: {list(d.keys())[:15]}")
+                
+                # Extract all available stats from Cached DB
+                p['product_name'] = d.get('product_name') or d.get('productName') or p.get('product_name')
+                p['sales'] = int(d.get('total_sale_cnt') or 0)
+                p['sales_7d'] = int(d.get('total_sale_7d_cnt') or 0)
+                p['sales_30d'] = int(d.get('total_sale_30d_cnt') or 0)
+                p['price'] = float(d.get('spu_avg_price') or 0)
+                p['video_count'] = int(d.get('total_video_cnt') or 0)
+                p['influencer_count'] = int(d.get('total_ifl_cnt') or 0)
+                p['views_count'] = int(d.get('total_views_cnt') or 0)
+                p['live_count'] = int(d.get('total_live_cnt') or 0)
+                
+                # Image URL - prefer cover_url, then product_image
+                img = d.get('cover_url') or d.get('product_image') or d.get('product_img_url')
+                if img:
+                    p['image_url'] = img
+                    
+                # Seller name resolution
                 p['seller_name'] = d.get('seller_name') or d.get('shop_name') or p.get('seller_name')
-                p['commission_rate'] = float(d.get('product_commission_rate', 0)) / 100.0
+                
+                # Commission (divide by 100 if percentage)
+                raw_comm = float(d.get('product_commission_rate') or 0)
+                p['commission_rate'] = raw_comm / 100.0 if raw_comm > 1 else raw_comm
+                
+                print(f"DEBUG: Cached DB extracted - S:{p.get('sales')} S7d:{p.get('sales_7d')} V:{p.get('video_count')} I:{p.get('influencer_count')}")
             else:
                 # Update local p dict from robust helper
                 for k, v in p_meta.items():
