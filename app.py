@@ -178,6 +178,92 @@ KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product st
 # SHARED HELPERS
 # =============================================================================
 
+def extract_metadata_from_echotik(d):
+    """
+    Robustly extract product metadata from EchoTik API response (d).
+    Handles both V3 flat structure and nested "Page Props" structure.
+    """
+    res = {
+        'product_name': None,
+        'image_url': None,
+        'sales': 0,
+        'sales_7d': 0,
+        'sales_30d': 0,
+        'influencer_count': 0,
+        'video_count': 0,
+        'commission_rate': 0.0,
+        'price': 0.0,
+        'seller_name': None,
+        'seller_id': None,
+        'live_count': 0,
+        'views_count': 0,
+        'product_url': None
+    }
+    
+    # 1. Top Level Mapping (V3 / Realtime Standard)
+    res['sales'] = int(d.get('totalSaleCnt') or d.get('total_sale_cnt') or 0)
+    res['sales_7d'] = int(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or 0)
+    res['sales_30d'] = int(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or 0)
+    res['influencer_count'] = int(d.get('totalIflCnt') or d.get('total_ifl_cnt') or 0)
+    res['video_count'] = int(d.get('totalVideoCnt') or d.get('total_video_cnt') or 0)
+    
+    raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or 0)
+    res['commission_rate'] = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
+    
+    res['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price') or 0)
+    res['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or d.get('productName')
+    res['image_url'] = d.get('cover') or d.get('image_url') or d.get('cover_url') or d.get('product_image')
+    res['product_url'] = d.get('product_url') or d.get('productUrl')
+    
+    res['seller_name'] = (
+        d.get('seller_name') or d.get('shop_name') or d.get('shopName') or d.get('sellerName') or
+        d.get('store_name') or d.get('brandName') or d.get('brand_name') or d.get('advertiser') or
+        (d.get('seller', {}).get('name') if isinstance(d.get('seller'), dict) else None)
+    )
+    res['seller_id'] = d.get('seller_id') or d.get('shop_id')
+    
+    # 2. Nested "Page Props" Fallback (Common for PDY/Shop data)
+    if res['sales'] == 0 or not res['seller_name']:
+        for k, v in d.items():
+            if isinstance(v, dict) and 'product_info' in v:
+                pi = v['product_info']
+                if res['sales'] == 0:
+                    res['sales'] = int(pi.get('sold_count') or pi.get('total_sold') or 0)
+                    res['sales_7d'] = res['sales'] # Fallback
+                
+                # Price extraction
+                if res['price'] == 0:
+                    p_val = pi.get('price', {}).get('real_price', {}).get('price_val') or pi.get('price', {}).get('real_price')
+                    if p_val:
+                        try: res['price'] = float(str(p_val).replace('$','').strip())
+                        except: pass
+                
+                # Base Metadata
+                base = pi.get('product_base', {})
+                res['product_name'] = res['product_name'] or base.get('title')
+                
+                # Image
+                if not res['image_url']:
+                    imgs = base.get('images', [])
+                    if imgs:
+                        res['image_url'] = imgs[0].get('url_list', [None])[0] or imgs[0].get('url')
+                
+                # Seller in Page Props
+                shop = pi.get('shop', {}) or pi.get('seller', {})
+                if isinstance(shop, dict):
+                    res['seller_name'] = res['seller_name'] or shop.get('name') or shop.get('shop_name') or shop.get('seller_name')
+                    res['seller_id'] = res['seller_id'] or shop.get('shop_id') or shop.get('seller_id')
+                
+                # Stock
+                total_stock = 0
+                if 'skus' in pi:
+                    for sku in pi['skus']: 
+                        if isinstance(sku, dict): total_stock += int(sku.get('stock') or 0)
+                res['live_count'] = total_stock
+                break
+                
+    return res
+
 def parse_cover_url(url):
     """Clean up cover URL which may be a JSON array string or list."""
     if not url: return ""
@@ -212,25 +298,24 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
     
     existing = Product.query.get(product_id)
     
-    # Extract & Normalize Stats
-    inf_count = int(p_data.get('total_ifl_cnt') or p_data.get('totalIflCnt') or 0)
-    sales = int(p_data.get('total_sale_cnt') or p_data.get('totalSaleCnt') or p_data.get('sales', 0))
-    s7d = int(p_data.get('total_sale_7d_cnt') or p_data.get('totalSale7dCnt') or p_data.get('sales_7d', 0))
-    s30d = int(p_data.get('total_sale_30d_cnt') or p_data.get('totalSale30dCnt') or p_data.get('sales_30d', 0))
+    # 1. Exhaustive Metadata Extraction
+    res = extract_metadata_from_echotik(p_data)
     
-    raw_comm = float(p_data.get('product_commission_rate') or p_data.get('productCommissionRate') or p_data.get('commission_rate', 0))
-    comm = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
+    # Normalize Stats
+    inf_count = res['influencer_count'] or int(p_data.get('influencer_count', 0))
+    sales = res['sales']
+    s7d = res['sales_7d']
+    s30d = res['sales_30d']
+    comm = res['commission_rate']
+    price = res['price']
+    v_count = res['video_count'] or int(p_data.get('video_count', 0))
     
-    price = float(p_data.get('spu_avg_price') or p_data.get('spuAvgPrice') or p_data.get('price', 0))
-    v_count = int(p_data.get('total_video_cnt') or p_data.get('totalVideoCnt') or p_data.get('video_count', 0))
-    
-    img = parse_cover_url(p_data.get('cover_url') or p_data.get('cover') or p_data.get('image_url') or p_data.get('item_img'))
-    name = p_data.get('product_name') or p_data.get('productName') or p_data.get('title') or ""
+    img = parse_cover_url(res['image_url'] or p_data.get('image_url') or p_data.get('item_img'))
+    name = res['product_name'] or p_data.get('product_name') or p_data.get('title') or ""
 
     # Generate or extract product URL
-    p_url = p_data.get('product_url') or p_data.get('productUrl') or p_data.get('url')
+    p_url = res['product_url'] or p_data.get('product_url') or p_data.get('url')
     if not p_url or 'tiktok.com' not in p_url:
-        # Standard TikTok Shop URL
         p_url = f"https://shop.tiktok.com/view/product/{raw_id}?region=US"
 
     if existing:
@@ -247,29 +332,18 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
         existing.video_count = v_count if v_count > 0 else existing.video_count
         
         # Merge other stats if available
-        existing.video_7d = int(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or existing.video_7d or 0)
-        existing.video_30d = int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or existing.video_30d or 0)
-        existing.live_count = int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or existing.live_count or 0)
+        existing.video_7d = int(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or res.get('video_7d') or existing.video_7d or 0)
+        existing.video_30d = int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or res.get('video_30d') or existing.video_30d or 0)
+        existing.live_count = res['live_count'] or int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or existing.live_count or 0)
         existing.views_count = int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
         
-        # Update seller info if missing
-        new_seller_name = (
-            p_data.get('seller_name') or 
-            p_data.get('shop_name') or 
-            p_data.get('shopName') or 
-            p_data.get('sellerName') or
-            p_data.get('store_name') or
-            p_data.get('brand_name') or
-            p_data.get('brandName') or
-            p_data.get('advertiser') or
-            p_data.get('advertiser_name') or
-            (p_data.get('seller', {}).get('name') if isinstance(p_data.get('seller'), dict) else None)
-        )
+        # Update seller info
+        new_seller_name = res['seller_name'] or "Unknown"
         if new_seller_name and str(new_seller_name).strip() not in ['', 'Unknown', 'None']:
             if not existing.seller_name or existing.seller_name == 'Unknown':
                 existing.seller_name = str(new_seller_name).strip()
         
-        new_seller_id = p_data.get('seller_id') or p_data.get('shop_id')
+        new_seller_id = res['seller_id'] or p_data.get('seller_id') or p_data.get('shop_id')
         if new_seller_id and (not existing.seller_id):
             existing.seller_id = new_seller_id
 
@@ -291,10 +365,10 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
             video_count=v_count,
             video_7d=int(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or 0),
             video_30d=int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or 0),
-            live_count=int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or 0),
+            live_count=res['live_count'] or int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or 0),
             views_count=int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or 0),
-            seller_id=p_data.get('seller_id') or p_data.get('shop_id'),
-            seller_name=new_seller_name or "Unknown",
+            seller_id=res['seller_id'] or p_data.get('seller_id') or p_data.get('shop_id'),
+            seller_name=res['seller_name'] or "Unknown",
             scan_type=scan_type,
             first_seen=datetime.utcnow()
         )
@@ -345,120 +419,32 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     except:
                         print(f"DEBUG: EchoTik Data (Raw): {d}")
 
-                    # Update product - Try CamelCase (v3) then SnakeCase (v2) fallback
-                    p['sales'] = int(d.get('totalSaleCnt') or d.get('total_sale_cnt', 0))
-                    p['sales_7d'] = int(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt', 0))
-                    p['sales_30d'] = int(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt', 0))
-                    p['influencer_count'] = int(d.get('totalIflCnt') or d.get('total_ifl_cnt', 0))
-                    p['video_count'] = int(d.get('totalVideoCnt') or d.get('total_video_cnt', 0))
-                    p['commission_rate'] = float(d.get('productCommissionRate') or d.get('product_commission_rate', 0))
-                    p['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price', 0))
+                    p_meta = extract_metadata_from_echotik(d)
                     
-                    # Capture Seller Name
-                    p['seller_name'] = (
-                        d.get('seller_name') or 
-                        d.get('shop_name') or 
-                        d.get('shopName') or 
-                        d.get('sellerName') or
-                        d.get('store_name') or 
-                        d.get('brandName') or
-                        d.get('brand_name') or
-                        d.get('advertiser') or
-                        (d.get('seller', {}).get('name') if isinstance(d.get('seller'), dict) else None) or
-                        p.get('seller_name')
-                    )
-                    # Capture Product URL if provided by EchoTik
-                    e_url = d.get('product_url') or d.get('productUrl')
-                    if e_url: p['url'] = e_url
-                    
-                    # Fallback: Check for Raw Page Props (shop/pdp/...)
-                    if p['sales'] == 0:
-                        # Iterate keys to find the one with product_info
-                        for k, v in d.items():
-                            # DEBUG: Log what we are scanning
-                            print(f"DEBUG: Scanning key '{k}' Type: {type(v)}")
-                            
-                            if isinstance(v, dict) and 'product_info' in v:
-                                try:
-                                    pi = v['product_info']
-                                    # Total Sales
-                                    p['sales'] = int(pi.get('sold_count', 0))
-                                    # Use Total Sales as proxy for 7 Day Sales if missing, just so it shows up? 
-                                    # Or better yet, save it to p['sales'] (total) and ensure embed shows it?
-                                    # For now, let's FORCE it into sales_7d so the user sees *something* instead of 0
-                                    p['sales_7d'] = p['sales'] 
-
-                                    p['price'] = float(str(pi.get('price', {}).get('real_price', '0')).replace('$',''))
-                                    
-                                    base = pi.get('product_base', {})
-                                    p['product_name'] = base.get('title')
-                                    
-                                    # Extract Stock from SKUs
-                                    total_stock = 0
-                                    if 'skus' in pi:
-                                        for sku in pi['skus']:
-                                            total_stock += int(sku.get('stock', 0))
-                                    p['live_count'] = total_stock
-
-                                    images = base.get('images', [])
-                                    if images and len(images) > 0:
-                                         # Try thumb_url_list or url_list
-                                         p['image_url'] = images[0].get('url_list', [None])[0]
-
-                                    print(f"DEBUG: Extracted Page Props - Sale:{p['sales_7d']} Price:{p['price']} Stock:{p['live_count']}")
-                                except Exception as e:
-                                    print(f"DEBUG: Extraction Error: {e}")
-                                
-                                break
-                    
-                    # Validation: Check for common failure modes
-                    if p['price'] == 0.0 and p['sales'] == 0:
-                        keys_found = list(d.keys())
+                    # Validation: Check for common failure modes (WAF)
+                    if p_meta['price'] == 0.0 and p_meta['sales'] == 0:
                         # Check for WAF (Web Application Firewall) Block
                         for k, v in d.items():
                              if isinstance(v, dict) and 'waf_decision' in v:
-                                 # Smart Retry: WAF is often region-specific. Try rotating region.
                                  current_region = p.get('region', 'US')
                                  fallback_map = {'US': 'GB', 'GB': 'DE'}
                                  next_region = fallback_map.get(current_region)
                                  
                                  if next_region:
-                                    # Optimization: Allow ONE regional failover for batch imports to balance quality and speed
                                     if "[DV-IMPORT]" in i_log_prefix and current_region != 'US':
-                                        print(f"DEBUG: WAF blocked {current_region}. Already failed over once. Falling back to DB.")
                                         return fetch_cached_product_data(p, i_log_prefix)
                                     
                                     print(f"DEBUG: WAF blocked {current_region}, failing over to {next_region}...")
                                     p['region'] = next_region
-                                    # Recursive retry with new region
                                     return enrich_product_data(p, i_log_prefix, force=True)
 
-                                 # If WAF persists or no next region, FALLBACK TO DB API
                                  print(f"DEBUG: Realtime WAF blocked. Attempting Cache DB API...")
                                  return fetch_cached_product_data(p, i_log_prefix)
 
-                        debug_raw = json.dumps(d, default=str)[:500]
-                        return False, f"Empty Data (200 OK). Keys: {keys_found}. Sample: {debug_raw}"
-                    
-                    # ---------------------------------------------------------
-                    # PARSER for REALTIME V3 "Page Props" Structure
-                    # ---------------------------------------------------------
-                    # Name & Image
-                    p['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or p.get('product_name')
-                    p['image_url'] = d.get('cover') or d.get('image_url') or p.get('image_url')
-                    
-                    if p.get('is_mobile'):
-                         # Mobile structure is usually simpler or flat
-                         p['sales'] = int(d.get('item_sold_count', 0))
-                         p['price'] = float(d.get('price', {}).get('real_price', {}).get('price_val', 0))
-                    else:
-                        # Desktop/Universal Parse
-                        pass # relying on common keys extracted above or failing validation
-                    
-                    # Final Validation
-                    if p['price'] == 0.0 and p['sales'] == 0:
-                         # Try fallback DB if parser failed but no WAF
-                         return fetch_cached_product_data(p, i_log_prefix)
+                    # Update local p dict
+                    for k, v in p_meta.items():
+                        if v is not None:
+                            p[k] = v
 
                     p['is_enriched'] = True
                     return True, "Enriched via Realtime v3"
@@ -5818,6 +5804,14 @@ def refresh_all_products():
                         
                         # Use unified helper for all mapping and persistence
                         save_or_update_product(d, scan_type=product.scan_type)
+                        
+                        # Check if we actually got data or just a empty response/WAF
+                        if product.seller_name == 'Unknown':
+                            # Check for WAF in raw results
+                            # Using 'in str(d)' as a shortcut for deep search
+                            if 'waf_decision' in str(d):
+                                print(f"DEBUG: WAF block detected during refresh for {target_id}")
+                        
                         updated += 1
                     else:
                         print(f"DEBUG: Empty data for {target_id}. Response: {response.text[:200]}")
