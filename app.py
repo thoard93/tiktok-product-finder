@@ -496,14 +496,25 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                 # Debug: Log the raw response to see what keys are available
                 print(f"DEBUG: Cached DB keys for {pid}: {list(d.keys())[:15]}")
                 
-                # Extract all available stats from Cached DB
+                # Extract stats from Cached DB - PRESERVE original DV values if API returns 0
                 p['product_name'] = d.get('product_name') or d.get('productName') or p.get('product_name')
-                p['sales'] = int(d.get('total_sale_cnt') or 0)
-                p['sales_7d'] = int(d.get('total_sale_7d_cnt') or 0)
-                p['sales_30d'] = int(d.get('total_sale_30d_cnt') or 0)
-                p['price'] = float(d.get('spu_avg_price') or 0)
-                p['video_count'] = int(d.get('total_video_cnt') or 0)
-                p['influencer_count'] = int(d.get('total_ifl_cnt') or 0)
+                
+                # Sales: Use API if available, otherwise keep DV value
+                api_sales = int(d.get('total_sale_cnt') or 0)
+                api_sales_7d = int(d.get('total_sale_7d_cnt') or 0)
+                api_sales_30d = int(d.get('total_sale_30d_cnt') or 0)
+                
+                p['sales'] = api_sales if api_sales > 0 else p.get('sales', 0)
+                p['sales_7d'] = api_sales_7d if api_sales_7d > 0 else p.get('sales_7d', 0)
+                p['sales_30d'] = api_sales_30d if api_sales_30d > 0 else p.get('sales_30d', 0)
+                
+                # Price: Use API if available, otherwise keep DV value
+                api_price = float(d.get('spu_avg_price') or 0)
+                p['price'] = api_price if api_price > 0 else p.get('price', 0)
+                
+                # Video/Influencer counts - these should come from API
+                p['video_count'] = int(d.get('total_video_cnt') or 0) or p.get('video_count', 0)
+                p['influencer_count'] = int(d.get('total_ifl_cnt') or 0) or p.get('influencer_count', 0)
                 p['views_count'] = int(d.get('total_views_cnt') or 0)
                 p['live_count'] = int(d.get('total_live_cnt') or 0)
                 
@@ -532,10 +543,20 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                 
                 print(f"DEBUG: Cached DB extracted - S:{p.get('sales')} S7d:{p.get('sales_7d')} V:{p.get('video_count')} I:{p.get('influencer_count')} Seller:{p.get('seller_name')}")
             else:
-                # Update local p dict from robust helper
+                # Update local p dict from robust helper - PRESERVE DV values if API returns 0
                 for k, v in p_meta.items():
                     if v is not None:
-                        p[k] = v
+                        # For numeric stats, only overwrite if API returns non-zero value
+                        if k in ['sales', 'sales_7d', 'sales_30d', 'price', 'video_count', 'influencer_count']:
+                            if v and v > 0:
+                                p[k] = v
+                            # else: keep original DV value
+                        elif k == 'seller_name':
+                            # Only update seller if we have a real name
+                            if v and v not in ['Unknown', 'None', '', None]:
+                                p[k] = v
+                        else:
+                            p[k] = v
 
             p['is_enriched'] = True
             return True, f"Enriched via {source}"
