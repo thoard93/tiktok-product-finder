@@ -5760,8 +5760,8 @@ def refresh_all_products():
     passkey = request.args.get('passkey') or (request.json.get('passkey') if request.is_json else None)
     dev_passkey = os.environ.get('DEV_PASSKEY', '')
     
-    # Allow if passkey matches OR if user is admin (which they are if they can see the settings)
-    if not (dev_passkey and passkey == dev_passkey) and not current_user.is_authenticated:
+    # Allow if passkey matches OR if user is logged in
+    if not (dev_passkey and passkey == dev_passkey) and not session.get('user_id'):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     
     # Limit how many products to refresh per call (to avoid timeout)
