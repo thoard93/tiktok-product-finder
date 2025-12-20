@@ -2056,6 +2056,19 @@ def quick_scan():
                 # Unified Save/Update
                 p['seller_id'] = seller_id
                 p['seller_name'] = seller_name
+                
+                # Explicitly inject calculated stats to ensure persistence
+                p['total_sale_cnt'] = total_sales
+                p['total_sale_7d_cnt'] = sales_7d
+                p['total_sale_30d_cnt'] = sales_30d
+                p['total_video_cnt'] = video_count
+                p['total_video_7d_cnt'] = video_7d
+                p['total_video_30d_cnt'] = video_30d
+                p['total_live_cnt'] = live_count
+                p['total_views_cnt'] = views_count
+                p['total_ifl_cnt'] = influencer_count
+                p['product_commission_rate'] = commission_rate * 100 # Back to percentage for storage logic
+
                 is_new = save_or_update_product(p, scan_type='brand_hunter')
                 if is_new:
                     result['products_saved'] += 1
@@ -2324,6 +2337,12 @@ def scan_page_range(seller_id):
                 products_found += 1
                 p['seller_id'] = seller_id
                 p['seller_name'] = seller_name
+                
+                # Explicitly inject calculated stats
+                p['total_sale_7d_cnt'] = sales_7d
+                p['total_video_cnt'] = video_count
+                p['total_ifl_cnt'] = inf_count
+
                 if save_or_update_product(p, scan_type='page_range'):
                     products_saved += 1
             
@@ -2368,14 +2387,23 @@ def scan_single_brand(seller_id):
                 products_scanned += 1
                 sales_7d = int(p.get('total_sale_7d_cnt') or p.get('totalSale7dCnt') or 0)
                 video_count = int(p.get('total_video_cnt') or p.get('totalVideoCnt') or 0)
+                influencer_count = int(p.get('total_ifl_cnt') or p.get('totalIflCnt') or 0)
                 
                 if sales_7d < min_sales: continue
                 if video_count < 2: continue
                 
                 products_found += 1
+                # Unified Save/Update
                 p['seller_id'] = seller_id
                 p['seller_name'] = seller_name
-                if save_or_update_product(p, scan_type='deep_scan'):
+                
+                # Explicitly inject calculated stats
+                p['total_sale_7d_cnt'] = sales_7d
+                p['total_video_cnt'] = video_count
+                p['total_ifl_cnt'] = influencer_count
+
+                is_new = save_or_update_product(p, scan_type='brand_hunter')
+                if is_new:
                     products_saved += 1
             
             if page % 10 == 0: db.session.commit()
@@ -2996,12 +3024,12 @@ def scan_manual_import():
                 p = future_to_prod[future]
                 elapsed = time.time() - start_time_wall
                 
-                if elapsed > 45:
+                if elapsed > 120:
                     debug_log += f" | {p.get('product_id','?')[:8]} skipped (budget)"
                     res, msg = False, "Skipped (Budget)"
                 else:
                     try:
-                        p, res, msg = future.result(timeout=(45 - elapsed))
+                        p, res, msg = future.result(timeout=(120 - elapsed))
                     except Exception as e:
                         res, msg = False, f"Error: {str(e)}"
 
