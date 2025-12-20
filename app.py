@@ -251,17 +251,41 @@ def extract_metadata_from_echotik(d):
                 # Seller in Page Props
                 shop = pi.get('shop', {}) or pi.get('seller', {})
                 if isinstance(shop, dict):
-                    res['seller_name'] = res['seller_name'] or shop.get('name') or shop.get('shop_name') or shop.get('seller_name')
-                    res['seller_id'] = res['seller_id'] or shop.get('shop_id') or shop.get('seller_id')
+                    res['seller_name'] = res['seller_name'] or shop.get('name') or shop.get('shop_name') or shop.get('seller_name') or shop.get('sellerName') or shop.get('shopName')
+                    res['seller_id'] = res['seller_id'] or shop.get('shop_id') or shop.get('seller_id') or shop.get('id')
+                
+                # Direct pi mappings (Product Info level)
+                pi_seller = pi.get('seller') or pi.get('shop') or {}
+                if isinstance(pi_seller, dict):
+                    res['seller_name'] = res['seller_name'] or pi_seller.get('name') or pi_seller.get('shop_name')
+                
+                res['seller_name'] = res['seller_name'] or pi.get('seller_name') or pi.get('shop_name') or pi.get('advertiser_name') or pi.get('brandName')
+                
+                # Image in Page Props / Product Info
+                if not res['image_url']:
+                    res['image_url'] = pi.get('cover') or pi.get('image') or pi.get('product_cover')
                 
                 # Stock
                 total_stock = 0
-                if 'skus' in pi:
+                if 'skus' in pi and isinstance(pi['skus'], list):
                     for sku in pi['skus']: 
                         if isinstance(sku, dict): total_stock += int(sku.get('stock') or 0)
                 res['live_count'] = total_stock
                 break
                 
+    # Final cleanup: deduplicate and strip "Unknown" if seen
+    if res['seller_name']:
+        s_name = str(res['seller_name']).strip()
+        if s_name.lower() in ['unknown', 'none', 'null', '', 'false', 'undefined']:
+            res['seller_name'] = None
+        else:
+            # Handle "Shop - Shop" duplication
+            parts = s_name.split(' - ')
+            if len(parts) > 1 and parts[0].strip() == parts[1].strip():
+                res['seller_name'] = parts[0].strip()
+            else:
+                res['seller_name'] = s_name
+            
     return res
 
 def fetch_product_details_echotik(product_id, region='US'):
@@ -343,17 +367,23 @@ def parse_cover_url(url):
         except: pass
     return str(url)
 
-def save_or_update_product(p_data, scan_type='brand_hunter'):
+def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
     """
     Unified helper to save or update a product in the DB.
     Ensures normalized shop_ prefix and comprehensive field updates.
     """
-    raw_id = str(p_data.get('product_id') or p_data.get('productId') or p_data.get('id')).replace('shop_', '')
-    product_id = f"shop_{raw_id}"
+    # 1. Determine Product ID
+    res_id = p_data.get('product_id') or p_data.get('productId') or p_data.get('id')
+    raw_id = str(res_id or explicit_id or "").replace('shop_', '')
     
+    if not raw_id or raw_id.lower() == 'none':
+        print(f"DEBUG: Skipping save - No valid product ID found in data or explicit_id.")
+        return None
+        
+    product_id = f"shop_{raw_id}"
     existing = Product.query.get(product_id)
     
-    # 1. Exhaustive Metadata Extraction
+    # 2. Exhaustive Metadata Extraction
     res = extract_metadata_from_echotik(p_data)
     
     # Normalize Stats
@@ -393,22 +423,28 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
         existing.views_count = int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
         
         # Update seller info
-        new_seller_name = res['seller_name'] or "Unknown"
-        if new_seller_name and str(new_seller_name).strip() not in ['', 'Unknown', 'None']:
-            if not existing.seller_name or existing.seller_name == 'Unknown':
-                existing.seller_name = str(new_seller_name).strip()
+        new_name = str(res['seller_name'] or "").strip()
+        if new_name and new_name.lower() not in ['unknown', 'none', 'null', '']:
+             # Only update if current is unknown or we found a better name
+             if not existing.seller_name or existing.seller_name == 'Unknown':
+                 existing.seller_name = new_name
         
-        new_seller_id = res['seller_id'] or p_data.get('seller_id') or p_data.get('shop_id')
-        if new_seller_id and (not existing.seller_id):
-            existing.seller_id = new_seller_id
+        new_id = res['seller_id'] or p_data.get('seller_id') or p_data.get('shop_id')
+        if new_id and (not existing.seller_id):
+            existing.seller_id = new_id
 
         existing.last_updated = datetime.utcnow()
         return False # False = Updated
     else:
         # Create new record
+        # Final fallback for seller_name if absolutely nothing found
+        final_seller = str(res['seller_name'] or "").strip()
+        if not final_seller or final_seller.lower() in ['unknown', 'none', 'null']:
+            final_seller = "Unknown"
+
         product = Product(
             product_id=product_id,
-            product_name=name,
+            product_name=name or "Unknown Product",
             image_url=img,
             product_url=p_url,
             price=price,
@@ -422,8 +458,8 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
             video_30d=int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or 0),
             live_count=res['live_count'] or int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or 0),
             views_count=int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or 0),
+            seller_name=final_seller,
             seller_id=res['seller_id'] or p_data.get('seller_id') or p_data.get('shop_id'),
-            seller_name=res['seller_name'] or "Unknown",
             scan_type=scan_type,
             first_seen=datetime.utcnow()
         )
@@ -798,6 +834,13 @@ class Product(db.Model):
 
 with app.app_context():
     db.create_all()
+    # Cleanup corrupted records (legacy bug)
+    try:
+        corrupted = Product.query.filter(Product.product_id.ilike('%None%')).delete(synchronize_session=False)
+        if corrupted:
+            print(f">> Cleaned up {corrupted} corrupted shop_None records")
+            db.session.commit()
+    except: pass
     print(">> Database tables initialized")
 
 # =============================================================================
@@ -2962,26 +3005,18 @@ def scan_manual_import():
                     except Exception as e:
                         res, msg = False, f"Error: {str(e)}"
 
-                # --- Database Saving / Updating ---
-                # Normalized ID
-                if not p.get('product_id'): 
-                    p['product_id'] = f"dv_{hash(p['url']) if p.get('url') else int(time.time()*1000)}"
+                # Database Saving / Updating
+                # Use the global helper to ensure consistency
+                # Pass explicit_id to prevent 'shop_None' if API response lacks ID
+                is_new = save_or_update_product(p, scan_type='daily_virals', explicit_id=p.get('product_id'))
+                
+                if is_new:
+                    saved_count += 1
+                
+                if i < 5:
+                    debug_log += f" | {p.get('product_id','?')[:8]}: {p.get('product_name','?')[:15]}"
 
-            # 3. Save or Update Candidates
-            # Use the global helper to ensure consistency
-            from datetime import datetime
-            is_new = save_or_update_product(p, scan_type='daily_virals')
-            
-            if is_new:
-                saved_count += 1
-            
-            if i < 5:
-                # Add a quick note to debug log
-                debug_log += f" | {p['product_id']}: {p['product_name'][:15]}"
-
-        db.session.commit()
-
-        db.session.commit()
+            db.session.commit()
         
         return jsonify({
             'success': True,
@@ -5795,7 +5830,8 @@ def refresh_all_products():
                 
                 if d:
                     # Use unified helper for all mapping and persistence
-                    save_or_update_product(d, scan_type=product.scan_type)
+                    # Pass explicit_id to prevent 'shop_None' if API response lacks ID
+                    save_or_update_product(d, scan_type=product.scan_type, explicit_id=product.product_id)
                     updated += 1
                 else:
                     print(f"DEBUG: Failed to refresh {product.product_id} from any source.")
