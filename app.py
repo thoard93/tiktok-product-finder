@@ -507,19 +507,30 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                 p['views_count'] = int(d.get('total_views_cnt') or 0)
                 p['live_count'] = int(d.get('total_live_cnt') or 0)
                 
-                # Image URL - prefer cover_url, then product_image
+                # Image URL - ONLY use cached_db image if we don't already have one
+                # EchoSell CDN (echosell-images.tos-ap-southeast-1.volces.com) is blocked by many firewalls
                 img = d.get('cover_url') or d.get('product_image') or d.get('product_img_url')
-                if img:
+                original_img = p.get('image_url') or p.get('cover_url')
+                
+                # Prefer original TikTok CDN image over EchoSell CDN
+                if not original_img or 'vantage' in str(original_img).lower():
                     p['image_url'] = img
+                    print(f"DEBUG: Using Cached DB image: {img[:60] if img else 'NONE'}")
+                else:
+                    print(f"DEBUG: Keeping original image: {original_img[:60] if original_img else 'NONE'} (ignoring EchoSell: {img[:30] if img else  'N/A'})")
+
                     
-                # Seller name resolution
-                p['seller_name'] = d.get('seller_name') or d.get('shop_name') or p.get('seller_name')
+                # Seller name resolution - try multiple keys
+                seller_from_db = d.get('seller_name') or d.get('shop_name') or d.get('shopName') or d.get('sellerName') or d.get('brand_name') or d.get('brandName')
+                print(f"DEBUG: Cached DB seller candidates: seller_name={d.get('seller_name')} shop_name={d.get('shop_name')} brand_name={d.get('brand_name')}")
+                if seller_from_db and seller_from_db not in ['Unknown', 'None', '', None]:
+                    p['seller_name'] = seller_from_db
                 
                 # Commission (divide by 100 if percentage)
                 raw_comm = float(d.get('product_commission_rate') or 0)
                 p['commission_rate'] = raw_comm / 100.0 if raw_comm > 1 else raw_comm
                 
-                print(f"DEBUG: Cached DB extracted - S:{p.get('sales')} S7d:{p.get('sales_7d')} V:{p.get('video_count')} I:{p.get('influencer_count')}")
+                print(f"DEBUG: Cached DB extracted - S:{p.get('sales')} S7d:{p.get('sales_7d')} V:{p.get('video_count')} I:{p.get('influencer_count')} Seller:{p.get('seller_name')}")
             else:
                 # Update local p dict from robust helper
                 for k, v in p_meta.items():
