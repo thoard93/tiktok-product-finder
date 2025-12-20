@@ -386,14 +386,14 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
     # 2. Exhaustive Metadata Extraction
     res = extract_metadata_from_echotik(p_data)
     
-    # Normalize Stats
-    inf_count = res['influencer_count'] or int(p_data.get('influencer_count', 0))
-    sales = res['sales']
-    s7d = res['sales_7d']
-    s30d = res['sales_30d']
-    comm = res['commission_rate']
-    price = res['price']
-    v_count = res['video_count'] or int(p_data.get('video_count', 0))
+    # Normalize Stats - FALLBACK to p_data direct values (set by enrichment)
+    inf_count = res['influencer_count'] or int(p_data.get('influencer_count') or 0)
+    sales = res['sales'] or int(p_data.get('sales') or 0)
+    s7d = res['sales_7d'] or int(p_data.get('sales_7d') or 0)
+    s30d = res['sales_30d'] or int(p_data.get('sales_30d') or 0)
+    comm = res['commission_rate'] or float(p_data.get('commission_rate') or 0)
+    price = res['price'] or float(p_data.get('price') or 0)
+    v_count = res['video_count'] or int(p_data.get('video_count') or 0)
     
     img = parse_cover_url(res['image_url'] or p_data.get('image_url') or p_data.get('item_img'))
     name = res['product_name'] or p_data.get('product_name') or p_data.get('title') or ""
