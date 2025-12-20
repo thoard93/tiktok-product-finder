@@ -4565,8 +4565,125 @@ def lookup_product():
         }), 500
 
 # =============================================================================
+# BATCH URL LOOKUP - Quick Preview Mode (No Save)
+# =============================================================================
+
+@app.route('/api/lookup/batch', methods=['POST'])
+@login_required
+def lookup_batch():
+    """
+    Batch lookup multiple TikTok products by URL or ID.
+    Returns stats preview WITHOUT saving to database.
+    
+    POST body: { "urls": "url1\nurl2\nurl3" } (newline-separated string)
+    Max 50 URLs per batch.
+    """
+    data = request.get_json() or {}
+    urls_raw = data.get('urls', '')
+    
+    if not urls_raw:
+        return jsonify({'success': False, 'error': 'Please provide URLs'}), 400
+    
+    # Parse URLs (split by newlines and filter empty)
+    urls = [u.strip() for u in urls_raw.strip().split('\n') if u.strip()]
+    
+    if len(urls) == 0:
+        return jsonify({'success': False, 'error': 'No valid URLs found'}), 400
+    
+    if len(urls) > 50:
+        return jsonify({'success': False, 'error': f'Maximum 50 URLs allowed, you provided {len(urls)}'}), 400
+    
+    results = []
+    errors = []
+    
+    for i, url in enumerate(urls):
+        try:
+            # Resolve share links
+            resolved_url = url
+            if is_tiktok_share_link(url):
+                resolved_url = resolve_tiktok_share_link(url)
+                if not resolved_url:
+                    errors.append({'url': url, 'error': 'Could not resolve share link'})
+                    continue
+            
+            # Extract product ID
+            product_id = extract_product_id(resolved_url)
+            if not product_id:
+                errors.append({'url': url, 'error': 'Could not extract product ID'})
+                continue
+            
+            # Call EchoTik product detail API
+            response = requests.get(
+                f"{BASE_URL}/product/detail",
+                params={'product_ids': product_id},
+                auth=get_auth(),
+                timeout=15
+            )
+            
+            if response.status_code != 200:
+                errors.append({'url': url, 'error': f'API returned {response.status_code}'})
+                continue
+            
+            api_data = response.json()
+            if api_data.get('code') != 0 or not api_data.get('data'):
+                errors.append({'url': url, 'error': 'Product not found'})
+                continue
+            
+            p = api_data['data'][0]
+            
+            # Extract seller info
+            seller_name = p.get('seller_name') or p.get('shop_name') or p.get('store_name') or ''
+            seller_id = p.get('seller_id') or p.get('shop_id') or ''
+            
+            # If we have seller_id but no name, try seller/detail API
+            if seller_id and not seller_name:
+                try:
+                    seller_resp = requests.get(
+                        f"{BASE_URL}/seller/detail",
+                        params={'seller_id': seller_id},
+                        auth=get_auth(),
+                        timeout=10
+                    )
+                    if seller_resp.status_code == 200:
+                        sd = seller_resp.json()
+                        if sd.get('code') == 0 and sd.get('data'):
+                            si = sd['data'][0] if isinstance(sd['data'], list) else sd['data']
+                            seller_name = si.get('seller_name') or si.get('shop_name') or ''
+                except:
+                    pass
+            
+            # Build result
+            results.append({
+                'product_id': product_id,
+                'product_name': p.get('product_name', ''),
+                'image_url': p.get('product_img_url') or p.get('item_img') or '',
+                'seller_name': seller_name or 'Unknown',
+                'price': float(p.get('spu_avg_price', 0) or 0),
+                'sales': int(p.get('total_sale_cnt', 0) or 0),
+                'sales_7d': int(p.get('total_sale_7d_cnt', 0) or 0),
+                'sales_30d': int(p.get('total_sale_30d_cnt', 0) or 0),
+                'video_count': int(p.get('total_video_cnt', 0) or 0),
+                'influencer_count': int(p.get('total_ifl_cnt', 0) or 0),
+                'commission_rate': float(p.get('product_commission_rate', 0) or 0) / 100.0,
+                'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+                'url': url
+            })
+            
+        except Exception as e:
+            errors.append({'url': url, 'error': str(e)})
+    
+    return jsonify({
+        'success': True,
+        'count': len(results),
+        'products': results,
+        'errors': errors,
+        'message': f'Found stats for {len(results)} of {len(urls)} products'
+    })
+
+# =============================================================================
 # AI IMAGE GENERATION - Gemini API (Nano Banana Pro)
 # =============================================================================
+
 
 import base64
 

@@ -158,7 +158,7 @@
             <div class="max-w-5xl mx-auto space-y-8">
 
                 <!-- Scanner Selectors -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div class="scan-tab active glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
                         onclick="setMode('quick', this)">
                         <i class="fas fa-bolt text-2xl text-yellow-400"></i>
@@ -183,6 +183,12 @@
                         <i class="fas fa-file-import text-2xl text-emerald-400"></i>
                         <div class="font-medium">DailyVirals</div>
                         <div class="text-xs text-slate-500">Import JSON</div>
+                    </div>
+                    <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+                        onclick="setMode('urlbatch', this)">
+                        <i class="fas fa-link text-2xl text-pink-400"></i>
+                        <div class="font-medium">URL Batch</div>
+                        <div class="text-xs text-slate-500">Preview Stats</div>
                     </div>
                 </div>
 
@@ -305,6 +311,17 @@
                  </div>
                  <button onclick="runDVImport(this)" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all">
                     Import Data & Enrich (EchoTik)
+                </button>
+            `,
+            'urlbatch': `
+                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-link text-pink-400"></i> Batch URL Preview</h3>
+                <div class="mb-6">
+                    <label class="block text-sm text-slate-400 mb-2">Paste TikTok Product URLs (one per line)</label>
+                    <textarea id="batch-urls" rows="8" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-pink-500 outline-none font-mono text-xs" placeholder="https://shop.tiktok.com/view/product/123...\nhttps://www.tiktok.com/t/ZTxxxxx/\n1729532687558808508"></textarea>
+                    <div class="text-xs text-slate-500 mt-2">Enter up to 50 TikTok product URLs, IDs, or share links. Results shown in console below (not saved to library).</div>
+                </div>
+                <button onclick="runBatchLookup(this)" class="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-pink-500/20 transition-all">
+                    <i class="fas fa-search mr-2"></i> Lookup Stats (Preview Only)
                 </button>
             `
         };
@@ -453,6 +470,64 @@
             } catch (e) {
                 log(`Network Error: ${e.message}`, 'error');
             }
+        }
+
+        async function runBatchLookup(btn) {
+            const urlsRaw = document.getElementById('batch-urls').value;
+            if (!urlsRaw.trim()) {
+                return log("Please paste some URLs first", 'error');
+            }
+
+            const urls = urlsRaw.trim().split('\n').filter(u => u.trim());
+            if (urls.length === 0) {
+                return log("No valid URLs found", 'error');
+            }
+            if (urls.length > 50) {
+                return log(`Maximum 50 URLs allowed, you have ${urls.length}`, 'error');
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Looking up...';
+            log(`Looking up ${urls.length} products...`, 'info');
+
+            try {
+                const res = await fetch('/api/lookup/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ urls: urlsRaw })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    log(data.message, 'success');
+
+                    // Display each product
+                    if (data.products && data.products.length > 0) {
+                        log('─'.repeat(60), 'info');
+                        for (const p of data.products) {
+                            const name = p.product_name.length > 40 ? p.product_name.substring(0, 40) + '...' : p.product_name;
+                            log(`📦 ${name}`, 'success');
+                            log(`   Shop: ${p.seller_name} | Sales: ${p.sales.toLocaleString()} | 7D: ${p.sales_7d.toLocaleString()} | Videos: ${p.video_count} | Inf: ${p.influencer_count}`, 'info');
+                        }
+                        log('─'.repeat(60), 'info');
+                    }
+
+                    // Show errors
+                    if (data.errors && data.errors.length > 0) {
+                        log(`⚠️ ${data.errors.length} URLs failed:`, 'warn');
+                        for (const e of data.errors) {
+                            log(`   ${e.url.substring(0, 40)}... → ${e.error}`, 'error');
+                        }
+                    }
+                } else {
+                    log(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log(`Network Error: ${e.message}`, 'error');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search mr-2"></i> Lookup Stats (Preview Only)';
         }
 
         // Init
