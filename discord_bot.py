@@ -408,41 +408,6 @@ def create_product_embed(p, title_prefix=""):
     
     return embed
 
-def get_hot_products():
-    """Get Top Products from ANY source (EchoTik/Manual/etc)"""
-    from datetime import timedelta
-    
-    with app.app_context():
-        # Calculate cutoff date for repeat prevention
-        cutoff_date = datetime.utcnow() - timedelta(days=DAYS_BEFORE_REPEAT)
-        
-        # Query: 
-        # 1. Has Stock (live_count > 0) OR Sales (sales_7d > 0)
-        # 2. Has Videos (video_count > 0) - ensure verified product
-        # 3. Not shown recently
-        products = Product.query.filter(
-            Product.sales_7d >= MIN_SALES_7D,  # Use global constant
-            Product.video_count > 0,           # Videos > 0
-            db.or_(
-                Product.last_shown_hot == None,  # Never shown
-                Product.last_shown_hot < cutoff_date  # Or shown more than 3 days ago
-            )
-        ).order_by(
-            Product.sales_7d.desc() # Top Sales first
-        ).limit(MAX_DAILY_POSTS).all()
-        
-        # Mark products as shown today
-        for p in products:
-            p.last_shown_hot = datetime.utcnow()
-
-        
-        try:
-            db.session.commit()
-        except Exception as e:
-            print(f"Error updating last_shown_hot: {e}")
-            db.session.rollback()
-            
-        return products
 
 @bot.event
 async def on_ready():
@@ -471,12 +436,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No free shipping deals matching criteria today. Run a Deal Hunter scan!")
+        await channel.send("📭 No hot products matching criteria today (50+ 7D sales, ≤30 videos). Try scanning more products!")
         return
     
     # Send header message
-    await channel.send(f"# 🎁 Daily Free Shipping Deals - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** Free shipping, 50+ weekly sales, <30 videos (low competition)\n"
+    await channel.send(f"# 🔥 Daily Hot Products - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
+                       f"**Criteria:** 50+ weekly sales, ≤30 videos (low competition)\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"─────────────────────────────")
     
@@ -671,10 +636,13 @@ def get_hot_products():
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
         # Query: 
+        # 1. High 7D Sales (MIN_SALES_7D = 50)
+        # 2. Low Video Count (MAX_VIDEO_COUNT = 30) for low competition
+        # 3. Not shown recently
         products = Product.query.filter(
-            # Product.scan_type == 'apify_shop', # REMOVED: Allow any scan type
-            # Product.live_count > 0,          # REMOVED: Stock logic deleted
-            Product.video_count > 0,           # Videos > 0
+            Product.sales_7d >= MIN_SALES_7D,   # High 7D sales (50+)
+            Product.video_count > 0,            # At least some videos (verified)
+            Product.video_count <= MAX_VIDEO_COUNT,  # Low competition (<=30 videos)
             db.or_(
                 Product.last_shown_hot == None,  # Never shown
                 Product.last_shown_hot < cutoff_date  # Or shown more than 3 days ago
