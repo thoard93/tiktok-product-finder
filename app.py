@@ -257,11 +257,13 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
             p_data.get('seller_name') or 
             p_data.get('shop_name') or 
             p_data.get('shopName') or 
+            p_data.get('sellerName') or
             p_data.get('store_name') or
             p_data.get('brand_name') or
             p_data.get('brandName') or
             p_data.get('advertiser') or
-            p_data.get('advertiser_name')
+            p_data.get('advertiser_name') or
+            (p_data.get('seller', {}).get('name') if isinstance(p_data.get('seller'), dict) else None)
         )
         if new_seller_name and str(new_seller_name).strip() not in ['', 'Unknown', 'None']:
             if not existing.seller_name or existing.seller_name == 'Unknown':
@@ -292,7 +294,7 @@ def save_or_update_product(p_data, scan_type='brand_hunter'):
             live_count=int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or 0),
             views_count=int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or 0),
             seller_id=p_data.get('seller_id') or p_data.get('shop_id'),
-            seller_name=p_data.get('seller_name') or p_data.get('shop_name') or p_data.get('shopName'),
+            seller_name=new_seller_name or "Unknown",
             scan_type=scan_type,
             first_seen=datetime.utcnow()
         )
@@ -353,7 +355,18 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                     p['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price', 0))
                     
                     # Capture Seller Name
-                    p['seller_name'] = d.get('seller_name') or d.get('shop_name') or d.get('shopName') or p.get('seller_name')
+                    p['seller_name'] = (
+                        d.get('seller_name') or 
+                        d.get('shop_name') or 
+                        d.get('shopName') or 
+                        d.get('sellerName') or
+                        d.get('store_name') or 
+                        d.get('brandName') or
+                        d.get('brand_name') or
+                        d.get('advertiser') or
+                        (d.get('seller', {}).get('name') if isinstance(d.get('seller'), dict) else None) or
+                        p.get('seller_name')
+                    )
                     # Capture Product URL if provided by EchoTik
                     e_url = d.get('product_url') or d.get('productUrl')
                     if e_url: p['url'] = e_url
@@ -5783,10 +5796,12 @@ def refresh_all_products():
         
         for i, product in enumerate(products):
             try:
-                # Call EchoTik API for single product
+                # v3 realtime uses 'product_id' and required 'region'
+                target_id = product.product_id.replace('shop_', '')
+                
                 response = requests.get(
-                    f"{BASE_URL}/product/detail",
-                    params={'product_id': product.product_id},
+                    f"{ECHOTIK_REALTIME_BASE}/product/detail",
+                    params={'product_id': target_id, 'region': 'US'},
                     auth=get_auth(),
                     timeout=30
                 )
@@ -5794,49 +5809,30 @@ def refresh_all_products():
                 if response.status_code != 200:
                     failed += 1
                     if len(errors) < 5:
-                        errors.append(f"Product {product.product_id}: HTTP {response.status_code}")
+                        errors.append(f"Prod {target_id}: HTTP {response.status_code}")
                 else:
                     data = response.json().get('data')
                     if data:
-                        d = data[0]
-                        # Update fields
-                        product.sales = int(d.get('total_sale_cnt', 0))
-                        product.sales_7d = int(d.get('total_sale_7d_cnt', 0))
-                        product.sales_30d = int(d.get('total_sale_30d_cnt', 0))
-                        product.influencer_count = int(d.get('total_ifl_cnt', 0))
-                        product.video_count = int(d.get('total_video_cnt', 0))
-                        product.commission_rate = float(d.get('product_commission_rate', 0))
-                        product.price = float(d.get('spu_avg_price', 0))
+                        # Realtime data is usually one object or list[0]
+                        d = data[0] if isinstance(data, list) else data
                         
-                        # Fix missing metadata
-                        if not product.seller_name or product.seller_name == "Unknown":
-                            product.seller_name = (
-                                d.get('seller_name') or 
-                                d.get('shop_name') or 
-                                d.get('store_name') or 
-                                d.get('brand_name') or
-                                d.get('seller', {}).get('name') if isinstance(d.get('seller'), dict) else None
-                            ) or "Unknown"
-                        if not product.image_url:
-                            product.image_url = d.get('cover_url') or d.get('product_image')
-                            product.cached_image_url = None # Reset cache to force refresh
-
-                        product.last_updated = datetime.utcnow()
-                        product.product_status = 'active' # Mark active
+                        # Use unified helper for all mapping and persistence
+                        save_or_update_product(d, scan_type=product.scan_type)
                         updated += 1
                     else:
-                         # Product might be gone
-                         product.product_status = 'likely_oos'
+                        print(f"DEBUG: Empty data for {target_id}. Response: {response.text[:200]}")
+                        # Product might be gone or WAF blocked
+                        product.product_status = 'likely_oos'
             
             except Exception as e:
                 failed += 1
                 if len(errors) < 5:
-                    errors.append(f"Product {product.product_id}: {str(e)}")
+                    errors.append(f"Prod {product.product_id}: {str(e)}")
             
             # Rate limiting
             time.sleep(delay)
             if i % 10 == 0:
-                db.session.commit() # Periodic commit
+                db.session.commit()
         
         db.session.commit()
         
