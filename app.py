@@ -264,6 +264,61 @@ def extract_metadata_from_echotik(d):
                 
     return res
 
+def fetch_product_details_echotik(product_id, region='US'):
+    """
+    Robust fetcher for Product Details.
+    Tries Realtime Multi-Region -> Then Cached DB.
+    Returns (raw_data, source_name) or (None, err)
+    """
+    raw_pid = str(product_id).replace('shop_', '')
+    
+    # Try Realtime with Regional Failover
+    regions = ['US', 'GB', 'DE']
+    if region in regions and region != 'US':
+        regions.remove(region)
+        regions.insert(0, region)
+        
+    for r in regions:
+        try:
+            res = requests.get(
+                f"{ECHOTIK_REALTIME_BASE}/product/detail",
+                params={'product_id': raw_pid, 'region': r},
+                auth=get_auth(),
+                timeout=15
+            )
+            if res.status_code == 200:
+                d = res.json().get('data')
+                if not d: continue
+                if isinstance(d, list): d = d[0]
+                
+                # Use str search for WAF to catch any flavor (Mobile/Desktop)
+                if 'waf_decision' in str(d):
+                    print(f"DEBUG: WAF blocked region {r} for {raw_pid}")
+                    continue
+                
+                return d, f"realtime_{r}"
+        except Exception as e:
+            print(f"DEBUG: Realtime err {r}: {e}")
+            
+    # Try Cached DB Fallback
+    try:
+        res = requests.get(
+            f"{ECHOTIK_V3_BASE}/product/detail",
+            params={'product_ids': raw_pid},
+            auth=get_auth(),
+            timeout=15
+        )
+        if res.status_code == 200:
+            data = res.json()
+            if data.get('data'):
+                d_list = data['data']
+                if isinstance(d_list, list) and len(d_list) > 0:
+                    return d_list[0], "cached_db"
+    except Exception as e:
+        print(f"DEBUG: Cached DB err: {e}")
+        
+    return None, "All sources failed"
+
 def parse_cover_url(url):
     """Clean up cover URL which may be a JSON array string or list."""
     if not url: return ""
@@ -391,80 +446,33 @@ def enrich_product_data(p, i_log_prefix="", force=False):
         t = re.sub(r'[^\w\s]', '', t) # Remove emojis/punctuation
         return t.strip()
 
-    # 1. Direct ID Check (Realtime v3)
+    # 1. Direct ID Check
     pid = p.get('product_id')
     if pid and not pid.startswith('ad_') and (force or not p.get('is_enriched')):
-        target_id = pid.replace('shop_', '') if pid.startswith('shop_') else pid
+        d, source = fetch_product_details_echotik(pid, region=p.get('region', 'US'))
         
-        try:
-            res = requests.get(
-                f"{ECHOTIK_REALTIME_BASE}/product/detail",
-                params={'product_id': target_id, 'region': p.get('region', 'US')}, # v3 uses singular 'product_id', required region
-                auth=get_auth(),
-                timeout=15 # Increased from 10 to give busy API more time
-            )
+        if d:
+            print(f"DEBUG: Enriched {pid} via {source}")
+            p_meta = extract_metadata_from_echotik(d)
             
-            if res.status_code == 200:
-                data = res.json()
-                # Check for v3 response structure usually {code:0, data: {...}}
-                if data.get('data'):
-                    d = data['data'] # Realtime v3 returns strictly one object usually
-                    if isinstance(d, list): d = d[0] # Handle if it returns list
-                    
-                    # DEBUG LOGGING
-                    print(f"DEBUG: EchoTik Data Keys: {list(d.keys())}")
-                    import json
-                    try:
-                        print(f"DEBUG: EchoTik Data Sample: {json.dumps(d, default=str)[:1000]}")
-                    except:
-                        print(f"DEBUG: EchoTik Data (Raw): {d}")
-
-                    p_meta = extract_metadata_from_echotik(d)
-                    
-                    # Validation: Check for common failure modes (WAF)
-                    if p_meta['price'] == 0.0 and p_meta['sales'] == 0:
-                        # Check for WAF (Web Application Firewall) Block
-                        for k, v in d.items():
-                             if isinstance(v, dict) and 'waf_decision' in v:
-                                 current_region = p.get('region', 'US')
-                                 fallback_map = {'US': 'GB', 'GB': 'DE'}
-                                 next_region = fallback_map.get(current_region)
-                                 
-                                 if next_region:
-                                    if "[DV-IMPORT]" in i_log_prefix and current_region != 'US':
-                                        return fetch_cached_product_data(p, i_log_prefix)
-                                    
-                                    print(f"DEBUG: WAF blocked {current_region}, failing over to {next_region}...")
-                                    p['region'] = next_region
-                                    return enrich_product_data(p, i_log_prefix, force=True)
-
-                                 print(f"DEBUG: Realtime WAF blocked. Attempting Cache DB API...")
-                                 return fetch_cached_product_data(p, i_log_prefix)
-
-                    # Update local p dict
-                    for k, v in p_meta.items():
-                        if v is not None:
-                            p[k] = v
-
-                    p['is_enriched'] = True
-                    return True, "Enriched via Realtime v3"
-                else:
-                    # API returned 200 but no data (ID invalid or not tracked yet)
-                    print(f"DEBUG: Realtime ID invalid/notfound, trying DB API just in case...")
-                    return fetch_cached_product_data(p, i_log_prefix)
+            # Special Mapping for Cached DB (which has different keys sometimes)
+            if source == 'cached_db':
+                p['sales'] = int(d.get('total_sale_cnt', 0))
+                p['sales_7d'] = int(d.get('total_sale_7d_cnt', 0))
+                p['price'] = float(d.get('spu_avg_price', 0))
+                p['image_url'] = d.get('cover_url') or d.get('product_image') or p.get('image_url')
+                p['seller_name'] = d.get('seller_name') or d.get('shop_name') or p.get('seller_name')
+                p['commission_rate'] = float(d.get('product_commission_rate', 0)) / 100.0
             else:
-                 # Any non-200 status (500, 429, etc) -> Fallback to DB
-                 print(f"DEBUG: Realtime API status {res.status_code}, falling back to DB...")
-                 return fetch_cached_product_data(p, i_log_prefix)
+                # Update local p dict from robust helper
+                for k, v in p_meta.items():
+                    if v is not None:
+                        p[k] = v
 
-        except Exception as e: 
-            print(f"Enrichment Error: {e}")
-            if force: return False, f"Enrichment Exception: {str(e)}"
-            pass
-
-    # If Realtime failed/skipped, Try DB API (but only if we have a PID)
-    if pid:
-        return fetch_cached_product_data(p, i_log_prefix)
+            p['is_enriched'] = True
+            return True, f"Enriched via {source}"
+        else:
+             print(f"DEBUG: All enrichment sources failed for {pid}")
 
     # 2. Search by Title
     title_raw = p.get('title') or p.get('product_name') or ""
@@ -5782,40 +5790,17 @@ def refresh_all_products():
         
         for i, product in enumerate(products):
             try:
-                # v3 realtime uses 'product_id' and required 'region'
-                target_id = product.product_id.replace('shop_', '')
+                # Use centralized helper with multi-region failover
+                d, source = fetch_product_details_echotik(product.product_id)
                 
-                response = requests.get(
-                    f"{ECHOTIK_REALTIME_BASE}/product/detail",
-                    params={'product_id': target_id, 'region': 'US'},
-                    auth=get_auth(),
-                    timeout=30
-                )
-                
-                if response.status_code != 200:
-                    failed += 1
-                    if len(errors) < 5:
-                        errors.append(f"Prod {target_id}: HTTP {response.status_code}")
+                if d:
+                    # Use unified helper for all mapping and persistence
+                    save_or_update_product(d, scan_type=product.scan_type)
+                    updated += 1
                 else:
-                    data = response.json().get('data')
-                    if data:
-                        # Realtime data is usually one object or list[0]
-                        d = data[0] if isinstance(data, list) else data
-                        
-                        # Use unified helper for all mapping and persistence
-                        save_or_update_product(d, scan_type=product.scan_type)
-                        
-                        # Check if we actually got data or just a empty response/WAF
-                        if product.seller_name == 'Unknown':
-                            # Check for WAF in raw results
-                            # Using 'in str(d)' as a shortcut for deep search
-                            if 'waf_decision' in str(d):
-                                print(f"DEBUG: WAF block detected during refresh for {target_id}")
-                        
-                        updated += 1
-                    else:
-                        print(f"DEBUG: Empty data for {target_id}. Response: {response.text[:200]}")
-                        # Product might be gone or WAF blocked
+                    print(f"DEBUG: Failed to refresh {product.product_id} from any source.")
+                    # Mark as likely OOS if it can't be found anymore
+                    if product.sales_7d == 0:
                         product.product_status = 'likely_oos'
             
             except Exception as e:
