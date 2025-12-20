@@ -2976,6 +2976,7 @@ def scan_manual_import():
             product_title = p_obj.get('productName') or p_obj.get('product_name') or p_obj.get('title') or p_obj.get('name') or "Unknown Product"
             
             # Image URL - Expanded mapping for DV Product List
+            # Priority: Supabase CDN > TikTok CDN > EchoSell CDN (blocked)
             img_url = p_obj.get('imageUrl') or p_obj.get('image_url') or p_obj.get('coverUrl') or p_obj.get('cover_url') or ""
             if not img_url:
                 # Try lists
@@ -2983,22 +2984,27 @@ def scan_manual_import():
                 if isinstance(imgs, list) and len(imgs) > 0:
                     img_url = imgs[0] if isinstance(imgs[0], str) else (imgs[0].get('url') or imgs[0].get('imageUrl'))
             
-            # Advertiser / Shop Name - Expanded mapping
+            # DEBUG: Log the image URL we found
+            print(f"DEBUG: DV-IMPORT {pid[:8]} imageUrl: {img_url[:60] if img_url else 'EMPTY'}")
+            
+            # Advertiser / Shop Name - Expanded mapping (DV JSON doesn't include this, will be Unknown)
             advertiser = p_obj.get('advertiser_name') or p_obj.get('shopName') or p_obj.get('shop_name') or p_obj.get('brandName') or p_obj.get('advertiser') or "Unknown"
             if advertiser == "Unknown" and is_video_based:
                 creator = item.get('creator')
                 if isinstance(creator, dict):
                     advertiser = creator.get('username') or creator.get('nickname') or "Unknown"
 
-            # Sales / GMV Mappings
-            # Support: totalUnitsSold, unitsSold, soldCount, sales
-            raw_sales = safe_int(p_obj.get('totalUnitsSold') or p_obj.get('unitsSold') or p_obj.get('soldCount') or p_obj.get('sales') or 0)
-            # Support 7d sales: revenueLastSevenDays, sales_7d, etc.
-            sales_7d = safe_int(p_obj.get('unitsSoldLastSevenDays') or p_obj.get('sales_7d') or 0)
+            # Sales / GMV Mappings - Updated for actual DV JSON structure
+            # DV uses: allTimeTotalUnitsSold (total), unitsSoldInRange (7d roughly)
+            raw_sales = safe_int(p_obj.get('allTimeTotalUnitsSold') or p_obj.get('totalUnitsSold') or p_obj.get('unitsSold') or p_obj.get('soldCount') or p_obj.get('sales') or 0)
+            sales_7d = safe_int(p_obj.get('unitsSoldInRange') or p_obj.get('unitsSoldLastSevenDays') or p_obj.get('sales_7d') or 0)
             
-            # Commission
+            # Commission - DV uses: open_commission_percentage, tdv_commission_percentage
             comm_val = p_obj.get('tdv_commission_percentage') or p_obj.get('open_commission_percentage') or p_obj.get('commission_rate') or 0
              
+            # Price - DV uses: avgPrice
+            price_val = float(p_obj.get('avgPrice') or p_obj.get('price') or 0)
+            
             # GMV / Revenue
             gmv = 0
             revenue_analytics = p_obj.get('revenueAnalytics')
@@ -3007,9 +3013,9 @@ def scan_manual_import():
             else:
                  gmv = safe_int(p_obj.get('totalRevenue') or p_obj.get('revenue') or p_obj.get('gmv') or 0)
 
-            # Rating & Reviews (New from Product List)
-            rating = float(p_obj.get('rating') or p_obj.get('product_rating') or 0)
-            reviews = safe_int(p_obj.get('reviews') or p_obj.get('review_count') or 0)
+            # Rating & Reviews (New from Product List) - DV uses: avgRating, totalReviews
+            rating = float(p_obj.get('avgRating') or p_obj.get('rating') or p_obj.get('product_rating') or 0)
+            reviews = safe_int(p_obj.get('totalReviews') or p_obj.get('reviews') or p_obj.get('review_count') or 0)
 
             # Create Candidate
             p = {
