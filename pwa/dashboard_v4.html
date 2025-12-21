@@ -206,17 +206,14 @@
                 <div class="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center">
                     <div class="flex gap-1 p-1.5 glass rounded-2xl overflow-x-auto no-scrollbar w-full xl:w-auto">
                         <button onclick="applyFilter('all', this)"
-                            class="filter-tab active-tab px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap">Full
-                            Spectrum</button>
+                            class="filter-tab active-tab px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap">All
+                            Products</button>
                         <button onclick="applyFilter('gmv_max', this)"
                             class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">GMV
-                            Maximizer</button>
+                            Max</button>
                         <button onclick="applyFilter('gems', this)"
                             class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">Hidden
                             Gems</button>
-                        <button onclick="applyFilter('low_comp', this)"
-                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">Low
-                            Competition</button>
                         <button onclick="applyFilter('favorites', this)"
                             class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">Watchlist</button>
                     </div>
@@ -226,7 +223,7 @@
                             class="bg-black/40 border border-white/5 rounded-2xl px-5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer shrink-0">
                             <option value="sales_7d">Sort: 7D Volume</option>
                             <option value="video_count">Sort: Highest Reach</option>
-                            <option value="vids_asc">Sort: Low Reach</option>
+                            <option value="vids_asc">Sort: Least Videos</option>
                             <option value="first_seen">Sort: Newest First</option>
                             <option value="commission_rate">Sort: High Margin</option>
                         </select>
@@ -430,7 +427,6 @@
             el.classList.add('active-tab');
 
             if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
-            else if (type === 'low_comp') curFilter = { max_vids: 15, min_sales: 20 };
             else if (type === 'gmv_max') curFilter = { scan_type: 'daily_virals' };
             else if (type === 'favorites') curFilter = { favorites_only: 'true' };
             else if (type === 'all') curFilter = {};
