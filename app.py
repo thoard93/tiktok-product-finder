@@ -471,6 +471,37 @@ def get_auth():
     """Get HTTP Basic Auth for EchoTik"""
     return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
 
+
+def fetch_seller_name(seller_id):
+    """
+    Fetch seller/shop name from EchoTik /seller/detail API.
+    Returns shop name or None if not found.
+    """
+    if not seller_id:
+        return None
+    
+    raw_id = str(seller_id).replace('shop_', '')
+    
+    try:
+        res = requests.get(
+            f"{ECHOTIK_V3_BASE}/seller/detail",
+            params={'seller_id': raw_id},
+            auth=get_auth(),
+            timeout=10
+        )
+        if res.status_code == 200:
+            data = res.json()
+            if data.get('code') == 0 and data.get('data'):
+                d = data['data']
+                name = d.get('seller_name') or d.get('shop_name') or d.get('name')
+                if name:
+                    print(f"[Seller Lookup] ✅ {raw_id} -> {name}")
+                    return name
+    except Exception as e:
+        print(f"[Seller Lookup] Error for {raw_id}: {e}")
+    
+    return None
+
 def enrich_product_data(p, i_log_prefix="", force=False):
     """
     Global Helper: Search Echotik for product stats based on Title then Brand.
@@ -6929,10 +6960,19 @@ def manual_scan_import():
                     if p.get('image_url') and not echotik_data.get('image_url'):
                         echotik_data['image_url'] = p['image_url']
                     
+                    # Fetch seller name if missing or Unknown
+                    seller_id = echotik_data.get('seller_id') or echotik_data.get('shop_id')
+                    current_seller = echotik_data.get('seller_name') or echotik_data.get('shop_name')
+                    if seller_id and (not current_seller or current_seller.lower() in ['unknown', 'none', '']):
+                        real_name = fetch_seller_name(seller_id)
+                        if real_name:
+                            echotik_data['seller_name'] = real_name
+                    
                     # Save/update in database
                     save_or_update_product(echotik_data, scan_type='dv_import', explicit_id=raw_id)
                     success_count += 1
                     print(f"[DV Import] ✅ Saved {raw_id} from {source}")
+
                 else:
                     # EchoTik failed, save with DV data only (limited)
                     fallback_data = {
