@@ -172,6 +172,10 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 # DailyVirals API Config
 DV_BACKEND_URL = "https://backend.thedailyvirals.com/api/videos/stats/top-growth-by-date-range"
 DV_API_TOKEN = os.environ.get('DAILYVIRALS_TOKEN', 'eyJhbGciOiJIUzI1NiIsImtpZCI6InlNMHVYRXRpWEM3Qm04V0MiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2h3b3JieG90eHdibnBscW5ob3ZpLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJhMTQyNDUzMi04M2QxLTRiMGItYTcxZS04OGU0ZmQ4MWNkYTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY1Mjk5Nzc1LCJpYXQiOjE3NjUyOTYxNzUsImVtYWlsIjoidGhvYXJkMjAzNUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJpc19hbm9ueW1vdXMiOmZhbHNlLCJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmaXJzdE5hbWUiOiJUaG9tYXMiLCJpc19hbm9ueW1vdXMiOmZhbHNlLCJsYXN0TmFtZSI6IkhvYXJkIiwic3RyaXBlQ3VzdG9tZXJJZCI6ImN1c19UUXhMcnc5dGJTSmxNdCIsInVzZXJJZCI6ImExNDI0NTMyLTgzZDEtNGIwYi1hNzFlLTg4ZTRmZDgxY2RhOCJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzY1Mjk1ODgxfV0sInNlc3Npb25faWQiOiJmZTQ2YTdkMi1kYjk1LTRhNDYtYmFmZi04ZGM3OWVhYTgwZjQiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.VWpxeNXqWXDmWFwQyblxgLeW8vYfiG4ZuOsZbBq_oZ4')
+if os.environ.get('DAILYVIRALS_TOKEN'):
+    print(">> DailyVirals Token loaded from Environment")
+else:
+    print(">> WARNING: DailyVirals Token using HARDCODED fallback (may be expired)")
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
@@ -7029,18 +7033,18 @@ def scan_dailyvirals_live():
         start_page = int(data.get('start_page', 1))
         page_count = int(data.get('page_count', 1))
         
-        # 1. Calculate Date Range
+        # 1. Calculate Date Range (Sanitized for API)
         days_int = int(days_str)
         now = datetime.utcnow()
-        end_date = now.isoformat() + "Z"
-        start_date = (now - timedelta(days=days_int)).isoformat() + "Z"
+        # DailyVirals prefers 3 decimal places for milliseconds and 'Z' suffix
+        end_date = now.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        start_date = (now - timedelta(days=days_int)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
         
         # 2. Map filters to DV API terms
         is_paid = "true" if is_paid_input in ['paid', 'mixed'] else "false"
-        # saturation filter mapping
         sort_by = "growth"
         if saturation == "hidden_gem":
-            sort_by = "growth" # Hidden gems are usually top growth in DV
+            sort_by = "growth" 
         elif saturation == "breakout":
             sort_by = "views"
             
@@ -7049,14 +7053,15 @@ def scan_dailyvirals_live():
             'authorization': f'Bearer {DV_API_TOKEN}',
             'origin': 'https://www.thedailyvirals.com',
             'referer': 'https://www.thedailyvirals.com/',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
         }
         
         total_processed = 0
         total_saved = 0
+        last_error = None
         
         for p_idx in range(start_page, start_page + page_count):
-            print(f"[DV Live] Fetching page {p_idx}...")
+            print(f"[DV Live] Fetching page {p_idx} (Start: {start_date}, End: {end_date})...")
             params = {
                 'startDate': start_date,
                 'endDate': end_date,
@@ -7068,43 +7073,62 @@ def scan_dailyvirals_live():
                 'region': ''
             }
             
-            res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
-            if res.status_code != 200:
-                print(f"[DV Live] API Error {res.status_code}: {res.text}")
-                continue
-                
-            dv_data = res.json()
-            videos = dv_data.get('videos', [])
-            if not videos:
-                print(f"[DV Live] No videos found on page {p_idx}")
-                break
-                
-            for v in videos:
-                product_info = v.get('product', {})
-                p_id = product_info.get('productId')
-                if not p_id: continue
-                
-                raw_id = str(p_id).replace('shop_', '')
-                total_processed += 1
-                
-                # Enrich via EchoTik
-                echotik_data, source = fetch_product_details_echotik(raw_id)
-                if echotik_data:
-                    # Seller lookup
-                    seller_id = echotik_data.get('seller_id') or echotik_data.get('shop_id')
-                    current_seller = echotik_data.get('seller_name') or echotik_data.get('shop_name')
-                    if seller_id and (not current_seller or current_seller.lower() in ['unknown', 'none', '']):
-                        real_name = fetch_seller_name(seller_id)
-                        if real_name: echotik_data['seller_name'] = real_name
+            try:
+                res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
+                if res.status_code != 200:
+                    last_error = f"API Error {res.status_code}: {res.text[:100]}"
+                    print(f"[DV Live] {last_error}")
+                    continue
                     
-                    # Save
-                    save_or_update_product(echotik_data, scan_type='dv_live', explicit_id=raw_id)
-                    total_saved += 1
+                dv_data = res.json()
+                videos = dv_data.get('videos')
+                
+                # Check for alternative keys if 'videos' is missing
+                if videos is None:
+                    videos = dv_data.get('data') or dv_data.get('list') or []
+                    if not videos:
+                        print(f"[DV Live] Warning: API returned success but no data keys found. Keys: {list(dv_data.keys())}")
+                
+                if not videos:
+                    print(f"[DV Live] No items found on page {p_idx}")
+                    continue
+                    
+                for v in videos:
+                    product_info = v.get('product', {})
+                    p_id = product_info.get('productId')
+                    if not p_id: continue
+                    
+                    raw_id = str(p_id).replace('shop_', '')
+                    total_processed += 1
+                    
+                    # Enrich via EchoTik
+                    echotik_data, source = fetch_product_details_echotik(raw_id)
+                    if echotik_data:
+                        # Seller lookup
+                        seller_id = echotik_data.get('seller_id') or echotik_data.get('shop_id')
+                        current_seller = echotik_data.get('seller_name') or echotik_data.get('shop_name')
+                        if seller_id and (not current_seller or current_seller.lower() in ['unknown', 'none', '']):
+                            real_name = fetch_seller_name(seller_id)
+                            if real_name: echotik_data['seller_name'] = real_name
+                        
+                        # Save
+                        save_or_update_product(echotik_data, scan_type='dv_live', explicit_id=raw_id)
+                        total_saved += 1
+                
+                db.session.commit()
+                time.sleep(1) # Polite delay
+                
+            except Exception as e:
+                last_error = f"Request Failed: {str(e)}"
+                print(f"[DV Live] {last_error}")
+                continue
             
-            # Commit after each page
-            db.session.commit()
-            time.sleep(1) # Polite delay
-            
+        if total_processed == 0 and last_error:
+            return jsonify({
+                'success': False,
+                'error': f"Uplink Failure: {last_error}. Please verify DAILYVIRALS_TOKEN."
+            }), 400
+
         return jsonify({
             'success': True,
             'message': f"Scanned {total_processed} items from DailyVirals, saved/updated {total_saved} products with EchoTik stats."
