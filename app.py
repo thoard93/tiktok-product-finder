@@ -6825,3 +6825,153 @@ def api_scan_brand_pages(seller_id):
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
 
+
+# =============================================================================
+# DAILYVIRALS MANUAL IMPORT ENDPOINT
+# =============================================================================
+
+@app.route('/api/scan/manual', methods=['POST'])
+@login_required
+def manual_scan_import():
+    """
+    Import products from DailyVirals videos JSON.
+    Extracts product IDs and fetches full stats from EchoTik.
+    """
+    try:
+        data = request.get_json()
+        json_str = data.get('json_data', '{}')
+        source_url = data.get('url', 'manual_import')
+        
+        # Parse the JSON
+        try:
+            parsed = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            return jsonify({'success': False, 'error': f'Invalid JSON: {e}'}), 400
+        
+        # Extract products from various structures
+        products_to_process = []
+        
+        # Structure 1: DailyVirals Videos format - data[].product.productId
+        if isinstance(parsed, dict) and 'data' in parsed:
+            items = parsed.get('data', [])
+            if isinstance(items, list):
+                for item in items:
+                    product = item.get('product', {})
+                    if isinstance(product, dict) and product.get('productId'):
+                        products_to_process.append({
+                            'product_id': product.get('productId'),
+                            'product_name': product.get('productName'),
+                            'image_url': product.get('imageUrl'),
+                            # Revenue from DV (fallback if EchoTik fails)
+                            'dv_revenue_7d': product.get('revenueLastSevenDays'),
+                            'dv_total_sold': product.get('totalUnitsSold'),
+                        })
+        
+        # Structure 2: Direct array of products
+        elif isinstance(parsed, list):
+            for item in parsed:
+                p_id = item.get('productId') or item.get('product_id') or item.get('id')
+                if p_id:
+                    products_to_process.append({
+                        'product_id': p_id,
+                        'product_name': item.get('productName') or item.get('product_name') or item.get('title'),
+                        'image_url': item.get('imageUrl') or item.get('image_url') or item.get('cover'),
+                    })
+        
+        # Structure 3: Object with 'list' key (common API response)
+        elif isinstance(parsed, dict) and 'list' in parsed:
+            items = parsed.get('list', [])
+            for item in items:
+                p_id = item.get('productId') or item.get('product_id') or item.get('id')
+                if p_id:
+                    products_to_process.append({
+                        'product_id': p_id,
+                        'product_name': item.get('productName') or item.get('product_name') or item.get('title'),
+                        'image_url': item.get('imageUrl') or item.get('image_url') or item.get('cover'),
+                    })
+        
+        # Structure 4: Object with 'videos' key
+        elif isinstance(parsed, dict) and 'videos' in parsed:
+            items = parsed.get('videos', [])
+            for item in items:
+                product = item.get('product', {})
+                if isinstance(product, dict) and product.get('productId'):
+                    products_to_process.append({
+                        'product_id': product.get('productId'),
+                        'product_name': product.get('productName'),
+                        'image_url': product.get('imageUrl'),
+                    })
+        
+        if not products_to_process:
+            return jsonify({
+                'success': False, 
+                'error': 'No products found in JSON. Expected: data[].product.productId or list[].productId',
+                'debug_info': f'Parsed type: {type(parsed).__name__}, Keys: {list(parsed.keys()) if isinstance(parsed, dict) else "N/A"}'
+            }), 400
+        
+        # Process each product: Fetch from EchoTik and save
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        for p in products_to_process:
+            raw_id = str(p['product_id']).replace('shop_', '')
+            print(f"[DV Import] Processing product: {raw_id}")
+            
+            try:
+                # Fetch full stats from EchoTik
+                echotik_data, source = fetch_product_details_echotik(raw_id)
+                
+                if echotik_data:
+                    # Merge DV data as fallback
+                    if p.get('product_name') and not echotik_data.get('product_name'):
+                        echotik_data['product_name'] = p['product_name']
+                    if p.get('image_url') and not echotik_data.get('image_url'):
+                        echotik_data['image_url'] = p['image_url']
+                    
+                    # Save/update in database
+                    save_or_update_product(echotik_data, scan_type='dv_import', explicit_id=raw_id)
+                    success_count += 1
+                    print(f"[DV Import] ✅ Saved {raw_id} from {source}")
+                else:
+                    # EchoTik failed, save with DV data only (limited)
+                    fallback_data = {
+                        'product_id': raw_id,
+                        'product_name': p.get('product_name') or 'Unknown',
+                        'image_url': p.get('image_url'),
+                        'sales_7d': int(p.get('dv_revenue_7d') or 0),  # Revenue as proxy for now
+                        'sales': int(p.get('dv_total_sold') or 0),
+                    }
+                    save_or_update_product(fallback_data, scan_type='dv_import_fallback', explicit_id=raw_id)
+                    error_count += 1
+                    errors.append(f"{raw_id}: EchoTik failed, saved with limited DV data")
+                    print(f"[DV Import] ⚠️ {raw_id}: EchoTik unavailable, used fallback")
+                    
+            except Exception as e:
+                error_count += 1
+                errors.append(f"{raw_id}: {str(e)[:50]}")
+                print(f"[DV Import] ❌ {raw_id}: {e}")
+        
+        # Commit all changes
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': f'DB commit failed: {e}'}), 500
+        
+        return jsonify({
+            'success': True,
+            'message': f'Imported {success_count} products with full stats, {error_count} with fallback data',
+            'products_processed': len(products_to_process),
+            'success_count': success_count,
+            'error_count': error_count,
+            'errors': errors[:5] if errors else None,  # Limit error details
+            'debug_info': f'Source: {source_url}'
+        })
+        
+    except Exception as e:
+        print(f"[DV Import] Critical error: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
