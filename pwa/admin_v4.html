@@ -6,332 +6,339 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard | Vantage</title>
     <link
-        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="/pwa/css/main.css">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        midnight: '#0F172A',
-                        glass: 'rgba(255, 255, 255, 0.05)',
-                        'glass-border': 'rgba(255, 255, 255, 0.1)',
-                        cyan: '#06B6D4',
-                        violet: '#7C3AED',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        heading: ['Outfit', 'sans-serif'],
+                        midnight: '#05070a',
+                        cyan: '#06b6d4',
+                        violet: '#7c3aed',
                     }
                 }
             }
         }
     </script>
     <style>
-        body {
-            background-color: #0F172A;
-            background-image:
-                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 40%);
-            color: #F8FAFC;
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
         }
 
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
 
-        .glass-card {
-            background: rgba(30, 41, 59, 0.4);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+        .admin-table th {
+            text-align: left;
+            padding: 1.25rem 1.5rem;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: #64748b;
+            font-weight: 800;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .admin-table td {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .admin-row:hover {
+            background: rgba(255, 255, 255, 0.02);
         }
     </style>
 </head>
 
-<body class="min-h-screen flex flex-col">
+<body class="bg-midnight min-h-screen text-white overflow-x-hidden pb-32">
 
     <!-- Top Nav -->
-    <nav class="glass-panel px-6 py-4 flex justify-between items-center sticky top-0 z-50">
-        <a href="/" class="flex items-center gap-2 group">
-            <div class="p-2 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors">
-                <svg class="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                </svg>
+    <nav class="glass px-6 h-20 flex justify-between items-center sticky top-0 z-50 border-b border-white/5">
+        <div class="flex items-center gap-6">
+            <a href="/"
+                class="flex items-center gap-3 glass py-2 px-4 rounded-xl group hover:border-cyan-400/50 transition-all border-white/5">
+                <i class="fas fa-chevron-left text-slate-500 group-hover:text-cyan-400"></i>
+                <span class="font-heading font-medium text-sm text-slate-300 group-hover:text-white">Exit
+                    Terminal</span>
+            </a>
+            <div class="h-6 w-px bg-white/10 hidden md:block"></div>
+            <h1 class="font-heading font-bold text-xl text-white hidden md:block">Executive Command</h1>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <div id="statusIndicator" class="flex items-center gap-2 glass px-4 py-2 rounded-xl border-white/5">
+                <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Protocol Active</span>
             </div>
-            <span class="font-heading font-medium text-slate-300 group-hover:text-white">Back to Dashboard</span>
-        </a>
-        <div class="font-heading font-bold text-xl text-white">Vantage Admin</div>
+        </div>
     </nav>
 
-    <main class="flex-1 container mx-auto p-6 max-w-7xl">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="glass-card p-6 rounded-2xl">
-                <div class="text-slate-400 text-sm mb-1 uppercase tracking-wider">Total Users</div>
-                <div class="text-3xl font-bold text-white" id="statUsers">--</div>
-            </div>
-            <div class="glass-card p-6 rounded-2xl">
-                <div class="text-slate-400 text-sm mb-1 uppercase tracking-wider">Total Products</div>
-                <div class="text-3xl font-bold text-cyan-400" id="statProducts">--</div>
-            </div>
-            <div class="glass-card p-6 rounded-2xl">
-                <div class="text-slate-400 text-sm mb-1 uppercase tracking-wider">System Status</div>
-                <div class="text-3xl font-bold text-emerald-400">Online</div>
-            </div>
-        </div>
+    <main class="container mx-auto p-4 md:p-8 max-w-7xl space-y-10">
 
-        <div class="glass-panel rounded-2xl p-6">
-            <h2 class="font-heading font-bold text-xl mb-6 flex items-center gap-2">
-                <svg class="w-6 h-6 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
-                    </path>
-                </svg>
-                User Management
-            </h2>
-
-            <div class="overflow-x-auto">
-                <table class="w-full text-left">
-                    <thead>
-                        <tr class="text-slate-500 text-xs uppercase tracking-wider border-b border-white/5">
-                            <th class="pb-3 px-4">User</th>
-                            <th class="pb-3 px-4">Role</th>
-                            <th class="pb-3 px-4">Status</th>
-                            <th class="pb-3 px-4 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="userTable" class="text-sm">
-                        </tr>
-                    </tbody>
-                </table>
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="glass-card p-8 group transition-all hover:border-cyan-400/30">
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Authenticated Users</p>
+                <div class="text-3xl font-heading font-bold text-white flex items-center gap-3">
+                    <span id="statUsers">--</span>
+                    <i class="fas fa-users text-sm text-cyan-400 opacity-50"></i>
+                </div>
+            </div>
+            <div class="glass-card p-8 group transition-all hover:border-violet-400/30">
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Total Intel SKUs</p>
+                <div class="text-3xl font-heading font-bold text-cyan-400 flex items-center gap-3">
+                    <span id="statProducts">--</span>
+                    <i class="fas fa-database text-sm opacity-50"></i>
+                </div>
+            </div>
+            <div class="glass-card p-8 border-t-4 border-t-emerald-500/50">
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Mainframe Uplink</p>
+                <div class="text-3xl font-heading font-bold text-emerald-400 flex items-center gap-3">
+                    V4.0.2
+                    <div class="flex gap-1">
+                        <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Activity Logs -->
-        <div class="glass-panel rounded-2xl p-6 mt-8">
-            <h2 class="font-heading font-bold text-xl mb-6 flex items-center gap-2">
-                <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
-                    </path>
-                </svg>
-                System Logs
-            </h2>
-            <div class="overflow-x-auto max-h-96 overflow-y-auto">
-                <table class="w-full text-left">
-                    <thead class="sticky top-0 bg-slate-900/90 backdrop-blur-md z-10">
-                        <tr class="text-slate-500 text-xs uppercase tracking-wider border-b border-white/5">
-                            <th class="py-3 px-4">Time (EST)</th>
-                            <th class="py-3 px-4">User</th>
-                            <th class="py-3 px-4">Action</th>
-                            <th class="py-3 px-4">Details</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logTableBody" class="text-sm font-mono">
-                        <tr>
-                            <td colspan="4" class="py-4 text-center text-slate-500">Loading logs...</td>
-                        </tr>
-                    </tbody>
-                </table>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Left: User Registry -->
+            <div class="lg:col-span-12 glass border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative">
+                <div class="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+                    <h2 class="font-heading font-bold text-lg flex items-center gap-3">
+                        <i class="fas fa-id-badge text-violet-400"></i>
+                        Authorized Operators
+                    </h2>
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Registry Sync:
+                        Active</span>
+                </div>
+                <div class="overflow-x-auto no-scrollbar">
+                    <table class="w-full admin-table">
+                        <thead>
+                            <tr>
+                                <th>Entity</th>
+                                <th>Access Level</th>
+                                <th>Status</th>
+                                <th class="text-right">Operations</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userTable">
+                            <tr>
+                                <td colspan="4"
+                                    class="py-12 text-center text-slate-600 font-bold uppercase tracking-[0.2em]">
+                                    Synchronizing Registry...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Full Width: System Mainframe Logs -->
+            <div class="lg:col-span-12 glass border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative">
+                <div class="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+                    <h2 class="font-heading font-bold text-lg flex items-center gap-3">
+                        <i class="fas fa-terminal text-cyan-400"></i>
+                        System Activity Logs
+                    </h2>
+                    <button onclick="window.location.reload()"
+                        class="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Flush
+                        Buffer</button>
+                </div>
+                <div class="overflow-x-auto max-h-[500px] no-scrollbar">
+                    <table class="w-full admin-table border-collapse">
+                        <thead class="sticky top-0 glass z-10">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Operator</th>
+                                <th>Protocol</th>
+                                <th>Parameters</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logTableBody" class="font-mono text-[11px] text-slate-400 tabular-nums">
+                            <tr>
+                                <td colspan="4" class="py-12 text-center text-slate-600">Established secure link.
+                                    Awaiting logs...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <div class="mt-8 flex flex-wrap justify-end gap-4">
-            <button onclick="refreshAllStats()"
-                class="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-lg transition-colors flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
-                    </path>
-                </svg>
-                🔄 Refresh All Stats (Batch)
-            </button>
+        <!-- System Controls -->
+        <div class="glass-card p-8 bg-gradient-to-br from-midnight to-black/40 border-white/10">
+            <h3 class="font-heading font-bold text-xl mb-8 flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center">
+                    <i class="fas fa-skull text-rose-500 text-sm"></i>
+                </div>
+                Danger Zone: Protocol Overrides
+            </h3>
 
-            <button onclick="refreshAllImages()"
-                class="px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 border border-violet-500/20 rounded-lg transition-colors flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
-                    </path>
-                </svg>
-                🖼️ Refresh All Images
-            </button>
+            <div class="flex flex-wrap gap-4">
+                <button onclick="refreshAllStats()" id="btnStats"
+                    class="glass px-6 py-3 rounded-2xl border-cyan-500/30 hover:border-cyan-400 text-cyan-400 flex items-center gap-3 transition-all">
+                    <i class="fas fa-sync-alt text-xs"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Refresh Global Stats</span>
+                </button>
 
-            <button onclick="runCleanup()"
-                class="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 rounded-lg transition-colors flex items-center gap-2">
-                🧹 Cleanup Invalid
-            </button>
+                <button onclick="refreshAllImages()" id="btnImages"
+                    class="glass px-6 py-3 rounded-2xl border-violet-500/30 hover:border-violet-400 text-violet-400 flex items-center gap-3 transition-all">
+                    <i class="fas fa-image text-xs"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Sign Image Keys</span>
+                </button>
 
-            <button onclick="nukeProducts()"
-                class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                    </path>
-                </svg>
-                Danger: Nuke DB
-            </button>
+                <button onclick="runCleanup()"
+                    class="glass px-6 py-3 rounded-2xl border-amber-500/30 hover:border-amber-400 text-amber-400 flex items-center gap-3 transition-all">
+                    <i class="fas fa-broom text-xs"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Vacuum DB</span>
+                </button>
+
+                <button onclick="nukeProducts()"
+                    class="glass px-6 py-3 rounded-2xl border-rose-500/30 hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group">
+                    <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Absolute Wipe (Nuke)</span>
+                </button>
+            </div>
         </div>
     </main>
 
-    <!-- Danger Zone Scripts -->
     <script>
-        async function nukeProducts() {
-            const confirmed = confirm("⚠️ DANGER ZONE ⚠️\n\nAre you sure you want to delete ALL products from the database?\n\nThis action cannot be undone.");
-            if (!confirmed) return;
+        async function loadAdmin() {
+            try {
+                const pRes = await fetch('/api/oos-stats');
+                if (pRes.ok) {
+                    const data = await pRes.json();
+                    document.getElementById('statProducts').textContent = (data.stats.total_products || 0).toLocaleString();
+                }
 
-            const doubleCheck = confirm("Final Confirmation:\n\nClick OK to wiping everything.\nClick Cancel to abort.");
-            if (!doubleCheck) return;
+                const meRes = await fetch('/api/me');
+                if (meRes.ok) {
+                    const me = await meRes.json();
+                    document.getElementById('statUsers').textContent = "1 Master Account";
+
+                    document.getElementById('userTable').innerHTML = `
+                        <tr class="admin-row">
+                            <td>
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-800 p-1 border border-white/5 relative overflow-hidden">
+                                        <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.discord_avatar}.png" 
+                                             class="w-full h-full object-cover rounded-lg" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-white text-sm tracking-tight">${me.discord_username || 'Unknown Operator'}</p>
+                                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">ID: ${me.discord_id}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge-premium bg-violet-600/20 text-violet-400 border border-violet-500/30">L5 Admin</span>
+                            </td>
+                            <td>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                                    <span class="text-[10px] font-bold text-white uppercase">Online</span>
+                                </div>
+                            </td>
+                            <td class="text-right">
+                                <button class="text-slate-500 hover:text-white transition-colors"><i class="fas fa-edit"></i></button>
+                            </td>
+                        </tr>`;
+                }
+
+                const logRes = await fetch('/api/admin/activity');
+                if (logRes.ok) {
+                    const lData = await logRes.json();
+                    const rows = (lData.logs || []).map(l => `
+                        <tr class="admin-row">
+                            <td class="opacity-50">${l.created_at_est || l.created_at}</td>
+                            <td class="text-cyan-400 font-bold">${l.username}</td>
+                            <td class="text-white">${l.action}</td>
+                            <td class="max-w-xs truncate" title="${l.details || ''}">${l.details || "-"}</td>
+                        </tr>`).join('');
+                    document.getElementById('logTableBody').innerHTML = rows || '<tr><td colspan="4" class="py-8 text-center text-slate-600">ZERO ACTIVITY DETECTED</td></tr>';
+                }
+            } catch (e) { console.error("Admin Load Error", e); }
+        }
+
+        async function nukeProducts() {
+            if (!confirm("⚠️ PROTOCOL OVERRIDE REQUIRED ⚠️\n\nInitiate full database purge? This action is irreversible.")) return;
+            if (!confirm("Final Confirmation: Nuke all products?")) return;
 
             try {
                 const res = await fetch('/api/admin/products/nuke', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keep_favorites: false }) // Force full wipe including favorites
+                    body: JSON.stringify({ keep_favorites: false })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert(`✅ Wiped ${data.deleted} products.`);
+                    alert(`Purge Complete: ${data.deleted} entities removed.`);
                     window.location.reload();
-                } else {
-                    alert('❌ Error: ' + data.error);
+                } else alert('Override Failed: ' + data.error);
+            } catch (e) { alert('Critical System Fault: ' + e); }
+        }
+
+        async function refreshAllStats() {
+            const btn = document.getElementById('btnStats');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Processing...</span>';
+            btn.disabled = true;
+
+            try {
+                let offset = 0;
+                let more = true;
+                while (more) {
+                    const res = await fetch(`/api/refresh-all-products?limit=100&offset=${offset}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        if (data.count < 100) more = false;
+                        else offset += 100;
+                    } else break;
                 }
-            } catch (e) {
-                alert('❌ Network Error: ' + e);
+                alert('Intelligence Synchronization Complete.');
+                window.location.reload();
+            } catch (e) { alert('Sync Fault: ' + e); }
+            finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
             }
         }
 
+        async function refreshAllImages() {
+            const btn = document.getElementById('btnImages');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Signing...</span>';
+            btn.disabled = true;
 
-        async function loadAdmin() {
             try {
-                // Fetch Stats (Mocked or Real if API exists)
-                // We'll use product stats API
-                const pRes = await fetch('/api/oos-stats'); // Reuse this for total products
-                if (pRes.ok) {
-                    const data = await pRes.json();
-                    document.getElementById('statProducts').textContent = data.stats.total_products;
-                }
-
-                // Fetch Users (We might not have a public user list API, so mocking cur user)
-                const meRes = await fetch('/api/me');
-                if (meRes.ok) {
-                    const me = await meRes.json();
-                    document.getElementById('statUsers').textContent = "1 (You)";
-
-                    document.getElementById('userTable').innerHTML = `
-    <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-        <td class="py-3 px-4 flex items-center gap-3">
-            <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.discord_avatar}.png"
-                class="w-8 h-8 rounded-full bg-slate-700">
-            <span class="text-white font-medium">${me.discord_username || 'Unknown'}</span>
-        </td>
-        <td class="py-3 px-4 text-slate-300">Admin</td>
-        <td class="py-3 px-4"><span
-                class="px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold">Active</span></td>
-        <td class="py-3 px-4 text-right">
-            <button class="text-slate-400 hover:text-white">Edit</button>
-        </td>
-    </tr>
-    `;
-                }
-
-                // Fetch Logs
-                const logRes = await fetch('/api/admin/activity');
-                if (logRes.ok) {
-                    const lData = await logRes.json();
-                    const rows = lData.logs.map(l => `
-                        <tr class="border-b border-white/5 font-mono text-xs">
-                            <td class="py-2 px-4 text-slate-400">${l.created_at_est || l.created_at}</td>
-                            <td class="py-2 px-4 text-cyan-400">${l.username}</td>
-                            <td class="py-2 px-4 text-white">${l.action}</td>
-                            <td class="py-2 px-4 text-slate-500 truncate max-w-xs" title='${l.details || ""}'>${l.details || "-"}</td>
-                        </tr>
-                    `).join('');
-                    document.getElementById('logTableBody').innerHTML = rows;
-                }
-            } catch (e) {
-                console.error(e);
+                const res = await fetch('/api/refresh-images?batch=100&force=true');
+                const data = await res.json();
+                if (data.success) alert(`Keys Signed: ${data.updated} images renewed.`);
+                else alert('Protocol Error: ' + data.error);
+            } catch (e) { alert('System Fault: ' + e); }
+            finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
             }
         }
 
         async function runCleanup() {
-            if (!confirm("Run cleanup? This deletes 0% commission products.")) return;
-            // Call API
             try {
                 const res = await fetch('/api/cleanup', { method: 'POST' });
                 const data = await res.json();
-                alert(data.message);
+                alert('Buffer Purged: ' + data.message);
                 loadAdmin();
-            } catch (e) { alert("Error: " + e); }
+            } catch (e) { alert('System Fault: ' + e); }
         }
 
-        async function refreshAllStats() {
-            const confirmed = confirm("This will batch refresh stats for ALL active products by calling the EchoTik API one-by-one.\n\nThis may take several minutes depending on the number of products.\n\nProceed?");
-            if (!confirmed) return;
-
-            // Simple recursive batching if needed, or just one big call if server handles it
-            // The backend /api/refresh-all-products handles a limit of 100 usually.
-            const limit = 100;
-            let offset = 0;
-            let totalProcessed = 0;
-
-            async function runBatch() {
-                try {
-                    console.log(`Refreshing batch with offset ${offset}...`);
-                    const res = await fetch(`/api/refresh-all-products?limit=${limit}&offset=${offset}`);
-                    const data = await res.json();
-
-                    if (data.success) {
-                        totalProcessed += data.count;
-                        if (data.count === limit) {
-                            offset += limit;
-                            // Update UI if possible, for now just log
-                            console.log(`Processed ${totalProcessed}. Continuing...`);
-                            if (confirm(`Processed ${totalProcessed} products. Continue to next batch?`)) {
-                                await runBatch();
-                            } else {
-                                alert(`Stopped. Refreshed ${totalProcessed} products.`);
-                                window.location.reload();
-                            }
-                        } else {
-                            alert(`✅ Finished! Refreshed ${totalProcessed} total products.`);
-                            window.location.reload();
-                        }
-                    } else {
-                        alert('❌ Batch Error: ' + data.error);
-                    }
-                } catch (e) {
-                    alert('❌ Network Error during batch: ' + e);
-                }
-            }
-
-            await runBatch();
-        }
-
-        async function refreshAllImages() {
-            const confirmed = confirm("This will refresh image cache (signed URLs) for all products.\n\nProceed?");
-            if (!confirmed) return;
-
-            try {
-                // Backend handles sign-in and expiry check. Added force=true to ensure renewals.
-                const res = await fetch('/api/refresh-images?batch=100&force=true');
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ Done! Processed ${data.processed} images, updated ${data.updated}.`);
-                    window.location.reload();
-                } else {
-                    alert('❌ Error: ' + data.error);
-                }
-            } catch (e) {
-                alert('❌ Network Error: ' + e);
-            }
-        }
-
-        loadAdmin();
+        document.addEventListener('DOMContentLoaded', loadAdmin);
     </script>
 </body>
 

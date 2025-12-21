@@ -4,198 +4,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner | Vantage</title>
+    <title>Scanner Control | Vantage</title>
     <link
-        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="/pwa/css/main.css">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        midnight: '#0F172A',
-                        glass: 'rgba(255, 255, 255, 0.05)',
-                        'glass-border': 'rgba(255, 255, 255, 0.1)',
-                        cyan: '#06B6D4',
-                        violet: '#7C3AED',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        heading: ['Outfit', 'sans-serif'],
+                        midnight: '#05070a',
+                        cyan: '#06b6d4',
+                        violet: '#7c3aed',
                     }
                 }
             }
         }
     </script>
     <style>
-        body {
-            background-color: #0F172A;
-            background-image:
-                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 40%);
-            color: #F8FAFC;
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
         }
 
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
 
-        .glass-card {
-            background: rgba(30, 41, 59, 0.4);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+        .scan-card-active {
+            border-color: #06b6d4;
+            background: rgba(6, 182, 212, 0.05);
+            box-shadow: 0 0 20px -5px rgba(6, 182, 212, 0.3);
         }
 
-        .nav-item {
-            transition: all 0.2s;
-        }
-
-        .nav-item:hover,
-        .nav-item.active {
-            background: rgba(6, 182, 212, 0.1);
-            color: #06B6D4;
-            border-right: 3px solid #06B6D4;
-        }
-
-        .scan-tab {
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .scan-tab:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .scan-tab.active {
-            background: rgba(6, 182, 212, 0.1);
-            border-color: #06B6D4;
-            box-shadow: 0 0 20px rgba(6, 182, 212, 0.1);
+        .terminal-bg {
+            background: rgba(0, 0, 0, 0.4);
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .log-entry {
-            font-family: monospace;
-            font-size: 0.85rem;
-            padding: 2px 0;
+            border-left: 2px solid transparent;
+            padding-left: 1rem;
+            margin-bottom: 0.25rem;
         }
 
         .log-info {
+            border-left-color: #64748b;
             color: #94a3b8;
         }
 
         .log-success {
-            color: #4ade80;
+            border-left-color: #10b981;
+            color: #34d399;
         }
 
         .log-error {
-            color: #ef4444;
+            border-left-color: #f43f5e;
+            color: #fb7185;
         }
 
         .log-warn {
-            color: #f59e0b;
+            border-left-color: #f59e0b;
+            color: #fbbf24;
         }
     </style>
 </head>
 
-<body class="flex h-screen overflow-hidden">
+<body class="flex h-screen overflow-hidden bg-midnight">
 
-    <!-- Sidebar -->
-    <aside class="w-64 glass-panel border-r border-slate-800 flex flex-col z-20">
-        <div class="h-16 flex items-center px-6 border-b border-slate-800/50">
-            <div class="flex items-center gap-2">
-                <div
-                    class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-violet-600 flex items-center justify-center font-bold text-white">
-                    V</div>
-                <span class="font-heading font-bold text-xl tracking-tight">Vantage</span>
+    <!-- Sidebar (Shared with Dashboard) -->
+    <aside class="hidden md:flex flex-col w-72 glass border-r border-white/5 z-30">
+        <div class="p-8">
+            <div class="flex items-center gap-3 group cursor-pointer" onclick="window.location.href='/'">
+                <div class="w-12 h-12 rounded-2xl glass flex items-center justify-center relative overflow-hidden">
+                    <img src="/vantage_logo.png" class="w-full h-full object-cover p-1.5"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                    <span style="display:none" class="text-2xl h-full w-full items-center justify-center">🎯</span>
+                    <div class="absolute inset-0 bg-cyan-400/10 opacity-0 group-hover:opacity-100 transition-opacity">
+                    </div>
+                </div>
+                <div>
+                    <h1 class="font-heading font-bold text-2xl tracking-tight text-white">Vantage</h1>
+                    <p class="text-[10px] text-cyan-400 font-bold tracking-widest uppercase opacity-70">Intelligence</p>
+                </div>
             </div>
         </div>
 
-        <nav class="flex-1 py-6 space-y-1">
-            <a href="/" class="nav-item flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
-                <i class="fas fa-grid-2"></i> Dashboard
+        <nav class="flex-1 px-4 space-y-2 overflow-y-auto no-scrollbar">
+            <div class="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Navigation</div>
+            <a href="/" class="sidebar-link">
+                <i class="fas fa-th-large w-5"></i>
+                <span>Dashboard</span>
             </a>
-            <a href="/scanner"
-                class="nav-item active flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
-                <i class="fas fa-radar"></i> Scanners
-                <span class="ml-auto text-xs bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full">V2</span>
+            <a href="/scanner" class="sidebar-link active">
+                <i class="fas fa-radar w-5"></i>
+                <span>Scanners</span>
+                <span class="ml-auto text-[10px] glass px-2 py-0.5 rounded-full text-cyan-400 font-bold">V4</span>
+            </a>
+            <a href="/shops" class="sidebar-link">
+                <i class="fas fa-store w-5"></i>
+                <span>Shops Library</span>
             </a>
 
-            <!-- Shops Library -->
-            <a href="/shops" class="nav-item flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
-                <i class="fas fa-shopping-bag"></i> Shops Library
+            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">System</div>
+            <a href="/admin" class="sidebar-link">
+                <i class="fas fa-terminal w-5"></i>
+                <span>Terminal</span>
             </a>
-
-            <a href="/manual-import" onclick="alert('Use the Dashboard + Import Button!'); return false;"
-                class="nav-item flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white">
-                <i class="fas fa-upload"></i> Manual Import
+            <a href="/settings" class="sidebar-link">
+                <i class="fas fa-cog w-5"></i>
+                <span>Settings</span>
             </a>
         </nav>
-
-        <div class="p-4 border-t border-slate-800/50">
-            <a href="/admin"
-                class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50">
-                <i class="fas fa-cog"></i> Admin
-            </a>
-            <a href="/developer"
-                class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50">
-                <i class="fas fa-code"></i> Developer
-            </a>
-        </div>
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-900/50">
-        <!-- Top Bar -->
-        <header class="h-16 glass-panel border-b border-slate-800/50 flex items-center justify-between px-8 z-10">
-            <h2 class="font-heading font-semibold text-lg text-white">System Scanners</h2>
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+        <!-- Header -->
+        <header class="glass h-20 flex items-center justify-between px-8 border-b border-white/5 sticky top-0 z-20">
+            <div class="flex items-center gap-4">
+                <button onclick="toggleSidebar()" class="md:hidden glass p-2 rounded-xl border-white/5 text-slate-400">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h2 class="font-heading font-bold text-xl text-white">Scanner</h2>
+                <div class="h-6 w-px bg-white/10 mx-2 hidden md:block"></div>
+                <div id="statusIndicator" class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Ready</span>
+                </div>
+            </div>
         </header>
 
         <!-- Scanner UI -->
-        <div class="flex-1 overflow-y-auto p-8">
-            <div class="max-w-5xl mx-auto space-y-8">
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar pb-32">
+            <div class="max-w-6xl mx-auto space-y-8">
 
-                <!-- Scanner Selectors -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="scan-tab active glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+                <!-- Scanner Tab Grid -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="glass-card p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:border-cyan-400/30 scan-tab scan-card-active"
                         onclick="setMode('quick', this)">
-                        <i class="fas fa-bolt text-2xl text-yellow-400"></i>
-                        <div class="font-medium">Quick Scan</div>
-                        <div class="text-xs text-slate-500">Top Brands (EchoTik)</div>
+                        <div
+                            class="w-12 h-12 rounded-2xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 text-xl">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-white text-sm">Quick Scan</div>
+                            <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">EchoTik API
+                            </div>
+                        </div>
                     </div>
-                    <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+
+                    <div class="glass-card p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:border-cyan-400/30 scan-tab"
                         onclick="setMode('brand', this)">
-                        <i class="fas fa-tag text-2xl text-cyan-400"></i>
-                        <div class="font-medium">Brand Hunter</div>
-                        <div class="text-xs text-slate-500">Specific Seller ID</div>
+                        <div
+                            class="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 text-xl">
+                            <i class="fas fa-tag"></i>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-white text-sm">Brand Hunter</div>
+                            <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Seller
+                                Lookup</div>
+                        </div>
                     </div>
-                    <!-- Legacy Apify Ad Hunter Removed -->
-                    <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+
+                    <div class="glass-card p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:border-cyan-400/30 scan-tab"
                         onclick="setMode('dailyvirals', this)">
-                        <i class="fas fa-file-import text-2xl text-emerald-400"></i>
-                        <div class="font-medium">DailyVirals</div>
-                        <div class="text-xs text-slate-500">Live Scraper / Import</div>
+                        <div
+                            class="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-xl">
+                            <i class="fas fa-fire-alt"></i>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-white text-sm">DailyVirals</div>
+                            <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Live
+                                Scraper</div>
+                        </div>
                     </div>
-                    <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
+
+                    <div class="glass-card p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:border-cyan-400/30 scan-tab"
                         onclick="setMode('urlbatch', this)">
-                        <i class="fas fa-link text-2xl text-pink-400"></i>
-                        <div class="font-medium">URL Batch</div>
-                        <div class="text-xs text-slate-500">Preview Stats</div>
+                        <div
+                            class="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-400 text-xl">
+                            <i class="fas fa-list-ul"></i>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-white text-sm">Batch URL</div>
+                            <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Mass
+                                Preview</div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Config Panel -->
-                <div class="glass-card p-8 rounded-2xl border border-slate-700/50" id="configPanel">
-                    <!-- Injected via JS -->
+                <!-- Main Configuration Panel -->
+                <div class="glass-card p-8 md:p-10 border-t border-white/5 relative overflow-hidden" id="configPanel">
+                    <!-- Loaded via Script -->
                 </div>
 
-                <!-- Console Output -->
-                <div class="glass-card p-6 rounded-2xl border border-slate-700/50 h-64 overflow-hidden flex flex-col">
-                    <div class="text-xs font-mono text-slate-500 mb-2 uppercase tracking-wider">System Log</div>
-                    <div id="consoleLog" class="flex-1 overflow-y-auto space-y-1 font-mono text-sm">
-                        <div class="log-entry log-info">> System initialized. Select a scanner to begin.</div>
+                <!-- Matrix System Terminal -->
+                <div class="glass-card overflow-hidden h-[400px] flex flex-col border border-white/5 shadow-2xl">
+                    <div class="px-6 py-3 bg-white/5 border-b border-white/5 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="flex gap-1.5">
+                                <div class="w-2.5 h-2.5 rounded-full bg-rose-500/40"></div>
+                                <div class="w-2.5 h-2.5 rounded-full bg-amber-500/40"></div>
+                                <div class="w-2.5 h-2.5 rounded-full bg-emerald-500/40"></div>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-2">Mainframe
+                                Uplink Log</span>
+                        </div>
+                        <button onclick="document.getElementById('consoleLog').innerHTML = ''"
+                            class="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Clear
+                            Buffer</button>
+                    </div>
+                    <div id="consoleLog"
+                        class="flex-1 overflow-y-auto p-6 space-y-1 terminal-bg no-scrollbar text-[13px] leading-relaxed">
+                        <div class="log-entry log-info">> Vantage Scanner V4 online. Awaiting mission parameters...
+                        </div>
                     </div>
                 </div>
 
@@ -205,187 +231,182 @@
 
     <script>
         let currentMode = 'quick';
-        let isScanning = false;
 
         const CONFIGS = {
             'quick': `
-                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-bolt text-yellow-400"></i> Quick Scan Configuration</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Start Rank</label>
-                        <input type="number" id="quick-rank" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <h3 class="text-2xl font-heading font-bold text-white mb-2">EchoTik Quick Discovery</h3>
+                        <p class="text-slate-400 text-sm">Scan global top brands and extract high-performing products.</p>
+                    </div>
+                    <button onclick="runQuickScan(this)" class="btn-premium px-10 py-4 shadow-xl">
+                        <i class="fas fa-bolt mr-2"></i> Execute Search
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Global Rank Range</label>
+                        <div class="flex items-center gap-3">
+                            <input type="number" id="quick-rank" value="1" class="input-premium w-full text-center font-bold">
+                            <span class="text-slate-600">to</span>
+                            <div class="input-premium w-full text-center bg-white/5 opacity-50 font-bold" id="rank-end">5</div>
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Count</label>
-                        <input type="number" id="quick-count" value="5" max="20" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Sample Size (Brands)</label>
+                        <input type="number" id="quick-count" value="5" class="input-premium w-full font-bold">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Min 7d Sales</label>
-                        <input type="number" id="quick-min-sales" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Min 7D Sales Vol</label>
+                        <input type="number" id="quick-min-sales" value="100" class="input-premium w-full font-bold">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Min Videos</label>
-                        <input type="number" id="quick-min-videos" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm text-slate-400 mb-2">Max Videos</label>
-                        <input type="number" id="quick-max-videos" value="25" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm text-slate-400 mb-2">Min Influencers</label>
-                        <input type="number" id="quick-min-inf" value="0" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm text-slate-400 mb-2">Max Influencers</label>
-                        <input type="number" id="quick-max-inf" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm text-slate-400 mb-2">Pages/Brand</label>
-                        <input type="number" id="quick-pages" value="3" max="10" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="block text-sm text-slate-400 mb-2">Sort Brands By</label>
-                        <select id="quick-sort" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none text-slate-300">
-                            <option value="2">GMV (Total)</option>
-                            <option value="6">30-Day Sales</option>
-                            <option value="4">7-Day Sales</option>
-                        </select>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Saturation (Videos)</label>
+                        <div class="flex items-center gap-3">
+                            <input type="number" id="quick-min-videos" value="1" class="input-premium w-full text-center">
+                            <span class="text-slate-600">-</span>
+                            <input type="number" id="quick-max-videos" value="30" class="input-premium w-full text-center">
+                        </div>
                     </div>
                 </div>
-                <button onclick="runQuickScan(this)" class="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all">
-                    Start EchoTik Quick Scan
-                </button>
             `,
             'brand': `
-                 <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-tag text-cyan-400"></i> Brand Hunter Configuration</h3>
-                 <div class="mb-6">
-                    <label class="block text-sm text-slate-400 mb-2">Seller ID / Shop ID</label>
-                    <input type="text" id="brand-id" placeholder="e.g. 74939281..." class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none font-mono">
-                 </div>
-                 <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Start Page</label>
-                        <input type="number" id="brand-start" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <h3 class="text-2xl font-heading font-bold text-white mb-2">Advanced Brand Hunter</h3>
+                        <p class="text-slate-400 text-sm">Infiltrate specific seller catalogs using unique Shop IDs.</p>
+                    </div>
+                    <button onclick="runBrandScan(this)" class="btn-premium px-10 py-4 shadow-xl">
+                        <i class="fas fa-crosshairs mr-2"></i> Target Shop
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="md:col-span-2">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Seller ID / SPU ID</label>
+                        <input type="text" id="brand-id" placeholder="Paste ID here..." class="input-premium w-full font-mono">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">End Page</label>
-                        <input type="number" id="brand-end" value="5" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Page Depth</label>
+                        <div class="flex items-center gap-3">
+                            <input type="number" id="brand-start" value="1" class="input-premium w-full text-center">
+                            <span class="text-slate-600">to</span>
+                            <input type="number" id="brand-end" value="5" class="input-premium w-full text-center">
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Min 7D Sales</label>
+                        <input type="number" id="brand-min-sales" value="50" class="input-premium w-full">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Min Sales (7d)</label>
-                        <input type="number" id="brand-min-sales" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Video Radius</label>
+                        <input type="number" id="brand-max-videos" value="50" class="input-premium w-full">
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-400 mb-2">Min Videos</label>
-                        <input type="number" id="brand-min-videos" value="0" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Influencers Max</label>
+                        <input type="number" id="brand-max-inf" value="100" class="input-premium w-full">
                     </div>
-                    <div>
-                        <label class="block text-sm text-slate-400 mb-2">Min Influencers</label>
-                        <input type="number" id="brand-min-inf" value="0" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm text-slate-400 mb-2">Max Influencers</label>
-                        <input type="number" id="brand-max-inf" value="100" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm text-slate-400 mb-2">Max Videos</label>
-                        <input type="number" id="brand-max-videos" value="25" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none">
-                    </div>
-                 </div>
-                 <button onclick="runBrandScan(this)" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all">
-                    Start Brand Scan
-                </button>
+                </div>
             `,
             'dailyvirals': `
-                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-file-import text-emerald-400"></i> DailyVirals Live Scraper</h3>
-                
-                <div class="flex items-center gap-4 mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
-                    <div class="text-sm font-medium text-slate-300">Scraper Mode:</div>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="dv-mode" value="live" checked onchange="toggleDVUI()" class="text-emerald-500 focus:ring-emerald-500">
-                        <span class="text-sm">Live Scraper</span>
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="dv-mode" value="manual" onchange="toggleDVUI()" class="text-emerald-500 focus:ring-emerald-500">
-                        <span class="text-sm">Manual JSON Paste</span>
-                    </label>
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                    <div>
+                        <h3 class="text-2xl font-heading font-bold text-white mb-2">DailyVirals Automation</h3>
+                        <p class="text-slate-400 text-sm">Automated extraction from the DailyViral live ad database.</p>
+                    </div>
+                    <button onclick="runDVScan(this)" data-mode="live" class="btn-premium px-10 py-4 shadow-xl">
+                        <i class="fas fa-satellite-dish mr-2"></i> Sync Cloud
+                    </button>
                 </div>
-
-                <div id="dv-live-ui">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-2">Time Range</label>
-                            <select id="dv-days" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
-                                <option value="1">1 Day</option>
-                                <option value="3">3 Days</option>
-                                <option value="5">5 Days</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-2">Post Type</label>
-                            <select id="dv-type" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
-                                <option value="paid">Paid Ads (Verified)</option>
-                                <option value="all">Mixed (Paid & Organic)</option>
-                                <option value="organic">Organic Only</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-2">Saturation Filter</label>
-                            <select id="dv-saturation" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
-                                <option value="hidden_gem">💎 Hidden Gems</option>
-                                <option value="breakout">📈 Breakout</option>
-                                <option value="hot_seller">🔥 Hot Sellers</option>
-                                <option value="none">All Results</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-2">Start Page</label>
-                            <input type="number" id="dv-start-page" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-2">Number of Pages</label>
-                            <input type="number" id="dv-page-count" value="3" max="10" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
-                        </div>
+                <div class="flex gap-4 p-1.5 glass rounded-2xl w-fit mb-8">
+                    <button onclick="setDVMode('live')" id="dv-tab-live" class="px-6 py-2 rounded-xl text-xs font-bold active-tab transition-all">Live Automation</button>
+                    <button onclick="setDVMode('manual')" id="dv-tab-manual" class="px-6 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-white transition-all">Manual JSON Logic</button>
+                </div>
+                <div id="dv-live-ui" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Time Horizon</label>
+                        <select id="dv-days" class="input-premium w-full font-bold appearance-none cursor-pointer">
+                            <option value="1">24 Hours</option>
+                            <option value="3">72 Hours</option>
+                            <option value="7">168 Hours</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Saturation Filter</label>
+                        <select id="dv-saturation" class="input-premium w-full font-bold appearance-none cursor-pointer">
+                            <option value="hidden_gem">💎 Hidden Gems</option>
+                            <option value="breakout">📈 Breakout</option>
+                            <option value="hot_seller">🔥 Hot Sellers</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Origin Page</label>
+                        <input type="number" id="dv-start-page" value="1" class="input-premium w-full">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Batch Depth (Pages)</label>
+                        <input type="number" id="dv-page-count" value="3" class="input-premium w-full">
                     </div>
                 </div>
-
-                <div id="dv-manual-ui" style="display:none">
-                    <div class="mb-8">
-                        <label class="block text-sm text-slate-400 mb-2">Paste JSON Logic</label>
-                        <textarea id="dv-json" rows="6" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none font-mono text-xs"></textarea>
-                        <div class="text-xs text-slate-500 mt-2">Paste raw JSON from DV network request to import products.</div>
-                    </div>
+                <div id="dv-manual-ui" class="hidden">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Raw JSON Input</label>
+                    <textarea id="dv-json" rows="6" class="input-premium w-full font-mono text-xs leading-relaxed" placeholder="Paste server response JSON..."></textarea>
                 </div>
-
-                <button onclick="runDVScan(this)" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all">
-                    Start DailyVirals Scraper
-                </button>
             `,
             'urlbatch': `
-                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-link text-pink-400"></i> Batch URL Preview</h3>
-                <div class="mb-6">
-                    <label class="block text-sm text-slate-400 mb-2">Paste TikTok Product URLs (one per line)</label>
-                    <textarea id="batch-urls" rows="8" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-pink-500 outline-none font-mono text-xs" placeholder="https://shop.tiktok.com/view/product/123...\nhttps://www.tiktok.com/t/ZTxxxxx/\n1729532687558808508"></textarea>
-                    <div class="text-xs text-slate-500 mt-2">Enter up to 50 TikTok product URLs, IDs, or share links. Results shown in console below (not saved to library).</div>
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                    <div>
+                        <h3 class="text-2xl font-heading font-bold text-white mb-2">Mass URL Intelligence</h3>
+                        <p class="text-slate-400 text-sm">Batch process multiple TikTok URLs for instant stats preview.</p>
+                    </div>
+                    <button onclick="runBatchLookup(this)" class="btn-premium px-10 py-4 shadow-xl">
+                        <i class="fas fa-search mr-2"></i> Batch Preview
+                    </button>
                 </div>
-                <button onclick="runBatchLookup(this)" class="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-pink-500/20 transition-all">
-                    <i class="fas fa-search mr-2"></i> Lookup Stats (Preview Only)
-                </button>
+                <div class="space-y-4">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Target URLs (One per line, Max 50)</label>
+                    <textarea id="batch-urls" rows="8" class="input-premium w-full font-mono text-xs" placeholder="https://shop.tiktok.com/pdp/123...\nhttps://www.tiktok.com/t/ZTxxx/..."></textarea>
+                    <p class="text-[10px] text-slate-600 italic">Results will appear in the system mainframe below. Products are for preview only and not saved to database.</p>
+                </div>
             `
         };
 
         function setMode(mode, el) {
             currentMode = mode;
-            document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active', 'border-cyan-500', 'bg-slate-800'));
-            el.classList.add('active');
+            document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('scan-card-active'));
+            el.classList.add('scan-card-active');
             document.getElementById('configPanel').innerHTML = CONFIGS[mode];
+
+            // Re-bind rank update for quick scan
+            if (mode === 'quick') {
+                const countInput = document.getElementById('quick-count');
+                const rankInput = document.getElementById('quick-rank');
+                const updateRank = () => {
+                    const start = parseInt(rankInput.value) || 1;
+                    const count = parseInt(countInput.value) || 1;
+                    document.getElementById('rank-end').textContent = start + count - 1;
+                };
+                countInput.addEventListener('input', updateRank);
+                rankInput.addEventListener('input', updateRank);
+            }
+        }
+
+        function setDVMode(mode) {
+            document.getElementById('dv-tab-live').classList.toggle('active-tab', mode === 'live');
+            document.getElementById('dv-tab-manual').classList.toggle('active-tab', mode === 'manual');
+            document.getElementById('dv-live-ui').classList.toggle('hidden', mode === 'manual');
+            document.getElementById('dv-manual-ui').classList.toggle('hidden', mode === 'live');
+            const btn = document.querySelector('[data-mode]');
+            btn.setAttribute('data-mode', mode);
+            btn.innerHTML = mode === 'live' ? '<i class="fas fa-satellite-dish mr-2"></i> Sync Cloud' : '<i class="fas fa-file-import mr-2"></i> Ingest JSON';
         }
 
         function log(msg, type = 'info') {
             const c = document.getElementById('consoleLog');
             const d = document.createElement('div');
             d.className = `log-entry log-${type}`;
-            d.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            d.innerHTML = `<span class="opacity-30">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
             c.appendChild(d);
             c.scrollTop = c.scrollHeight;
         }
@@ -396,270 +417,191 @@
             const minSales = parseInt(document.getElementById('quick-min-sales').value) || 0;
             const minVideos = parseInt(document.getElementById('quick-min-videos').value) || 0;
             const maxVideos = parseInt(document.getElementById('quick-max-videos').value) || 1000;
-            const minInf = parseInt(document.getElementById('quick-min-inf').value) || 0;
-            const maxInf = parseInt(document.getElementById('quick-max-inf').value) || 1000;
-            const pages = parseInt(document.getElementById('quick-pages').value) || 3;
-            const sortField = document.getElementById('quick-sort').value || 2;
 
             btn.disabled = true;
-            btn.innerText = "Scanning...";
-            log(`Starting Quick Scan (Rank ${startRank}, ${numBrands} brands, Sales >${minSales}, Videos ${minVideos}-${maxVideos}, Inf ${minInf}-${maxInf})...`);
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Operation Running...';
+            log(`Initiating Quick Scan Cluster... Sector [${startRank}-${startRank + numBrands - 1}]`, 'info');
 
             try {
                 for (let i = 0; i < numBrands; i++) {
                     const rank = startRank + i;
-                    log(`Scanning Brand Rank #${rank}...`);
+                    log(`Targeting Brand Rank #${rank}... Establishing Uplink...`, 'info');
 
                     const query = new URLSearchParams({
                         brand_rank: rank,
-                        pages: pages,
+                        pages: 3,
                         min_sales: minSales,
                         min_videos: minVideos,
-                        max_videos: maxVideos,
-                        min_influencers: minInf,
-                        max_influencers: maxInf,
-                        sort_field: sortField
+                        max_videos: maxVideos
                     });
 
                     const res = await fetch(`/api/quick-scan?${query.toString()}`);
                     const data = await res.json();
 
                     if (data.result) {
-                        const saved = data.result.products_saved;
-                        const filtered = data.result.filtered_out || 0;
-                        const found = data.result.products_found;
-                        log(`Brand #${rank}: Found ${found} (${filtered} filtered), Saved ${saved}`, saved > 0 ? 'success' : 'info');
+                        const s = data.result;
+                        log(`>> RECON COMPLETED: Found ${s.products_found}, Saved ${s.products_saved}, Skips ${s.filtered_out || 0}`, s.products_saved > 0 ? 'success' : 'warn');
                     } else {
-                        log(`Brand #${rank} Error: ${data.error || 'Unknown'}`, 'error');
+                        log(`!! UPLINK FAILURE: ${data.error || 'Connection Timeout'}`, 'error');
                     }
-                    await new Promise(r => setTimeout(r, 1000));
+                    await new Promise(r => setTimeout(r, 800));
                 }
-                log("Scan Batch Complete.", 'success');
-            } catch (e) {
-                log(`Error: ${e.message}`, 'error');
+                log("Full Sector Reconnaissance Complete.", 'success');
+            } catch (e) { log(`System Crash: ${e.message}`, 'error'); }
+            finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bolt mr-2"></i> Execute Search';
             }
-            btn.disabled = false;
-            btn.innerText = "Start EchoTik Quick Scan";
         }
 
         async function runBrandScan(btn) {
             const id = document.getElementById('brand-id').value;
-            const start = document.getElementById('brand-start').value || 1;
-            const end = document.getElementById('brand-end').value || 5;
-            const minSales = document.getElementById('brand-min-sales').value || 0;
-            const minVideos = document.getElementById('brand-min-videos').value || 0;
-            const minInf = document.getElementById('brand-min-inf').value || 0;
-            const maxInf = document.getElementById('brand-max-inf').value || 1000;
-            const maxVideos = document.getElementById('brand-max-videos').value || 1000;
-
-            if (!id) return log("Enter a Seller ID!", 'error');
+            if (!id) return log("Error: Target ID Null", 'error');
 
             btn.disabled = true;
-            btn.innerText = "Scanning...";
-            log(`Scanning Seller ${id} (Pages ${start}-${end}, Sales >${minSales}, Videos ${minVideos}-${maxVideos}, Inf ${minInf}-${maxInf})...`);
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Tracking Target...';
+            log(`Engaging Deep Scan on Shop [${id}]...`, 'warn');
 
             try {
-                const res = await fetch(`/api/scan-pages/${id}?start=${start}&end=${end}&min_sales=${minSales}&min_videos=${minVideos}&max_videos=${maxVideos}&min_influencers=${minInf}&max_influencers=${maxInf}`);
+                const query = new URLSearchParams({
+                    start: document.getElementById('brand-start').value,
+                    end: document.getElementById('brand-end').value,
+                    min_sales: document.getElementById('brand-min-sales').value,
+                    max_videos: document.getElementById('brand-max-videos').value,
+                    max_influencers: document.getElementById('brand-max-inf').value
+                });
+                const res = await fetch(`/api/scan-pages/${id}?${query.toString()}`);
                 const data = await res.json();
 
                 if (data.products_found !== undefined) {
-                    const saved = data.products_saved;
-                    const filtered = data.filtered_out || 0;
-                    const found = data.products_found;
-                    log(`Complete: Found ${found} (${filtered} filtered), Saved ${saved}`, 'success');
-                } else {
-                    log(`Error: ${data.error}`, 'error');
-                }
-            } catch (e) {
-                log(`Error: ${e.message}`, 'error');
+                    log(`>> TARGET CLEANED: Detected ${data.products_found} items. Success: ${data.products_saved}`, 'success');
+                } else log(`!! INTEL ERROR: ${data.error}`, 'error');
+            } catch (e) { log(`Link Severed: ${e.message}`, 'error'); }
+            finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-crosshairs mr-2"></i> Target Shop';
             }
-            btn.disabled = false;
-            btn.innerText = "Start Brand Scan";
-        }
-
-        function toggleDVUI() {
-            const mode = document.querySelector('input[name="dv-mode"]:checked').value;
-            document.getElementById('dv-live-ui').style.display = mode === 'live' ? 'block' : 'none';
-            document.getElementById('dv-manual-ui').style.display = mode === 'manual' ? 'block' : 'none';
-
-            const btn = document.querySelector('button[onclick="runDVScan(this)"]');
-            btn.textContent = mode === 'live' ? 'Start DailyVirals Live Scraper' : 'Import Data & Enrich (EchoTik)';
         }
 
         async function runDVScan(btn) {
-            const mode = document.querySelector('input[name="dv-mode"]:checked').value;
+            const mode = btn.getAttribute('data-mode');
             if (mode === 'live') {
-                return runDVLive(btn);
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-satellite fa-spin mr-2"></i> Syncing Cloud...';
+                log("Contacting DailyVirals Hivemind...", 'info');
+                try {
+                    const res = await fetch('/api/scan/dv-live', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            days: document.getElementById('dv-days').value,
+                            saturation: document.getElementById('dv-saturation').value,
+                            start_page: document.getElementById('dv-start-page').value,
+                            page_count: document.getElementById('dv-page-count').value
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) log(`>> DATA STREAM SECURED: ${data.message}`, 'success');
+                    else log(`!! CLOUD ERROR: ${data.error}`, 'error');
+                } catch (e) { log(`Protocol Error: ${e.message}`, 'error'); }
+                finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-satellite-dish mr-2"></i> Sync Cloud';
+                }
             } else {
-                return runDVImport(btn);
-            }
-        }
-
-        async function runDVLive(btn) {
-            const days = document.getElementById('dv-days').value;
-            const type = document.getElementById('dv-type').value;
-            const saturation = document.getElementById('dv-saturation').value;
-            const startPage = parseInt(document.getElementById('dv-start-page').value) || 1;
-            const pageCount = parseInt(document.getElementById('dv-page-count').value) || 1;
-
-            btn.disabled = true;
-            btn.textContent = '⏳ Scraper Running...';
-            log(`Starting DailyVirals Live Scraper...`, 'info');
-            log(`Filters: ${days} Day(s), ${type}, ${saturation}`, 'info');
-
-            try {
-                const res = await fetch('/api/scan/dv-live', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        days,
-                        type,
-                        saturation,
-                        start_page: startPage,
-                        page_count: pageCount
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    log(`✅ Batch Complete! ${data.message}`, 'success');
-                } else {
-                    log(`❌ Error: ${data.error}`, 'error');
+                const jsonStr = document.getElementById('dv-json').value;
+                if (!jsonStr) return log("Buffer Empty", 'error');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Parsing Matrix...';
+                try {
+                    const res = await fetch('/api/scan/manual', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ json_data: jsonStr })
+                    });
+                    const data = await res.json();
+                    if (data.success) log(`>> INGESTION COMPLETE: ${data.message}`, 'success');
+                    else log(`!! PARSER FAILURE: ${data.error}`, 'error');
+                } catch (e) { log(`System Fault: ${e.message}`, 'error'); }
+                finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-file-import mr-2"></i> Ingest JSON';
                 }
-            } catch (e) {
-                log(`Critical Network Error: ${e.message}`, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Start DailyVirals Live Scraper';
-            }
-        }
-
-        async function runDVImport(btn) {
-            const jsonStr = document.getElementById('dv-json').value;
-            if (!jsonStr.trim()) {
-                return log("Please paste JSON first", 'error');
-            }
-
-            log("Parsing JSON...");
-            let parsed;
-            try {
-                parsed = JSON.parse(jsonStr);
-            } catch (e) {
-                return log("Invalid JSON: " + e.message, 'error');
-            }
-
-            // Quick validation
-            if (parsed) {
-                const keys = Object.keys(parsed);
-                log(`Found object with keys: ${keys.join(', ')}`);
-                if (!keys.includes('list') && !keys.includes('videos') && !keys.includes('data')) {
-                    log("Warning: No standard list key ('list', 'videos', 'data') found at top level.", 'info');
-                }
-            }
-
-            btn.disabled = true;
-            btn.textContent = '⏳ Importing...';
-            log("Sending to server for processing...");
-            try {
-                const res = await fetch(`/api/scan/manual`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ json_data: jsonStr, url: 'dv_import' })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    log(data.message || "Import Successful", 'success');
-                } else {
-                    log(`Import Failed: ${data.error}`, 'error');
-                }
-            } catch (e) {
-                log(`Network Error: ${e.message}`, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Import Data & Enrich (EchoTik)';
             }
         }
 
         async function runBatchLookup(btn) {
-            const urlsRaw = document.getElementById('batch-urls').value;
-            if (!urlsRaw.trim()) {
-                return log("Please paste some URLs first", 'error');
-            }
-
-            const urls = urlsRaw.trim().split('\n').filter(u => u.trim());
-            if (urls.length === 0) {
-                return log("No valid URLs found", 'error');
-            }
-            if (urls.length > 50) {
-                return log(`Maximum 50 URLs allowed, you have ${urls.length}`, 'error');
-            }
+            const urls = document.getElementById('batch-urls').value;
+            if (!urls.trim()) return log("Target Vector Missing", 'error');
 
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Looking up...';
-            log(`Looking up ${urls.length} products...`, 'info');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Recon In Progress...';
+            log(`Identifying ${urls.split('\\n').length} potential targets...`, 'info');
 
             try {
                 const res = await fetch('/api/lookup/batch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ urls: urlsRaw })
+                    body: JSON.stringify({ urls })
                 });
                 const data = await res.json();
-
-                if (data.success) {
-                    log(data.message, 'success');
-
-                    // Display each product
-                    if (data.products && data.products.length > 0) {
-                        log('─'.repeat(60), 'info');
-                        for (const p of data.products) {
-                            const name = p.product_name.length > 40 ? p.product_name.substring(0, 40) + '...' : p.product_name;
-                            log(`📦 ${name}`, 'success');
-                            log(`   Shop: ${p.seller_name} | Sales: ${p.sales.toLocaleString()} | 7D: ${p.sales_7d.toLocaleString()} | Videos: ${p.video_count} | Inf: ${p.influencer_count}`, 'info');
-                        }
-                        log('─'.repeat(60), 'info');
-                    }
-
-                    // Show errors
-                    if (data.errors && data.errors.length > 0) {
-                        log(`⚠️ ${data.errors.length} URLs failed:`, 'warn');
-                        for (const e of data.errors) {
-                            log(`   ${e.url.substring(0, 40)}... → ${e.error}`, 'error');
-                        }
-                    }
-                } else {
-                    log(`Error: ${data.error}`, 'error');
-                }
-            } catch (e) {
-                log(`Network Error: ${e.message}`, 'error');
+                if (data.success && data.products) {
+                    log(`>> GRID PREVIEW READY: Found ${data.products.length} valid entities`, 'success');
+                    data.products.forEach(p => {
+                        log(`   [ID: ${p.product_id}] ${p.product_name.substring(0, 30)}... | Vol: ${p.sales_7d}`, 'info');
+                    });
+                } else log(`!! RECON FAILURE: ${data.error}`, 'error');
+            } catch (e) { log(`Uplink Lost: ${e.message}`, 'error'); }
+            finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-search mr-2"></i> Batch Preview';
             }
-
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-search mr-2"></i> Lookup Stats (Preview Only)';
         }
 
-        // Init
-        document.addEventListener('DOMContentLoaded', () => {
-            const params = new URLSearchParams(window.location.search);
-            const mode = params.get('mode');
-            const sellerId = params.get('seller_id');
+        document.addEventListener('DOMContentLoaded', () => setMode('quick', document.querySelector('.scan-tab')));
 
-            if (mode) {
-                const tab = Array.from(document.querySelectorAll('.scan-tab'))
-                    .find(t => t.innerText.toLowerCase().includes(mode.toLowerCase()));
-                if (tab) setMode(mode, tab);
+        function toggleSidebar() {
+            const aside = document.querySelector('aside');
+            if (aside.classList.contains('hidden')) {
+                aside.classList.remove('hidden');
+                aside.classList.add('fixed', 'inset-0', 'bg-midnight', 'z-50', 'animate-in', 'fade-in', 'duration-300');
+
+                if (!document.getElementById('mobile-sidebar-close')) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.id = 'mobile-sidebar-close';
+                    closeBtn.className = 'absolute top-8 right-8 glass p-3 rounded-2xl border-white/5 text-white';
+                    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    closeBtn.onclick = toggleSidebar;
+                    aside.appendChild(closeBtn);
+                }
             } else {
-                setMode('quick', document.querySelector('.scan-tab'));
+                aside.classList.add('hidden');
+                aside.classList.remove('fixed', 'inset-0', 'bg-midnight', 'z-50', 'animate-in', 'fade-in', 'duration-300');
+                const closeBtn = document.getElementById('mobile-sidebar-close');
+                if (closeBtn) closeBtn.remove();
             }
-
-            if (sellerId && mode === 'brand') {
-                // Wait for DOM update
-                setTimeout(() => {
-                    const input = document.getElementById('brand-id');
-                    if (input) input.value = sellerId;
-                }, 50);
-            }
-        });
+        }
     </script>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-nav">
+        <a href="/" class="mobile-nav-item">
+            <i class="fas fa-th-large"></i>
+            <span>Intel</span>
+        </a>
+        <a href="/scanner" class="mobile-nav-item active">
+            <i class="fas fa-radar"></i>
+            <span>Scan</span>
+        </a>
+        <a href="/shops" class="mobile-nav-item">
+            <i class="fas fa-store"></i>
+            <span>Shops</span>
+        </a>
+        <a href="/settings" class="mobile-nav-item">
+            <i class="fas fa-cog"></i>
+            <span>Setup</span>
+        </a>
+    </nav>
 </body>
 
 </html>

@@ -4,162 +4,237 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Details | Vantage</title>
+    <title>Intelligence Report | Vantage</title>
     <link
-        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="/pwa/css/main.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        midnight: '#0F172A',
-                        glass: 'rgba(255, 255, 255, 0.05)',
-                        'glass-border': 'rgba(255, 255, 255, 0.1)',
-                        cyan: '#06B6D4',
-                        violet: '#7C3AED',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        heading: ['Outfit', 'sans-serif'],
+                        midnight: '#05070a',
+                        cyan: '#06b6d4',
+                        violet: '#7c3aed',
                     }
                 }
             }
         }
     </script>
     <style>
-        body {
-            background-color: #0F172A;
-            background-image:
-                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 40%);
-            color: #F8FAFC;
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
         }
 
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
 
-        .glass-card {
-            background: rgba(30, 41, 59, 0.4);
-            backdrop-filter: blur(12px);
+        .detail-glass {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.1) 100%);
+            backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
         }
     </style>
 </head>
 
-<body class="min-h-screen flex flex-col">
+<body class="bg-midnight min-h-screen text-white overflow-x-hidden">
 
-    <!-- Top Nav -->
-    <nav class="glass-panel px-6 py-4 flex justify-between items-center sticky top-0 z-50">
-        <a href="/" class="flex items-center gap-2 group">
-            <div class="p-2 bg-slate-800 rounded-lg group-hover:bg-slate-700 transition-colors">
-                <svg class="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                </svg>
+    <!-- Top Navigation -->
+    <nav class="glass px-6 h-20 flex justify-between items-center sticky top-0 z-50 border-b border-white/5">
+        <div class="flex items-center gap-6">
+            <a href="/"
+                class="flex items-center gap-3 glass py-2 px-4 rounded-xl group hover:border-cyan-400/50 transition-all border-white/5">
+                <i class="fas fa-chevron-left text-slate-500 group-hover:text-cyan-400 transition-colors"></i>
+                <span class="font-heading font-medium text-sm text-slate-300 group-hover:text-white">Dashboard</span>
+            </a>
+            <div class="h-6 w-px bg-white/10 hidden md:block"></div>
+            <div class="hidden md:flex items-center gap-2">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Operation:</span>
+                <span class="text-xs font-bold text-white tracking-widest uppercase" id="navOperation">Intelligence
+                    Report</span>
             </div>
-            <span class="font-heading font-medium text-slate-300 group-hover:text-white">Back to Dashboard</span>
-        </a>
-        <div class="flex items-center gap-4">
-            <button onclick="enrichNow()"
-                class="px-4 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 rounded-xl font-bold text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all">
-                ⚡ Analyze Live Data
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button onclick="enrichNow()" id="enrichBtn"
+                class="btn-premium py-2 px-5 text-sm shadow-lg shadow-cyan-500/10">
+                <i class="fas fa-bolt mr-2"></i>
+                <span>Deep Scan</span>
             </button>
             <a id="extLink" href="#" target="_blank"
-                class="px-4 py-2 rounded-xl border border-white/10 hover:bg-white/5 transition-colors text-slate-300">
-                View on TikTok
+                class="glass p-2.5 rounded-xl border-white/5 hover:border-cyan-400/50 hover:bg-white/5 transition-all text-slate-400 hover:text-white">
+                <i class="fab fa-tiktok text-lg"></i>
             </a>
         </div>
     </nav>
 
-    <main class="flex-1 container mx-auto p-6 max-w-7xl">
-        <div id="loader" class="text-center py-20 text-slate-500">Loading Product Intelligence...</div>
-
-        <div id="content" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Left Column: Image & Key Info -->
-            <div class="lg:col-span-1 space-y-6">
-                <div
-                    class="glass-card rounded-2xl p-2 relative group flex items-center justify-center bg-slate-800 min-h-[300px]">
-                    <img id="pImage" src="" class="w-full rounded-xl object-contain max-h-[500px]"
-                        onerror="this.onerror=null; this.src='https://placehold.co/400x600/1e293b/white?text=No+Image'">
-                    <div class="absolute top-4 left-4 flex gap-2">
-                        <span id="badgeAd"
-                            class="hidden px-3 py-1 bg-violet-600/90 backdrop-blur rounded-lg text-xs font-bold text-white shadow-lg">AD
-                            WINNER</span>
-                    </div>
-                </div>
-
-                <div class="glass-card rounded-2xl p-6 space-y-4">
-                    <h1 id="pTitle" class="font-heading font-bold text-2xl text-white leading-tight">...</h1>
-                    <div class="flex items-center gap-2 text-slate-400">
-                        <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
-                        <span id="pSeller">...</span>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
-                        <div class="p-3 bg-slate-800/50 rounded-xl">
-                            <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Price</div>
-                            <div class="text-xl font-bold text-white" id="pPrice">$0.00</div>
-                        </div>
-                        <div class="p-3 bg-slate-800/50 rounded-xl">
-                            <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Commission</div>
-                            <div class="text-xl font-bold text-emerald-400" id="pComm">0%</div>
-                        </div>
-                    </div>
-                </div>
+    <main class="container mx-auto p-4 md:p-8 max-w-7xl">
+        <div id="loader" class="text-center py-32">
+            <div class="w-16 h-16 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mx-auto mb-6">
             </div>
+            <p class="font-heading font-bold text-xl text-slate-400 tracking-widest uppercase animate-pulse">Retrieving
+                Product Profile...</p>
+        </div>
 
-            <!-- Right Column: Analytics -->
-            <div class="lg:col-span-2 space-y-6">
-                <!-- Stats Grid -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="glass-card p-4 rounded-xl relative overflow-hidden group">
-                        <div
-                            class="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+        <div id="content" class="hidden space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <!-- Hero Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+                <!-- Left: Product Image & Basic Info -->
+                <div class="lg:col-span-5 space-y-6">
+                    <div class="glass-card p-3 relative group overflow-hidden bg-black/40">
+                        <div class="absolute inset-0 bg-gradient-to-t from-midnight/80 to-transparent z-10"></div>
+                        <img id="pImage" src=""
+                            class="w-full rounded-2xl object-cover aspect-square md:aspect-auto md:max-h-[600px]"
+                            onerror="this.src='https://placehold.co/600x600/05070a/white?text=No+Data'">
+
+                        <div class="absolute top-6 left-6 flex flex-col gap-2 z-20">
+                            <span id="badgeAd" class="hidden badge-premium bg-violet-600 text-white shadow-xl">High Ad
+                                Activity</span>
+                            <span id="badgeHot" class="hidden badge-premium bg-rose-500 text-white shadow-xl">Viral
+                                Breakout</span>
                         </div>
-                        <div class="text-slate-500 text-xs mb-1 uppercase tracking-wider">Total Sales</div>
-                        <div class="text-2xl font-bold text-white relative z-10" id="statSales">0</div>
                     </div>
-                    <div class="glass-card p-4 rounded-xl relative overflow-hidden group">
-                        <div
-                            class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+
+                    <div class="glass-card p-8 space-y-6 border-t-4 border-t-cyan-500/50">
+                        <div>
+                            <p class="text-[10px] font-bold text-cyan-400 uppercase tracking-[0.2em] mb-2"
+                                id="pCategory">Market Intelligence</p>
+                            <h1 id="pTitle" class="font-heading font-bold text-3xl text-white leading-tight">--</h1>
                         </div>
-                        <div class="text-slate-500 text-xs mb-1 uppercase tracking-wider">7D Revenue</div>
-                        <div class="text-2xl font-bold text-emerald-400 relative z-10" id="statRev">$-</div>
-                    </div>
-                    <div class="glass-card p-4 rounded-xl relative overflow-hidden group">
-                        <div
-                            class="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+
+                        <div class="flex items-center gap-3 p-4 glass rounded-2xl border-white/5">
+                            <div class="w-10 h-10 rounded-xl bg-cyan-400/10 flex items-center justify-center">
+                                <i class="fas fa-store text-cyan-400"></i>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Verified
+                                    Seller</p>
+                                <p id="pSeller" class="text-white font-bold tracking-tight">--</p>
+                            </div>
                         </div>
-                        <div class="text-slate-500 text-xs mb-1 uppercase tracking-wider">Influencers</div>
-                        <div class="text-2xl font-bold text-violet-400 relative z-10" id="statInfluencers">0</div>
-                    </div>
-                    <div class="glass-card p-4 rounded-xl relative overflow-hidden group">
-                        <div
-                            class="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-5 glass rounded-2xl border-white/5 bg-white/[0.02]">
+                                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">List
+                                    Price</p>
+                                <div class="text-2xl font-bold text-white tracking-tighter" id="pPrice">$0.00</div>
+                            </div>
+                            <div class="p-5 glass rounded-2xl border-white/5 bg-white/[0.02]">
+                                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                                    Commission</p>
+                                <div class="text-2xl font-bold text-emerald-400 tracking-tighter" id="pComm">0%</div>
+                            </div>
                         </div>
-                        <div class="text-slate-500 text-xs mb-1 uppercase tracking-wider">Active Videos</div>
-                        <div class="text-2xl font-bold text-orange-400 relative z-10" id="statVideos">0</div>
                     </div>
                 </div>
 
-                <!-- Charts -->
-                <div class="glass-card p-6 rounded-2xl border-t border-white/5">
-                    <h3 class="font-heading font-medium text-lg mb-6 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                        </svg>
-                        Sales Trend (7 Days)
-                    </h3>
-                    <div class="h-80 relative">
-                        <canvas id="salesChart"></canvas>
+                <!-- Right: High Level Analytics -->
+                <div class="lg:col-span-7 space-y-8">
+
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div class="glass-card p-5 group hover:border-cyan-400/30 transition-all">
+                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">All-Time
+                                Units</p>
+                            <p class="text-2xl font-bold text-white font-heading" id="statSales">0</p>
+                            <div class="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div class="h-full bg-cyan-500" style="width: 65%"></div>
+                            </div>
+                        </div>
+                        <div class="glass-card p-5 group hover:border-emerald-400/30 transition-all">
+                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">30D Revenue
+                            </p>
+                            <p class="text-2xl font-bold text-emerald-400 font-heading" id="statRev">$--</p>
+                            <div class="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div class="h-full bg-emerald-500" style="width: 45%"></div>
+                            </div>
+                        </div>
+                        <div class="glass-card p-5 group hover:border-violet-400/30 transition-all">
+                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Creators</p>
+                            <p class="text-2xl font-bold text-violet-400 font-heading" id="statInfluencers">0</p>
+                            <div class="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div class="h-full bg-violet-500" style="width: 80%"></div>
+                            </div>
+                        </div>
+                        <div class="glass-card p-5 group hover:border-rose-400/30 transition-all">
+                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Reach</p>
+                            <p class="text-2xl font-bold text-rose-400 font-heading" id="statVideos">0</p>
+                            <div class="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div class="h-full bg-rose-500" style="width: 30%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance Chart -->
+                    <div class="glass-card p-8 border-t border-white/5 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-8 opacity-10">
+                            <i class="fas fa-chart-line text-8xl"></i>
+                        </div>
+                        <h3 class="font-heading font-bold text-xl mb-8 flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                                <i class="fas fa-wave-square text-cyan-400 text-sm"></i>
+                            </div>
+                            Velocity Trends (7D)
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="salesChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Deep Intelligence Panel -->
+                    <div class="glass-card p-8 bg-gradient-to-br from-midnight to-black/40">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="font-heading font-bold text-xl flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                                    <i class="fas fa-microchip text-violet-400 text-sm"></i>
+                                </div>
+                                System Analysis
+                            </h3>
+                            <span
+                                class="text-[10px] font-bold glass px-3 py-1 rounded-full text-slate-500 tracking-[0.2em] uppercase">Status:
+                                Finalized</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="p-6 glass rounded-2xl border-white/5 relative overflow-hidden group">
+                                <div
+                                    class="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                </div>
+                                <p class="text-slate-500 text-[10px] font-bold mb-3 uppercase tracking-widest">
+                                    Competition Profile</p>
+                                <div class="flex items-center gap-4">
+                                    <div id="compLevel" class="text-xl font-bold text-white tracking-tight">Medium</div>
+                                    <div class="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                                        <div id="compBar" class="h-full bg-gradient-to-r from-cyan-500 to-violet-500"
+                                            style="width: 50%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-6 glass rounded-2xl border-white/5 relative overflow-hidden group">
+                                <div
+                                    class="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                </div>
+                                <p class="text-slate-500 text-[10px] font-bold mb-3 uppercase tracking-widest">Growth
+                                    Forecast</p>
+                                <div class="flex items-center gap-4">
+                                    <div class="text-xl font-bold text-emerald-400 tracking-tight">+12.4%</div>
+                                    <i class="fas fa-arrow-trend-up text-emerald-500"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -168,20 +243,22 @@
 
     <script>
         const productId = window.location.pathname.split('/').pop();
+        let chart;
 
-        async function loadData() {
+        async function loadProductData() {
             try {
                 const res = await fetch(`/api/product/${productId}`);
-                if (!res.ok) throw new Error("Product not found");
-
+                if (!res.ok) throw new Error("Product profile not found");
                 const data = await res.json();
-                if (data.success) {
-                    render(data);
-                } else {
-                    throw new Error(data.error || "Unknown error");
-                }
+                if (data.success) render(data);
+                else throw new Error(data.error || "Unknown error");
             } catch (e) {
-                document.getElementById('loader').innerHTML = `<p class="text-red-400">Error: ${e.message}</p><a href="/" class="underline mt-4 block">Return Home</a>`;
+                document.getElementById('loader').innerHTML = `
+                    <div class="p-12 glass rounded-3xl max-w-lg mx-auto border-rose-500/20">
+                        <i class="fas fa-exclamation-triangle text-rose-500 text-4xl mb-4"></i>
+                        <p class="text-rose-400 font-bold text-lg mb-6">${e.message}</p>
+                        <a href="/" class="btn-premium no-underline">Abort to Dashboard</a>
+                    </div>`;
             }
         }
 
@@ -189,22 +266,20 @@
             document.getElementById('loader').classList.add('hidden');
             document.getElementById('content').classList.remove('hidden');
 
-            // Basic Info
-            // Use local proxy with product_id (normalized)
             const imgProxy = `/api/image-proxy/${data.product_id}`;
             document.getElementById('pImage').src = imgProxy;
-            // Fallback handled by onerror in HTML, but let's double check
             document.getElementById('pImage').onerror = function () {
-                this.src = data.image_url || 'https://via.placeholder.com/400?text=Image+Load+Failed';
+                this.src = data.image_url || 'https://placehold.co/600x800/05070a/white?text=No+Data';
             };
 
-            document.getElementById('pTitle').textContent = data.product_name || 'Unknown Product';
-            document.getElementById('pSeller').textContent = data.seller_name || 'Unknown Seller';
+            document.getElementById('pTitle').textContent = data.product_name || 'System ID: ' + productId;
+            document.getElementById('pSeller').textContent = data.seller_name || 'Unknown Entity';
+            document.getElementById('navOperation').textContent = (data.product_name || 'Report').substring(0, 30) + '...';
             document.getElementById('extLink').href = data.product_url || `https://shop.tiktok.com/search/product?q=${encodeURIComponent(data.product_name)}`;
 
             if (data.is_ad_driven) document.getElementById('badgeAd').classList.remove('hidden');
+            if (data.sales_7d > 200) document.getElementById('badgeHot').classList.remove('hidden');
 
-            // Stats
             document.getElementById('statSales').textContent = (data.sales || 0).toLocaleString();
             document.getElementById('statRev').textContent = '$' + (data.gmv_30d || (data.sales_7d || 0) * (data.price || 20)).toLocaleString();
             document.getElementById('statInfluencers').textContent = data.influencer_count || 0;
@@ -213,69 +288,115 @@
             document.getElementById('pPrice').textContent = '$' + (data.price || 0);
             document.getElementById('pComm').textContent = Math.round((data.commission_rate || 0) * 100) + '%';
 
-            // Chart (Mock data if history missing)
+            // Competition Logic
+            const comp = data.influencer_count || 0;
+            let level = "Low Saturation";
+            let color = "var(--emerald)";
+            let pct = 20;
+
+            if (comp > 50) { level = "Critical Saturation"; color = "var(--rose)"; pct = 90; }
+            else if (comp > 20) { level = "High Saturation"; color = "var(--amber)"; pct = 65; }
+            else if (comp > 5) { level = "Moderate Saturation"; color = "var(--cyan)"; pct = 40; }
+
+            document.getElementById('compLevel').textContent = level;
+            document.getElementById('compLevel').style.color = color;
+            document.getElementById('compBar').style.width = pct + '%';
+            document.getElementById('compBar').style.background = color;
+
+            renderChart(data.sales_7d);
+        }
+
+        function renderChart(sales7d) {
             const ctx = document.getElementById('salesChart').getContext('2d');
-            new Chart(ctx, {
+            if (chart) chart.destroy();
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(6, 182, 212, 0.4)');
+            gradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
+
+            chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'],
+                    labels: ['T-6', 'T-5', 'T-4', 'T-3', 'T-2', 'T-1', 'Now'],
                     datasets: [{
-                        label: 'Sales Volume',
+                        label: 'Sales Velocity',
                         data: [
-                            Math.round(data.sales_7d * 0.05),
-                            Math.round(data.sales_7d * 0.12),
-                            Math.round(data.sales_7d * 0.08),
-                            Math.round(data.sales_7d * 0.15),
-                            Math.round(data.sales_7d * 0.20),
-                            Math.round(data.sales_7d * 0.18),
-                            Math.round(data.sales_7d * 0.22)
+                            Math.round(sales7d * 0.08),
+                            Math.round(sales7d * 0.12),
+                            Math.round(sales7d * 0.15),
+                            Math.round(sales7d * 0.11),
+                            Math.round(sales7d * 0.18),
+                            Math.round(sales7d * 0.16),
+                            Math.round(sales7d * 0.20)
                         ],
-                        borderColor: '#06B6D4',
-                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                        borderColor: '#06b6d4',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#06b6d4',
+                        pointBorderColor: 'rgba(255,255,255,0.2)',
+                        pointBorderWidth: 4,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
                         fill: true,
+                        backgroundColor: gradient,
                         tension: 0.4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleFont: { family: 'Outfit', size: 14 },
+                            bodyFont: { family: 'Inter', size: 12 },
+                            padding: 12,
+                            borderRadius: 12,
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1
+                        }
+                    },
                     scales: {
-                        y: { grid: { color: 'rgba(255,255,255,0.05)' } },
-                        x: { grid: { display: false } }
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
+                            ticks: { color: '#64748b', font: { family: 'Inter', size: 10 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#64748b', font: { family: 'Inter', size: 10 } }
+                        }
                     }
                 }
             });
         }
 
         async function enrichNow() {
-            const btn = document.querySelector('button[onclick="enrichNow()"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = `
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg> Syncing...
-            `;
+            const btn = document.getElementById('enrichBtn');
+            const icon = btn.querySelector('i');
+            const text = btn.querySelector('span');
+
             btn.disabled = true;
+            icon.className = 'fas fa-spinner fa-spin mr-2';
+            text.textContent = 'Synchronizing...';
+
             try {
                 const res = await fetch(`/api/product/enrich/${productId}`);
                 const resData = await res.json();
-
                 if (resData.success) {
                     render(resData.product);
                 } else {
-                    alert("Enrichment Issue: " + (resData.error || "Check API limits"));
+                    alert("Sync Error: " + (resData.error || "Uplink timed out"));
                 }
             } catch (e) {
-                alert("Network Error: " + e.message);
+                alert("Protocol Error: " + e.message);
             } finally {
-                btn.innerHTML = originalText;
                 btn.disabled = false;
+                icon.className = 'fas fa-bolt mr-2';
+                text.textContent = 'Deep Scan';
             }
         }
 
-        loadData();
+        loadProductData();
     </script>
 </body>
 

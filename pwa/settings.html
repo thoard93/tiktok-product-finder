@@ -4,50 +4,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings | Vantage</title>
+    <title>Settings | Vantage Intelligence</title>
     <link
-        href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="/pwa/css/main.css">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        midnight: '#05070a',
+                        cyan: '#06b6d4',
+                        violet: '#7c3aed',
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        body {
-            background-color: #0F172A;
-            color: #F8FAFC;
-            font-family: 'Inter', sans-serif;
+        .settings-bg {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: #05070a;
+            overflow: hidden;
         }
 
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+        .glow-orb {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
+            filter: blur(100px);
+            top: -200px;
+            left: -200px;
+            animation: float-orb 25s infinite alternate;
+        }
+
+        @keyframes float-orb {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            100% {
+                transform: translate(100px, 50px) scale(1.1);
+            }
         }
     </style>
 </head>
 
-<body class="p-8 flex flex-col items-center justify-center min-h-screen">
-    <div class="glass-panel p-10 rounded-2xl max-w-lg w-full text-center">
-        <h1 class="text-3xl font-bold mb-4 font-heading">Settings</h1>
-        <p class="text-slate-400 mb-8">Manage your API keys and Preferences here.</p>
+<body class="flex items-center justify-center min-h-screen p-6 overflow-hidden">
+    <div class="settings-bg">
+        <div class="glow-orb"></div>
+    </div>
 
-        <div class="text-left space-y-4">
-            <div>
-                <label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">EchoTik API Key</label>
-                <input type="password" value="****************"
-                    class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300" disabled>
+    <div class="glass-card max-w-xl w-full p-8 md:p-12 relative animate-float">
+        <div class="flex items-center gap-4 mb-10">
+            <div class="w-12 h-12 rounded-2xl glass flex items-center justify-center text-cyan-400">
+                <i class="fas fa-cog text-xl"></i>
             </div>
             <div>
-                <label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">Scraper Mode</label>
-                <select class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white">
-                    <option>Vantage Cloud (Default)</option>
-                    <option disabled>Local Browser (Coming V2.1)</option>
-                </select>
+                <h1 class="text-3xl font-heading font-bold text-white tracking-tight">System Settings</h1>
+                <p class="text-slate-400 text-sm font-medium">Manage your credentials and protocols</p>
             </div>
         </div>
 
-        <div class="mt-8 flex justify-center gap-4">
-            <a href="/" class="px-6 py-2 rounded-lg text-slate-400 hover:text-white transition-colors">Back</a>
-            <button class="px-6 py-2 bg-cyan-600 rounded-lg text-white font-medium hover:bg-cyan-500">Save
-                Changes</button>
+        <div class="space-y-8">
+            <div class="space-y-4">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1">EchoTik
+                    Integration</label>
+                <div class="relative group">
+                    <i class="fas fa-key absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                    <input type="password" value="********************************"
+                        class="input-premium w-full pl-11 opacity-60 cursor-not-allowed border-white/5" disabled>
+                    <div
+                        class="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-500 uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded">
+                        Linked</div>
+                </div>
+                <p class="text-[10px] text-slate-600 italic ml-1">Primary API key managed via environment variables.</p>
+            </div>
+
+            <div class="space-y-4">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1">Scanner
+                    Protocol</label>
+                <div class="relative">
+                    <select class="input-premium w-full appearance-none cursor-pointer pr-10">
+                        <option>Vantage Cloud (Optimized)</option>
+                        <option disabled>Local Browser Instance (V4.1)</option>
+                        <option disabled>Distributed Mesh Network</option>
+                    </select>
+                    <i
+                        class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none"></i>
+                </div>
+            </div>
+
+            <div class="space-y-4 pt-4 border-t border-white/5">
+                <div class="flex items-center justify-between group">
+                    <div>
+                        <p class="text-sm font-bold text-white">Neural Animations</p>
+                        <p class="text-[10px] text-slate-500 uppercase tracking-widest">Enable glassmorphism
+                            micro-effects</p>
+                    </div>
+                    <div class="w-12 h-6 bg-cyan-500/20 rounded-full relative cursor-pointer border border-cyan-500/30">
+                        <div
+                            class="absolute right-1 top-1 w-4 h-4 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(6,182,212,0.8)]">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-12 flex items-center justify-between">
+            <a href="/"
+                class="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-[0.2em] transition-colors flex items-center gap-2">
+                <i class="fas fa-arrow-left text-[10px]"></i> Abort to Base
+            </a>
+            <button class="btn-premium px-10 py-3 shadow-xl">
+                Update Protocols
+            </button>
         </div>
     </div>
 </body>
