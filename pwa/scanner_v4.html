@@ -158,7 +158,7 @@
             <div class="max-w-5xl mx-auto space-y-8">
 
                 <!-- Scanner Selectors -->
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="scan-tab active glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
                         onclick="setMode('quick', this)">
                         <i class="fas fa-bolt text-2xl text-yellow-400"></i>
@@ -171,18 +171,12 @@
                         <div class="font-medium">Brand Hunter</div>
                         <div class="text-xs text-slate-500">Specific Seller ID</div>
                     </div>
-                    <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
-                        onclick="setMode('apify', this)">
-                        <i class="fas fa-magic text-2xl text-violet-400"></i>
-                        <div class="font-medium">Ad Hunter</div>
-                        <div class="text-xs text-slate-500">Apify Scraper</div>
-                    </div>
-                    <!-- Restoration Link for DV -->
+                    <!-- Legacy Apify Ad Hunter Removed -->
                     <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
                         onclick="setMode('dailyvirals', this)">
                         <i class="fas fa-file-import text-2xl text-emerald-400"></i>
                         <div class="font-medium">DailyVirals</div>
-                        <div class="text-xs text-slate-500">Import JSON</div>
+                        <div class="text-xs text-slate-500">Live Scraper / Import</div>
                     </div>
                     <div class="scan-tab glass-card p-6 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3"
                         onclick="setMode('urlbatch', this)">
@@ -303,14 +297,68 @@
                 </button>
             `,
             'dailyvirals': `
-                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-file-import text-emerald-400"></i> DailyVirals Import</h3>
-                <div class="mb-8">
-                    <label class="block text-sm text-slate-400 mb-2">Paste JSON Logic</label>
-                    <textarea id="dv-json" rows="6" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none font-mono text-xs"></textarea>
-                    <div class="text-xs text-slate-500 mt-2">Paste raw JSON from DV network request (Videos OR Product List) to import products.</div>
-                 </div>
-                 <button onclick="runDVImport(this)" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all">
-                    Import Data & Enrich (EchoTik)
+                <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-file-import text-emerald-400"></i> DailyVirals Live Scraper</h3>
+                
+                <div class="flex items-center gap-4 mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                    <div class="text-sm font-medium text-slate-300">Scraper Mode:</div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="dv-mode" value="live" checked onchange="toggleDVUI()" class="text-emerald-500 focus:ring-emerald-500">
+                        <span class="text-sm">Live Scraper</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="dv-mode" value="manual" onchange="toggleDVUI()" class="text-emerald-500 focus:ring-emerald-500">
+                        <span class="text-sm">Manual JSON Paste</span>
+                    </label>
+                </div>
+
+                <div id="dv-live-ui">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-2">Time Range</label>
+                            <select id="dv-days" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
+                                <option value="1">1 Day</option>
+                                <option value="3">3 Days</option>
+                                <option value="5">5 Days</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-2">Post Type</label>
+                            <select id="dv-type" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
+                                <option value="paid">Paid Ads (Verified)</option>
+                                <option value="all">Mixed (Paid & Organic)</option>
+                                <option value="organic">Organic Only</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-2">Saturation Filter</label>
+                            <select id="dv-saturation" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
+                                <option value="hidden_gem">💎 Hidden Gems</option>
+                                <option value="breakout">📈 Breakout</option>
+                                <option value="hot_seller">🔥 Hot Sellers</option>
+                                <option value="none">All Results</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-2">Start Page</label>
+                            <input type="number" id="dv-start-page" value="1" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-2">Number of Pages</label>
+                            <input type="number" id="dv-page-count" value="3" max="10" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="dv-manual-ui" style="display:none">
+                    <div class="mb-8">
+                        <label class="block text-sm text-slate-400 mb-2">Paste JSON Logic</label>
+                        <textarea id="dv-json" rows="6" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 focus:border-emerald-500 outline-none font-mono text-xs"></textarea>
+                        <div class="text-xs text-slate-500 mt-2">Paste raw JSON from DV network request to import products.</div>
+                    </div>
+                </div>
+
+                <button onclick="runDVScan(this)" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all">
+                    Start DailyVirals Scraper
                 </button>
             `,
             'urlbatch': `
@@ -429,23 +477,78 @@
             btn.innerText = "Start Brand Scan";
         }
 
+        function toggleDVUI() {
+            const mode = document.querySelector('input[name="dv-mode"]:checked').value;
+            document.getElementById('dv-live-ui').style.display = mode === 'live' ? 'block' : 'none';
+            document.getElementById('dv-manual-ui').style.display = mode === 'manual' ? 'block' : 'none';
+
+            const btn = document.querySelector('button[onclick="runDVScan(this)"]');
+            btn.textContent = mode === 'live' ? 'Start DailyVirals Live Scraper' : 'Import Data & Enrich (EchoTik)';
+        }
+
+        async function runDVScan(btn) {
+            const mode = document.querySelector('input[name="dv-mode"]:checked').value;
+            if (mode === 'live') {
+                return runDVLive(btn);
+            } else {
+                return runDVImport(btn);
+            }
+        }
+
+        async function runDVLive(btn) {
+            const days = document.getElementById('dv-days').value;
+            const type = document.getElementById('dv-type').value;
+            const saturation = document.getElementById('dv-saturation').value;
+            const startPage = parseInt(document.getElementById('dv-start-page').value) || 1;
+            const pageCount = parseInt(document.getElementById('dv-page-count').value) || 1;
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Scraper Running...';
+            log(`Starting DailyVirals Live Scraper...`, 'info');
+            log(`Filters: ${days} Day(s), ${type}, ${saturation}`, 'info');
+
+            try {
+                const res = await fetch('/api/scan/dv-live', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        days,
+                        type,
+                        saturation,
+                        start_page: startPage,
+                        page_count: pageCount
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    log(`✅ Batch Complete! ${data.message}`, 'success');
+                } else {
+                    log(`❌ Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log(`Critical Network Error: ${e.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Start DailyVirals Live Scraper';
+            }
+        }
+
         async function runDVImport(btn) {
             const jsonStr = document.getElementById('dv-json').value;
-            if (!jsonStr) return log("Paste JSON first", 'error');
+            if (!jsonStr.trim()) {
+                return log("Please paste JSON first", 'error');
+            }
 
             log("Parsing JSON...");
             let parsed;
             try {
                 parsed = JSON.parse(jsonStr);
-                log("JSON Parsed successfully.");
             } catch (e) {
-                return log(`JSON Parse Error: ${e.message}`, 'error');
+                return log("Invalid JSON: " + e.message, 'error');
             }
 
-            // Diagnostic structure check
-            if (Array.isArray(parsed)) {
-                log(`Found array with ${parsed.length} items.`);
-            } else if (typeof parsed === 'object') {
+            // Quick validation
+            if (parsed) {
                 const keys = Object.keys(parsed);
                 log(`Found object with keys: ${keys.join(', ')}`);
                 if (!keys.includes('list') && !keys.includes('videos') && !keys.includes('data')) {
@@ -453,6 +556,8 @@
                 }
             }
 
+            btn.disabled = true;
+            btn.textContent = '⏳ Importing...';
             log("Sending to server for processing...");
             try {
                 const res = await fetch(`/api/scan/manual`, {
@@ -463,12 +568,14 @@
                 const data = await res.json();
                 if (data.success) {
                     log(data.message || "Import Successful", 'success');
-                    if (data.debug_info) log(`Debug: ${data.debug_info}`, 'info');
                 } else {
                     log(`Import Failed: ${data.error}`, 'error');
                 }
             } catch (e) {
                 log(`Network Error: ${e.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Import Data & Enrich (EchoTik)';
             }
         }
 

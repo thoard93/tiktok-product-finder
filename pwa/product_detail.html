@@ -737,28 +737,34 @@
         }
 
         async function fetchLiveData(pid) {
-            const btn = event.target;
-            btn.textContent = '⏳ Loading...';
+            const btn = document.querySelector('[onclick*="fetchLiveData"]') ||
+                document.getElementById('refresh-btn') ||
+                event.target;
+
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Refreshing...';
             btn.disabled = true;
+
             try {
                 const r = await fetch(`/api/refresh-product/${pid}`, { method: 'POST' });
                 const d = await r.json();
                 if (d.success) {
-                    showToast('✅ Data refreshed!');
-                    location.reload();
+                    showToast('✅ Data refreshed from EchoTik!');
+                    setTimeout(() => location.reload(), 1000);
                 } else {
                     showToast('Failed: ' + (d.error || 'Unknown error'), true);
                 }
             } catch (e) {
                 showToast('Error: ' + e.message, true);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
             }
-            btn.textContent = '🔄 Refresh Data';
-            btn.disabled = false;
         }
 
         function showToast(msg, isError) {
             const t = document.createElement('div');
-            t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:8px;z-index:1000;color:#fff;background:' + (isError ? '#e94560' : '#333');
+            t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:8px;z-index:1000;color:#fff;background:' + (isError ? '#e94560' : '#333') + ';box-shadow: 0 4px 12px rgba(0,0,0,0.5);';
             t.textContent = msg;
             document.body.appendChild(t);
             setTimeout(() => t.remove(), 3000);
@@ -781,84 +787,6 @@
             }
         }
         loadProduct();
-    </script>
-
-    <script>
-        // Update video counts display after refresh
-        function updateVideoDisplay(data) {
-            // Update 7 day counts
-            const video7dEl = document.querySelector('[data-video-7d]');
-            if (video7dEl) video7dEl.textContent = data.video_7d || 0;
-
-            const live7dEl = document.querySelector('[data-live-7d]');
-            if (live7dEl) live7dEl.textContent = data.live_7d || 0;
-
-            // Update 30 day counts
-            const video30dEl = document.querySelector('[data-video-30d]');
-            if (video30dEl) video30dEl.textContent = data.video_30d || 0;
-
-            const live30dEl = document.querySelector('[data-live-30d]');
-            if (live30dEl) live30dEl.textContent = data.live_30d || 0;
-
-            // Update totals
-            const videoTotalEl = document.querySelector('[data-video-total]');
-            if (videoTotalEl) videoTotalEl.textContent = data.video_count || 0;
-
-            const liveTotalEl = document.querySelector('[data-live-total]');
-            if (liveTotalEl) liveTotalEl.textContent = data.live_count || 0;
-
-            // Update influencer count
-            const iflEl = document.querySelector('[data-influencer-count]');
-            if (iflEl) iflEl.textContent = data.influencer_count || data.total_influencers || 0;
-
-            // Update seller name
-            const sellerEl = document.querySelector('[data-seller-name]');
-            if (sellerEl && data.seller_name) sellerEl.textContent = data.seller_name;
-
-            // Update image
-            const imgEl = document.querySelector('.product-image');
-            if (imgEl && data.cover_url) {
-                imgEl.src = '/api/image-proxy?url=' + encodeURIComponent(data.cover_url);
-            }
-        }
-
-        // Override refresh button click
-        document.addEventListener('DOMContentLoaded', function () {
-            const refreshBtn = document.querySelector('[onclick*="refresh"]') ||
-                document.querySelector('button:contains("Refresh")') ||
-                document.getElementById('refresh-btn');
-
-            if (refreshBtn) {
-                refreshBtn.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    const productId = window.location.search.split('id=')[1];
-                    if (!productId) return;
-
-                    refreshBtn.disabled = true;
-                    refreshBtn.textContent = '⏳ Refreshing...';
-
-                    fetch('/api/product/' + productId + '/refresh')
-                        .then(r => r.json())
-                        .then(result => {
-                            if (result.success && result.data) {
-                                updateVideoDisplay(result.data);
-                                alert('✅ Data refreshed from EchoTik!');
-                                // Reload to show all updates
-                                window.location.reload();
-                            } else {
-                                alert('Error: ' + (result.error || 'Unknown error'));
-                            }
-                        })
-                        .catch(err => {
-                            alert('Error refreshing: ' + err.message);
-                        })
-                        .finally(() => {
-                            refreshBtn.disabled = false;
-                            refreshBtn.textContent = '🔄 Refresh Data';
-                        });
-                });
-            }
-        });
     </script>
 
 
