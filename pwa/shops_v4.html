@@ -83,7 +83,7 @@
                 <i class="fas fa-th-large w-5"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="/scanner" class="sidebar-link">
+            <a href="/scanner" id="sidebarScannerLink" class="sidebar-link hidden">
                 <i class="fas fa-radar w-5"></i>
                 <span>Scanners</span>
             </a>
@@ -91,6 +91,11 @@
                 <i class="fas fa-store w-5"></i>
                 <span>Shops Library</span>
             </a>
+            <button onclick="window.location.href='/?batch=true'"
+                class="sidebar-link w-full text-left bg-transparent border-0 cursor-pointer">
+                <i class="fas fa-list-ul w-5"></i>
+                <span>Batch Scan</span>
+            </button>
 
             <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">System</div>
             <a href="/admin" class="sidebar-link">
@@ -304,6 +309,17 @@
         }
 
         async function init() {
+            // Admin Protection UI check
+            try {
+                const meRes = await fetch('/api/me');
+                if (meRes.ok) {
+                    const me = await meRes.json();
+                    if (me.user && me.user.is_admin) {
+                        document.getElementById('sidebarScannerLink').classList.remove('hidden');
+                    }
+                }
+            } catch (e) { }
+
             loadShops(1);
         }
 

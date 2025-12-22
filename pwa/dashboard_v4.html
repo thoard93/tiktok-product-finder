@@ -76,7 +76,7 @@
                 <i class="fas fa-th-large w-5"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="/scanner" class="sidebar-link">
+            <a href="/scanner" id="sidebarScannerLink" class="sidebar-link hidden">
                 <i class="fas fa-radar w-5"></i>
                 <span>Scanners</span>
                 <span class="ml-auto text-[10px] glass px-2 py-0.5 rounded-full text-cyan-400 font-bold">V4</span>
@@ -91,6 +91,11 @@
                 class="sidebar-link w-full text-left bg-transparent border-0 cursor-pointer">
                 <i class="fas fa-plus-circle w-5"></i>
                 <span>Quick Import</span>
+            </button>
+            <button onclick="document.getElementById('batchModal').classList.remove('hidden')"
+                class="sidebar-link w-full text-left bg-transparent border-0 cursor-pointer">
+                <i class="fas fa-list-ul w-5"></i>
+                <span>Batch Scan</span>
             </button>
             <a href="/admin" class="sidebar-link">
                 <i class="fas fa-terminal w-5"></i>
@@ -134,6 +139,11 @@
             </div>
 
             <div class="flex items-center gap-4">
+                <button onclick="document.getElementById('batchModal').classList.remove('hidden')"
+                    class="glass py-2 px-4 rounded-xl text-xs font-bold text-rose-400 border-rose-500/20 hover:bg-rose-500/10 transition-all hidden sm:flex items-center gap-2">
+                    <i class="fas fa-list-ul"></i>
+                    <span>Batch Scan</span>
+                </button>
                 <button onclick="document.getElementById('importModal').classList.remove('hidden')"
                     class="btn-premium py-2 px-5 text-sm hidden sm:flex">
                     <i class="fas fa-plus mr-2"></i>
@@ -296,47 +306,106 @@
                 </div>
             </div>
         </div>
-    </main>
+        <!-- Batch Scan Modal -->
+        <div id="batchModal"
+            class="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[100] hidden flex flex-col p-6 animate-in fade-in zoom-in duration-300"
+            onclick="if(event.target===this) this.classList.add('hidden')">
 
-    <script>
-        let curPage = 1;
-        let curFilter = {};
-        let searchTimeout;
+            <div class="max-w-4xl w-full mx-auto flex flex-col h-full space-y-6">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-heading font-bold text-3xl text-white">Batch Intelligence Recon</h3>
+                        <p class="text-slate-500 text-sm mt-1">Mass preview stats for up to 50 TikTok URLs.</p>
+                    </div>
+                    <button onclick="document.getElementById('batchModal').classList.add('hidden')"
+                        class="glass p-3 rounded-2xl text-slate-400 hover:text-white">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
 
-        async function loadDashboard() {
-            try {
-                const meRes = await fetch('/api/me');
-                if (meRes.ok) {
-                    const me = await meRes.json();
-                    document.getElementById('userName').textContent = me.discord_username || 'Operator';
-                    if (me.avatar) document.getElementById('userAvatar').src = `https://cdn.discordapp.com/avatars/${me.discord_id}/${me.avatar}.png`;
-                }
-                loadProducts(1);
-                loadStats();
-            } catch (e) { console.error("Global Init Error", e); }
-        }
+                <!-- Input Area -->
+                <div class="glass-card p-6 border-white/5">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Target URL
+                        Vector (One per line)</label>
+                    <textarea id="batchUrls" rows="6" class="input-premium w-full font-mono text-xs leading-relaxed"
+                        placeholder="https://shop.tiktok.com/pdp/123...\nhttps://v.tiktok.com/t/ZTxxx/..."></textarea>
 
-        async function loadStats() {
-            try {
-                const res = await fetch('/api/stats');
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success && data.stats) {
-                        const s = data.stats;
-                        document.getElementById('statTotal').textContent = s.total_products || 0;
-                        document.getElementById('statAdWinners').textContent = s.ad_winners || 0;
-                        document.getElementById('statGems').textContent = s.hidden_gems || 0;
+                    <div class="mt-4 flex justify-end">
+                        <button onclick="runBatchLookup(this)" id="batchBtn" class="btn-premium px-8 py-3">
+                            <i class="fas fa-search mr-2"></i> Execute Search
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Terminal Results -->
+                <div class="glass-card flex-1 overflow-hidden border border-white/5 flex flex-col bg-black/40">
+                    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
+                        <div class="flex gap-1.5">
+                            <div class="w-2.5 h-2.5 rounded-full bg-rose-500/40"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-amber-500/40"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-emerald-500/40"></div>
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">System Output
+                            Buffer</span>
+                    </div>
+                    <div id="batchTerminal"
+                        class="flex-1 overflow-y-auto p-6 font-mono text-[11px] space-y-1.5 text-slate-400 no-scrollbar">
+                        <div class="flex gap-4">
+                            <span class="text-slate-600 font-bold">></span>
+                            <span>Awaiting target coordinates...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let curPage = 1;
+            let curFilter = {};
+            let searchTimeout;
+
+            async function loadDashboard() {
+                try {
+                    const meRes = await fetch('/api/me');
+                    if (meRes.ok) {
+                        const me = await meRes.json();
+                        const user = me.user || {};
+                        document.getElementById('userName').textContent = user.discord_username || 'Operator';
+                        if (user.discord_avatar) document.getElementById('userAvatar').src = `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.discord_avatar}.png`;
+
+                        // Admin Protection UI
+                        if (user.is_admin) {
+                            document.getElementById('sidebarScannerLink').classList.remove('hidden');
+                            document.querySelectorAll('.mobile-nav-item[href="/scanner"]').forEach(el => el.classList.remove('hidden'));
+                        }
                     }
-                }
-            } catch (e) { }
-        }
+                    loadProducts(1);
+                    loadStats();
+                } catch (e) { console.error("Global Init Error", e); }
+            }
 
-        async function loadProducts(page) {
-            curPage = page;
-            const params = new URLSearchParams({ page: page, limit: 24, ...curFilter });
+            async function loadStats() {
+                try {
+                    const res = await fetch('/api/stats');
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.success && data.stats) {
+                            const s = data.stats;
+                            document.getElementById('statTotal').textContent = s.total_products || 0;
+                            document.getElementById('statAdWinners').textContent = s.ad_winners || 0;
+                            document.getElementById('statGems').textContent = s.hidden_gems || 0;
+                        }
+                    }
+                } catch (e) { }
+            }
 
-            // Loading state
-            document.getElementById('productGrid').innerHTML = `
+            async function loadProducts(page) {
+                curPage = page;
+                const params = new URLSearchParams({ page: page, limit: 24, ...curFilter });
+
+                // Loading state
+                document.getElementById('productGrid').innerHTML = `
                 <div class="col-span-full py-32 flex flex-col items-center justify-center space-y-6">
                     <div class="w-12 h-12 relative">
                         <div class="absolute inset-0 border-2 border-cyan-500/20 rounded-full"></div>
@@ -344,41 +413,41 @@
                     </div>
                 </div>`;
 
-            try {
-                const res = await fetch(`/api/products?${params.toString()}`);
-                const data = await res.json();
-                renderGrid(data.products || []);
+                try {
+                    const res = await fetch(`/api/products?${params.toString()}`);
+                    const data = await res.json();
+                    renderGrid(data.products || []);
 
-                const totalPages = Math.ceil((data.count || 0) / 24);
-                document.getElementById('pageIndicator').innerText = `Sector ${String(page).padStart(2, '0')}`;
-                document.getElementById('btnPrev').disabled = page <= 1;
-                document.getElementById('btnNext').disabled = page >= totalPages;
-            } catch (e) {
-                document.getElementById('productGrid').innerHTML = `<div class="col-span-full text-center text-rose-400 font-bold p-12 glass rounded-3xl">PROTOCOL FAILURE: UPLINK DISCONNECTED</div>`;
-            }
-        }
-
-        function renderGrid(products) {
-            const grid = document.getElementById('productGrid');
-            grid.innerHTML = '';
-
-            if (products.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center text-slate-600 font-bold py-20 uppercase tracking-[0.2em] border-2 border-dashed border-white/5 rounded-3xl">Zero matching items in local databanks</div>`;
-                return;
+                    const totalPages = Math.ceil((data.count || 0) / 24);
+                    document.getElementById('pageIndicator').innerText = `Sector ${String(page).padStart(2, '0')}`;
+                    document.getElementById('btnPrev').disabled = page <= 1;
+                    document.getElementById('btnNext').disabled = page >= totalPages;
+                } catch (e) {
+                    document.getElementById('productGrid').innerHTML = `<div class="col-span-full text-center text-rose-400 font-bold p-12 glass rounded-3xl">PROTOCOL FAILURE: UPLINK DISCONNECTED</div>`;
+                }
             }
 
-            products.forEach(p => {
-                const card = document.createElement('div');
-                card.className = 'glass-card group flex flex-col relative cursor-pointer overflow-hidden transform-gpu';
-                card.onclick = (e) => {
-                    if (!e.target.closest('a') && !e.target.closest('button'))
-                        window.location.href = `/product/${p.product_id}`;
-                };
+            function renderGrid(products) {
+                const grid = document.getElementById('productGrid');
+                grid.innerHTML = '';
 
-                const imgUrl = `/api/image-proxy/${p.product_id}`;
-                const ttLink = p.product_url || `https://shop.tiktok.com/search/product?q=${encodeURIComponent(p.product_name)}`;
+                if (products.length === 0) {
+                    grid.innerHTML = `<div class="col-span-full text-center text-slate-600 font-bold py-20 uppercase tracking-[0.2em] border-2 border-dashed border-white/5 rounded-3xl">Zero matching items in local databanks</div>`;
+                    return;
+                }
 
-                card.innerHTML = `
+                products.forEach(p => {
+                    const card = document.createElement('div');
+                    card.className = 'glass-card group flex flex-col relative cursor-pointer overflow-hidden transform-gpu';
+                    card.onclick = (e) => {
+                        if (!e.target.closest('a') && !e.target.closest('button'))
+                            window.location.href = `/product/${p.product_id}`;
+                    };
+
+                    const imgUrl = `/api/image-proxy/${p.product_id}`;
+                    const ttLink = p.product_url || `https://shop.tiktok.com/search/product?q=${encodeURIComponent(p.product_name)}`;
+
+                    card.innerHTML = `
                     <div class="relative aspect-square overflow-hidden bg-black/20 card-image-gradient">
                         <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" loading="lazy" onerror="this.src='https://placehold.co/400x400/05070a/white?text=No+Data'">
                         
@@ -418,118 +487,173 @@
                         </div>
                     </div>
                 `;
-                grid.appendChild(card);
-            });
-        }
-
-        function applyFilter(type, el) {
-            document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active-tab', 'text-white'));
-            el.classList.add('active-tab');
-
-            if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
-            else if (type === 'gmv_max') curFilter = { scan_type: 'daily_virals' };
-            else if (type === 'favorites') curFilter = { favorites_only: 'true' };
-            else if (type === 'all') curFilter = {};
-
-            loadProducts(1);
-        }
-
-        function updateSort(val) {
-            curFilter.sort_by = val;
-            loadProducts(1);
-        }
-
-        function searchProducts(query) {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                const lower = query.toLowerCase();
-                document.querySelectorAll('.glass-card').forEach(card => {
-                    const title = card.querySelector('h3').innerText.toLowerCase();
-                    const shop = card.querySelector('.text-slate-500').innerText.toLowerCase();
-                    card.style.display = (title.includes(lower) || shop.includes(lower)) ? 'flex' : 'none';
+                    grid.appendChild(card);
                 });
-            }, 300);
-        }
-
-        function searchBrands(query) { searchProducts(query); }
-
-        function changePage(delta) { loadProducts(curPage + delta); }
-
-        async function runImport() {
-            const input = document.getElementById('importInput').value;
-            if (!input) return;
-
-            const btn = document.getElementById('importBtn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
-            btn.disabled = true;
-
-            try {
-                // Mocking a product list for manual import trigger
-                const jsonBody = {
-                    json_data: JSON.stringify({ list: [{ product: { url: input } }] })
-                };
-                const res = await fetch('/api/scan/manual', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(jsonBody)
-                });
-                if (res.ok) {
-                    document.getElementById('importModal').classList.add('hidden');
-                    document.getElementById('importInput').value = '';
-                    loadProducts(1);
-                } else alert('Link integration protocols failed.');
-            } catch (e) { alert('Critical link error: ' + e); }
-            finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
             }
-        }
 
-        document.addEventListener('DOMContentLoaded', loadDashboard);
+            function applyFilter(type, el) {
+                document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active-tab', 'text-white'));
+                el.classList.add('active-tab');
 
-        function toggleSidebar() {
-            const aside = document.querySelector('aside');
-            if (aside.classList.contains('hidden')) {
-                aside.classList.remove('hidden');
-                aside.classList.add('fixed', 'inset-0', 'bg-midnight', 'z-50', 'animate-in', 'fade-in', 'duration-300');
+                if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
+                else if (type === 'gmv_max') curFilter = { scan_type: 'daily_virals' };
+                else if (type === 'favorites') curFilter = { favorites_only: 'true' };
+                else if (type === 'all') curFilter = {};
 
-                if (!document.getElementById('mobile-sidebar-close')) {
-                    const closeBtn = document.createElement('button');
-                    closeBtn.id = 'mobile-sidebar-close';
-                    closeBtn.className = 'absolute top-8 right-8 glass p-3 rounded-2xl border-white/5 text-white';
-                    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                    closeBtn.onclick = toggleSidebar;
-                    aside.appendChild(closeBtn);
+                loadProducts(1);
+            }
+
+            function updateSort(val) {
+                curFilter.sort_by = val;
+                loadProducts(1);
+            }
+
+            function searchProducts(query) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    const lower = query.toLowerCase();
+                    document.querySelectorAll('.glass-card').forEach(card => {
+                        const title = card.querySelector('h3').innerText.toLowerCase();
+                        const shop = card.querySelector('.text-slate-500').innerText.toLowerCase();
+                        card.style.display = (title.includes(lower) || shop.includes(lower)) ? 'flex' : 'none';
+                    });
+                }, 300);
+            }
+
+            function searchBrands(query) { searchProducts(query); }
+
+            function changePage(delta) { loadProducts(curPage + delta); }
+
+            async function runImport() {
+                const input = document.getElementById('importInput').value;
+                if (!input) return;
+
+                const btn = document.getElementById('importBtn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
+                btn.disabled = true;
+
+                try {
+                    // Mocking a product list for manual import trigger
+                    const jsonBody = {
+                        json_data: JSON.stringify({ list: [{ product: { url: input } }] })
+                    };
+                    const res = await fetch('/api/scan/manual', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(jsonBody)
+                    });
+                    if (res.ok) {
+                        document.getElementById('importModal').classList.add('hidden');
+                        document.getElementById('importInput').value = '';
+                        loadProducts(1);
+                    } else alert('Link integration protocols failed.');
+                } catch (e) { alert('Critical link error: ' + e); }
+                finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
                 }
-            } else {
-                aside.classList.add('hidden');
-                aside.classList.remove('fixed', 'inset-0', 'bg-midnight', 'z-50', 'animate-in', 'fade-in', 'duration-300');
-                const closeBtn = document.getElementById('mobile-sidebar-close');
-                if (closeBtn) closeBtn.remove();
             }
-        }
-    </script>
 
-    <!-- Mobile Bottom Navigation -->
-    <nav class="mobile-nav">
-        <a href="/" class="mobile-nav-item active">
-            <i class="fas fa-th-large"></i>
-            <span>Intel</span>
-        </a>
-        <a href="/scanner" class="mobile-nav-item">
-            <i class="fas fa-radar"></i>
-            <span>Scan</span>
-        </a>
-        <a href="/shops" class="mobile-nav-item">
-            <i class="fas fa-store"></i>
-            <span>Shops</span>
-        </a>
-        <a href="/settings" class="mobile-nav-item">
-            <i class="fas fa-cog"></i>
-            <span>Setup</span>
-        </a>
-    </nav>
+            document.addEventListener('DOMContentLoaded', loadDashboard);
+
+            function toggleSidebar() {
+                const aside = document.querySelector('aside');
+                if (aside.classList.contains('hidden')) {
+                    aside.classList.remove('hidden');
+                    aside.classList.add('fixed', 'inset-0', 'bg-midnight', 'z-50', 'animate-in', 'fade-in', 'duration-300');
+
+                    if (!document.getElementById('mobile-sidebar-close')) {
+                        const closeBtn = document.createElement('button');
+                        closeBtn.id = 'mobile-sidebar-close';
+                        closeBtn.className = 'absolute top-8 right-8 glass p-3 rounded-2xl border-white/5 text-white';
+                        closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                        closeBtn.onclick = toggleSidebar;
+                        aside.appendChild(closeBtn);
+                    }
+                } else {
+                    aside.classList.add('hidden');
+                    aside.classList.remove('fixed', 'inset-0', 'bg-midnight', 'z-50', 'animate-in', 'fade-in', 'duration-300');
+                    const closeBtn = document.getElementById('mobile-sidebar-close');
+                    if (closeBtn) closeBtn.remove();
+                }
+            }
+
+            // --- BATCH LOOKUP SYSTEM ---
+            function batchLog(msg, type = 'info') {
+                const term = document.getElementById('batchTerminal');
+                const entry = document.createElement('div');
+                entry.className = 'flex gap-4';
+
+                let color = 'text-slate-400';
+                if (type === 'success') color = 'text-emerald-400 font-bold';
+                if (type === 'error') color = 'text-rose-400 font-bold';
+                if (type === 'warn') color = 'text-amber-400 font-bold';
+
+                entry.innerHTML = `
+                <span class="text-slate-700 font-bold">></span>
+                <span class="${color}">[${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}] ${msg}</span>
+            `;
+                term.appendChild(entry);
+                term.scrollTop = term.scrollHeight;
+            }
+
+            async function runBatchLookup(btn) {
+                const urls = document.getElementById('batchUrls').value.trim();
+                if (!urls) return batchLog("RECON ABORTED: No target URLs provided.", "error");
+
+                btn.disabled = true;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Scanning...';
+
+                const term = document.getElementById('batchTerminal');
+                term.innerHTML = '';
+                batchLog(`Initiating Batch Recon on ${urls.split('\n').length} vectors...`, "warn");
+
+                try {
+                    const res = await fetch('/api/lookup/batch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ urls: urls })
+                    });
+
+                    const data = await res.json();
+                    if (data.success && data.products) {
+                        batchLog(`INTEL ACQUIRED: Successfully retrieved ${data.products.length} product datasets.`, "success");
+                        data.products.forEach(p => {
+                            batchLog(`  [FOUND] ${p.product_id} - ${p.product_name.substring(0, 40)}... | 7D: ${p.sales_7d}`, "info");
+                        });
+                    } else {
+                        batchLog(`UPLINK ERROR: ${data.error || "Unknown Failure"}`, "error");
+                    }
+                } catch (e) {
+                    batchLog(`SYSTEM CRITICAL: ${e.message}`, "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            }
+        </script>
+
+        <!-- Mobile Bottom Navigation -->
+        <nav class="mobile-nav">
+            <a href="/" class="mobile-nav-item active">
+                <i class="fas fa-th-large"></i>
+                <span>Intel</span>
+            </a>
+            <a href="/scanner" class="mobile-nav-item">
+                <i class="fas fa-radar"></i>
+                <span>Scan</span>
+            </a>
+            <a href="/shops" class="mobile-nav-item">
+                <i class="fas fa-store"></i>
+                <span>Shops</span>
+            </a>
+            <a href="/settings" class="mobile-nav-item">
+                <i class="fas fa-cog"></i>
+                <span>Setup</span>
+            </a>
+        </nav>
 </body>
 
 </html>

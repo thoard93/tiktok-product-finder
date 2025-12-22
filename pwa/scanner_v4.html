@@ -99,7 +99,7 @@
                 <i class="fas fa-th-large w-5"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="/scanner" class="sidebar-link active">
+            <a href="/scanner" id="sidebarScannerLink" class="sidebar-link active">
                 <i class="fas fa-radar w-5"></i>
                 <span>Scanners</span>
                 <span class="ml-auto text-[10px] glass px-2 py-0.5 rounded-full text-cyan-400 font-bold">V4</span>
@@ -143,7 +143,7 @@
             <div class="max-w-6xl mx-auto space-y-8">
 
                 <!-- Scanner Tab Grid -->
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="glass-card p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:border-cyan-400/30 scan-tab scan-card-active"
                         onclick="setMode('quick', this)">
                         <div
@@ -183,18 +183,6 @@
                         </div>
                     </div>
 
-                    <div class="glass-card p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:border-cyan-400/30 scan-tab"
-                        onclick="setMode('urlbatch', this)">
-                        <div
-                            class="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-400 text-xl">
-                            <i class="fas fa-list-ul"></i>
-                        </div>
-                        <div class="text-center">
-                            <div class="font-bold text-white text-sm">Batch URL</div>
-                            <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Mass
-                                Preview</div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Main Configuration Panel -->
@@ -354,22 +342,6 @@
                     <textarea id="dv-json" rows="6" class="input-premium w-full font-mono text-xs leading-relaxed" placeholder="Paste server response JSON..."></textarea>
                 </div>
             `,
-            'urlbatch': `
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-                    <div>
-                        <h3 class="text-2xl font-heading font-bold text-white mb-2">Mass URL Intelligence</h3>
-                        <p class="text-slate-400 text-sm">Batch process multiple TikTok URLs for instant stats preview.</p>
-                    </div>
-                    <button onclick="runBatchLookup(this)" class="btn-premium px-10 py-4 shadow-xl">
-                        <i class="fas fa-search mr-2"></i> Batch Preview
-                    </button>
-                </div>
-                <div class="space-y-4">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Target URLs (One per line, Max 50)</label>
-                    <textarea id="batch-urls" rows="8" class="input-premium w-full font-mono text-xs" placeholder="https://shop.tiktok.com/pdp/123...\nhttps://www.tiktok.com/t/ZTxxx/..."></textarea>
-                    <p class="text-[10px] text-slate-600 italic">Results will appear in the system mainframe below. Products are for preview only and not saved to database.</p>
-                </div>
-            `
         };
 
         function setMode(mode, el) {
@@ -530,33 +502,6 @@
             }
         }
 
-        async function runBatchLookup(btn) {
-            const urls = document.getElementById('batch-urls').value;
-            if (!urls.trim()) return log("Target Vector Missing", 'error');
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Recon In Progress...';
-            log(`Identifying ${urls.split('\\n').length} potential targets...`, 'info');
-
-            try {
-                const res = await fetch('/api/lookup/batch', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ urls })
-                });
-                const data = await res.json();
-                if (data.success && data.products) {
-                    log(`>> GRID PREVIEW READY: Found ${data.products.length} valid entities`, 'success');
-                    data.products.forEach(p => {
-                        log(`   [ID: ${p.product_id}] ${p.product_name.substring(0, 30)}... | Vol: ${p.sales_7d}`, 'info');
-                    });
-                } else log(`!! RECON FAILURE: ${data.error}`, 'error');
-            } catch (e) { log(`Uplink Lost: ${e.message}`, 'error'); }
-            finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-search mr-2"></i> Batch Preview';
-            }
-        }
 
         document.addEventListener('DOMContentLoaded', () => setMode('quick', document.querySelector('.scan-tab')));
 

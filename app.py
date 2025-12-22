@@ -5191,6 +5191,7 @@ def shops_page():
 
 @app.route('/scanner')
 @login_required
+@admin_required
 def scanner_page():
     return send_from_directory('pwa', 'scanner_v4.html')
 
@@ -5280,6 +5281,10 @@ def image_proxy(product_id):
                 target_url = p.cached_image_url
             elif p and p.image_url:
                 target_url = p.image_url
+            
+            # Clean URL (handles bracketed JSON arrays from some sources)
+            if target_url:
+                target_url = parse_cover_url(target_url)
             
             # Fallback for manual IDs passed directly
             if not target_url:
@@ -7083,6 +7088,10 @@ def scan_dailyvirals_live():
             
             try:
                 res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
+                if res.status_code == 403:
+                    last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
+                    print(f"[DV Live] 403 Forbidden: {res.text[:200]}")
+                    break # Stop if auth fails
                 if res.status_code != 200:
                     last_error = f"API Error {res.status_code}: {res.text[:100]}"
                     print(f"[DV Live] {last_error}")
