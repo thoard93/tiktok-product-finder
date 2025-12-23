@@ -619,10 +619,19 @@ def enrich_product_data(p, i_log_prefix="", force=False):
         t = re.sub(r'[^\w\s]', '', t) # Remove emojis/punctuation
         return t.strip()
 
+    # Helper for robust attribute access (handles both dict and Product model)
+    def gv(obj, key, default=None):
+        if isinstance(obj, dict): return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    def sv(obj, key, val):
+        if isinstance(obj, dict): obj[key] = val
+        else: setattr(obj, key, val)
+
     # 1. Direct ID Check
-    pid = p.get('product_id')
-    if pid and not pid.startswith('ad_') and (force or not p.get('is_enriched')):
-        d, source = fetch_product_details_echotik(pid, region=p.get('region', 'US'))
+    pid = gv(p, 'product_id')
+    if pid and not pid.startswith('ad_') and (force or not gv(p, 'is_enriched')):
+        d, source = fetch_product_details_echotik(pid, region=gv(p, 'region', 'US'))
         
         if d:
             print(f"DEBUG: Enriched {pid} via {source}")
@@ -634,35 +643,35 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                 print(f"DEBUG: Cached DB keys for {pid}: {list(d.keys())[:15]}")
                 
                 # Extract stats from Cached DB - PRESERVE original DV values if API returns 0
-                p['product_name'] = d.get('product_name') or d.get('productName') or p.get('product_name')
+                sv(p, 'product_name', d.get('product_name') or d.get('productName') or gv(p, 'product_name'))
                 
                 # Sales: Use API if available, otherwise keep DV value
                 api_sales = int(d.get('total_sale_cnt') or 0)
                 api_sales_7d = int(d.get('total_sale_7d_cnt') or 0)
                 api_sales_30d = int(d.get('total_sale_30d_cnt') or 0)
                 
-                p['sales'] = api_sales if api_sales > 0 else p.get('sales', 0)
-                p['sales_7d'] = api_sales_7d if api_sales_7d > 0 else p.get('sales_7d', 0)
-                p['sales_30d'] = api_sales_30d if api_sales_30d > 0 else p.get('sales_30d', 0)
+                sv(p, 'sales', api_sales if api_sales > 0 else gv(p, 'sales', 0))
+                sv(p, 'sales_7d', api_sales_7d if api_sales_7d > 0 else gv(p, 'sales_7d', 0))
+                sv(p, 'sales_30d', api_sales_30d if api_sales_30d > 0 else gv(p, 'sales_30d', 0))
                 
                 # Price: Use API if available, otherwise keep DV value
                 api_price = float(d.get('spu_avg_price') or 0)
-                p['price'] = api_price if api_price > 0 else p.get('price', 0)
+                sv(p, 'price', api_price if api_price > 0 else gv(p, 'price', 0))
                 
                 # Video/Influencer counts - these should come from API
-                p['video_count'] = int(d.get('total_video_cnt') or 0) or p.get('video_count', 0)
-                p['influencer_count'] = int(d.get('total_ifl_cnt') or 0) or p.get('influencer_count', 0)
-                p['views_count'] = int(d.get('total_views_cnt') or 0)
-                p['live_count'] = int(d.get('total_live_cnt') or 0)
+                sv(p, 'video_count', int(d.get('total_video_cnt') or 0) or gv(p, 'video_count', 0))
+                sv(p, 'influencer_count', int(d.get('total_ifl_cnt') or 0) or gv(p, 'influencer_count', 0))
+                sv(p, 'views_count', int(d.get('total_views_cnt') or 0))
+                sv(p, 'live_count', int(d.get('total_live_cnt') or 0))
                 
                 # Image URL - ONLY use cached_db image if we don't already have one
                 # EchoSell CDN (echosell-images.tos-ap-southeast-1.volces.com) is blocked by many firewalls
                 img = d.get('cover_url') or d.get('product_image') or d.get('product_img_url')
-                original_img = p.get('image_url') or p.get('cover_url')
+                original_img = gv(p, 'image_url') or gv(p, 'cover_url')
                 
                 # Prefer original TikTok CDN image over EchoSell CDN
                 if not original_img or 'vantage' in str(original_img).lower():
-                    p['image_url'] = img
+                    sv(p, 'image_url', img)
                     print(f"DEBUG: Using Cached DB image: {img[:60] if img else 'NONE'}")
                 else:
                     print(f"DEBUG: Keeping original image: {original_img[:60] if original_img else 'NONE'} (ignoring EchoSell: {img[:30] if img else  'N/A'})")
@@ -672,13 +681,13 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                 seller_from_db = d.get('seller_name') or d.get('shop_name') or d.get('shopName') or d.get('sellerName') or d.get('brand_name') or d.get('brandName')
                 print(f"DEBUG: Cached DB seller candidates: seller_name={d.get('seller_name')} shop_name={d.get('shop_name')} brand_name={d.get('brand_name')}")
                 if seller_from_db and seller_from_db not in ['Unknown', 'None', '', None]:
-                    p['seller_name'] = seller_from_db
+                    sv(p, 'seller_name', seller_from_db)
                 
                 # Commission (divide by 100 if percentage)
                 raw_comm = float(d.get('product_commission_rate') or 0)
-                p['commission_rate'] = raw_comm / 100.0 if raw_comm > 1 else raw_comm
+                sv(p, 'commission_rate', raw_comm / 100.0 if raw_comm > 1 else raw_comm)
                 
-                print(f"DEBUG: Cached DB extracted - S:{p.get('sales')} S7d:{p.get('sales_7d')} V:{p.get('video_count')} I:{p.get('influencer_count')} Seller:{p.get('seller_name')}")
+                print(f"DEBUG: Cached DB extracted - S:{gv(p, 'sales')} S7d:{gv(p, 'sales_7d')} V:{gv(p, 'video_count')} I:{gv(p, 'influencer_count')} Seller:{gv(p, 'seller_name')}")
             else:
                 # Update local p dict from robust helper - PRESERVE DV values if API returns 0
                 for k, v in p_meta.items():
@@ -686,27 +695,36 @@ def enrich_product_data(p, i_log_prefix="", force=False):
                         # For numeric stats, only overwrite if API returns non-zero value
                         if k in ['sales', 'sales_7d', 'sales_30d', 'price', 'video_count', 'influencer_count']:
                             if v and v > 0:
-                                p[k] = v
+                                sv(p, k, v)
                             # else: keep original DV value
                         elif k == 'seller_name':
                             # Only update seller if we have a real name
                             if v and v not in ['Unknown', 'None', '', None]:
-                                p[k] = v
+                                sv(p, k, v)
                         else:
-                            p[k] = v
+                            sv(p, k, v)
 
-            p['is_enriched'] = True
+            sv(p, 'is_enriched', True)
             return True, f"Enriched via {source}"
         else:
              print(f"DEBUG: All enrichment sources failed for {pid}")
 
     # 2. Search by Title
-    title_raw = p.get('title') or p.get('product_name') or ""
+    title_raw = gv(p, 'title') or gv(p, 'product_name') or ""
     search_term = clean_title_for_search(title_raw)
 
 def fetch_cached_product_data(p, i_log_prefix):
     """Fallback: Fetch from EchoTik Cached Database API"""
-    pid = p.get('product_id')
+    # Helper for robust attribute access (handles both dict and Product model)
+    def gv(obj, key, default=None):
+        if isinstance(obj, dict): return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    def sv(obj, key, val):
+        if isinstance(obj, dict): obj[key] = val
+        else: setattr(obj, key, val)
+
+    pid = gv(p, 'product_id')
     if not pid: return False, "No Product ID"
     
     # Strip prefixes for DB API
@@ -716,7 +734,6 @@ def fetch_cached_product_data(p, i_log_prefix):
     print(f"{i_log_prefix}Fallback: Fetching from DB API for {target_id}")
     
     try:
-        # Docs: GET /api/v3/echotik/product/detail?product_ids=...
         res = requests.get(
             f"{ECHOTIK_V3_BASE}/product/detail",
             params={'product_ids': target_id},
@@ -727,37 +744,35 @@ def fetch_cached_product_data(p, i_log_prefix):
         if res.status_code == 200:
             data = res.json()
             if data.get('data'):
-                # DB API returns a list of objects
                 d_list = data['data']
                 if isinstance(d_list, list) and len(d_list) > 0:
                     d = d_list[0]
                     # Map DB API fields -> Our Model
-                    # Docs: total_sale_cnt, spu_avg_price, product_name, cover_url
-                    p['product_name'] = d.get('product_name') or d.get('productName') or p.get('product_name')
-                    p['image_url'] = d.get('cover_url') or d.get('coverUrl') or d.get('product_image') or p.get('image_url')
-                    p['seller_name'] = d.get('seller_name') or d.get('sellerName') or d.get('shop_name') or d.get('shopName') or p.get('seller_name')
-                    p['url'] = d.get('product_url') or d.get('productUrl') or p.get('url')
-                    if p['image_url'] and p['image_url'].startswith('['):
-                         # Often returns JSON string for images
-                         try:
-                             import json
-                             imgs = json.loads(p['image_url'])
-                             if imgs and len(imgs) > 0: p['image_url'] = imgs[0].get('url')
-                         except: pass
-
-                    p['price'] = float(d.get('spu_avg_price', 0))
-                    p['sales'] = int(d.get('total_sale_cnt', 0))
-                    p['sales_7d'] = int(d.get('total_sale_7d_cnt', 0))
-                    p['revenue'] = float(d.get('total_sale_gmv_amt', 0))
-                    p['commission_rate'] = float(d.get('product_commission_rate', 0)) / 100.0 
+                    sv(p, 'product_name', d.get('product_name') or d.get('productName') or gv(p, 'product_name'))
+                    img_raw = d.get('cover_url') or d.get('coverUrl') or d.get('product_image') or gv(p, 'image_url')
+                    sv(p, 'seller_name', d.get('seller_name') or d.get('sellerName') or d.get('shop_name') or d.get('shopName') or gv(p, 'seller_name'))
+                    sv(p, 'product_url', d.get('product_url') or d.get('productUrl') or gv(p, 'product_url'))
                     
-                    # Extra stats
-                    p['video_count'] = int(d.get('total_video_cnt', 0))
-                    p['influencer_count'] = int(d.get('total_ifl_cnt', 0))
+                    if img_raw and str(img_raw).startswith('['):
+                        try:
+                            imgs = json.loads(img_raw)
+                            if imgs: img_raw = imgs[0].get('url') or imgs[0].get('imageUrl')
+                        except: pass
+                    sv(p, 'image_url', img_raw)
 
-                    print(f"DEBUG: Extracted DB Data - {p['product_name']} S:{p['sales']} P:{p['price']}")
-                    p['is_enriched'] = True
+                    sv(p, 'price', float(d.get('spu_avg_price', 0)))
+                    sv(p, 'sales', int(d.get('total_sale_cnt', 0)))
+                    sv(p, 'sales_7d', int(d.get('total_sale_7d_cnt', 0)))
+                    sv(p, 'gmv', float(d.get('total_sale_gmv_amt', 0)))
+                    comm_rate = float(d.get('product_commission_rate', 0))
+                    sv(p, 'commission_rate', comm_rate / 100.0 if comm_rate > 1 else comm_rate)
+                    
+                    sv(p, 'video_count', int(d.get('total_video_cnt', 0)))
+                    sv(p, 'influencer_count', int(d.get('total_ifl_cnt', 0)))
+
+                    sv(p, 'is_enriched', True)
                     return True, "Enriched via Database v3"
+
     except Exception as e:
         print(f"DEBUG: DB API Error: {e}")
         
@@ -5492,6 +5507,7 @@ def image_proxy(product_id):
                 {"Referer": None, "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
                 {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
                 {"Referer": "https://echosell.echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": "https://shop.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
                 {"Referer": None, "UA": None}
             ]
             
@@ -5508,8 +5524,10 @@ def image_proxy(product_id):
                 
                 try:
                     # Very high timeout for Southeast Asian CDNs on Render
-                    current_timeout = 20 if "volces.com" in lower_url else 10
+                    # Ultra-high timeout for problematic Southeast Asian CDNs on Render
+                    current_timeout = 30 if "volces.com" in lower_url else 15
                     resp = requests.get(target_url, headers=local_headers, stream=True, timeout=current_timeout)
+
                     if resp.status_code == 200:
                         break
                     # If we got a real error that isn't worth retrying
@@ -5520,9 +5538,10 @@ def image_proxy(product_id):
                     continue
             
             if not resp or resp.status_code != 200:
-                sc = resp.status_code if resp else "No Response"
+                sc = resp.status_code if resp else "No Response / Timeout"
                 print(f"Proxy Final Error: {sc} for {target_url}")
-                return redirect('/vantage_logo.png') # Redirect to logo instead of 500
+                # Log the reason if it's a known timeout
+                return redirect('/vantage_logo.png')
 
             # Exclude some problematic headers
             excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
@@ -7249,7 +7268,8 @@ def scan_dailyvirals_live():
             'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site'
+            'sec-fetch-site': 'same-site',
+            'accept-encoding': 'gzip, deflate, br'
         }
         
         total_processed = 0
