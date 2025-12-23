@@ -330,16 +330,27 @@ def fetch_product_details_echotik_web(product_id):
         data = {}
         
         # 1. Try to find the JSON in initial state
+        # 1. Try to find the data in the page source
         try:
+            print(f"DEBUG: Attempting EchoTik Web scrape for {raw_pid}...")
             # Pattern for Nuxt state (common on EchoTik)
-            matches = re.search(r'window\.__NUXT__\s*=\s*(\{.*?\});', html, re.DOTALL)
-            if not matches:
-                matches = re.search(r'window\.__INITIAL_STATE__\s*=\s*(\{.*?\});', html, re.DOTALL)
+            # Use raw strings and avoid escaping backslashes in a way that breaks multi-line python strings
+            m = re.search(r'window\.__NUXT__\s*=\s*(.*?);(</script>|\n)', html, re.DOTALL)
+            if not m:
+                 m = re.search(r'window\.__INITIAL_STATE__\s*=\s*(.*?);(</script>|\n)', html, re.DOTALL)
             
-            if matches:
-                state_json = matches.group(1)
-                # Cleanup if needed (Nuxt state often has undefined/null replacements)
-                state = json.loads(state_json)
+            if m:
+                print(f"DEBUG: Found Nuxt/Initial state blob for {raw_pid}")
+                state_raw = m.group(1).strip()
+                # If it's a function call like (function(a,b...){...})(...), we just want the JSON part if possible
+                # or we try a greedy match for the first { } 
+                json_match = re.search(r'(\{.*\})', state_raw, re.DOTALL)
+                if json_match:
+                    state_json = json_match.group(1)
+                    # Nuxt/JS state often has 'undefined' or '!0' etc.
+                    state_json = state_json.replace(':undefined', ':null').replace(': undefined', ': null')
+                    state_json = state_json.replace(':!0', ':true').replace(':!1', ':false')
+                    state = json.loads(state_json)
                 # Extract product data - structure depends on their Nuxt implementation
                 # This is a heuristic based on common EchoTik structures
                 product_data = None
@@ -376,9 +387,11 @@ def fetch_product_details_echotik_web(product_id):
             except: pass
 
         if data:
+            print(f"DEBUG: EchoTik Web successfully extracted product {raw_pid}")
             # Inject source
             return data, "web_scraper"
             
+        print(f"DEBUG: EchoTik Web failed to extract product {raw_pid} - Data keys: {list(data.keys()) if data else 'EMPTY'}")
         return None, "Scraper failed to extract data"
         
     except Exception as e:
@@ -392,6 +405,8 @@ def fetch_product_details_echotik(product_id, region='US'):
     Returns (raw_data, source_name) or (None, err)
     """
     raw_pid = str(product_id).replace('shop_', '')
+    use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'false').lower() == 'true'
+    print(f"DEBUG: fetch_product_details_echotik for {raw_pid} - Scraper enabled: {use_scraper}")
     
     # 1. Try Web Scraper First (to save credits)
     try:
@@ -5508,7 +5523,7 @@ def image_proxy(product_id):
                 {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
                 {"Referer": "https://echosell.echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
                 {"Referer": "https://shop.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": None, "UA": None}
+                {"Referer": None, "UA": None, "naked": True}
             ]
             
             resp = None
@@ -5523,13 +5538,15 @@ def image_proxy(product_id):
                 local_headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
                 
                 try:
-                    # Very high timeout for Southeast Asian CDNs on Render
-                    # Ultra-high timeout for problematic Southeast Asian CDNs on Render
-                    current_timeout = 30 if "volces.com" in lower_url else 15
-                    resp = requests.get(target_url, headers=local_headers, stream=True, timeout=current_timeout)
-
+                    # Ultra-high timeout for read, but shorter for connect
+                    current_timeout = (5, 30) if "volces.com" in lower_url else (5, 15)
+                    resp = requests.get(target_url, headers=local_headers, stream=True, timeout=current_timeout, verify=False if config.get("naked") else True)
                     if resp.status_code == 200:
                         break
+                    print(f"DEBUG: Proxy attempt {config.get('Referer')} status: {resp.status_code}")
+                except Exception as e:
+                    print(f"DEBUG: Proxy config attempt failed: {e}")
+                    continue
                     # If we got a real error that isn't worth retrying
                     if resp.status_code in [404, 401]:
                         break
@@ -7244,6 +7261,9 @@ def scan_dailyvirals_live():
         
         # 2. Get Token (DB or Env fallback)
         token = get_config_value('DAILYVIRALS_TOKEN', DV_API_TOKEN)
+        # Handle if the user pasted the word "Bearer " into the setting
+        if token and token.lower().startswith('bearer '):
+            token = token[7:].strip()
         print(f"[DV Live] Using token (len: {len(token) if token else 0})")
         
         # 3. Map filters to DV API terms
@@ -7263,9 +7283,7 @@ def scan_dailyvirals_live():
             'origin': 'https://www.thedailyvirals.com',
             'referer': 'https://www.thedailyvirals.com/',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
+            'x-requested-with': 'XMLHttpRequest',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-site',
@@ -7289,11 +7307,10 @@ def scan_dailyvirals_live():
                 'region': ''
             }
             
-            try:
                 res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
                 if res.status_code == 403:
                     last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
-                    print(f"[DV Live] 403 Forbidden: {res.text[:200]}")
+                    print(f"[DV Live] 403 Forbidden. Body: {res.text[:300]}")
                     break # Stop if auth fails
                 if res.status_code != 200:
                     last_error = f"API Error {res.status_code}: {res.text[:100]}"
