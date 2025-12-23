@@ -5608,7 +5608,7 @@ def image_proxy(product_id):
                     continue
             
             if not resp or resp.status_code != 200:
-                print(f"Proxy Final Error: {sc} for {target_url}")
+                print(f"Proxy Final Error: {last_status} for {target_url}")
                 # Last resort: redirect to original URL, maybe the USER's browser can load it directly
                 return redirect(target_url)
 
@@ -7326,6 +7326,7 @@ def scan_dailyvirals_live():
         elif saturation == "breakout":
             sort_by = "views"
         
+        ua = get_random_user_agent()
         # Standard headers matching the working test script + browser emulation
         headers = {
             'authority': 'backend.thedailyvirals.com',
@@ -7334,16 +7335,18 @@ def scan_dailyvirals_live():
             'authorization': f'Bearer {token}',
             'origin': 'https://www.thedailyvirals.com',
             'referer': 'https://www.thedailyvirals.com/',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'user-agent': ua,
             'x-requested-with': 'XMLHttpRequest',
-            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-site',
             'accept-encoding': 'gzip, deflate, br'
         }
+        # Add sec-ch-ua only if not mobile (simplified)
+        if "iPhone" not in ua and "Android" not in ua:
+            headers['sec-ch-ua'] = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"'
+            headers['sec-ch-ua-mobile'] = '?0'
+            headers['sec-ch-ua-platform'] = '"Windows"'
         
         total_processed = 0
         total_saved = 0
