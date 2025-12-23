@@ -216,9 +216,9 @@ def extract_metadata_from_echotik(d):
     raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or 0)
     res['commission_rate'] = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
     
-    res['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price') or 0)
-    res['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or d.get('productName')
-    res['image_url'] = d.get('cover') or d.get('image_url') or d.get('cover_url') or d.get('product_image')
+    res['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price') or d.get('price') or 0)
+    res['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or d.get('productName') or d.get('product_name')
+    res['image_url'] = d.get('cover') or d.get('image_url') or d.get('cover_url') or d.get('product_image') or d.get('product_img_url')
     res['product_url'] = d.get('product_url') or d.get('productUrl')
     
     res['seller_name'] = (
@@ -339,6 +339,8 @@ def fetch_product_details_echotik_web(product_id):
             if not m:
                  m = re.search(r'window\.__INITIAL_STATE__\s*=\s*(.*?);(</script>|\n)', html, re.DOTALL)
             
+            state = None
+            state_json = ""
             if m:
                 print(f"DEBUG: Found Nuxt/Initial state blob for {raw_pid}")
                 state_raw = m.group(1).strip()
@@ -350,24 +352,43 @@ def fetch_product_details_echotik_web(product_id):
                     # Nuxt/JS state often has 'undefined' or '!0' etc.
                     state_json = state_json.replace(':undefined', ':null').replace(': undefined', ': null')
                     state_json = state_json.replace(':!0', ':true').replace(':!1', ':false')
-                    state = json.loads(state_json)
+                    try: state = json.loads(state_json)
+                    except: pass
+
+            # Nuxt 3 Data Script Fallback
+            if not state:
+                m_data = re.search(r'<script id="__NUXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL)
+                if m_data:
+                    try: 
+                        state = json.loads(m_data.group(1))
+                        print(f"DEBUG: Found Nuxt 3 Data Script for {raw_pid}")
+                    except: pass
+            
+            if state:
+                print(f"DEBUG: EchoTik state found, analyzing... (len: {len(str(state))})")
                 # Extract product data - structure depends on their Nuxt implementation
                 # This is a heuristic based on common EchoTik structures
                 product_data = None
                 
                 # Dig for the product object
-                def recursive_find_product(obj):
+                def recursive_find_product(obj, depth=0):
+                    if depth > 10: return None # Safety
                     if isinstance(obj, dict):
+                        # print(f"DEBUG: Depth {depth} Keys: {list(obj.keys())[:5]}")
+                        # Common EchoTik keys
                         if 'product_id' in obj and str(obj.get('product_id')) == raw_pid:
                             return obj
-                        if 'baseInfo' in obj and 'productId' in obj:
+                        if 'productId' in obj and str(obj.get('productId')) == raw_pid:
                             return obj
+                        if 'baseInfo' in obj and isinstance(obj['baseInfo'], dict):
+                            if str(obj['baseInfo'].get('productId')) == raw_pid:
+                                return obj
                         for v in obj.values():
-                            found = recursive_find_product(v)
+                            found = recursive_find_product(v, depth + 1)
                             if found: return found
                     elif isinstance(obj, list):
                         for item in obj:
-                            found = recursive_find_product(item)
+                            found = recursive_find_product(item, depth + 1)
                             if found: return found
                     return None
 
@@ -377,13 +398,26 @@ def fetch_product_details_echotik_web(product_id):
         except Exception as e:
             print(f"DEBUG: EchoTik Nuxt parse failed: {e}")
 
-        # 2. Regex Fallback for common stats if JSON extraction fails
+        # 2. Regex Fallback for common stats if JSON extraction fails or is incomplete
         if not data.get('total_sale_cnt') and not data.get('totalSaleCnt'):
-            # Look for <span>Sales: 1.2K</span> or similar patterns
-            # Note: EchoTik web uses obfuscated or localized names sometimes
             try:
-                # This is a very basic fallback, the JSON extraction is preferred
-                pass
+                # Look for patterns like "1.2K Sales" or "Sales: 1.2K"
+                sales_match = re.search(r'(Sales|Total Sales):?\s*([\d\.]+[KMB]?)', html, re.I)
+                if sales_match:
+                    data['total_sale_cnt'] = sales_match.group(2)
+                    print(f"DEBUG: Regex Fallback Sales: {data['total_sale_cnt']}")
+                
+                # Look for price
+                price_match = re.search(r'\$([\d\.,]+)', html)
+                if price_match:
+                    data['price'] = price_match.group(1)
+                    print(f"DEBUG: Regex Fallback Price: {data['price']}")
+                
+                # Look for name in title
+                if not data.get('product_name'):
+                    title_match = re.search(r'<title>(.*?)</title>', html, re.I)
+                    if title_match:
+                        data['product_name'] = title_match.group(1).split('|')[0].strip()
             except: pass
 
         if data:
@@ -652,8 +686,8 @@ def enrich_product_data(p, i_log_prefix="", force=False):
             print(f"DEBUG: Enriched {pid} via {source}")
             p_meta = extract_metadata_from_echotik(d)
             
-            # Special Mapping for Cached DB (which has different keys sometimes)
-            if source == 'cached_db':
+            # Special Mapping for Cached DB & Web Scraper (which share similar flat structures)
+            if source in ['cached_db', 'web_scraper']:
                 # Debug: Log the raw response to see what keys are available
                 print(f"DEBUG: Cached DB keys for {pid}: {list(d.keys())[:15]}")
                 
@@ -5527,31 +5561,41 @@ def image_proxy(product_id):
             ]
             
             resp = None
+            last_status = "Not Attempted"
             for config in try_configs:
                 local_headers = {}
-                if config["UA"]:
-                    local_headers["User-Agent"] = config["UA"]
-                if config["Referer"]:
+                local_headers["User-Agent"] = config.get("UA") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                if config.get("Referer"):
                     local_headers["Referer"] = config["Referer"]
                 
                 # Standard Accept Header
                 local_headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
                 
+                # Advanced Browser Signaling
+                local_headers["sec-ch-ua"] = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"'
+                local_headers["sec-ch-ua-mobile"] = "?0"
+                local_headers["sec-ch-ua-platform"] = '"Windows"'
+                local_headers["sec-fetch-dest"] = "image"
+                local_headers["sec-fetch-mode"] = "no-cors"
+                local_headers["sec-fetch-site"] = "cross-site"
+                
                 try:
                     # Ultra-high timeout for read, but shorter for connect
                     current_timeout = (5, 30) if "volces.com" in lower_url else (5, 15)
                     resp = requests.get(target_url, headers=local_headers, stream=True, timeout=current_timeout, verify=False if config.get("naked") else True)
+                    
                     if resp.status_code == 200:
                         break
+                    
+                    last_status = str(resp.status_code)
                     print(f"DEBUG: Proxy attempt {config.get('Referer')} status: {resp.status_code}")
-                except Exception as e:
-                    print(f"DEBUG: Proxy config attempt failed: {e}")
-                    continue
+                    
                     # If we got a real error that isn't worth retrying
                     if resp.status_code in [404, 401]:
                         break
                 except Exception as e:
-                    print(f"Proxy attempt failed: {target_url[:30]}... | {e}")
+                    last_status = f"Err: {str(e)[:50]}"
+                    print(f"DEBUG: Proxy config attempt failed: {e}")
                     continue
             
             if not resp or resp.status_code != 200:
@@ -7284,6 +7328,9 @@ def scan_dailyvirals_live():
             'referer': 'https://www.thedailyvirals.com/',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'x-requested-with': 'XMLHttpRequest',
+            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-site',
