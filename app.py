@@ -5484,33 +5484,36 @@ def image_proxy(product_id):
             ]
             
             # Logic to try multiple referers and User-Agents if 403 or timeout
+            # Attempt 1: Standard Browser (No Referer - works best for some CDNs)
+            # Attempt 2: TikTok Referer
+            # Attempt 3: EchoTik Referer
+            # Attempt 4: Naked Request
             try_configs = [
-                {"Referer": headers.get("Referer"), "UA": headers["User-Agent"]},
-                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"},
-                {"Referer": "", "UA": headers["User-Agent"]}, # Try NO referer
-                {"Referer": None, "UA": None} # Naked request as absolute last resort
+                {"Referer": None, "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": "https://echosell.echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": None, "UA": None}
             ]
             
             resp = None
             for config in try_configs:
-                local_headers = headers.copy()
+                local_headers = {}
                 if config["UA"]:
                     local_headers["User-Agent"] = config["UA"]
-                else:
-                    if "User-Agent" in local_headers: del local_headers["User-Agent"]
-                
                 if config["Referer"]:
                     local_headers["Referer"] = config["Referer"]
-                elif config["Referer"] is None:
-                    if "Referer" in local_headers: del local_headers["Referer"]
+                
+                # Standard Accept Header
+                local_headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
                 
                 try:
-                    # High timeout for problematic Asian CDNs
-                    current_timeout = 15 if "volces.com" in lower_url else 7
+                    # Very high timeout for Southeast Asian CDNs on Render
+                    current_timeout = 20 if "volces.com" in lower_url else 10
                     resp = requests.get(target_url, headers=local_headers, stream=True, timeout=current_timeout)
                     if resp.status_code == 200:
                         break
-                    if resp.status_code != 403: 
+                    # If we got a real error that isn't worth retrying
+                    if resp.status_code in [404, 401]:
                         break
                 except Exception as e:
                     print(f"Proxy attempt failed: {target_url[:30]}... | {e}")
@@ -7232,14 +7235,21 @@ def scan_dailyvirals_live():
         elif saturation == "breakout":
             sort_by = "views"
         
-        # Standard headers matching the working test script
+        # Standard headers matching the working test script + browser emulation
         headers = {
+            'authority': 'backend.thedailyvirals.com',
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'en-US,en;q=0.9',
             'authorization': f'Bearer {token}',
             'origin': 'https://www.thedailyvirals.com',
             'referer': 'https://www.thedailyvirals.com/',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-site'
         }
         
         total_processed = 0
