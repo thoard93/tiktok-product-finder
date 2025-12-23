@@ -7307,6 +7307,7 @@ def scan_dailyvirals_live():
                 'region': ''
             }
             
+            try:
                 res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
                 if res.status_code == 403:
                     last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
