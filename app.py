@@ -187,12 +187,12 @@ KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product st
 def get_random_user_agent():
     """Returns a random modern browser user agent."""
     uas = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
     ]
     import random
     return random.choice(uas)
@@ -7327,26 +7327,15 @@ def scan_dailyvirals_live():
             sort_by = "views"
         
         ua = get_random_user_agent()
-        # Standard headers matching the working test script + browser emulation
+        # Simplified headers to match the WORKING test_dailyvirals.py exactly
         headers = {
-            'authority': 'backend.thedailyvirals.com',
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'en-US,en;q=0.9',
             'authorization': f'Bearer {token}',
             'origin': 'https://www.thedailyvirals.com',
             'referer': 'https://www.thedailyvirals.com/',
-            'user-agent': ua,
-            'x-requested-with': 'XMLHttpRequest',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site',
-            'accept-encoding': 'gzip, deflate, br'
+            'user-agent': ua
         }
-        # Add sec-ch-ua only if not mobile (simplified)
-        if "iPhone" not in ua and "Android" not in ua:
-            headers['sec-ch-ua'] = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"'
-            headers['sec-ch-ua-mobile'] = '?0'
-            headers['sec-ch-ua-platform'] = '"Windows"'
         
         total_processed = 0
         total_saved = 0
@@ -7358,7 +7347,7 @@ def scan_dailyvirals_live():
                 'startDate': start_date,
                 'endDate': end_date,
                 'page': str(p_idx),
-                'limit': '15',
+                'limit': '12', # Match test script
                 'sortBy': sort_by,
                 'limitedResults': 'false',
                 'isPaidPosts': is_paid,
