@@ -752,6 +752,37 @@ def release_scan_lock(user_id=None):
 # DATABASE MODELS
 # =============================================================================
 
+class SystemConfig(db.Model):
+    """General system settings stored in DB to survive restarts without Render redeploy"""
+    __tablename__ = 'system_config'
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text)
+    description = db.Column(db.String(255))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+def get_config_value(key, default=None):
+    """Get config from DB, fallback to environment or default"""
+    try:
+        # We need an app context if this is called outside of a request
+        config = SystemConfig.query.get(key)
+        if config and config.value:
+            return config.value
+    except Exception as e:
+        # Fallback if table doesn't exist yet or other DB error
+        pass
+    return os.environ.get(key, default)
+
+def set_config_value(key, value, description=None):
+    """Set config in DB"""
+    config = SystemConfig.query.get(key)
+    if not config:
+        config = SystemConfig(key=key)
+    config.value = value
+    if description:
+        config.description = description
+    db.session.add(config)
+    db.session.commit()
+
 class User(db.Model):
     """Users who can access the tool"""
     __tablename__ = 'users'
@@ -1253,6 +1284,37 @@ def admin_kick_user(user_id):
         db.session.commit()
         return jsonify({'success': True})
     return jsonify({'error': 'User not found'}), 404
+
+@app.route('/api/admin/config', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_config():
+    """Manage system settings (tokens, global params)"""
+    if request.method == 'GET':
+        settings = SystemConfig.query.all()
+        # Redact sensitive values for safety
+        result = []
+        for s in settings:
+            val = s.value
+            if val and len(val) > 20 and any(k in s.key.upper() for k in ['TOKEN', 'KEY', 'SECRET']):
+                val = val[:6] + "..." + val[-6:]
+            result.append({
+                'key': s.key,
+                'value': val,
+                'description': s.description,
+                'updated_at': s.updated_at.isoformat() if s.updated_at else None
+            })
+        return jsonify({'settings': result})
+    
+    # POST
+    data = request.get_json()
+    if not data or 'key' not in data or 'value' not in data:
+        return jsonify({'error': 'Missing key or value'}), 400
+    
+    set_config_value(data['key'], data['value'], data.get('description'))
+    log_activity(session.get('user_id'), 'admin_config_update', {'config_key': data['key']})
+    
+    return jsonify({'success': True, 'message': f"Updated {data['key']}"})
 
 @app.route('/api/admin/migrate')
 @login_required
@@ -7045,19 +7107,22 @@ def scan_dailyvirals_live():
         end_date = now.strftime('%Y-%m-%dT%H:%M:%S.000Z')
         start_date = (now - timedelta(days=days_int)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
         
-        # 2. Map filters to DV API terms
+        # 2. Get Token (DB or Env fallback)
+        token = get_config_value('DAILYVIRALS_TOKEN', DV_API_TOKEN)
+        
+        # 3. Map filters to DV API terms
         is_paid = "true" if is_paid_input in ['paid', 'mixed'] else "false"
         sort_by = "growth"
         if saturation == "hidden_gem":
             sort_by = "growth" 
         elif saturation == "breakout":
             sort_by = "views"
-            
+        
         headers = {
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'en-US,en;q=0.9',
             'accept-encoding': 'gzip, deflate, br',
-            'authorization': f'Bearer {DV_API_TOKEN}',
+            'authorization': f'Bearer {token}',
             'origin': 'https://www.thedailyvirals.com',
             'referer': 'https://www.thedailyvirals.com/',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
