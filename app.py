@@ -5487,22 +5487,27 @@ def image_proxy(product_id):
             try_configs = [
                 {"Referer": headers.get("Referer"), "UA": headers["User-Agent"]},
                 {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"},
-                {"Referer": "", "UA": headers["User-Agent"]} # Try NO referer as last resort
+                {"Referer": "", "UA": headers["User-Agent"]}, # Try NO referer
+                {"Referer": None, "UA": None} # Naked request as absolute last resort
             ]
             
             resp = None
             for config in try_configs:
-                if config["Referer"]:
-                    headers["Referer"] = config["Referer"]
-                elif "Referer" in headers: 
-                    del headers["Referer"]
+                local_headers = headers.copy()
+                if config["UA"]:
+                    local_headers["User-Agent"] = config["UA"]
+                else:
+                    if "User-Agent" in local_headers: del local_headers["User-Agent"]
                 
-                headers["User-Agent"] = config["UA"]
+                if config["Referer"]:
+                    local_headers["Referer"] = config["Referer"]
+                elif config["Referer"] is None:
+                    if "Referer" in local_headers: del local_headers["Referer"]
                 
                 try:
-                    # Increased timeout to 10s for volces/southeast-asia domains
-                    current_timeout = 10 if "volces.com" in lower_url else 5
-                    resp = requests.get(target_url, headers=headers, stream=True, timeout=current_timeout)
+                    # High timeout for problematic Asian CDNs
+                    current_timeout = 15 if "volces.com" in lower_url else 7
+                    resp = requests.get(target_url, headers=local_headers, stream=True, timeout=current_timeout)
                     if resp.status_code == 200:
                         break
                     if resp.status_code != 403: 
@@ -7217,6 +7222,7 @@ def scan_dailyvirals_live():
         
         # 2. Get Token (DB or Env fallback)
         token = get_config_value('DAILYVIRALS_TOKEN', DV_API_TOKEN)
+        print(f"[DV Live] Using token (len: {len(token) if token else 0})")
         
         # 3. Map filters to DV API terms
         is_paid = "true" if is_paid_input in ['paid', 'mixed'] else "false"
@@ -7226,20 +7232,14 @@ def scan_dailyvirals_live():
         elif saturation == "breakout":
             sort_by = "views"
         
+        # Standard headers matching the working test script
         headers = {
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'en-US,en;q=0.9',
-            'accept-encoding': 'gzip, deflate, br',
             'authorization': f'Bearer {token}',
             'origin': 'https://www.thedailyvirals.com',
             'referer': 'https://www.thedailyvirals.com/',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-            'sec-ch-ua': '"Chromium";v="143", "Not?A_Brand";v="99", "Google Chrome";v="143"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site'
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
         }
         
         total_processed = 0
