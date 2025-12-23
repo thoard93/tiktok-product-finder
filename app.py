@@ -5560,24 +5560,13 @@ def image_proxy(product_id):
             elif "tiktokcdn.com" in lower_url:
                 headers["Referer"] = "https://www.tiktok.com/"
 
-            # Logic to try multiple referers and User-Agents if 403
-            # Reduced to 2 most-likely-to-succeed attempts to stay under Render's timeout
+            # Consolidated Retry Logic
             try_configs = [
-                {"Referer": headers.get("Referer"), "UA": headers["User-Agent"]},
-                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"}
-            ]
-            
-            # Logic to try multiple referers and User-Agents if 403 or timeout
-            # Attempt 1: Standard Browser (No Referer - works best for some CDNs)
-            # Attempt 2: TikTok Referer
-            # Attempt 3: EchoTik Referer
-            # Attempt 4: Naked Request
-            try_configs = [
-                {"Referer": None, "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": "https://echosell.echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": "https://shop.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": None, "UA": None, "naked": True}
+                {"Referer": None, "UA": get_random_user_agent()},
+                {"Referer": "https://www.tiktok.com/", "UA": get_random_user_agent()},
+                {"Referer": "https://echosell.echotik.live/", "UA": get_random_user_agent()},
+                {"Referer": "https://shop.tiktok.com/", "UA": get_random_user_agent()},
+                {"Referer": None, "UA": get_random_user_agent(), "naked": True}
             ]
             
             resp = None
@@ -5619,10 +5608,9 @@ def image_proxy(product_id):
                     continue
             
             if not resp or resp.status_code != 200:
-                sc = resp.status_code if resp else "No Response / Timeout"
                 print(f"Proxy Final Error: {sc} for {target_url}")
-                # Log the reason if it's a known timeout
-                return redirect('/vantage_logo.png')
+                # Last resort: redirect to original URL, maybe the USER's browser can load it directly
+                return redirect(target_url)
 
             # Exclude some problematic headers
             excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
@@ -7328,7 +7316,7 @@ def scan_dailyvirals_live():
         # Handle if the user pasted the word "Bearer " into the setting
         if token and token.lower().startswith('bearer '):
             token = token[7:].strip()
-        print(f"[DV Live] Using token (len: {len(token) if token else 0})")
+        print(f"[DV Live] Using token (prefix: {token[:8]}... len: {len(token) if token else 0})")
         
         # 3. Map filters to DV API terms
         is_paid = "true" if is_paid_input in ['paid', 'mixed'] else "false"
@@ -7378,7 +7366,9 @@ def scan_dailyvirals_live():
                 res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
                 if res.status_code == 403:
                     last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
-                    print(f"[DV Live] 403 Forbidden. Body: {res.text[:300]}")
+                    print(f"[DV Live] 403 Forbidden. Body snippet: {res.text[:300]}")
+                    if "cloudflare" in res.text.lower() or "ray id" in res.text.lower():
+                        print("[DV Live] Cloudflare block detected. Try refreshing your browser session on DV.")
                     break # Stop if auth fails
                 if res.status_code != 200:
                     last_error = f"API Error {res.status_code}: {res.text[:100]}"
