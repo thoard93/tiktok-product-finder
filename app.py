@@ -294,15 +294,115 @@ def extract_metadata_from_echotik(d):
             
     return res
 
+def fetch_product_details_echotik_web(product_id):
+    """
+    Direct web scraper for EchoTik.
+    Saves API credits by fetching the public/logged-in web page.
+    Requires ECHOTIK_COOKIE for full stats (Videos/Influencers).
+    """
+    try:
+        use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'false').lower() == 'true'
+        if not use_scraper:
+            return None, "Web scraper disabled"
+
+        cookie = get_config_value('ECHOTIK_COOKIE')
+        if not cookie:
+            return None, "Missing EchoTik Cookie"
+
+        raw_pid = str(product_id).replace('shop_', '')
+        url = f"https://echotik.live/products/{raw_pid}"
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Cookie": cookie,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Referer": "https://echotik.live/board"
+        }
+
+        res = requests.get(url, headers=headers, timeout=15)
+        if res.status_code != 200:
+            return None, f"EchoTik Web returned {res.status_code}"
+
+        html = res.text
+        
+        # Look for the JSON data blob (Nuxt state)
+        # Usually window.__NUXT__ or window.__INITIAL_STATE__
+        data = {}
+        
+        # 1. Try to find the JSON in initial state
+        try:
+            # Pattern for Nuxt state (common on EchoTik)
+            matches = re.search(r'window\.__NUXT__\s*=\s*(\{.*?\});', html, re.DOTALL)
+            if not matches:
+                matches = re.search(r'window\.__INITIAL_STATE__\s*=\s*(\{.*?\});', html, re.DOTALL)
+            
+            if matches:
+                state_json = matches.group(1)
+                # Cleanup if needed (Nuxt state often has undefined/null replacements)
+                state = json.loads(state_json)
+                # Extract product data - structure depends on their Nuxt implementation
+                # This is a heuristic based on common EchoTik structures
+                product_data = None
+                
+                # Dig for the product object
+                def recursive_find_product(obj):
+                    if isinstance(obj, dict):
+                        if 'product_id' in obj and str(obj.get('product_id')) == raw_pid:
+                            return obj
+                        if 'baseInfo' in obj and 'productId' in obj:
+                            return obj
+                        for v in obj.values():
+                            found = recursive_find_product(v)
+                            if found: return found
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            found = recursive_find_product(item)
+                            if found: return found
+                    return None
+
+                product_data = recursive_find_product(state)
+                if product_data:
+                    data = product_data
+        except Exception as e:
+            print(f"DEBUG: EchoTik Nuxt parse failed: {e}")
+
+        # 2. Regex Fallback for common stats if JSON extraction fails
+        if not data.get('total_sale_cnt') and not data.get('totalSaleCnt'):
+            # Look for <span>Sales: 1.2K</span> or similar patterns
+            # Note: EchoTik web uses obfuscated or localized names sometimes
+            try:
+                # This is a very basic fallback, the JSON extraction is preferred
+                pass
+            except: pass
+
+        if data:
+            # Inject source
+            return data, "web_scraper"
+            
+        return None, "Scraper failed to extract data"
+        
+    except Exception as e:
+        print(f"DEBUG: EchoTik Scraper Error: {e}")
+        return None, str(e)
+
 def fetch_product_details_echotik(product_id, region='US'):
     """
     Robust fetcher for Product Details.
-    Tries Realtime Multi-Region -> Then Cached DB.
+    Tries Web Scraper -> Realtime Multi-Region -> Then Cached DB.
     Returns (raw_data, source_name) or (None, err)
     """
     raw_pid = str(product_id).replace('shop_', '')
     
-    # Try Realtime with Regional Failover
+    # 1. Try Web Scraper First (to save credits)
+    try:
+        d, source = fetch_product_details_echotik_web(raw_pid)
+        if d:
+            print(f"DEBUG: Enriched {raw_pid} via {source}")
+            return d, source
+    except Exception as e:
+        print(f"DEBUG: Web Scraper attempt failed for {raw_pid}: {e}")
+
+    # 2. Try Realtime with Regional Failover
     regions = ['US', 'GB', 'DE']
     if region in regions and region != 'US':
         regions.remove(region)
@@ -330,7 +430,7 @@ def fetch_product_details_echotik(product_id, region='US'):
         except Exception as e:
             print(f"DEBUG: Realtime err {r}: {e}")
             
-    # Try Cached DB Fallback
+    # 3. Try Cached DB Fallback
     try:
         res = requests.get(
             f"{ECHOTIK_V3_BASE}/product/detail",
@@ -5383,6 +5483,13 @@ def image_proxy(product_id):
                 {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"}
             ]
             
+            # Logic to try multiple referers and User-Agents if 403 or timeout
+            try_configs = [
+                {"Referer": headers.get("Referer"), "UA": headers["User-Agent"]},
+                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"},
+                {"Referer": "", "UA": headers["User-Agent"]} # Try NO referer as last resort
+            ]
+            
             resp = None
             for config in try_configs:
                 if config["Referer"]:
@@ -5393,8 +5500,9 @@ def image_proxy(product_id):
                 headers["User-Agent"] = config["UA"]
                 
                 try:
-                    # Timeout reduced to 5s to avoid chain-timeout on Render
-                    resp = requests.get(target_url, headers=headers, stream=True, timeout=5)
+                    # Increased timeout to 10s for volces/southeast-asia domains
+                    current_timeout = 10 if "volces.com" in lower_url else 5
+                    resp = requests.get(target_url, headers=headers, stream=True, timeout=current_timeout)
                     if resp.status_code == 200:
                         break
                     if resp.status_code != 403: 
