@@ -172,10 +172,14 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 # DailyVirals API Config
 DV_BACKEND_URL = "https://backend.thedailyvirals.com/api/videos/stats/top-growth-by-date-range"
 DV_API_TOKEN = os.environ.get('DAILYVIRALS_TOKEN', 'eyJhbGciOiJIUzI1NiIsImtpZCI6InlNMHVYRXRpWEM3Qm04V0MiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2h3b3JieG90eHdibnBscW5ob3ZpLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJhMTQyNDUzMi04M2QxLTRiMGItYTcxZS04OGU0ZmQ4MWNkYTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY1Mjk5Nzc1LCJpYXQiOjE3NjUyOTYxNzUsImVtYWlsIjoidGhvYXJkMjAzNUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJpc19hbm9ueW1vdXMiOmZhbHNlLCJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmaXJzdE5hbWUiOiJUaG9tYXMiLCJpc19hbm9ueW1vdXMiOmZhbHNlLCJsYXN0TmFtZSI6IkhvYXJkIiwic3RyaXBlQ3VzdG9tZXJJZCI6ImN1c19UUXhMcnc5dGJTSmxNdCIsInVzZXJJZCI6ImExNDI0NTMyLTgzZDEtNGIwYi1hNzFlLTg4ZTRmZDgxY2RhOCJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzY1Mjk1ODgxfV0sInNlc3Npb25faWQiOiJmZTQ2YTdkMi1kYjk1LTRhNDYtYmFmZi04ZGM3OWVhYTgwZjQiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.VWpxeNXqWXDmWFwQyblxgLeW8vYfiG4ZuOsZbBq_oZ4')
+# Proxy for DailyVirals (format: host:port:user:pass)
+DV_PROXY_STRING = os.environ.get('DAILYVIRALS_PROXY', '')
 if os.environ.get('DAILYVIRALS_TOKEN'):
     print(">> DailyVirals Token loaded from Environment")
 else:
     print(">> WARNING: DailyVirals Token using HARDCODED fallback (may be expired)")
+if DV_PROXY_STRING:
+    print(f">> DailyVirals Proxy configured: {DV_PROXY_STRING.split(':')[0]}:****")
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
@@ -7355,7 +7359,22 @@ def scan_dailyvirals_live():
             }
             
             try:
-                res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
+                # Build proxy dict if configured
+                proxies = None
+                if DV_PROXY_STRING:
+                    try:
+                        parts = DV_PROXY_STRING.split(':')
+                        if len(parts) == 4:
+                            host, port, user, pw = parts
+                            proxy_url = f"http://{user}:{pw}@{host}:{port}"
+                            proxies = {"http": proxy_url, "https": proxy_url}
+                            print(f"[DV Live] Using proxy: {host}:****")
+                        else:
+                            print(f"[DV Live] Invalid proxy format. Expected host:port:user:pass")
+                    except Exception as pe:
+                        print(f"[DV Live] Proxy parse error: {pe}")
+                
+                res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30, proxies=proxies)
                 if res.status_code == 403:
                     last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
                     print(f"[DV Live] 403 Forbidden. Body snippet: {res.text[:300]}")
