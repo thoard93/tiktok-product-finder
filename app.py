@@ -7385,13 +7385,13 @@ def scan_dailyvirals_live():
                             # Use curl_cffi for browser-grade TLS fingerprinting to bypass Cloudflare
                             from curl_cffi import requests as curl_requests
                             
-                            print(f"[DV Live] Using curl-cffi impersonation (chrome120)...")
+                            print(f"[DV Live] Using curl-cffi impersonation (chrome110)...")
                             res = curl_requests.get(
                                 DV_BACKEND_URL, 
                                 headers=headers, 
                                 params=params, 
                                 proxies=proxies,
-                                impersonate="chrome120",
+                                impersonate="chrome110",
                                 timeout=60
                             )
                             print(f"[DV Live] Proxy response: {res.status_code}")
@@ -7408,7 +7408,7 @@ def scan_dailyvirals_live():
                         DV_BACKEND_URL, 
                         headers=headers, 
                         params=params, 
-                        impersonate="chrome120",
+                        impersonate="chrome110",
                         timeout=30
                     )
                 if res.status_code == 403:
