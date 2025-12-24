@@ -7331,13 +7331,20 @@ def scan_dailyvirals_live():
             sort_by = "views"
         
         ua = get_random_user_agent()
-        # Simplified headers to match the WORKING test_dailyvirals.py exactly
+        # Enhanced headers with modern browser signatures to bypass Cloudflare
         headers = {
+            'authority': 'backend.thedailyvirals.com',
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'en-US,en;q=0.9',
             'authorization': f'Bearer {token}',
             'origin': 'https://www.thedailyvirals.com',
             'referer': 'https://www.thedailyvirals.com/',
+            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-site',
             'user-agent': ua
         }
         
