@@ -7359,36 +7359,67 @@ def scan_dailyvirals_live():
             }
             
             try:
-                # Build proxy dict if configured
-                proxies = None
-                proxy_auth = None
+                # Build proxy config if available
+                res = None
                 if DV_PROXY_STRING:
                     try:
                         parts = DV_PROXY_STRING.split(':')
                         if len(parts) == 4:
                             host, port, user, pw = parts
-                            # Use explicit proxy URL with credentials embedded
-                            proxy_url = f"http://{user}:{pw}@{host}:{port}"
-                            proxies = {"http": proxy_url, "https": proxy_url}
                             print(f"[DV Live] Using proxy: {host}:{port} (auth: {user[:4]}****)")
-                        elif len(parts) == 2:
-                            # Simple host:port without auth
-                            host, port = parts
+                            
+                            # Use urllib3 ProxyManager for proper HTTPS tunnel auth
+                            import urllib3
+                            from urllib3.util import make_headers
+                            import base64
+                            
+                            # Create proxy auth header
+                            proxy_auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
+                            proxy_headers = make_headers(proxy_basic_auth=f"{user}:{pw}")
+                            
+                            # Build full URL with params
+                            from urllib.parse import urlencode
+                            full_url = f"{DV_BACKEND_URL}?{urlencode(params)}"
+                            
+                            # Create proxy manager with auth
                             proxy_url = f"http://{host}:{port}"
-                            proxies = {"http": proxy_url, "https": proxy_url}
-                            print(f"[DV Live] Using proxy: {host}:{port} (no auth)")
+                            pm = urllib3.ProxyManager(
+                                proxy_url,
+                                proxy_headers=proxy_headers,
+                                num_pools=1,
+                                timeout=urllib3.Timeout(connect=30, read=30)
+                            )
+                            
+                            # Make the request
+                            urllib_res = pm.request(
+                                'GET',
+                                full_url,
+                                headers=headers,
+                                timeout=45
+                            )
+                            
+                            # Convert to requests-like response
+                            class ProxyResponse:
+                                def __init__(self, urllib_resp):
+                                    self.status_code = urllib_resp.status
+                                    self.text = urllib_resp.data.decode('utf-8', errors='replace')
+                                    self._data = urllib_resp.data
+                                def json(self):
+                                    import json
+                                    return json.loads(self._data.decode('utf-8'))
+                            
+                            res = ProxyResponse(urllib_res)
+                            print(f"[DV Live] Proxy response status: {res.status_code}")
                         else:
-                            print(f"[DV Live] Invalid proxy format. Expected host:port or host:port:user:pass")
+                            print(f"[DV Live] Invalid proxy format: {len(parts)} parts")
                     except Exception as pe:
-                        print(f"[DV Live] Proxy parse error: {pe}")
+                        import traceback
+                        print(f"[DV Live] Proxy error: {pe}")
+                        traceback.print_exc()
                 
-                # Make request with explicit session for better proxy handling
-                session = requests.Session()
-                if proxies:
-                    session.proxies.update(proxies)
-                    session.trust_env = False  # Don't use system proxy settings
-                
-                res = session.get(DV_BACKEND_URL, headers=headers, params=params, timeout=45)
+                # Fallback to direct request if no proxy or proxy failed
+                if res is None:
+                    res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
                 if res.status_code == 403:
                     last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
                     print(f"[DV Live] 403 Forbidden. Body snippet: {res.text[:300]}")
