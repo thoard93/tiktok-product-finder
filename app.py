@@ -552,16 +552,42 @@ def fetch_product_details_echotik(product_id, region='US'):
     use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'true').lower() == 'true'
     print(f"DEBUG: fetch_product_details_echotik for {raw_pid} - Scraper enabled: {use_scraper}")
     
-    # 1. Try Web Scraper First (to save credits)
+    # 0. Try Internal Cache First (Less than 24h old)
+    # This is the BIGGEST credit saver.
+    try:
+        from models import Product # Ensure model is available
+        existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
+        if existing and existing.last_updated:
+            age = (datetime.utcnow() - existing.last_updated).total_seconds()
+            if age < 86400: # 24 hours
+                print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({int(age/3600)}h old)")
+                # Convert model to dict for transparency with other logic
+                cached_data = {
+                    'product_id': existing.product_id,
+                    'product_name': existing.product_name,
+                    'image_url': existing.image_url,
+                    'price': existing.price,
+                    'sales_7d': existing.sales_7d,
+                    'video_count': existing.video_count,
+                    'influencer_count': existing.influencer_count,
+                    'commission_rate': existing.commission_rate,
+                    'seller_id': existing.seller_id,
+                    'seller_name': existing.seller_name
+                }
+                return cached_data, "db_cache"
+    except Exception as ce:
+        print(f"DEBUG: Cache check failed: {ce}")
+
+    # 1. Try Web Scraper First (Free)
     try:
         d, source = fetch_product_details_echotik_web(raw_pid)
         if d:
-            print(f"DEBUG: Enriched {raw_pid} via {source}")
+            print(f"[CREDIT SAVED] 🌐 Scraped {raw_pid} via {source}")
             return d, source
     except Exception as e:
         print(f"DEBUG: Web Scraper attempt failed for {raw_pid}: {e}")
 
-    # 2. Try Realtime with Regional Failover
+    # 2. Try Realtime with Regional Failover (Paid)
     regions = ['US', 'GB', 'DE']
     if region in regions and region != 'US':
         regions.remove(region)
@@ -585,6 +611,7 @@ def fetch_product_details_echotik(product_id, region='US'):
                     print(f"DEBUG: WAF blocked region {r} for {raw_pid}")
                     continue
                 
+                print(f"[PAID API] 💸 Product {raw_pid} fetched via {r} realtime endpoint.")
                 return d, f"realtime_{r}"
         except Exception as e:
             print(f"DEBUG: Realtime err {r}: {e}")
@@ -811,6 +838,7 @@ def fetch_seller_name(seller_id):
 
     # 2. Fallback to Paid API
     try:
+        print(f"[PAID API] 💸 Fetching seller name for {raw_id}...")
         res = requests.get(
             f"{ECHOTIK_V3_BASE}/seller/detail",
             params={'seller_id': raw_id},
@@ -821,10 +849,15 @@ def fetch_seller_name(seller_id):
             data = res.json()
             if data.get('code') == 0 and data.get('data'):
                 d = data['data']
-                name = d.get('seller_name') or d.get('shop_name') or d.get('name')
-                if name:
-                    print(f"[Seller Lookup] ✅ {raw_id} -> {name} (via Paid API)")
-                    return name
+                # BUGFIX: data['data'] is often a list in V3/Detail responses
+                if isinstance(d, list) and len(d) > 0:
+                    d = d[0]
+                
+                if isinstance(d, dict):
+                    name = d.get('seller_name') or d.get('shop_name') or d.get('name')
+                    if name:
+                        print(f"[Seller Lookup] ✅ {raw_id} -> {name} (via Paid API)")
+                        return name
     except Exception as e:
         print(f"[Seller Lookup] Error for {raw_id}: {e}")
     
@@ -5452,11 +5485,11 @@ def image_proxy(product_id):
 
             # Consolidated Retry Logic
             try_configs = [
-                {"Referer": None, "UA": get_random_user_agent()},
-                {"Referer": "https://www.tiktok.com/", "UA": get_random_user_agent()},
-                {"Referer": "https://echosell.echotik.live/", "UA": get_random_user_agent()},
-                {"Referer": "https://shop.tiktok.com/", "UA": get_random_user_agent()},
-                {"Referer": None, "UA": get_random_user_agent(), "naked": True}
+                {"Referer": "https://echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": "https://echosell.echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": "https://shop.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": None, "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "naked": True}
             ]
             
             resp = None
@@ -7241,6 +7274,7 @@ def scan_dailyvirals_live():
         total_processed = 0
         total_saved = 0
         last_error = None
+        session_cache = set() # Track products processed in THIS scan to avoid redundant EchoTik calls
         
         for p_idx in range(start_page, start_page + page_count):
             print(f"[DV Live] Fetching page {p_idx} (Start: {start_date}, End: {end_date})...")
@@ -7343,6 +7377,13 @@ def scan_dailyvirals_live():
                         if not p_id: continue
                         
                         raw_id = str(p_id).replace('shop_', '')
+                        
+                        # DEDUPLICATION: Skip if already processed in this scan session
+                        if raw_id in session_cache:
+                            # print(f"[DV Live] Skipping {raw_id} - Already processed in this session.")
+                            continue
+                        session_cache.add(raw_id)
+                        
                         total_processed += 1
                         
                         # Enrich via EchoTik
