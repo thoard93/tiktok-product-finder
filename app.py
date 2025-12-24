@@ -7367,9 +7367,9 @@ def scan_dailyvirals_live():
                         # Build target URL with params
                         target_url = f"{DV_BACKEND_URL}?{urlencode(params)}"
                         # Route through ScraperAPI with keep_headers to pass Authorization
-                        # premium=true required for Cloudflare-protected sites
-                        scraper_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&keep_headers=true&premium=true&url={quote(target_url, safe='')}"
-                        print(f"[DV Live] Using ScraperAPI (premium) for Cloudflare bypass...")
+                        # ultra_premium=true is the highest tier for difficult Cloudflare blocks
+                        scraper_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&keep_headers=true&ultra_premium=true&country_code=us&url={quote(target_url, safe='')}"
+                        print(f"[DV Live] Using ScraperAPI (ultra_premium, US) for Cloudflare bypass...")
                         
                         # Pass headers to ScraperAPI - it will forward them to the target
                         res = requests.get(scraper_url, headers=headers, timeout=90)
