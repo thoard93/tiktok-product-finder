@@ -743,16 +743,73 @@ def get_auth():
     return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
 
 
+def fetch_seller_name_web(seller_id):
+    """
+    Attempt to scrape seller name from EchoTik web profile.
+    Saves API credits and bypasses some blocks.
+    """
+    try:
+        raw_id = str(seller_id).replace('shop_', '')
+        # EchoTik uses both /shop/ and /seller/ paths, /shop/ is common for slugs/IDs
+        url = f"https://echotik.live/shop/{raw_id}"
+        
+        headers = {
+            "User-Agent": get_random_user_agent(),
+            "Cookie": get_config_value('ECHOTIK_COOKIE', ''),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Referer": "https://echotik.live/shops"
+        }
+
+        try:
+            from curl_cffi import requests as curl_requests
+        except ImportError:
+            curl_requests = requests
+
+        res = curl_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+        if res.status_code != 200:
+            # Try /seller/ path as fallback
+            url = f"https://echotik.live/seller/{raw_id}"
+            res = curl_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+            
+        if res.status_code == 200:
+            html = res.text
+            # Try to find name in title: "<Name> | EchoTik"
+            title_match = re.search(r'<title>(.*?)</title>', html, re.I)
+            if title_match:
+                name = title_match.group(1).split('|')[0].replace('TikTok Shop', '').replace('EchoTik', '').strip(' |-_')
+                if name and len(name) > 1 and "login" not in name.lower():
+                    return name
+            
+            # Try H1 or common class for shop name
+            h1_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.I | re.DOTALL)
+            if h1_match:
+                name = re.sub('<[^<]+?>', '', h1_match.group(1)).strip()
+                if name and len(name) > 1 and "login" not in name.lower():
+                    return name
+                    
+    except Exception as e:
+        print(f"DEBUG: Seller Web Scrape Error: {e}")
+    return None
+
 def fetch_seller_name(seller_id):
     """
-    Fetch seller/shop name from EchoTik /seller/detail API.
-    Returns shop name or None if not found.
+    Robust fetcher for seller names.
+    Tries Web Scraper First -> Then Paid API.
     """
     if not seller_id:
         return None
     
     raw_id = str(seller_id).replace('shop_', '')
     
+    # 1. Try Free Web Scraper First
+    try:
+        web_name = fetch_seller_name_web(raw_id)
+        if web_name:
+            print(f"[Seller Lookup] ✅ {raw_id} -> {web_name} (via Web Scraper)")
+            return web_name
+    except: pass
+
+    # 2. Fallback to Paid API
     try:
         res = requests.get(
             f"{ECHOTIK_V3_BASE}/seller/detail",
@@ -766,7 +823,7 @@ def fetch_seller_name(seller_id):
                 d = data['data']
                 name = d.get('seller_name') or d.get('shop_name') or d.get('name')
                 if name:
-                    print(f"[Seller Lookup] ✅ {raw_id} -> {name}")
+                    print(f"[Seller Lookup] ✅ {raw_id} -> {name} (via Paid API)")
                     return name
     except Exception as e:
         print(f"[Seller Lookup] Error for {raw_id}: {e}")
@@ -3961,29 +4018,24 @@ def refresh_images():
                     time.sleep(0.1)
                     continue
                 
-                # No image_url - fetch from single-product API
-                response = requests.get(
-                    f"{BASE_URL}/product/detail",
-                    params={'product_id': product.product_id},
-                    auth=get_auth(),
-                    timeout=30
-                )
+                # No image_url (or force refresh) - fetch from centralized tiered fetcher
+                # This prioritizes the free web scraper to save credits
+                d, source = fetch_product_details_echotik(product.product_id)
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('code') == 0 and data.get('data'):
-                        p = data['data'] if isinstance(data['data'], dict) else data['data'][0] if data['data'] else {}
-                        
-                        cover_url = p.get('cover_url', '')
-                        if cover_url:
-                            parsed_url = parse_cover_url(cover_url)
-                            if parsed_url:
-                                product.image_url = parsed_url
-                                signed_urls = get_cached_image_urls([parsed_url])
-                                if signed_urls.get(parsed_url):
-                                    product.cached_image_url = signed_urls[parsed_url]
-                                    product.image_cached_at = datetime.utcnow()
-                                    updated += 1
+                if d:
+                    # Robustly extract metadata (handles both V3 and Scraped formats)
+                    res = extract_metadata_from_echotik(d)
+                    cover_url = res.get('image_url') or res.get('cover')
+                    
+                    if cover_url:
+                        parsed_url = parse_cover_url(cover_url)
+                        if parsed_url:
+                            product.image_url = parsed_url
+                            signed_urls = get_cached_image_urls([parsed_url])
+                            if signed_urls.get(parsed_url):
+                                product.cached_image_url = signed_urls[parsed_url]
+                                product.image_cached_at = datetime.utcnow()
+                                updated += 1
                         
                         # BONUS: Also update commission and sales if they're 0
                         if (product.commission_rate or 0) == 0:
