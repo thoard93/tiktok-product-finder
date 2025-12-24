@@ -7375,20 +7375,25 @@ def scan_dailyvirals_live():
                             host, port, user, pw = parts
                             print(f"[DV Live] Using proxy: {host}:{port} (auth: {user[:4]}****)")
                             
-                            # Standard residential proxies (Smartproxy, Webshare, etc.)
-                            # work best with direct requests.Session correctly formatted
+                            # Standard residential proxies (Smartproxy, Webshare, Decodo, etc.)
                             proxy_url = f"http://{user}:{pw}@{host}:{port}"
                             proxies = {
                                 "http": proxy_url,
                                 "https": proxy_url
                             }
                             
-                            session = requests.Session()
-                            session.proxies.update(proxies)
-                            # Disable environment proxies to ensure we use our specific one
-                            session.trust_env = False
+                            # Use curl_cffi for browser-grade TLS fingerprinting to bypass Cloudflare
+                            from curl_cffi import requests as curl_requests
                             
-                            res = session.get(DV_BACKEND_URL, headers=headers, params=params, timeout=60)
+                            print(f"[DV Live] Using curl-cffi impersonation (chrome120)...")
+                            res = curl_requests.get(
+                                DV_BACKEND_URL, 
+                                headers=headers, 
+                                params=params, 
+                                proxies=proxies,
+                                impersonate="chrome120",
+                                timeout=60
+                            )
                             print(f"[DV Live] Proxy response: {res.status_code}")
                         else:
                             print(f"[DV Live] Invalid proxy format: {len(parts)} parts. Expected host:port:user:pass")
@@ -7396,9 +7401,16 @@ def scan_dailyvirals_live():
                         print(f"[DV Live] Proxy error: {pe}")
                         res = None
                 
-                # Fallback to direct request if no proxy or it failed
+                # Fallback to direct request (also via curl-cffi) if no proxy or it failed
                 if res is None:
-                    res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
+                    from curl_cffi import requests as curl_requests
+                    res = curl_requests.get(
+                        DV_BACKEND_URL, 
+                        headers=headers, 
+                        params=params, 
+                        impersonate="chrome120",
+                        timeout=30
+                    )
                 if res.status_code == 403:
                     last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
                     print(f"[DV Live] 403 Forbidden. Body snippet: {res.text[:300]}")
