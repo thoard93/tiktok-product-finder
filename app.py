@@ -172,14 +172,14 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 # DailyVirals API Config
 DV_BACKEND_URL = "https://backend.thedailyvirals.com/api/videos/stats/top-growth-by-date-range"
 DV_API_TOKEN = os.environ.get('DAILYVIRALS_TOKEN', 'eyJhbGciOiJIUzI1NiIsImtpZCI6InlNMHVYRXRpWEM3Qm04V0MiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2h3b3JieG90eHdibnBscW5ob3ZpLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJhMTQyNDUzMi04M2QxLTRiMGItYTcxZS04OGU0ZmQ4MWNkYTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY1Mjk5Nzc1LCJpYXQiOjE3NjUyOTYxNzUsImVtYWlsIjoidGhvYXJkMjAzNUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJpc19hbm9ueW1vdXMiOmZhbHNlLCJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmaXJzdE5hbWUiOiJUaG9tYXMiLCJpc19hbm9ueW1vdXMiOmZhbHNlLCJsYXN0TmFtZSI6IkhvYXJkIiwic3RyaXBlQ3VzdG9tZXJJZCI6ImN1c19UUXhMcnc5dGJTSmxNdCIsInVzZXJJZCI6ImExNDI0NTMyLTgzZDEtNGIwYi1hNzFlLTg4ZTRmZDgxY2RhOCJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzY1Mjk1ODgxfV0sInNlc3Npb25faWQiOiJmZTQ2YTdkMi1kYjk1LTRhNDYtYmFmZi04ZGM3OWVhYTgwZjQiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.VWpxeNXqWXDmWFwQyblxgLeW8vYfiG4ZuOsZbBq_oZ4')
-# Proxy for DailyVirals (format: host:port:user:pass)
-DV_PROXY_STRING = os.environ.get('DAILYVIRALS_PROXY', '')
+# ScraperAPI for bypassing Cloudflare (get key from scraperapi.com)
+SCRAPERAPI_KEY = os.environ.get('SCRAPERAPI_KEY', '')
 if os.environ.get('DAILYVIRALS_TOKEN'):
     print(">> DailyVirals Token loaded from Environment")
 else:
     print(">> WARNING: DailyVirals Token using HARDCODED fallback (may be expired)")
-if DV_PROXY_STRING:
-    print(f">> DailyVirals Proxy configured: {DV_PROXY_STRING.split(':')[0]}:****")
+if SCRAPERAPI_KEY:
+    print(f">> ScraperAPI configured (key: {SCRAPERAPI_KEY[:8]}****)")
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
@@ -7359,65 +7359,29 @@ def scan_dailyvirals_live():
             }
             
             try:
-                # Build proxy config if available
+                # Use ScraperAPI if configured (recommended for Cloudflare bypass)
                 res = None
-                if DV_PROXY_STRING:
+                if SCRAPERAPI_KEY:
                     try:
-                        parts = DV_PROXY_STRING.split(':')
-                        if len(parts) == 4:
-                            host, port, user, pw = parts
-                            print(f"[DV Live] Using proxy: {host}:{port} (auth: {user[:4]}****)")
-                            
-                            # Use urllib3 ProxyManager for proper HTTPS tunnel auth
-                            import urllib3
-                            from urllib3.util import make_headers
-                            import base64
-                            
-                            # Create proxy auth header
-                            proxy_auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
-                            proxy_headers = make_headers(proxy_basic_auth=f"{user}:{pw}")
-                            
-                            # Build full URL with params
-                            from urllib.parse import urlencode
-                            full_url = f"{DV_BACKEND_URL}?{urlencode(params)}"
-                            
-                            # Create proxy manager with auth
-                            proxy_url = f"http://{host}:{port}"
-                            pm = urllib3.ProxyManager(
-                                proxy_url,
-                                proxy_headers=proxy_headers,
-                                num_pools=1,
-                                timeout=urllib3.Timeout(connect=30, read=30)
-                            )
-                            
-                            # Make the request
-                            urllib_res = pm.request(
-                                'GET',
-                                full_url,
-                                headers=headers,
-                                timeout=45
-                            )
-                            
-                            # Convert to requests-like response
-                            class ProxyResponse:
-                                def __init__(self, urllib_resp):
-                                    self.status_code = urllib_resp.status
-                                    self.text = urllib_resp.data.decode('utf-8', errors='replace')
-                                    self._data = urllib_resp.data
-                                def json(self):
-                                    import json
-                                    return json.loads(self._data.decode('utf-8'))
-                            
-                            res = ProxyResponse(urllib_res)
-                            print(f"[DV Live] Proxy response status: {res.status_code}")
-                        else:
-                            print(f"[DV Live] Invalid proxy format: {len(parts)} parts")
-                    except Exception as pe:
-                        import traceback
-                        print(f"[DV Live] Proxy error: {pe}")
-                        traceback.print_exc()
+                        from urllib.parse import urlencode, quote
+                        # Build target URL with params
+                        target_url = f"{DV_BACKEND_URL}?{urlencode(params)}"
+                        # Route through ScraperAPI
+                        scraper_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&url={quote(target_url, safe='')}"
+                        print(f"[DV Live] Using ScraperAPI for Cloudflare bypass...")
+                        
+                        # ScraperAPI needs the auth header passed through
+                        res = requests.get(scraper_url, headers=headers, timeout=60)
+                        print(f"[DV Live] ScraperAPI response: {res.status_code}")
+                        
+                        if res.status_code == 403 and "cloudflare" not in res.text.lower():
+                            # ScraperAPI might return 403 for invalid API key
+                            print(f"[DV Live] ScraperAPI auth issue. Check your API key.")
+                    except Exception as se:
+                        print(f"[DV Live] ScraperAPI error: {se}")
+                        res = None
                 
-                # Fallback to direct request if no proxy or proxy failed
+                # Fallback to direct request if no ScraperAPI or it failed
                 if res is None:
                     res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
                 if res.status_code == 403:
