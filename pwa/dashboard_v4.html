@@ -496,7 +496,7 @@
                 el.classList.add('active-tab');
 
                 if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
-                else if (type === 'gmv_max') curFilter = { scan_type: 'daily_virals' };
+                else if (type === 'gmv_max') curFilter = { scan_type: 'daily_virals,dv_live,dv_import' };
                 else if (type === 'favorites') curFilter = { favorites_only: 'true' };
                 else if (type === 'all') curFilter = {};
 

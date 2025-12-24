@@ -376,11 +376,21 @@ def fetch_product_details_echotik_web(product_id):
             "Upgrade-Insecure-Requests": "1"
         }
 
-        res = requests.get(url, headers=headers, timeout=15)
+        try:
+            from curl_cffi import requests as curl_requests
+        except ImportError:
+            curl_requests = requests # Fallback if not installed
+
+        res = curl_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
         if res.status_code != 200:
             return None, f"EchoTik Web returned {res.status_code}"
 
         html = res.text
+        
+        # Detection: If page is too small or contains login/signup indicators, we are blocked/redirected
+        if len(html) < 2000 or "login" in html.lower() or "login-container" in html:
+            if "echotik.live" in html:
+                return None, "Blocked by Login: EchoTik is requiring a fresh cookie."
         
         # Look for the JSON data blob (Nuxt state)
         # Usually window.__NUXT__ or window.__INITIAL_STATE__
@@ -447,8 +457,16 @@ def fetch_product_details_echotik_web(product_id):
                             return obj
                         if 'productId' in obj and str(obj.get('productId')) == raw_pid:
                             return obj
+                        if 'id' in obj and str(obj.get('id')) == raw_pid:
+                            return obj
+                        if 'spu_id' in obj and str(obj.get('spu_id')) == raw_pid:
+                            return obj
+                        if 'itemId' in obj and str(obj.get('itemId')) == raw_pid:
+                            return obj
                         if 'baseInfo' in obj and isinstance(obj['baseInfo'], dict):
                             if str(obj['baseInfo'].get('productId')) == raw_pid:
+                                return obj
+                            if str(obj['baseInfo'].get('id')) == raw_pid:
                                 return obj
                         for v in obj.values():
                             found = recursive_find_product(v, depth + 1)
@@ -5483,11 +5501,15 @@ def api_products():
             query = query.filter(Product.seller_id == seller_id)
             
         if scan_type:
-             query = query.filter(Product.scan_type == scan_type)
+            if ',' in scan_type:
+                types = [t.strip() for t in scan_type.split(',')]
+                query = query.filter(Product.scan_type.in_(types))
+            else:
+                query = query.filter(Product.scan_type == scan_type)
         else:
              # Default view: Exclude Ad Winners to avoid cluttering organic/low-stat feed
              # This isolates GMV MAX ads to their own tab only
-             query = query.filter(Product.scan_type.notin_(['daily_virals', 'apify_ad', 'dv_live']))
+             query = query.filter(Product.scan_type.notin_(['daily_virals', 'apify_ad', 'dv_live', 'dv_import', 'dv_import_fallback']))
 
         if keyword:
             query = query.filter(db.or_(
