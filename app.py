@@ -5564,7 +5564,10 @@ def api_products():
         min_sales = request.args.get('min_sales', type=int)
         max_inf = request.args.get('max_inf', type=int)
         min_inf = request.args.get('min_inf', type=int)
-        min_vids = request.args.get('min_vids', type=int)
+        
+        # Default to 2 videos unless searching specifically for lower (e.g. for debugging)
+        min_vids = request.args.get('min_vids', 2, type=int)
+        
         max_vids = request.args.get('max_vids', type=int)
         scan_type = request.args.get('scan_type')
         seller_id = request.args.get('seller_id')
@@ -5584,12 +5587,12 @@ def api_products():
             query = query.filter(Product.is_favorite == True)
         
         if is_gems:
-            # Selling well, low competition
+            # Selling well, low competition, high signal (2+ videos)
             query = query.filter(
                 Product.sales_7d >= 20,
                 Product.influencer_count <= 30,
                 Product.influencer_count >= 1,
-                Product.video_count >= 1
+                Product.video_count >= 2
             )
 
         if seller_id:
@@ -6321,6 +6324,33 @@ def admin_nuke_products():
         return jsonify({'success': True, 'deleted': deleted})
     except Exception as e:
         db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/purge-low-signal', methods=['POST'])
+@login_required
+def purge_low_signal():
+    """
+    Delete products with 0 or 1 total videos from the database.
+    This keeps the databanks high-signal.
+    """
+    try:
+        # We target products with <=1 video count
+        products_to_delete = Product.query.filter(
+            Product.video_count <= 1
+        )
+        
+        count = products_to_delete.count()
+        products_to_delete.delete(synchronize_session=False)
+        db.session.commit()
+        
+        print(f"🧹 PURGE COMPLETE: Removed {count} low-signal products.")
+        return jsonify({
+            'success': True, 
+            'message': f'Mission Accomplished: {count} low-signal items purged from mainframe.'
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"CRITICAL Error in purge: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/admin/stats', methods=['GET'])

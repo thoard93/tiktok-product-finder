@@ -144,6 +144,12 @@
                     <i class="fas fa-list-ul"></i>
                     <span>Batch Scan</span>
                 </button>
+                <button onclick="purgeLowSignal()"
+                    class="glass py-2 px-4 rounded-xl text-xs font-bold text-amber-400 border-amber-500/20 hover:bg-amber-500/10 transition-all hidden sm:flex items-center gap-2"
+                    title="Delete products with 0 or 1 total videos">
+                    <i class="fas fa-broom"></i>
+                    <span>Purge Low Signal</span>
+                </button>
                 <button onclick="document.getElementById('importModal').classList.remove('hidden')"
                     class="btn-premium py-2 px-5 text-sm hidden sm:flex">
                     <i class="fas fa-plus mr-2"></i>
@@ -631,6 +637,33 @@
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = originalText;
+                }
+            }
+
+            async function purgeLowSignal() {
+                if (!confirm("⚠️ This will permanently delete ALL products with 0 or 1 total videos from your database. Proceed?")) return;
+
+                try {
+                    const btn = document.querySelector('button[onclick="purgeLowSignal()"]');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Purging...</span>';
+                    btn.disabled = true;
+
+                    const res = await fetch('/api/admin/purge-low-signal', { method: 'POST' });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        showToast(data.message || 'Purge complete!');
+                        loadInitialData(); // Refresh grid
+                    } else {
+                        showToast('Purge failed: ' + data.error, 'error');
+                    }
+
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                } catch (err) {
+                    console.error('Purge error:', err);
+                    showToast('API Error during purge', 'error');
                 }
             }
         </script>
