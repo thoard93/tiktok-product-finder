@@ -201,6 +201,27 @@ def get_random_user_agent():
     import random
     return random.choice(uas)
 
+def parse_kmb_string(s):
+    """
+    Parses strings like '1.2K', '5.5M', '1,000' into integers.
+    """
+    if not s: return 0
+    s = str(s).upper().replace(',', '').strip()
+    try:
+        if 'K' in s:
+            return int(float(s.replace('K', '')) * 1000)
+        if 'M' in s:
+            return int(float(s.replace('M', '')) * 1000000)
+        if 'B' in s:
+            return int(float(s.replace('B', '')) * 1000000000)
+        return int(float(s))
+    except (ValueError, TypeError):
+        # Fallback: remove everything except digits and dots
+        s = "".join(c for c in s if c.isdigit() or c == ".")
+        try:
+            return int(float(s)) if s else 0
+        except: return 0
+
 
 def extract_metadata_from_echotik(d):
     """
@@ -224,12 +245,24 @@ def extract_metadata_from_echotik(d):
         'product_url': None
     }
     
+    # helper for safe int parsing of KMB strings
+    def get_num(val):
+        if val is None: return 0
+        if isinstance(val, (int, float)): return int(val)
+        return parse_kmb_string(str(val))
+    
     # 1. Top Level Mapping (V3 / Realtime Standard)
-    res['sales'] = int(d.get('totalSaleCnt') or d.get('total_sale_cnt') or 0)
-    res['sales_7d'] = int(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or 0)
-    res['sales_30d'] = int(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or 0)
-    res['influencer_count'] = int(d.get('totalIflCnt') or d.get('total_ifl_cnt') or 0)
-    res['video_count'] = int(d.get('totalVideoCnt') or d.get('total_video_cnt') or 0)
+    res['sales'] = get_num(d.get('totalSaleCnt') or d.get('total_sale_cnt') or 0)
+    res['sales_7d'] = get_num(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or 0)
+    res['sales_30d'] = get_num(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or 0)
+    res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or 0)
+    res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or 0)
+    
+    # Internal Fallbacks for shorthand data
+    if res['sales'] > 0 and res['sales_7d'] == 0:
+        res['sales_7d'] = res['sales']
+    if res['sales'] > 0 and res['sales_30d'] == 0:
+        res['sales_30d'] = res['sales']
     
     raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or 0)
     res['commission_rate'] = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
@@ -359,20 +392,30 @@ def fetch_product_details_echotik_web(product_id):
             print(f"DEBUG: Attempting EchoTik Web scrape for {raw_pid}...")
             # Pattern for Nuxt state (common on EchoTik)
             # Use raw strings and avoid escaping backslashes in a way that breaks multi-line python strings
-            m = re.search(r'window\.__NUXT__\s*=\s*(.*?);(</script>|\n)', html, re.DOTALL)
+            # Improved Nuxt/Initial state capture
+            # Try to find the block first, then extract the JSON-like payload
+            m = re.search(r'window\.__NUXT__\s*=\s*(.*?)</script>', html, re.DOTALL)
             if not m:
-                 m = re.search(r'window\.__INITIAL_STATE__\s*=\s*(.*?);(</script>|\n)', html, re.DOTALL)
+                 m = re.search(r'window\.__INITIAL_STATE__\s*=\s*(.*?)</script>', html, re.DOTALL)
             
             state = None
             state_json = ""
             if m:
-                print(f"DEBUG: Found Nuxt/Initial state blob for {raw_pid}")
                 state_raw = m.group(1).strip()
-                # If it's a function call like (function(a,b...){...})(...), we just want the JSON part if possible
-                # or we try a greedy match for the first { } 
-                json_match = re.search(r'(\{.*\})', state_raw, re.DOTALL)
-                if json_match:
-                    state_json = json_match.group(1)
+                # Remove trailing semicolon if present
+                if state_raw.endswith(';'): state_raw = state_raw[:-1]
+                
+                print(f"DEBUG: Found Nuxt/Initial state blob for {raw_pid}")
+                
+                # If wrapped in (function(...){...})(...), try to find the inner object
+                if state_raw.startswith('('):
+                    json_match = re.search(r'(\{.*\})', state_raw, re.DOTALL)
+                    if json_match:
+                         state_json = json_match.group(1)
+                else:
+                    state_json = state_raw
+
+                if state_json:
                     # Nuxt/JS state often has 'undefined' or '!0' etc.
                     state_json = state_json.replace(':undefined', ':null').replace(': undefined', ': null')
                     state_json = state_json.replace(':!0', ':true').replace(':!1', ':false')
@@ -431,17 +474,32 @@ def fetch_product_details_echotik_web(product_id):
                     data['total_sale_cnt'] = sales_match.group(2)
                     print(f"DEBUG: Regex Fallback Sales: {data['total_sale_cnt']}")
                 
+                # Look for influencers/videos
+                v_match = re.search(r'(Videos|Total Videos):?\s*([\d\.]+[KMB]?)', html, re.I)
+                if v_match:
+                    data['total_video_cnt'] = v_match.group(2)
+                
+                i_match = re.search(r'(Influencers|Creators):?\s*([\d\.]+[KMB]?)', html, re.I)
+                if i_match:
+                    data['total_ifl_cnt'] = i_match.group(2)
+
                 # Look for price
                 price_match = re.search(r'\$([\d\.,]+)', html)
                 if price_match:
                     data['price'] = price_match.group(1)
                     print(f"DEBUG: Regex Fallback Price: {data['price']}")
                 
+                # Look for image (og:image)
+                img_match = re.search(r'<meta property="og:image" content="(.*?)"', html, re.I)
+                if img_match:
+                    data['image_url'] = img_match.group(1)
+                    print(f"DEBUG: Regex Fallback Image: {data['image_url']}")
+                
                 # Look for name in title
                 if not data.get('product_name'):
                     title_match = re.search(r'<title>(.*?)</title>', html, re.I)
                     if title_match:
-                        data['product_name'] = title_match.group(1).split('|')[0].strip()
+                        data['product_name'] = title_match.group(1).split('|')[0].replace('Product Details', '').replace('EchoTik', '').strip(' |-_')
             except: pass
 
         if data:
@@ -566,13 +624,17 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
     res = extract_metadata_from_echotik(p_data)
     
     # Normalize Stats - FALLBACK to p_data direct values (set by enrichment)
-    inf_count = res['influencer_count'] or int(p_data.get('influencer_count') or 0)
-    sales = res['sales'] or int(p_data.get('sales') or 0)
-    s7d = res['sales_7d'] or int(p_data.get('sales_7d') or 0)
-    s30d = res['sales_30d'] or int(p_data.get('sales_30d') or 0)
-    comm = res['commission_rate'] or float(p_data.get('commission_rate') or 0)
-    price = res['price'] or float(p_data.get('price') or 0)
-    v_count = res['video_count'] or int(p_data.get('video_count') or 0)
+    def parse_safe_float(v):
+        try: return float(str(v or 0).replace('$','').replace(',','').strip())
+        except: return 0.0
+
+    inf_count = res['influencer_count'] or parse_kmb_string(p_data.get('influencer_count') or 0)
+    sales = res['sales'] or parse_kmb_string(p_data.get('sales') or 0)
+    s7d = res['sales_7d'] or parse_kmb_string(p_data.get('sales_7d') or 0)
+    s30d = res['sales_30d'] or parse_kmb_string(p_data.get('sales_30d') or 0)
+    comm = res['commission_rate'] or parse_safe_float(p_data.get('commission_rate') or 0)
+    price = res['price'] or parse_safe_float(p_data.get('price') or 0)
+    v_count = res['video_count'] or parse_kmb_string(p_data.get('video_count') or 0)
     
     img = parse_cover_url(res['image_url'] or p_data.get('image_url') or p_data.get('item_img'))
     name = res['product_name'] or p_data.get('product_name') or p_data.get('title') or ""
@@ -587,19 +649,21 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
         existing.product_name = name or existing.product_name
         existing.image_url = img or existing.image_url
         existing.product_url = p_url or existing.product_url
-        existing.price = price if price > 0 else existing.price
-        existing.sales = sales if sales > 0 else existing.sales
-        existing.sales_7d = s7d if s7d > 0 else existing.sales_7d
-        existing.sales_30d = s30d if s30d > 0 else existing.sales_30d
-        existing.influencer_count = inf_count if inf_count > 0 else existing.influencer_count
-        existing.commission_rate = comm if comm > 0 else existing.commission_rate
-        existing.video_count = v_count if v_count > 0 else existing.video_count
+        
+        # Update stats if new data is better or existing is empty
+        if price > 0 or existing.price == 0: existing.price = price
+        if sales > 0 or existing.sales == 0: existing.sales = sales
+        if s7d > 0 or existing.sales_7d == 0: existing.sales_7d = s7d
+        if s30d > 0 or existing.sales_30d == 0: existing.sales_30d = s30d
+        if inf_count > 0 or existing.influencer_count == 0: existing.influencer_count = inf_count
+        if comm > 0 or existing.commission_rate == 0: existing.commission_rate = comm
+        if v_count > 0 or existing.video_count == 0: existing.video_count = v_count
         
         # Merge other stats if available
-        existing.video_7d = int(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or res.get('video_7d') or existing.video_7d or 0)
-        existing.video_30d = int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or res.get('video_30d') or existing.video_30d or 0)
-        existing.live_count = res['live_count'] or int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or existing.live_count or 0)
-        existing.views_count = int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
+        existing.video_7d = parse_kmb_string(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or res.get('video_7d') or existing.video_7d or 0)
+        existing.video_30d = parse_kmb_string(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or res.get('video_30d') or existing.video_30d or 0)
+        existing.live_count = res['live_count'] or parse_kmb_string(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or existing.live_count or 0)
+        existing.views_count = parse_kmb_string(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
         
         # Update seller info
         new_name = str(res['seller_name'] or "").strip()
@@ -4416,7 +4480,7 @@ def api_stats():
         # 2. Ad Winners (Ads, >50 sales, <5 influencers)
         ad_winners = Product.query.filter(
              db.or_(
-                Product.scan_type.in_(['apify_ad', 'daily_virals']),
+                Product.scan_type.in_(['apify_ad', 'daily_virals', 'dv_live']),
                 db.and_(Product.sales_7d > 50, Product.influencer_count < 5, Product.video_count < 5)
             )
         ).count()
@@ -5423,7 +5487,7 @@ def api_products():
         else:
              # Default view: Exclude Ad Winners to avoid cluttering organic/low-stat feed
              # This isolates GMV MAX ads to their own tab only
-             query = query.filter(Product.scan_type.notin_(['daily_virals', 'apify_ad']))
+             query = query.filter(Product.scan_type.notin_(['daily_virals', 'apify_ad', 'dv_live']))
 
         if keyword:
             query = query.filter(db.or_(
