@@ -172,14 +172,14 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 # DailyVirals API Config
 DV_BACKEND_URL = "https://backend.thedailyvirals.com/api/videos/stats/top-growth-by-date-range"
 DV_API_TOKEN = os.environ.get('DAILYVIRALS_TOKEN', 'eyJhbGciOiJIUzI1NiIsImtpZCI6InlNMHVYRXRpWEM3Qm04V0MiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2h3b3JieG90eHdibnBscW5ob3ZpLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJhMTQyNDUzMi04M2QxLTRiMGItYTcxZS04OGU0ZmQ4MWNkYTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY1Mjk5Nzc1LCJpYXQiOjE3NjUyOTYxNzUsImVtYWlsIjoidGhvYXJkMjAzNUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJpc19hbm9ueW1vdXMiOmZhbHNlLCJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmaXJzdE5hbWUiOiJUaG9tYXMiLCJpc19hbm9ueW1vdXMiOmZhbHNlLCJsYXN0TmFtZSI6IkhvYXJkIiwic3RyaXBlQ3VzdG9tZXJJZCI6ImN1c19UUXhMcnc5dGJTSmxNdCIsInVzZXJJZCI6ImExNDI0NTMyLTgzZDEtNGIwYi1hNzFlLTg4ZTRmZDgxY2RhOCJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzY1Mjk1ODgxfV0sInNlc3Npb25faWQiOiJmZTQ2YTdkMi1kYjk1LTRhNDYtYmFmZi04ZGM3OWVhYTgwZjQiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.VWpxeNXqWXDmWFwQyblxgLeW8vYfiG4ZuOsZbBq_oZ4')
-# ScraperAPI for bypassing Cloudflare (get key from scraperapi.com)
-SCRAPERAPI_KEY = os.environ.get('SCRAPERAPI_KEY', '')
+# Standard Proxy for DailyVirals (format: host:port:user:pass)
+DV_PROXY_STRING = os.environ.get('DAILYVIRALS_PROXY', '')
 if os.environ.get('DAILYVIRALS_TOKEN'):
     print(">> DailyVirals Token loaded from Environment")
 else:
     print(">> WARNING: DailyVirals Token using HARDCODED fallback (may be expired)")
-if SCRAPERAPI_KEY:
-    print(f">> ScraperAPI configured (key: {SCRAPERAPI_KEY[:8]}****)")
+if DV_PROXY_STRING:
+    print(f">> DailyVirals Proxy configured: {DV_PROXY_STRING.split(':')[0]}:****")
 
 # Default prompt for video generation
 KLING_DEFAULT_PROMPT = "cinematic push towards the product, no hands, product stays still"
@@ -7359,34 +7359,37 @@ def scan_dailyvirals_live():
             }
             
             try:
-                # Use ScraperAPI if configured (recommended for Cloudflare bypass)
+                # Use standard residential proxy if configured
                 res = None
-                if SCRAPERAPI_KEY:
+                if DV_PROXY_STRING:
                     try:
-                        from urllib.parse import urlencode, quote
-                        # Build target URL with params
-                        target_url = f"{DV_BACKEND_URL}?{urlencode(params)}"
-                        # Route through ScraperAPI with keep_headers to pass Authorization
-                        # ultra_premium=true is the highest tier for difficult Cloudflare blocks
-                        scraper_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&keep_headers=true&ultra_premium=true&country_code=us&url={quote(target_url, safe='')}"
-                        print(f"[DV Live] Using ScraperAPI (ultra_premium, US) for Cloudflare bypass...")
-                        
-                        # Pass headers to ScraperAPI - it will forward them to the target
-                        res = requests.get(scraper_url, headers=headers, timeout=90)
-                        print(f"[DV Live] ScraperAPI response: {res.status_code}")
-                        
-                        # Debug: show first 200 chars of response if not 200
-                        if res.status_code != 200:
-                            print(f"[DV Live] ScraperAPI body: {res.text[:200]}")
-                        
-                        if res.status_code == 403 and "cloudflare" not in res.text.lower():
-                            # ScraperAPI might return 403 for invalid API key
-                            print(f"[DV Live] ScraperAPI auth issue. Check your API key.")
-                    except Exception as se:
-                        print(f"[DV Live] ScraperAPI error: {se}")
+                        parts = DV_PROXY_STRING.split(':')
+                        if len(parts) == 4:
+                            host, port, user, pw = parts
+                            print(f"[DV Live] Using proxy: {host}:{port} (auth: {user[:4]}****)")
+                            
+                            # Standard residential proxies (Smartproxy, Webshare, etc.)
+                            # work best with direct requests.Session correctly formatted
+                            proxy_url = f"http://{user}:{pw}@{host}:{port}"
+                            proxies = {
+                                "http": proxy_url,
+                                "https": proxy_url
+                            }
+                            
+                            session = requests.Session()
+                            session.proxies.update(proxies)
+                            # Disable environment proxies to ensure we use our specific one
+                            session.trust_env = False
+                            
+                            res = session.get(DV_BACKEND_URL, headers=headers, params=params, timeout=60)
+                            print(f"[DV Live] Proxy response: {res.status_code}")
+                        else:
+                            print(f"[DV Live] Invalid proxy format: {len(parts)} parts. Expected host:port:user:pass")
+                    except Exception as pe:
+                        print(f"[DV Live] Proxy error: {pe}")
                         res = None
                 
-                # Fallback to direct request if no ScraperAPI or it failed
+                # Fallback to direct request if no proxy or it failed
                 if res is None:
                     res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30)
                 if res.status_code == 403:
