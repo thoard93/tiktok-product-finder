@@ -319,7 +319,7 @@ def fetch_product_details_echotik_web(product_id):
     Requires ECHOTIK_COOKIE for full stats (Videos/Influencers).
     """
     try:
-        use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'false').lower() == 'true'
+        use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'true').lower() == 'true'
         if not use_scraper:
             return None, "Web scraper disabled"
 
@@ -463,7 +463,7 @@ def fetch_product_details_echotik(product_id, region='US'):
     Returns (raw_data, source_name) or (None, err)
     """
     raw_pid = str(product_id).replace('shop_', '')
-    use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'false').lower() == 'true'
+    use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'true').lower() == 'true'
     print(f"DEBUG: fetch_product_details_echotik for {raw_pid} - Scraper enabled: {use_scraper}")
     
     # 1. Try Web Scraper First (to save credits)
@@ -4563,13 +4563,8 @@ def is_tiktok_share_link(url):
 def lookup_product():
     """
     Look up any TikTok product by URL or ID.
-    Fetches real-time stats from EchoTik without requiring it to be in our database.
-    
-    GET/POST params:
-        - url: TikTok product URL or product ID
-        - save: 'true' to save to database (default: false)
+    Fetches stats from EchoTik (prioritizing Web Scraper for 0 credit cost).
     """
-    # Accept both GET and POST
     if request.method == 'POST':
         data = request.get_json() or {}
         input_url = data.get('url', '')
@@ -4581,275 +4576,67 @@ def lookup_product():
     if not input_url:
         return jsonify({'success': False, 'error': 'Please provide a TikTok product URL or ID'}), 400
     
-    # Check if it's a TikTok share link (/t/XXXXX format) and resolve it
+    # Resolve share links
     resolved_url = input_url
     if is_tiktok_share_link(input_url):
-        print(f"Resolving TikTok share link: {input_url}")
         resolved_url = resolve_tiktok_share_link(input_url)
         if not resolved_url:
-            return jsonify({
-                'success': False, 
-                'error': 'Could not resolve TikTok share link. Please try copying the full product URL instead.',
-                'hint': 'Open the product in TikTok, tap Share, then copy the link from your browser'
-            }), 400
-        print(f"Resolved to: {resolved_url}")
+            return jsonify({'success': False, 'error': 'Could not resolve share link'}), 400
     
     # Extract product ID
     product_id = extract_product_id(resolved_url)
     if not product_id:
-        return jsonify({
-            'success': False, 
-            'error': 'Could not extract product ID from input',
-            'hint': 'Try pasting a TikTok product URL or just the product ID number',
-            'resolved_url': resolved_url if resolved_url != input_url else None
-        }), 400
+        return jsonify({'success': False, 'error': 'Could not extract product ID'}), 400
     
     try:
-        # Check if we already have this product in our database
-        existing = Product.query.get(product_id)
+        # TIERED ENRICHMENT (Web Scraper -> Realtime -> Cached)
+        p, source = fetch_product_details_echotik(product_id)
         
-        # Call EchoTik product detail API
-        response = requests.get(
-            f"{BASE_URL}/product/detail",
-            params={'product_ids': product_id},
-            auth=get_auth(),
-            timeout=30
-        )
+        if not p:
+            return jsonify({'success': False, 'error': 'Product not found across EchoTik sources (Web/API/DB)'}), 404
+
+        # Extract stats using robust helper
+        res = extract_metadata_from_echotik(p)
         
-        if response.status_code != 200:
-            return jsonify({
-                'success': False, 
-                'error': f'EchoTik API returned status {response.status_code}'
-            }), 500
-        
-        data = response.json()
-        
-        if data.get('code') != 0:
-            return jsonify({
-                'success': False, 
-                'error': f'EchoTik API error: {data.get("msg", "Unknown error")}'
-            }), 500
-        
-        if not data.get('data') or len(data['data']) == 0:
-            return jsonify({
-                'success': False, 
-                'error': 'Product not found in EchoTik database',
-                'product_id': product_id
-            }), 404
-        
-        p = data['data'][0]
-        
-        # Debug: print all keys returned by EchoTik (remove after debugging)
-        print(f"EchoTik product detail keys: {list(p.keys())}")
-        
-        # Try multiple field names for seller (EchoTik may use different names)
-        seller_name = (
-            p.get('seller_name') or 
-            p.get('shop_name') or 
-            p.get('store_name') or 
-            p.get('brand_name') or
-            p.get('seller', {}).get('name') if isinstance(p.get('seller'), dict) else None or
-            ''
-        )
-        
-        # If we have this product in database with seller info, use that
-        if not seller_name and existing and existing.seller_name:
-            seller_name = existing.seller_name
-        
-        seller_id = p.get('seller_id') or p.get('shop_id') or p.get('store_id') or ''
-        if not seller_id and existing and existing.seller_id:
-            seller_id = existing.seller_id
-        
-        # If we have seller_id but no seller_name, try to fetch it from seller detail API
-        if seller_id and not seller_name:
-            try:
-                seller_response = requests.get(
-                    f"{BASE_URL}/seller/detail",
-                    params={'seller_id': seller_id},
-                    auth=get_auth(),
-                    timeout=15
-                )
-                if seller_response.status_code == 200:
-                    seller_data = seller_response.json()
-                    if seller_data.get('code') == 0 and seller_data.get('data'):
-                        seller_info = seller_data['data'][0] if isinstance(seller_data['data'], list) else seller_data['data']
-                        seller_name = seller_info.get('seller_name') or seller_info.get('shop_name') or ''
-                        print(f"Fetched seller name from seller/detail: {seller_name}")
-            except Exception as e:
-                print(f"Failed to fetch seller details: {e}")
-        
-        # Parse the product data
+        # Seller name recovery
+        if not res['seller_name'] and res['seller_id']:
+            real_name = fetch_seller_name(res['seller_id'])
+            if real_name: res['seller_name'] = real_name
+
+        # Prepare response data
         product_data = {
             'product_id': product_id,
-            'product_name': p.get('product_name', ''),
-            'seller_id': seller_id,
-            'seller_name': seller_name,
-            
-            # Sales data
-            'sales': int(p.get('total_sale_cnt', 0) or 0),
-            'sales_7d': int(p.get('total_sale_7d_cnt', 0) or 0),
-            'sales_30d': int(p.get('total_sale_30d_cnt', 0) or 0),
-            'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
-            'gmv_7d': float(p.get('total_sale_gmv_7d_amt', 0) or 0),
-            'gmv_30d': float(p.get('total_sale_gmv_30d_amt', 0) or 0),
-            
-            # Commission
-            'commission_rate': float(p.get('product_commission_rate', 0) or 0),
-            'price': float(p.get('spu_avg_price', 0) or 0),
-            
-            # Competition stats (the key metrics!)
-            'influencer_count': int(p.get('total_ifl_cnt', 0) or 0),
-            'video_count': int(p.get('total_video_cnt', 0) or 0),
-            'video_7d': int(p.get('total_video_7d_cnt', 0) or 0),
-            'video_30d': int(p.get('total_video_30d_cnt', 0) or 0),
-            'live_count': int(p.get('total_live_cnt', 0) or 0),
-            'views_count': int(p.get('total_views_cnt', 0) or 0),
-            
-            # Ratings
-            'product_rating': float(p.get('product_rating', 0) or 0),
-            'review_count': int(p.get('review_count', 0) or 0),
-            
-            # Image - get the raw URL first
-            'image_url': parse_cover_url(p.get('cover_url', '')),
-            'cached_image_url': None,  # Will be filled below
-            
-            # Links
-            'tiktok_url': f'https://www.tiktok.com/shop/pdp/{product_id}',
-            'echotik_url': f'https://echotik.live/products/{product_id}',
-            
-            # Meta
-            'in_database': existing is not None,
-            'is_favorite': existing.is_favorite if existing else False,
+            'product_name': res['product_name'] or "Unknown Product",
+            'seller_id': res['seller_id'],
+            'seller_name': res['seller_name'] or "Unknown Seller",
+            'sales': res['sales'],
+            'sales_7d': res['sales_7d'],
+            'sales_30d': res['sales_30d'],
+            'commission_rate': res['commission_rate'],
+            'price': res['price'],
+            'influencer_count': res['influencer_count'],
+            'video_count': res['video_count'],
+            'live_count': res['live_count'],
+            'views_count': res['views_count'],
+            'image_url': res['image_url'],
+            'product_url': res['product_url'] or f'https://www.tiktok.com/shop/pdp/{product_id}',
+            'source': source
         }
-        
-        # Try to get signed/cached image URL
-        if product_data['image_url']:
-            try:
-                signed_urls = get_cached_image_urls([product_data['image_url']])
-                if signed_urls.get(product_data['image_url']):
-                    product_data['cached_image_url'] = signed_urls[product_data['image_url']]
-            except Exception as e:
-                print(f"Failed to get signed image URL: {e}")
-        
-        # Calculate competition level
-        inf = product_data['influencer_count']
-        if inf <= 10:
-            product_data['competition_level'] = 'untapped'
-            product_data['competition_label'] = '🔥 Untapped (1-10)'
-        elif inf <= 30:
-            product_data['competition_level'] = 'low'
-            product_data['competition_label'] = '💎 Low Competition (11-30)'
-        elif inf <= 60:
-            product_data['competition_level'] = 'medium'
-            product_data['competition_label'] = '📊 Medium (31-60)'
-        elif inf <= 100:
-            product_data['competition_level'] = 'good'
-            product_data['competition_label'] = '✅ Good (61-100)'
-        else:
-            product_data['competition_level'] = 'high'
-            product_data['competition_label'] = '⚠️ High Competition (100+)'
-        
-        # Save to database if requested
-        saved = False
-        if save_to_db and not existing:
-            try:
-                new_product = Product(
-                    product_id=product_id,
-                    product_name=product_data['product_name'],
-                    seller_id=product_data['seller_id'],
-                    seller_name=product_data['seller_name'],
-                    gmv=product_data['gmv'],
-                    gmv_30d=product_data['gmv_30d'],
-                    sales=product_data['sales'],
-                    sales_7d=product_data['sales_7d'],
-                    sales_30d=product_data['sales_30d'],
-                    influencer_count=product_data['influencer_count'],
-                    commission_rate=product_data['commission_rate'],
-                    price=product_data['price'],
-                    image_url=product_data['image_url'],
-                    cached_image_url=product_data.get('cached_image_url'),
-                    image_cached_at=datetime.utcnow() if product_data.get('cached_image_url') else None,
-                    video_count=product_data['video_count'],
-                    video_7d=product_data['video_7d'],
-                    video_30d=product_data['video_30d'],
-                    live_count=product_data['live_count'],
-                    views_count=product_data['views_count'],
-                    product_rating=product_data['product_rating'],
-                    review_count=product_data['review_count'],
-                    scan_type='lookup'
-                )
-                db.session.add(new_product)
-                db.session.commit()
-                saved = True
-                product_data['in_database'] = True
-            except Exception as e:
-                db.session.rollback()
-                print(f"Failed to save product: {e}")
-        elif save_to_db and existing:
-            # Update existing product with fresh data
-            existing.sales = product_data['sales']
-            existing.sales_7d = product_data['sales_7d']
-            existing.sales_30d = product_data['sales_30d']
-            existing.gmv = product_data['gmv']
-            existing.gmv_30d = product_data['gmv_30d']
-            existing.influencer_count = product_data['influencer_count']
-            existing.commission_rate = product_data['commission_rate']
-            existing.video_count = product_data['video_count']
-            existing.video_7d = product_data['video_7d']
-            existing.video_30d = product_data['video_30d']
-            existing.live_count = product_data['live_count']
-            existing.views_count = product_data['views_count']
-            # Update image if we got a new one
-            if product_data.get('cached_image_url') and not existing.cached_image_url:
-                existing.image_url = product_data['image_url']
-                existing.cached_image_url = product_data['cached_image_url']
-                existing.image_cached_at = datetime.utcnow()
-            existing.last_updated = datetime.utcnow()
-            db.session.commit()
-            saved = True
-        
-        # Log the lookup
-        user = get_current_user()
-        if user:
-            log_activity(user.id, 'product_lookup', {
-                'product_id': product_id,
-                'product_name': product_data['product_name'][:50],
-                'saved': saved
-            })
-        
-        # Include debug info if requested
-        debug = request.args.get('debug', 'false').lower() == 'true'
-        response_data = {
+
+        # Save/Update if requested
+        if save_to_db:
+            save_or_update_product(p, scan_type='lookup', explicit_id=product_id)
+
+        return jsonify({
             'success': True,
             'product': product_data,
-            'saved': saved,
-            'message': 'Product saved to database!' if saved else None
-        }
-        
-        if debug:
-            response_data['debug'] = {
-                'raw_keys': list(p.keys()),
-                'seller_fields': {
-                    'seller_name': p.get('seller_name'),
-                    'shop_name': p.get('shop_name'),
-                    'store_name': p.get('store_name'),
-                    'brand_name': p.get('brand_name'),
-                    'seller_id': p.get('seller_id'),
-                    'shop_id': p.get('shop_id'),
-                }
-            }
-        
-        return jsonify(response_data)
-        
-    except requests.Timeout:
-        return jsonify({'success': False, 'error': 'EchoTik API timeout - please try again'}), 504
+            'source': source
+        })
+
     except Exception as e:
-        import traceback
-        return jsonify({
-            'success': False, 
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # =============================================================================
 # BATCH URL LOOKUP - Quick Preview Mode (No Save)
@@ -4861,9 +4648,6 @@ def lookup_batch():
     """
     Batch lookup multiple TikTok products by URL or ID.
     Returns stats preview WITHOUT saving to database.
-    
-    POST body: { "urls": "url1\nurl2\nurl3" } (newline-separated string)
-    Max 50 URLs per batch.
     """
     data = request.get_json() or {}
     urls_raw = data.get('urls', '')
@@ -4871,14 +4655,11 @@ def lookup_batch():
     if not urls_raw:
         return jsonify({'success': False, 'error': 'Please provide URLs'}), 400
     
-    # Parse URLs (split by newlines and filter empty)
     urls = [u.strip() for u in urls_raw.strip().split('\n') if u.strip()]
-    
-    if len(urls) == 0:
+    if not urls:
         return jsonify({'success': False, 'error': 'No valid URLs found'}), 400
-    
-    if len(urls) > 50:
-        return jsonify({'success': False, 'error': f'Maximum 50 URLs allowed, you provided {len(urls)}'}), 400
+    if len(urls) > 20: # Limit batch size for performance
+         return jsonify({'success': False, 'error': 'Batch limited to 20 items per request'}), 400
     
     results = []
     errors = []
@@ -4889,70 +4670,31 @@ def lookup_batch():
             resolved_url = url
             if is_tiktok_share_link(url):
                 resolved_url = resolve_tiktok_share_link(url)
-                if not resolved_url:
-                    errors.append({'url': url, 'error': 'Could not resolve share link'})
-                    continue
             
             # Extract product ID
             product_id = extract_product_id(resolved_url)
             if not product_id:
-                errors.append({'url': url, 'error': 'Could not extract product ID'})
+                errors.append({'url': url, 'error': 'Invalid ID'})
                 continue
             
-            # Call EchoTik product detail API
-            response = requests.get(
-                f"{BASE_URL}/product/detail",
-                params={'product_ids': product_id},
-                auth=get_auth(),
-                timeout=15
-            )
-            
-            if response.status_code != 200:
-                errors.append({'url': url, 'error': f'API returned {response.status_code}'})
+            # TIERED ENRICHMENT
+            p, source = fetch_product_details_echotik(product_id)
+            if not p:
+                errors.append({'url': url, 'error': 'Not found'})
                 continue
             
-            api_data = response.json()
-            if api_data.get('code') != 0 or not api_data.get('data'):
-                errors.append({'url': url, 'error': 'Product not found'})
-                continue
+            res = extract_metadata_from_echotik(p)
             
-            p = api_data['data'][0]
-            
-            # Extract seller info
-            seller_name = p.get('seller_name') or p.get('shop_name') or p.get('store_name') or ''
-            seller_id = p.get('seller_id') or p.get('shop_id') or ''
-            
-            # If we have seller_id but no name, try seller/detail API
-            if seller_id and not seller_name:
-                try:
-                    seller_resp = requests.get(
-                        f"{BASE_URL}/seller/detail",
-                        params={'seller_id': seller_id},
-                        auth=get_auth(),
-                        timeout=10
-                    )
-                    if seller_resp.status_code == 200:
-                        sd = seller_resp.json()
-                        if sd.get('code') == 0 and sd.get('data'):
-                            si = sd['data'][0] if isinstance(sd['data'], list) else sd['data']
-                            seller_name = si.get('seller_name') or si.get('shop_name') or ''
-                except:
-                    pass
-            
-            # Build result
             results.append({
                 'product_id': product_id,
-                'product_name': p.get('product_name', ''),
-                'image_url': p.get('product_img_url') or p.get('item_img') or '',
-                'seller_name': seller_name or 'Unknown',
-                'price': float(p.get('spu_avg_price', 0) or 0),
-                'sales': int(p.get('total_sale_cnt', 0) or 0),
-                'sales_7d': int(p.get('total_sale_7d_cnt', 0) or 0),
-                'sales_30d': int(p.get('total_sale_30d_cnt', 0) or 0),
-                'video_count': int(p.get('total_video_cnt', 0) or 0),
-                'influencer_count': int(p.get('total_ifl_cnt', 0) or 0),
-                'commission_rate': float(p.get('product_commission_rate', 0) or 0) / 100.0,
-                'gmv': float(p.get('total_sale_gmv_amt', 0) or 0),
+                'product_name': res['product_name'] or 'Unknown',
+                'image_url': res['image_url'],
+                'seller_name': res['seller_name'] or 'Unknown',
+                'price': res['price'],
+                'sales_7d': res['sales_7d'],
+                'video_count': res['video_count'],
+                'influencer_count': res['influencer_count'],
+                'commission_rate': res['commission_rate'],
                 'url': url
             })
             
@@ -4963,9 +4705,9 @@ def lookup_batch():
         'success': True,
         'count': len(results),
         'products': results,
-        'errors': errors,
-        'message': f'Found stats for {len(results)} of {len(urls)} products'
+        'errors': errors
     })
+
 
 # =============================================================================
 # AI IMAGE GENERATION - Gemini API (Nano Banana Pro)
@@ -7453,11 +7195,12 @@ def scan_dailyvirals_live():
                             real_name = fetch_seller_name(seller_id)
                             if real_name: echotik_data['seller_name'] = real_name
                         
-                        # Save
-                        save_or_update_product(echotik_data, scan_type='dv_live', explicit_id=raw_id)
+                        # Save as 'daily_virals' to ensure it appears in GMV Max tab
+                        save_or_update_product(echotik_data, scan_type='daily_virals', explicit_id=raw_id)
                         total_saved += 1
                 
                 db.session.commit()
+
                 time.sleep(1) # Polite delay
                 
             except Exception as e:

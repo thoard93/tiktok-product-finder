@@ -232,7 +232,7 @@
                         <select onchange="updateSort(this.value)"
                             class="bg-black/40 border border-white/5 rounded-2xl px-5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer shrink-0">
                             <option value="sales_7d">Sort: 7D Volume</option>
-                            <option value="video_count">Sort: Highest Reach</option>
+                            <option value="video_count">Sort: Highest Videos</option>
                             <option value="vids_asc">Sort: Least Videos</option>
                             <option value="first_seen">Sort: Newest First</option>
                             <option value="commission_rate">Sort: High Margin</option>
@@ -477,11 +477,11 @@
                                 <p class="text-xs font-bold text-white tracking-widest">${(p.sales_7d || 0).toLocaleString()}</p>
                             </div>
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Reach</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Total Videos</p>
                                 <p class="text-xs font-bold ${p.video_count > 100 ? 'text-rose-400' : 'text-cyan-400'} tracking-widest">${p.video_count || 0}</p>
                             </div>
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Profit</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Commission</p>
                                 <p class="text-xs font-bold text-violet-400 tracking-widest">${Math.round((p.commission_rate || 0) * 100)}%</p>
                             </div>
                         </div>
