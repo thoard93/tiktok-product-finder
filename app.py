@@ -7153,6 +7153,11 @@ def scan_dailyvirals_live():
                         impersonate="chrome110",
                         timeout=30
                     )
+                if res is None:
+                    last_error = "Connection Failed: Both proxy and direct connection attempts failed."
+                    print(f"[DV Live] {last_error}")
+                    continue
+
                 if res.status_code == 403:
                     last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
                     print(f"[DV Live] 403 Forbidden. Body snippet: {res.text[:300]}")
@@ -7165,47 +7170,61 @@ def scan_dailyvirals_live():
                     continue
                     
                 dv_data = res.json()
+                if not dv_data:
+                    print(f"[DV Live] Empty JSON from page {p_idx}")
+                    continue
+
                 videos = dv_data.get('videos')
                 
                 # Check for alternative keys if 'videos' is missing
                 if videos is None:
                     videos = dv_data.get('data') or dv_data.get('list') or []
-                    if not videos:
-                        print(f"[DV Live] Warning: API returned success but no data keys found. Keys: {list(dv_data.keys())}")
                 
-                if not videos:
+                if not videos or not isinstance(videos, list):
                     print(f"[DV Live] No items found on page {p_idx}")
                     continue
                     
                 for v in videos:
-                    product_info = v.get('product', {})
-                    p_id = product_info.get('productId')
-                    if not p_id: continue
-                    
-                    raw_id = str(p_id).replace('shop_', '')
-                    total_processed += 1
-                    
-                    # Enrich via EchoTik
-                    echotik_data, source = fetch_product_details_echotik(raw_id)
-                    if echotik_data:
-                        # Seller lookup
-                        seller_id = echotik_data.get('seller_id') or echotik_data.get('shop_id')
-                        current_seller = echotik_data.get('seller_name') or echotik_data.get('shop_name')
-                        if seller_id and (not current_seller or current_seller.lower() in ['unknown', 'none', '']):
-                            real_name = fetch_seller_name(seller_id)
-                            if real_name: echotik_data['seller_name'] = real_name
+                    try:
+                        if not v or not isinstance(v, dict): continue
                         
-                        # Save as 'daily_virals' to ensure it appears in GMV Max tab
-                        save_or_update_product(echotik_data, scan_type='daily_virals', explicit_id=raw_id)
-                        total_saved += 1
+                        product_info = v.get('product', {})
+                        if not product_info: continue
+                        
+                        p_id = product_info.get('productId')
+                        if not p_id: continue
+                        
+                        raw_id = str(p_id).replace('shop_', '')
+                        total_processed += 1
+                        
+                        # Enrich via EchoTik
+                        echotik_data, source = fetch_product_details_echotik(raw_id)
+                        if echotik_data:
+                            # Seller lookup
+                            seller_id = echotik_data.get('seller_id') or echotik_data.get('shop_id')
+                            current_seller = echotik_data.get('seller_name') or echotik_data.get('shop_name')
+                            if seller_id and (not current_seller or current_seller.lower() in ['unknown', 'none', '']):
+                                real_name = fetch_seller_name(seller_id)
+                                if real_name: echotik_data['seller_name'] = real_name
+                            
+                            # Save as 'daily_virals' to ensure it appears in GMV Max tab
+                            save_or_update_product(echotik_data, scan_type='daily_virals', explicit_id=raw_id)
+                            total_saved += 1
+                            # Commit each successfully processed item to ensure persistence
+                            db.session.commit()
+                        else:
+                            print(f"[DV Live] Skipping {raw_id} - No EchoTik enrichment found.")
+                    except Exception as ve:
+                        print(f"[DV Live] Error processing video item: {ve}")
+                        db.session.rollback()
+                        continue
                 
-                db.session.commit()
-
                 time.sleep(1) # Polite delay
                 
             except Exception as e:
                 last_error = f"Request Failed: {str(e)}"
                 print(f"[DV Live] {last_error}")
+                db.session.rollback()
                 continue
             
         if total_processed == 0 and last_error:
