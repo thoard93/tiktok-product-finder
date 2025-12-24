@@ -513,6 +513,16 @@ def fetch_product_details_echotik_web(product_id):
                     data['image_url'] = img_match.group(1)
                     print(f"DEBUG: Regex Fallback Image: {data['image_url']}")
                 
+                # More aggressive image search in JSON-like strings
+                if not data.get('image_url'):
+                    # Look for "cover": "..." or "image": "..." patterns
+                    img_match = re.search(r'"(cover|image|imageUrl|cover_url|item_img)":\s*"([^"]+)"', html)
+                    if img_match:
+                        found_img = img_match.group(2).replace('\\u002F', '/')
+                        if found_img.startswith('http'):
+                            data['image_url'] = found_img
+                            print(f"DEBUG: Aggressive Regex Image: {found_img}")
+                
                 # Look for name in title
                 if not data.get('product_name'):
                     title_match = re.search(r'<title>(.*?)</title>', html, re.I)
