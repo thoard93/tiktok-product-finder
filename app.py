@@ -7361,20 +7361,34 @@ def scan_dailyvirals_live():
             try:
                 # Build proxy dict if configured
                 proxies = None
+                proxy_auth = None
                 if DV_PROXY_STRING:
                     try:
                         parts = DV_PROXY_STRING.split(':')
                         if len(parts) == 4:
                             host, port, user, pw = parts
+                            # Use explicit proxy URL with credentials embedded
                             proxy_url = f"http://{user}:{pw}@{host}:{port}"
                             proxies = {"http": proxy_url, "https": proxy_url}
-                            print(f"[DV Live] Using proxy: {host}:****")
+                            print(f"[DV Live] Using proxy: {host}:{port} (auth: {user[:4]}****)")
+                        elif len(parts) == 2:
+                            # Simple host:port without auth
+                            host, port = parts
+                            proxy_url = f"http://{host}:{port}"
+                            proxies = {"http": proxy_url, "https": proxy_url}
+                            print(f"[DV Live] Using proxy: {host}:{port} (no auth)")
                         else:
-                            print(f"[DV Live] Invalid proxy format. Expected host:port:user:pass")
+                            print(f"[DV Live] Invalid proxy format. Expected host:port or host:port:user:pass")
                     except Exception as pe:
                         print(f"[DV Live] Proxy parse error: {pe}")
                 
-                res = requests.get(DV_BACKEND_URL, headers=headers, params=params, timeout=30, proxies=proxies)
+                # Make request with explicit session for better proxy handling
+                session = requests.Session()
+                if proxies:
+                    session.proxies.update(proxies)
+                    session.trust_env = False  # Don't use system proxy settings
+                
+                res = session.get(DV_BACKEND_URL, headers=headers, params=params, timeout=45)
                 if res.status_code == 403:
                     last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
                     print(f"[DV Live] 403 Forbidden. Body snippet: {res.text[:300]}")
