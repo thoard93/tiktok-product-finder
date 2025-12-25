@@ -5580,6 +5580,9 @@ def image_proxy(product_id):
                     local_headers.pop("Referer", None)
                 
                 try:
+                    # Ultra-high timeout for read, but shorter for connect
+                    current_timeout = (10, 30) if "volces.com" in lower_url else (10, 15)
+                    
                     current_proxies = None
                     if config.get("use_proxy") and DV_PROXY_STRING:
                         parts = DV_PROXY_STRING.split(':')
@@ -5613,7 +5616,7 @@ def image_proxy(product_id):
                             target_url, 
                             headers=local_headers, 
                             stream=True, 
-                            timeout=20, 
+                            timeout=current_timeout, 
                             verify=False if config.get("naked") else True,
                             proxies=current_proxies
                         )
