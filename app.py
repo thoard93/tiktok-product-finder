@@ -7406,79 +7406,80 @@ def scan_dailyvirals_live():
         
         for p_idx in range(start_page, start_page + page_count):
             print(f"[DV Live] Fetching page {p_idx} (Start: {start_date}, End: {end_date})...")
-            params = {
-                'startDate': start_date,
-                'endDate': end_date,
-                'page': str(p_idx),
-                'limit': '12', # Match test script
-                'sortBy': sort_by,
-                'limitedResults': 'false',
-                'isPaidPosts': is_paid,
-                'region': ''
-            }
-            
-            # Consolidated Retry Logic for Scanner
-            try_configs = [
-                {"use_proxy": True, "impersonate": "chrome110"},
-                {"use_proxy": True, "impersonate": "safari15_3"},
-                {"use_proxy": False, "impersonate": "chrome110"}
-            ]
-            
-            res = None
-            last_status = "Not Attempted"
-            
-            for config in try_configs:
-                try:
-                    current_proxies = None
-                    if config.get("use_proxy") and DV_PROXY_STRING:
-                        parts = DV_PROXY_STRING.split(':')
-                        if len(parts) == 4:
-                            host, port, user, pw = parts
-                            proxy_url = f"http://{user}:{pw}@{host}:{port}"
-                            current_proxies = {"http": proxy_url, "https": proxy_url}
-                            print(f"[DV Live] Attempting via proxy {host}:{port} ({config.get('impersonate')})")
-                        else:
-                            print(f"[DV Live] Skipping proxy (invalid format)")
-                            continue
-                    else:
-                        print(f"[DV Live] Attempting direct connection ({config.get('impersonate')})")
-
-                    from curl_cffi import requests as curl_requests
-                    r = curl_requests.get(
-                        DV_BACKEND_URL, 
-                        headers=headers, 
-                        params=params, 
-                        proxies=current_proxies,
-                        impersonate=config.get("impersonate", "chrome110"),
-                        timeout=25
-                    )
-                    
-                    if r.status_code == 200:
-                        res = r
-                        break
-                    
-                    last_status = str(r.status_code)
-                    print(f"[DV Live] Attempt failed: HTTP {r.status_code}")
-                    
-                    # If it's a 403, it's likely a token issue, don't spam retries
-                    if r.status_code == 403:
-                        res = r
-                        break
-                        
-                except Exception as e:
-                    last_status = f"Err: {str(e)[:50]}"
-                    print(f"[DV Live] Attempt Exception: {e}")
-                    continue
-            
-            if not res or res.status_code != 200:
-                if res and res.status_code == 403:
-                    last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is heavily blocked."
-                    print(f"[DV Live] 403 Forbidden. Stopping scan.")
-                    break
+            try:
+                params = {
+                    'startDate': start_date,
+                    'endDate': end_date,
+                    'page': str(p_idx),
+                    'limit': '12', # Match test script
+                    'sortBy': sort_by,
+                    'limitedResults': 'false',
+                    'isPaidPosts': is_paid,
+                    'region': ''
+                }
                 
-                last_error = f"Connection Failed: {last_status}"
-                print(f"[DV Live] Skipping page {p_idx} due to multiple failures.")
-                continue
+                # Consolidated Retry Logic for Scanner
+                try_configs = [
+                    {"use_proxy": True, "impersonate": "chrome110"},
+                    {"use_proxy": True, "impersonate": "safari15_3"},
+                    {"use_proxy": False, "impersonate": "chrome110"}
+                ]
+                
+                res = None
+                last_status = "Not Attempted"
+                
+                for config in try_configs:
+                    try:
+                        current_proxies = None
+                        if config.get("use_proxy") and DV_PROXY_STRING:
+                            parts = DV_PROXY_STRING.split(':')
+                            if len(parts) == 4:
+                                host, port, user, pw = parts
+                                proxy_url = f"http://{user}:{pw}@{host}:{port}"
+                                current_proxies = {"http": proxy_url, "https": proxy_url}
+                                print(f"[DV Live] Attempting via proxy {host}:{port} ({config.get('impersonate')})")
+                            else:
+                                print(f"[DV Live] Skipping proxy (invalid format)")
+                                continue
+                        else:
+                            print(f"[DV Live] Attempting direct connection ({config.get('impersonate')})")
+    
+                        from curl_cffi import requests as curl_requests
+                        r = curl_requests.get(
+                            DV_BACKEND_URL, 
+                            headers=headers, 
+                            params=params, 
+                            proxies=current_proxies,
+                            impersonate=config.get("impersonate", "chrome110"),
+                            timeout=25
+                        )
+                        
+                        if r.status_code == 200:
+                            res = r
+                            break
+                        
+                        last_status = str(r.status_code)
+                        print(f"[DV Live] Attempt failed: HTTP {r.status_code}")
+                        
+                        # If it's a 403, it's likely a token issue, don't spam retries
+                        if r.status_code == 403:
+                            res = r
+                            break
+                            
+                    except Exception as e:
+                        last_status = f"Err: {str(e)[:50]}"
+                        print(f"[DV Live] Attempt Exception: {e}")
+                        continue
+                
+                if not res or res.status_code != 200:
+                    if res and res.status_code == 403:
+                        last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is heavily blocked."
+                        print(f"[DV Live] 403 Forbidden. Stopping scan.")
+                        break
+                    
+                    last_error = f"Connection Failed: {last_status}"
+                    print(f"[DV Live] Skipping page {p_idx} due to multiple failures.")
+                    continue
 
                 dv_data = res.json()
                 if not dv_data:
