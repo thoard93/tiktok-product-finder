@@ -5657,7 +5657,7 @@ def api_products():
         per_page = request.args.get('per_page', 24, type=int)
         if 'limit' in request.args: per_page = request.args.get('limit', type=int)
         
-        sort_by = request.args.get('sort') or request.args.get('sort_by') or 'newest'
+        sort_by = request.args.get('sort') or request.args.get('sort_by') or 'sales_7d'
         
         # Filters
         min_sales = request.args.get('min_sales', type=int)

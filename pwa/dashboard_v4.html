@@ -54,7 +54,8 @@
     <!-- Sidebar (Desktop) -->
     <aside class="hidden md:flex flex-col w-72 glass border-r border-white/5 z-30">
         <div class="p-8 text-center md:text-left">
-            <div class="flex items-center gap-3 group cursor-pointer" onclick="window.location.href='/'">
+            <div class="flex items-center gap-3 group cursor-pointer"
+                onclick="sessionStorage.clear(); window.location.href='/'">
                 <div
                     class="w-12 h-12 rounded-2xl glass flex items-center justify-center relative overflow-hidden shrink-0">
                     <img src="/vantage_logo.png" class="w-full h-full object-cover p-1.5"
@@ -367,8 +368,8 @@
         </div>
 
         <script>
-            let curPage = 1;
-            let curFilter = {};
+            let curPage = parseInt(sessionStorage.getItem('vantage_page')) || 1;
+            let curFilter = JSON.parse(sessionStorage.getItem('vantage_filter')) || { sort_by: 'sales_7d' };
             let searchTimeout;
 
             async function loadDashboard() {
@@ -380,13 +381,29 @@
                         document.getElementById('userName').textContent = user.discord_username || 'Operator';
                         if (user.discord_avatar) document.getElementById('userAvatar').src = `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.discord_avatar}.png`;
 
+                        // Restore UI state from stored filter
+                        if (curFilter.sort_by) {
+                            const sortSelect = document.querySelector('select[onchange="updateSort(this.value)"]');
+                            if (sortSelect) sortSelect.value = curFilter.sort_by;
+                        }
+
+                        // Restore active tab
+                        const activeTabType = sessionStorage.getItem('vantage_tab_type') || 'all';
+                        const tabs = document.querySelectorAll('.filter-tab');
+                        tabs.forEach(tab => {
+                            tab.classList.remove('active-tab', 'text-white');
+                            if (tab.getAttribute('onclick').includes(`'${activeTabType}'`)) {
+                                tab.classList.add('active-tab');
+                            }
+                        });
+
                         // Admin Protection UI
                         if (user.is_admin) {
                             document.getElementById('sidebarScannerLink').classList.remove('hidden');
                             document.querySelectorAll('.mobile-nav-item[href="/scanner"]').forEach(el => el.classList.remove('hidden'));
                         }
                     }
-                    loadProducts(1);
+                    loadProducts(curPage);
                     loadStats();
                 } catch (e) { console.error("Global Init Error", e); }
             }
@@ -408,6 +425,9 @@
 
             async function loadProducts(page) {
                 curPage = page;
+                sessionStorage.setItem('vantage_page', curPage);
+                sessionStorage.setItem('vantage_filter', JSON.stringify(curFilter));
+
                 const params = new URLSearchParams({ page: page, limit: 24, ...curFilter });
 
                 // Loading state
@@ -501,11 +521,16 @@
                 document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active-tab', 'text-white'));
                 el.classList.add('active-tab');
 
+                // Preserve sort_by when switching tabs
+                const savedSort = curFilter.sort_by || 'sales_7d';
+
                 if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
                 else if (type === 'gmv_max') curFilter = { scan_type: 'daily_virals,dv_live,dv_import' };
                 else if (type === 'favorites') curFilter = { favorites_only: 'true' };
                 else if (type === 'all') curFilter = {};
 
+                curFilter.sort_by = savedSort;
+                sessionStorage.setItem('vantage_tab_type', type);
                 loadProducts(1);
             }
 
@@ -654,7 +679,7 @@
 
                     if (data.success) {
                         showToast(data.message || 'Purge complete!');
-                        loadInitialData(); // Refresh grid
+                        loadProducts(1); // Refresh grid
                     } else {
                         showToast('Purge failed: ' + data.error, 'error');
                     }
