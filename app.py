@@ -384,32 +384,50 @@ def fetch_product_details_echotik_web(product_id):
             curl_requests = requests # Fallback if not installed
 
         # Apply Proxy if configured (Shared with DailyVirals)
-        proxies = None
-        if DV_PROXY_STRING:
-            parts = DV_PROXY_STRING.split(':')
-            if len(parts) == 4:
-                host, port, user, pw = parts
-                proxy_url = f"http://{user}:{pw}@{host}:{port}"
-                proxies = {"http": proxy_url, "https": proxy_url}
-                print(f"DEBUG: EchoTik Web using proxy: {host}:{port}")
-
-        try:
-            res = curl_requests.get(
-                url, 
-                headers=headers, 
-                impersonate="chrome110", 
-                proxies=proxies,
-                timeout=20
-            )
-        except Exception as pe:
-            print(f"DEBUG: Proxy attempt failed for {raw_pid} ({pe}). Retrying DIRECT...")
-            res = curl_requests.get(
-                url, 
-                headers=headers, 
-                impersonate="chrome110", 
-                proxies=None,
-                timeout=15
-            )
+        # We try: 
+        # 1. Proxy + Chrome110
+        # 2. Proxy + Safari15 (sometimes bypasses differently)
+        # 3. Direct + Chrome110
+        
+        configs = [
+            {"use_proxy": True, "impersonate": "chrome110", "timeout": 25},
+            {"use_proxy": True, "impersonate": "safari15_3", "timeout": 25},
+            {"use_proxy": False, "impersonate": "chrome110", "timeout": 15}
+        ]
+        
+        res = None
+        last_err = None
+        
+        for cfg in configs:
+            try:
+                current_proxies = None
+                if cfg["use_proxy"] and DV_PROXY_STRING:
+                    parts = DV_PROXY_STRING.split(':')
+                    if len(parts) == 4:
+                        host, port, user, pw = parts
+                        proxy_url = f"http://{user}:{pw}@{host}:{port}"
+                        current_proxies = {"http": proxy_url, "https": proxy_url}
+                elif cfg["use_proxy"]:
+                    continue # Skip proxy attempt if not configured
+                
+                print(f"DEBUG: EchoTik Web attempt (Proxy: {cfg['use_proxy']}, Profile: {cfg['impersonate']})...")
+                res = curl_requests.get(
+                    url, 
+                    headers=headers, 
+                    impersonate=cfg["impersonate"], 
+                    proxies=current_proxies,
+                    timeout=cfg["timeout"]
+                )
+                if res.status_code == 200:
+                    break
+                print(f"DEBUG: EchoTik Web attempt failed with status {res.status_code}")
+            except Exception as e:
+                last_err = e
+                print(f"DEBUG: EchoTik Web attempt exception: {e}")
+                continue
+                
+        if not res:
+            return None, f"Scraper Failed: {last_err}"
 
         if res.status_code == 403:
             return None, "BLOCKED_BY_WAF"
@@ -5539,37 +5557,29 @@ def image_proxy(product_id):
 
             # Consolidated Retry Logic
             try_configs = [
-                {"Referer": "https://echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": "https://echosell.echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "use_proxy": True},
-                {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": "https://shop.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "use_proxy": True},
-                {"Referer": None, "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "naked": True}
+                {"Referer": "https://echotik.live/", "use_proxy": False, "impersonate": "chrome110"},
+                {"Referer": "https://echosell.echotik.live/", "use_proxy": True, "impersonate": "chrome110"},
+                {"Referer": "https://www.tiktok.com/", "use_proxy": False, "impersonate": "safari15_3"},
+                {"Referer": "https://shop.tiktok.com/", "use_proxy": True, "impersonate": "chrome110"},
+                {"Referer": None, "use_proxy": False, "naked": True, "impersonate": "chrome110"}
             ]
             
             resp = None
             last_status = "Not Attempted"
+            
+            try:
+                from curl_cffi import requests as curl_requests
+            except ImportError:
+                curl_requests = None
+
             for config in try_configs:
-                local_headers = {}
-                local_headers["User-Agent"] = config.get("UA") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                local_headers = headers.copy()
                 if config.get("Referer"):
                     local_headers["Referer"] = config["Referer"]
-                
-                # Standard Accept Header
-                local_headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-                
-                # Advanced Browser Signaling
-                local_headers["sec-ch-ua"] = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"'
-                local_headers["sec-ch-ua-mobile"] = "?0"
-                local_headers["sec-ch-ua-platform"] = '"Windows"'
-                local_headers["sec-fetch-dest"] = "image"
-                local_headers["sec-fetch-mode"] = "no-cors"
-                local_headers["sec-fetch-site"] = "cross-site"
+                else:
+                    local_headers.pop("Referer", None)
                 
                 try:
-                    # Ultra-high timeout for read, but shorter for connect
-                    current_timeout = (5, 30) if "volces.com" in lower_url else (5, 15)
-                    
-                    # SMART PROXY: If standard requests fail, one of our attempts will use the residential proxy
                     current_proxies = None
                     if config.get("use_proxy") and DV_PROXY_STRING:
                         parts = DV_PROXY_STRING.split(':')
@@ -5579,42 +5589,56 @@ def image_proxy(product_id):
                             current_proxies = {"http": proxy_url, "https": proxy_url}
                             print(f"DEBUG: Image Proxy using residential tunnel for {config.get('Referer')}")
 
-                    resp = requests.get(
-                        target_url, 
-                        headers=local_headers, 
-                        stream=True, 
-                        timeout=current_timeout, 
-                        verify=False if config.get("naked") else True,
-                        proxies=current_proxies
-                    )
+                    # Prefer curl_cffi for better impersonation
+                    if curl_requests:
+                        r = curl_requests.get(
+                            target_url, 
+                            headers=local_headers, 
+                            proxies=current_proxies,
+                            impersonate=config.get("impersonate", "chrome110"),
+                            timeout=current_timeout,
+                            verify=False if config.get("naked") else True
+                        )
+                        # Adapt curl_cffi response to look like requests response for the rest of the logic
+                        class MockResp:
+                            def __init__(self, r):
+                                self.status_code = r.status_code
+                                self.content = r.content
+                                self.headers = r.headers
+                                # curl_cffi headers are case-insensitive dict
+                                self.raw = type('obj', (object,), {'headers': r.headers})
+                        resp = MockResp(r)
+                    else:
+                        resp = requests.get(
+                            target_url, 
+                            headers=local_headers, 
+                            stream=True, 
+                            timeout=20, 
+                            verify=False if config.get("naked") else True,
+                            proxies=current_proxies
+                        )
                     
                     if resp.status_code == 200:
                         break
                     
                     last_status = str(resp.status_code)
-                    print(f"DEBUG: Proxy attempt {config.get('Referer')} status: {resp.status_code}")
+                    print(f"DEBUG: Image Proxy attempt {config.get('Referer')} status: {resp.status_code}")
                     
-                    # If we got a real error that isn't worth retrying
-                    if resp.status_code in [404, 401]:
-                        break
                 except Exception as e:
                     last_status = f"Err: {str(e)[:50]}"
-                    print(f"DEBUG: Proxy config attempt failed: {e}")
+                    print(f"DEBUG: Image Proxy attempt failed ({config.get('Referer')}): {e}")
                     continue
             
             if not resp or resp.status_code != 200:
                 print(f"Proxy Final Error: {last_status} for {target_url}")
-                # Last resort: redirect to original URL, maybe the USER's browser can load it directly
                 return redirect(target_url)
 
-            # Exclude some problematic headers
-            excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-            proxy_headers = [(name, value) for (name, value) in (resp.raw.headers.items() if resp else [])
+            # Re-wrap headers for Flask Response
+            excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'server', 'x-cache']
+            proxy_headers = [(name, value) for (name, value) in resp.headers.items()
                              if name.lower() not in excluded_headers]
 
-            content = resp.content if resp else b""
-            status_code = resp.status_code if resp else 302 # Fallback
-            return Response(content, status_code, proxy_headers)
+            return Response(resp.content, resp.status_code, proxy_headers)
 
     except Exception as e:
         print(f"Proxy Error: {e}")
