@@ -22,6 +22,8 @@ import secrets
 import sys
 import subprocess
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 try:
     import stripe
 except ImportError:
@@ -382,8 +384,10 @@ def fetch_product_details_echotik_web(product_id):
             curl_requests = requests # Fallback if not installed
 
         res = curl_requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+        if res.status_code == 403:
+            return None, "BLOCKED_BY_WAF"
         if res.status_code != 200:
-            return None, f"EchoTik Web returned {res.status_code}"
+            return None, f"WEB_ERROR_{res.status_code}"
 
         html = res.text
         
@@ -549,7 +553,7 @@ def fetch_product_details_echotik(product_id, region='US', force=False):
     Tries Web Scraper -> Realtime Multi-Region -> Then Cached DB.
     Returns (raw_data, source_name) or (None, err)
     
-    CREDIT PROTECTION: If scraper is blocked by login, we STOP before hitting paid API.
+    CREDIT PROTECTION: If scraper is blocked (WAF, Login, or 403), we STOP before hitting paid API.
     """
     raw_pid = str(product_id).replace('shop_', '')
     use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'true').lower() == 'true'
@@ -558,25 +562,26 @@ def fetch_product_details_echotik(product_id, region='US', force=False):
     # 0. Try Internal Cache First (unless forced)
     if not force:
         try:
-            from models import Product 
-            existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
-            if existing and existing.last_updated:
-                age = (datetime.utcnow() - existing.last_updated).total_seconds()
-                if age < 86400: # 24 hours
-                    print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({int(age/3600)}h old)")
-                    cached_data = {
-                        'product_id': existing.product_id,
-                        'product_name': existing.product_name,
-                        'image_url': existing.image_url,
-                        'price': existing.price,
-                        'sales_7d': existing.sales_7d,
-                        'video_count': existing.video_count,
-                        'influencer_count': existing.influencer_count,
-                        'commission_rate': existing.commission_rate,
-                        'seller_id': existing.seller_id,
-                        'seller_name': existing.seller_name
-                    }
-                    return cached_data, "db_cache"
+            with app.app_context():
+                # Use global Product class defined in app.py
+                existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
+                if existing and existing.last_updated:
+                    age = (datetime.utcnow() - existing.last_updated).total_seconds()
+                    if age < 86400: # 24 hours
+                        print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({int(age/3600)}h old)")
+                        cached_data = {
+                            'product_id': existing.product_id,
+                            'product_name': existing.product_name,
+                            'image_url': existing.image_url,
+                            'price': existing.price,
+                            'sales_7d': existing.sales_7d,
+                            'video_count': existing.video_count,
+                            'influencer_count': existing.influencer_count,
+                            'commission_rate': existing.commission_rate,
+                            'seller_id': existing.seller_id,
+                            'seller_name': existing.seller_name
+                        }
+                        return cached_data, "db_cache"
         except Exception as ce:
             print(f"DEBUG: Cache check failed: {ce}")
 
@@ -587,10 +592,11 @@ def fetch_product_details_echotik(product_id, region='US', force=False):
             print(f"[CREDIT SAVED] 🌐 Scraped {raw_pid} via {source}")
             return d, source
         
-        # HARD STOP: If we are blocked by login, DO NOT fall back to paid API.
-        if source == "BLOCKED_BY_LOGIN":
-            print(f"[CREDIT SAFEGUARD] 🛑 Stopping enrichment for {raw_pid} - Scraper blocked by login. Update cookies to resume free lookups.")
-            return None, "BLOCKED_BY_LOGIN"
+        # HARD STOP: If we are blocked or hit error, DO NOT fall back to paid API by default.
+        # This is the "Budget Safeguard".
+        if source and ("BLOCKED" in source or "WEB_ERROR" in source):
+            print(f"[CREDIT SAFEGUARD] 🛑 Stopping enrichment for {raw_pid} - Scraper failed ({source}). Update cookies to resume.")
+            return None, source
 
     except Exception as e:
         print(f"DEBUG: Web Scraper attempt failed for {raw_pid}: {e}")
