@@ -390,7 +390,8 @@ def fetch_product_details_echotik_web(product_id):
         # Detection: If page is too small or contains login/signup indicators, we are blocked/redirected
         if len(html) < 2000 or "login" in html.lower() or "login-container" in html:
             if "echotik.live" in html:
-                return None, "Blocked by Login: EchoTik is requiring a fresh cookie."
+                print(f"DEBUG: Web Scraper BLOCKED by Login for {raw_pid}")
+                return None, "BLOCKED_BY_LOGIN"
         
         # Look for the JSON data blob (Nuxt state)
         # Usually window.__NUXT__ or window.__INITIAL_STATE__
@@ -542,41 +543,42 @@ def fetch_product_details_echotik_web(product_id):
         print(f"DEBUG: EchoTik Scraper Error: {e}")
         return None, str(e)
 
-def fetch_product_details_echotik(product_id, region='US'):
+def fetch_product_details_echotik(product_id, region='US', force=False):
     """
     Robust fetcher for Product Details.
     Tries Web Scraper -> Realtime Multi-Region -> Then Cached DB.
     Returns (raw_data, source_name) or (None, err)
+    
+    CREDIT PROTECTION: If scraper is blocked by login, we STOP before hitting paid API.
     """
     raw_pid = str(product_id).replace('shop_', '')
     use_scraper = get_config_value('ECHOTIK_USE_WEB_SCRAPER', 'true').lower() == 'true'
-    print(f"DEBUG: fetch_product_details_echotik for {raw_pid} - Scraper enabled: {use_scraper}")
+    print(f"DEBUG: fetch_product_details_echotik for {raw_pid} - Scraper: {use_scraper}, Force: {force}")
     
-    # 0. Try Internal Cache First (Less than 24h old)
-    # This is the BIGGEST credit saver.
-    try:
-        from models import Product # Ensure model is available
-        existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
-        if existing and existing.last_updated:
-            age = (datetime.utcnow() - existing.last_updated).total_seconds()
-            if age < 86400: # 24 hours
-                print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({int(age/3600)}h old)")
-                # Convert model to dict for transparency with other logic
-                cached_data = {
-                    'product_id': existing.product_id,
-                    'product_name': existing.product_name,
-                    'image_url': existing.image_url,
-                    'price': existing.price,
-                    'sales_7d': existing.sales_7d,
-                    'video_count': existing.video_count,
-                    'influencer_count': existing.influencer_count,
-                    'commission_rate': existing.commission_rate,
-                    'seller_id': existing.seller_id,
-                    'seller_name': existing.seller_name
-                }
-                return cached_data, "db_cache"
-    except Exception as ce:
-        print(f"DEBUG: Cache check failed: {ce}")
+    # 0. Try Internal Cache First (unless forced)
+    if not force:
+        try:
+            from models import Product 
+            existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
+            if existing and existing.last_updated:
+                age = (datetime.utcnow() - existing.last_updated).total_seconds()
+                if age < 86400: # 24 hours
+                    print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({int(age/3600)}h old)")
+                    cached_data = {
+                        'product_id': existing.product_id,
+                        'product_name': existing.product_name,
+                        'image_url': existing.image_url,
+                        'price': existing.price,
+                        'sales_7d': existing.sales_7d,
+                        'video_count': existing.video_count,
+                        'influencer_count': existing.influencer_count,
+                        'commission_rate': existing.commission_rate,
+                        'seller_id': existing.seller_id,
+                        'seller_name': existing.seller_name
+                    }
+                    return cached_data, "db_cache"
+        except Exception as ce:
+            print(f"DEBUG: Cache check failed: {ce}")
 
     # 1. Try Web Scraper First (Free)
     try:
@@ -584,6 +586,12 @@ def fetch_product_details_echotik(product_id, region='US'):
         if d:
             print(f"[CREDIT SAVED] 🌐 Scraped {raw_pid} via {source}")
             return d, source
+        
+        # HARD STOP: If we are blocked by login, DO NOT fall back to paid API.
+        if source == "BLOCKED_BY_LOGIN":
+            print(f"[CREDIT SAFEGUARD] 🛑 Stopping enrichment for {raw_pid} - Scraper blocked by login. Update cookies to resume free lookups.")
+            return None, "BLOCKED_BY_LOGIN"
+
     except Exception as e:
         print(f"DEBUG: Web Scraper attempt failed for {raw_pid}: {e}")
 
@@ -885,8 +893,9 @@ def enrich_product_data(p, i_log_prefix="", force=False):
 
     # 1. Direct ID Check
     pid = gv(p, 'product_id')
+    raw_pid = str(pid).replace('shop_', '')
     if pid and not pid.startswith('ad_') and (force or not gv(p, 'is_enriched')):
-        d, source = fetch_product_details_echotik(pid, region=gv(p, 'region', 'US'))
+        d, source = fetch_product_details_echotik(raw_pid, region=gv(p, 'region', 'US'), force=force)
         
         if d:
             print(f"DEBUG: Enriched {pid} via {source}")
@@ -5411,13 +5420,19 @@ def api_enrich_product(product_id):
         return jsonify({'success': False, 'error': 'Product not found'}), 404
         
     try:
-        # Trigger enrichment logic
+        # Trigger enrichment logic - force bypasses database cache
         success = enrich_product_data(p, i_log_prefix="⚡[LiveSync]", force=True)
         if success:
             db.session.commit()
             return jsonify({'success': True, 'product': p.to_dict()})
         else:
-            return jsonify({'success': False, 'error': 'Enrichment failed or no new data found'}), 500
+            # Check if it was a budget safeguard block
+            # Note: enrich_product_data returns boolean, so we might need to check logs or return more info if needed
+            # For now, if it failed and force was True, it's likely a scraper issue or API issue
+            return jsonify({
+                'success': False, 
+                'error': 'Enrichment blocked or failed. Please check EchoTik cookie status in Terminal.'
+            }), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
