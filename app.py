@@ -5740,13 +5740,15 @@ def api_products():
         elif sort_by in ['commission', 'commission_rate']:
             query = query.order_by(Product.commission_rate.desc())
         elif sort_by in ['newest', 'first_seen']:
-            query = query.order_by(Product.first_seen.desc())
+            query = query.order_by(Product.first_seen.desc(), Product.last_updated.desc())
+        elif sort_by in ['updated', 'last_updated']:
+            query = query.order_by(Product.last_updated.desc())
         elif sort_by == 'video_count':
             query = query.order_by(Product.video_count.desc())
         elif sort_by in ['vids_asc', 'video_asc']:
             query = query.order_by(Product.video_count.asc())
         else:
-            query = query.order_by(Product.first_seen.desc())
+            query = query.order_by(Product.first_seen.desc(), Product.last_updated.desc())
 
         # 4. Pagination & Execution
         total = query.count()

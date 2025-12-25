@@ -242,6 +242,7 @@
                             <option value="video_count">Sort: Highest Videos</option>
                             <option value="vids_asc">Sort: Least Videos</option>
                             <option value="first_seen">Sort: Newest First</option>
+                            <option value="updated">Sort: Recently Scanned</option>
                             <option value="commission_rate">Sort: High Margin</option>
                         </select>
 
@@ -527,7 +528,7 @@
                 if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
                 else if (type === 'gmv_max') curFilter = { scan_type: 'daily_virals,dv_live,dv_import' };
                 else if (type === 'favorites') curFilter = { favorites_only: 'true' };
-                else if (type === 'all') curFilter = {};
+                else if (type === 'all') curFilter = { min_videos: 0, min_vids: 0 };
 
                 curFilter.sort_by = savedSort;
                 sessionStorage.setItem('vantage_tab_type', type);
