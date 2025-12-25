@@ -158,6 +158,8 @@ ECHOTIK_REALTIME_BASE = "https://open.echotik.live/api/v3/realtime"
 BASE_URL = ECHOTIK_V3_BASE # Default for shop lists etc.
 ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
 ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
+ECHOTIK_PROXY_STRING = os.environ.get('ECHOTIK_PROXY_STRING')
+TIKTOK_PARTNER_COOKIE = os.environ.get('TIKTOK_PARTNER_COOKIE')
 
 # Telegram Alerts Config
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
@@ -7553,13 +7555,156 @@ def scan_dailyvirals_live():
                 'success': False,
                 'error': f"Uplink Failure: {last_error}. Please verify DAILYVIRALS_TOKEN."
             }), 400
-
+            
         return jsonify({
             'success': True,
             'message': f"Scanned {total_processed} items from DailyVirals, saved/updated {total_saved} products with EchoTik stats."
         })
-        
     except Exception as e:
         print(f"[DV Live] Critical Error: {e}")
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/scan/partner_opportunity', methods=['POST'])
+@login_required
+def trigger_partner_opportunity_scan():
+    """Endpoint to trigger the TikTok Partner Center scan"""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'error': 'Admin privileges required'}), 403
+        
+    if not TIKTOK_PARTNER_COOKIE:
+        return jsonify({'success': False, 'error': 'TIKTOK_PARTNER_COOKIE not configured in environment.'}), 400
+
+    # Run in background via executor
+    executor.submit(scan_partner_opportunity_live)
+    return jsonify({'success': True, 'message': 'Partner Opportunity scan started in background. Results will appear in the Opportunities tab.'})
+
+def scan_partner_opportunity_live():
+    """
+    Scrapes the TikTok Shop Partner Center 'High Opportunity' pool.
+    Uses humans-centric rate limiting and proxy rotation for safety.
+    """
+    from curl_cffi import requests as curl_requests
+    import time
+    
+    print("[Partner Scan] Starting High Opportunity scan...")
+    
+    target_url = "https://partner.us.tiktokshop.com/api/v1/affiliate/partner/product/opportunity_product/list"
+    
+    # These params were extracted from the user's cURL.
+    # Note: partner_id and fp are likely session-specific.
+    params = {
+        'user_language': 'en',
+        'partner_id': '8653231797418889998', 
+        'aid': '359713',
+        'app_name': 'i18n_ecom_alliance',
+        'device_id': '0',
+        'fp': 'verify_mjiwfxfc_9k8DpPTf_DdjR_4JGE_Bvx7_nVbrXHj81VV5',
+        'device_platform': 'web',
+        'cookie_enabled': 'true',
+        'screen_width': '1536',
+        'screen_height': '864',
+        'browser_language': 'en-US',
+        'browser_platform': 'Win32',
+        'browser_name': 'Mozilla',
+        'browser_version': '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+        'browser_online': 'true',
+        'timezone_name': 'America/New_York'
+    }
+    
+    headers = {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'en-US,en;q=0.9',
+        'content-type': 'application/json',
+        'cookie': TIKTOK_PARTNER_COOKIE,
+        'origin': 'https://partner.us.tiktokshop.com',
+        'referer': 'https://partner.us.tiktokshop.com/affiliate-product-management/opportunity-product-pool?prePage=product_marketplace&market=100',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+    }
+    
+    proxies = None
+    if ECHOTIK_PROXY_STRING:
+        p_parts = ECHOTIK_PROXY_STRING.split(':')
+        if len(p_parts) == 4:
+            proxies = {
+                "http": f"http://{p_parts[2]}:{p_parts[3]}@{p_parts[0]}:{p_parts[1]}",
+                "https": f"http://{p_parts[2]}:{p_parts[3]}@{p_parts[0]}:{p_parts[1]}"
+            }
+
+    total_saved = 0
+    max_pages = 5 # Start small for safety
+    
+    for page in range(1, max_pages + 1):
+        print(f"[Partner Scan] Fetching page {page}...")
+        
+        payload = {
+            "filter": {
+                "product_source": [],
+                "campaign_type": [],
+                "label_type": [],
+                "product_status": 1
+            },
+            "page_size": 15,
+            "page": page
+        }
+        
+        try:
+            res = curl_requests.post(
+                target_url,
+                params=params,
+                headers=headers,
+                json=payload,
+                proxies=proxies,
+                impersonate="chrome110",
+                timeout=30
+            )
+            
+            if res.status_code != 200:
+                print(f"[Partner Scan] Error {res.status_code}: {res.text[:200]}")
+                break
+                
+            data = res.json()
+            products = data.get('data', {}).get('opportunity_product_list', [])
+            
+            if not products:
+                print("[Partner Scan] No more products found.")
+                break
+                
+            with app.app_context():
+                for p in products:
+                    try:
+                        # Map TikTok Partner fields to our Product model
+                        # Example fields from observed API structure:
+                        # product_id, title, img_url, price, sales, commission_rate, etc.
+                        pid = p.get('product_id')
+                        if not pid: continue
+                        
+                        # Data Mapping
+                        p_data = {
+                            'product_id': pid,
+                            'product_name': p.get('title', 'Unknown Product'),
+                            'image_url': p.get('img_url'),
+                            'price': float(p.get('price', {}).get('price_with_vat_val', 0)) if isinstance(p.get('price'), dict) else 0,
+                            'sales_7d': int(p.get('sales', 0)), # Partner center usually shows total sales, but we'll use it as baseline
+                            'commission_rate': float(p.get('commission_info', {}).get('commission_rate', 0)) / 100 if isinstance(p.get('commission_info'), dict) else 0,
+                            'seller_name': p.get('seller_info', {}).get('name', 'Classified') if isinstance(p.get('seller_info'), dict) else 'Classified',
+                            'product_url': f"https://shop.tiktok.com/view/product/{pid}?region=US"
+                        }
+                        
+                        if save_or_update_product(p_data, scan_type='partner_opportunity'):
+                            total_saved += 1
+                            
+                    except Exception as e_p:
+                        print(f"[Partner Scan] Error mapping product {p.get('product_id')}: {e_p}")
+                
+                db.session.commit()
+                
+            # SAFETY PROTOCOL: 10-15 second delay between pages
+            print(f"[Partner Scan] Page {page} processed. Sleeping 12s...")
+            time.sleep(12)
+            
+        except Exception as e:
+            print(f"[Partner Scan] Fatal request error: {e}")
+            break
+            
+    print(f"[Partner Scan] Finished. Total new/updated opportunities: {total_saved}")
