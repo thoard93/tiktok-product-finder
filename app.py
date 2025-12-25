@@ -899,8 +899,25 @@ def fetch_seller_name(seller_id):
     return None
 
 def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
-    # ... (Cleanup logic same) ...
-    # ...
+    """
+    Global Helper: Search Echotik for product stats based on Title then Brand.
+    """
+    # Helper: Clean title
+    def clean_title_for_search(t):
+        if not t: return ""
+        t = re.sub(r'#\w+', '', t) # Remove hashtags
+        t = re.sub(r'[^\w\s]', '', t) # Remove emojis/punctuation
+        return t.strip()
+
+    # Helper for robust attribute access (handles both dict and Product model)
+    def gv(obj, key, default=None):
+        if isinstance(obj, dict): return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    def sv(obj, key, val):
+        if isinstance(obj, dict): obj[key] = val
+        else: setattr(obj, key, val)
+
     # 1. Direct ID Check
     pid = gv(p, 'product_id')
     raw_pid = str(pid).replace('shop_', '')
