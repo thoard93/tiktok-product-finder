@@ -7566,12 +7566,9 @@ def scan_dailyvirals_live():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/scan/partner_opportunity', methods=['POST'])
-@login_required
+@admin_required
 def trigger_partner_opportunity_scan():
     """Endpoint to trigger the TikTok Partner Center scan"""
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'error': 'Admin privileges required'}), 403
-        
     if not TIKTOK_PARTNER_COOKIE:
         return jsonify({'success': False, 'error': 'TIKTOK_PARTNER_COOKIE not configured in environment.'}), 400
 
