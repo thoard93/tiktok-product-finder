@@ -1327,8 +1327,6 @@ class Product(db.Model):
     
     scan_type = db.Column(db.String(50), default='brand_hunter')
     is_ad_driven = db.Column(db.Boolean, default=False) # Track if found via ad scan
-    first_seen = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     
     # Composite indexes for common query patterns
     __table_args__ = (
@@ -5704,9 +5702,10 @@ def api_products():
             else:
                 query = query.filter(Product.scan_type == scan_type)
         else:
-             # Default view: Exclude Ad Winners to avoid cluttering organic/low-stat feed
-             # This isolates GMV MAX ads to their own tab only
-             query = query.filter(Product.scan_type.notin_(['daily_virals', 'apify_ad', 'dv_live', 'dv_import', 'dv_import_fallback']))
+             # Default view: Include EVERYTHING. 
+             # We previously excluded automated scans to avoid "clutter", 
+             # but users want to see the newest items everywhere.
+             pass
 
         if keyword:
             query = query.filter(db.or_(
@@ -7418,68 +7417,69 @@ def scan_dailyvirals_live():
                 'region': ''
             }
             
-            try:
-                # Use standard residential proxy if configured
-                res = None
-                if DV_PROXY_STRING:
-                    try:
+            # Consolidated Retry Logic for Scanner
+            try_configs = [
+                {"use_proxy": True, "impersonate": "chrome110"},
+                {"use_proxy": True, "impersonate": "safari15_3"},
+                {"use_proxy": False, "impersonate": "chrome110"}
+            ]
+            
+            res = None
+            last_status = "Not Attempted"
+            
+            for config in try_configs:
+                try:
+                    current_proxies = None
+                    if config.get("use_proxy") and DV_PROXY_STRING:
                         parts = DV_PROXY_STRING.split(':')
                         if len(parts) == 4:
                             host, port, user, pw = parts
-                            print(f"[DV Live] Using proxy: {host}:{port} (auth: {user[:4]}****)")
-                            
-                            # Standard residential proxies (Smartproxy, Webshare, Decodo, etc.)
                             proxy_url = f"http://{user}:{pw}@{host}:{port}"
-                            proxies = {
-                                "http": proxy_url,
-                                "https": proxy_url
-                            }
-                            
-                            # Use curl_cffi for browser-grade TLS fingerprinting to bypass Cloudflare
-                            from curl_cffi import requests as curl_requests
-                            
-                            print(f"[DV Live] Using curl-cffi impersonation (chrome110)...")
-                            res = curl_requests.get(
-                                DV_BACKEND_URL, 
-                                headers=headers, 
-                                params=params, 
-                                proxies=proxies,
-                                impersonate="chrome110",
-                                timeout=60
-                            )
-                            print(f"[DV Live] Proxy response: {res.status_code}")
+                            current_proxies = {"http": proxy_url, "https": proxy_url}
+                            print(f"[DV Live] Attempting via proxy {host}:{port} ({config.get('impersonate')})")
                         else:
-                            print(f"[DV Live] Invalid proxy format: {len(parts)} parts. Expected host:port:user:pass")
-                    except Exception as pe:
-                        print(f"[DV Live] Proxy error: {pe}")
-                        res = None
-                
-                # Fallback to direct request (also via curl-cffi) if no proxy or it failed
-                if res is None:
+                            print(f"[DV Live] Skipping proxy (invalid format)")
+                            continue
+                    else:
+                        print(f"[DV Live] Attempting direct connection ({config.get('impersonate')})")
+
                     from curl_cffi import requests as curl_requests
-                    res = curl_requests.get(
+                    r = curl_requests.get(
                         DV_BACKEND_URL, 
                         headers=headers, 
                         params=params, 
-                        impersonate="chrome110",
-                        timeout=30
+                        proxies=current_proxies,
+                        impersonate=config.get("impersonate", "chrome110"),
+                        timeout=25
                     )
-                if res is None:
-                    last_error = "Connection Failed: Both proxy and direct connection attempts failed."
-                    print(f"[DV Live] {last_error}")
-                    continue
-
-                if res.status_code == 403:
-                    last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is blocked by Cloudflare."
-                    print(f"[DV Live] 403 Forbidden. Body snippet: {res.text[:300]}")
-                    if "cloudflare" in res.text.lower() or "ray id" in res.text.lower():
-                        print("[DV Live] Cloudflare block detected. Try refreshing your browser session on DV.")
-                    break # Stop if auth fails
-                if res.status_code != 200:
-                    last_error = f"API Error {res.status_code}: {res.text[:100]}"
-                    print(f"[DV Live] {last_error}")
-                    continue
                     
+                    if r.status_code == 200:
+                        res = r
+                        break
+                    
+                    last_status = str(r.status_code)
+                    print(f"[DV Live] Attempt failed: HTTP {r.status_code}")
+                    
+                    # If it's a 403, it's likely a token issue, don't spam retries
+                    if r.status_code == 403:
+                        res = r
+                        break
+                        
+                except Exception as e:
+                    last_status = f"Err: {str(e)[:50]}"
+                    print(f"[DV Live] Attempt Exception: {e}")
+                    continue
+            
+            if not res or res.status_code != 200:
+                if res and res.status_code == 403:
+                    last_error = f"Authentication Failed (403). Your DailyVirals token may be expired or your IP is heavily blocked."
+                    print(f"[DV Live] 403 Forbidden. Stopping scan.")
+                    break
+                
+                last_error = f"Connection Failed: {last_status}"
+                print(f"[DV Live] Skipping page {p_idx} due to multiple failures.")
+                continue
+
                 dv_data = res.json()
                 if not dv_data:
                     print(f"[DV Live] Empty JSON from page {p_idx}")
