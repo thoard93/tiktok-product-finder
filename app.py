@@ -393,13 +393,24 @@ def fetch_product_details_echotik_web(product_id):
                 proxies = {"http": proxy_url, "https": proxy_url}
                 print(f"DEBUG: EchoTik Web using proxy: {host}:{port}")
 
-        res = curl_requests.get(
-            url, 
-            headers=headers, 
-            impersonate="chrome110", 
-            proxies=proxies,
-            timeout=20
-        )
+        try:
+            res = curl_requests.get(
+                url, 
+                headers=headers, 
+                impersonate="chrome110", 
+                proxies=proxies,
+                timeout=20
+            )
+        except Exception as pe:
+            print(f"DEBUG: Proxy attempt failed for {raw_pid} ({pe}). Retrying DIRECT...")
+            res = curl_requests.get(
+                url, 
+                headers=headers, 
+                impersonate="chrome110", 
+                proxies=None,
+                timeout=15
+            )
+
         if res.status_code == 403:
             return None, "BLOCKED_BY_WAF"
         if res.status_code != 200:
@@ -5529,9 +5540,9 @@ def image_proxy(product_id):
             # Consolidated Retry Logic
             try_configs = [
                 {"Referer": "https://echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": "https://echosell.echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": "https://echosell.echotik.live/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "use_proxy": True},
                 {"Referer": "https://www.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-                {"Referer": "https://shop.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                {"Referer": "https://shop.tiktok.com/", "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "use_proxy": True},
                 {"Referer": None, "UA": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "naked": True}
             ]
             
@@ -5557,7 +5568,25 @@ def image_proxy(product_id):
                 try:
                     # Ultra-high timeout for read, but shorter for connect
                     current_timeout = (5, 30) if "volces.com" in lower_url else (5, 15)
-                    resp = requests.get(target_url, headers=local_headers, stream=True, timeout=current_timeout, verify=False if config.get("naked") else True)
+                    
+                    # SMART PROXY: If standard requests fail, one of our attempts will use the residential proxy
+                    current_proxies = None
+                    if config.get("use_proxy") and DV_PROXY_STRING:
+                        parts = DV_PROXY_STRING.split(':')
+                        if len(parts) == 4:
+                            host, port, user, pw = parts
+                            proxy_url = f"http://{user}:{pw}@{host}:{port}"
+                            current_proxies = {"http": proxy_url, "https": proxy_url}
+                            print(f"DEBUG: Image Proxy using residential tunnel for {config.get('Referer')}")
+
+                    resp = requests.get(
+                        target_url, 
+                        headers=local_headers, 
+                        stream=True, 
+                        timeout=current_timeout, 
+                        verify=False if config.get("naked") else True,
+                        proxies=current_proxies
+                    )
                     
                     if resp.status_code == 200:
                         break
