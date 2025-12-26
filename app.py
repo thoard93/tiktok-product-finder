@@ -5520,22 +5520,20 @@ def image_proxy(product_id):
                 p = Product.query.get(raw_id)
             
             target_url = None
-            if p and p.cached_image_url:
-                target_url = p.cached_image_url
-            elif p and p.image_url:
-                target_url = p.image_url
+            if p:
+                target_url = p.cached_image_url or p.image_url
             
-            # Clean URL (handles bracketed JSON arrays from some sources)
+            # Clean URL (handles bracketed JSON arrays or quoted strings from some sources)
             if target_url:
                 target_url = parse_cover_url(target_url)
             
-            # Fallback for manual IDs passed directly
+            # Fallback for manual IDs or if DB fetch failed
             if not target_url:
-                # If product_id looks like a URL already
                 if str(product_id).startswith('http'):
                     target_url = product_id
                 else:
-                    return redirect('/vantage_logo.png') # Internal placeholder fallback
+                    # Final ditch effort: check if the product_id itself contains the image key via meta
+                    return redirect('/vantage_logo.png')
 
             # Dynamic Headers: TikTok/Volcengine are extremely sensitive
             headers = {
@@ -7668,6 +7666,11 @@ def scan_partner_opportunity_live():
             if not products:
                 print(f"[Partner Scan] No more products found on page {page}. Raw Response (first 500 chars): {str(data)[:500]}")
                 break
+            
+            # DEBUG: See what we are dealing with
+            if page == 1:
+                print(f"[Partner Scan] SAMPLE PRODUCT KEYS: {list(products[0].keys())}")
+                print(f"[Partner Scan] SAMPLE PRODUCT DATA (TOP 10%): {str(products[0])[:1000]}")
                 
             with app.app_context():
                 for p in products:
@@ -7676,12 +7679,14 @@ def scan_partner_opportunity_live():
                         if not pid: continue
                         
                         # Data Mapping from actual API observation (Fallback)
+                        # Price: looks like "$58.37"
                         raw_price = p.get('price', {}).get('floor_price', '0').replace('$', '').replace(',', '')
                         try:
                             price_val = float(raw_price)
                         except:
                             price_val = 0
                             
+                        # Sales: looks like "87.4K sold"
                         sales_str = p.get('sales', '0').split(' ')[0]
                         if 'K' in sales_str:
                             sales_val = int(float(sales_str.replace('K', '')) * 1000)
@@ -7693,20 +7698,31 @@ def scan_partner_opportunity_live():
                             except:
                                 sales_val = 0
 
+                        # Commission: Basis points (10000 = 100%)
+                        comm_raw = float(p.get('commission_rate', 0))
+                        comm_val = comm_raw / 10000.0 if comm_raw > 1.0 else comm_raw
+
+                        # Image Hunting: TikTok Partner API uses nested 'img_url' or 'image' or 'item_image'
+                        img_url = p.get('img_url') or p.get('image') or p.get('product_image') or p.get('cover')
+                        if not img_url and isinstance(p.get('price'), dict):
+                             # Sometimes hidden in price sibling or shop_info? Let's check common keys
+                             img_url = p.get('image_url') or p.get('imageUrl')
+
                         p_data = {
                             'product_id': pid,
                             'product_name': p.get('title', 'Unknown Product'),
-                            'image_url': p.get('img_url') or p.get('image'), 
+                            'image_url': img_url, 
                             'price': price_val,
                             'sales': sales_val, # Use Partner total sales as baseline
-                            'sales_7d': sales_val, # Fallback
-                            'commission_rate': float(p.get('commission_rate', 0)) / 100, 
+                            'sales_7d': 0, # DO NOT fallback to total sales for 7D, keep it 0 if unknown
+                            'commission_rate': comm_val, 
                             'seller_name': p.get('shop_info', {}).get('shop_name', 'Classified'),
                             'product_url': f"https://shop.tiktok.com/view/product/{pid}?region=US"
                         }
 
                         # HYDRA-ENRICHMENT: Use EchoTik as a bridge for high-fidelity data (7D Sales & Video Count)
                         print(f"[Partner Scan] Hydra-Enriching {pid} via EchoTik...")
+                        # Priority enrichment
                         echotik_data, source = fetch_product_details_echotik(pid)
                         if echotik_data:
                             # Merge enrichment data - save_or_update_product handles preference
