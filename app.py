@@ -367,6 +367,14 @@ def fetch_product_details_echotik_web(product_id):
             return None, "Web scraper disabled"
 
         cookie = get_config_value('ECHOTIK_COOKIE')
+        # DIAGNOSTIC: Log where the cookie is coming from
+        try:
+            from_db = SystemConfig.query.get('ECHOTIK_COOKIE')
+            cookie_source = "DATABASE" if (from_db and from_db.value) else "ENV_VAR"
+        except:
+            cookie_source = "ENV_VAR (DB check failed)"
+        print(f"DEBUG: ECHOTIK_COOKIE loaded from: {cookie_source}, Length: {len(cookie) if cookie else 0}")
+        
         if not cookie:
             return None, "Missing EchoTik Cookie"
 
@@ -427,10 +435,16 @@ def fetch_product_details_echotik_web(product_id):
                     timeout=cfg["timeout"]
                 )
                 if res.status_code == 200:
-                    # Detection: If page is too small or contains login indicators, try next config
-                    if len(res.text) < 2000 or "login" in res.text.lower() or "login-container" in res.text:
-                         print(f"DEBUG: EchoTik Web attempt (Profile: {cfg['impersonate']}) hit Login Page. Trying next...")
-                         continue
+                    # SMARTER Login Detection:
+                    # 1. Check if we were REDIRECTED to a login/auth page
+                    # 2. Check for login-only page markers (small page with no product data)
+                    final_url = str(res.url).lower()
+                    is_login_redirect = '/login' in final_url or '/auth' in final_url or '/signin' in final_url
+                    is_login_only_page = len(res.text) < 2000 and 'login-container' in res.text
+                    
+                    if is_login_redirect or is_login_only_page:
+                        print(f"DEBUG: EchoTik Web attempt (Profile: {cfg['impersonate']}) hit Login Page. URL: {final_url[:80]}, Length: {len(res.text)}")
+                        continue
                     break
                 print(f"DEBUG: EchoTik Web attempt failed with status {res.status_code}")
             except Exception as e:
@@ -448,11 +462,15 @@ def fetch_product_details_echotik_web(product_id):
 
         html = res.text
         
-        # Detection: If page is too small or contains login/signup indicators, we are blocked/redirected
-        if len(html) < 2000 or "login" in html.lower() or "login-container" in html:
-            if "echotik.live" in html:
-                print(f"DEBUG: Web Scraper BLOCKED by Login for {raw_pid}")
-                return None, "BLOCKED_BY_LOGIN"
+        # SMARTER Login Detection (Post-Loop):
+        # Only flag as BLOCKED if we were actually REDIRECTED to a login page or got a truly empty response
+        final_url = str(res.url).lower() if res else ''
+        is_login_redirect = '/login' in final_url or '/auth' in final_url or '/signin' in final_url
+        is_login_only_page = len(html) < 2000 and 'login-container' in html
+        
+        if is_login_redirect or is_login_only_page:
+            print(f"DEBUG: Web Scraper BLOCKED by Login for {raw_pid}. Final URL: {final_url[:80]}, Length: {len(html)}")
+            return None, "BLOCKED_BY_LOGIN"
         
         # Look for the JSON data blob (Nuxt state)
         # Usually window.__NUXT__ or window.__INITIAL_STATE__
