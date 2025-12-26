@@ -427,6 +427,10 @@ def fetch_product_details_echotik_web(product_id):
                     timeout=cfg["timeout"]
                 )
                 if res.status_code == 200:
+                    # Detection: If page is too small or contains login indicators, try next config
+                    if len(res.text) < 2000 or "login" in res.text.lower() or "login-container" in res.text:
+                         print(f"DEBUG: EchoTik Web attempt (Profile: {cfg['impersonate']}) hit Login Page. Trying next...")
+                         continue
                     break
                 print(f"DEBUG: EchoTik Web attempt failed with status {res.status_code}")
             except Exception as e:
@@ -549,9 +553,9 @@ def fetch_product_details_echotik_web(product_id):
         if not data.get('total_sale_cnt') and not data.get('totalSaleCnt'):
             try:
                 # More flexible regex that handles tags like <span>7D Sales</span> <span>1.2K</span>
-                # We look for the label, skip some junk/tags, then find the value
-                # CRITICAL: Do NOT capture "30" from "30 Days" - we use negative lookahead (?! Days)
-                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Sales|Total\s*Sales)[^>]*?>?\s*([\d\.,]+[KMB]?)', html, re.I)
+                # CRITICAL: Use word boundary \b to prevent partial matches like "3" in "30"
+                # CRITICAL: Use negative lookahead to prevent capturing date strings
+                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Sales|Total\s*Sales)[^>]*?>?\s*\b([\d\.,]+[KMB]?)\b(?!\s*Days?\b)', html, re.I)
                 if sales_match:
                     label = sales_match.group(1).lower()
                     val = sales_match.group(2)
@@ -562,11 +566,11 @@ def fetch_product_details_echotik_web(product_id):
                     print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
                 
                 # Look for influencers/videos with tag-awareness and exclusion of "Days" labels
-                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos)[^>]*?>?\s*([\d\.,]+[KMB]?(?!\s*Days))', html, re.I)
+                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos)[^>]*?>?\s*\b([\d\.,]+[KMB]?)\b(?!\s*Days?\b)', html, re.I)
                 if v_match:
                     data['total_video_cnt'] = v_match.group(2)
                 
-                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl|Influencer)[^>]*?>?\s*([\d\.,]+[KMB]?(?!\s*Days))', html, re.I)
+                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl|Influencer)[^>]*?>?\s*\b([\d\.,]+[KMB]?)\b(?!\s*Days?\b)', html, re.I)
                 if i_match:
                     data['total_ifl_cnt'] = i_match.group(2)
 
@@ -641,8 +645,12 @@ def fetch_product_details_echotik(product_id, region='US', force=False, allow_pa
                 existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
                 if existing and not force:
                     cache_age = (datetime.utcnow() - (existing.last_updated or datetime.min)).total_seconds() / 3600
-                    # If cache is fresh AND has meaningful stats AND has an image, reuse it
-                    if cache_age < 24 and (existing.sales_7d > 0 or existing.video_count > 0) and existing.image_url:
+                    
+                    # SUSPICIOUS VALUE CHECK: 3 and 30 are common placeholders from bad regex
+                    is_suspicious = existing.video_count in [3, 30]
+                    
+                    # If cache is fresh AND has meaningful stats AND has an image AND NOT suspicious, reuse it
+                    if cache_age < 24 and (existing.sales_7d > 0 or existing.video_count > 0) and existing.image_url and not is_suspicious:
                         print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({cache_age:.1f}h old)")
                         cached_data = {
                             'sales_7d': existing.sales_7d,
