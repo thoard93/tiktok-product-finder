@@ -664,8 +664,8 @@ def fetch_product_details_echotik(product_id, region='US', force=False, allow_pa
                 if existing and not force:
                     cache_age = (datetime.utcnow() - (existing.last_updated or datetime.min)).total_seconds() / 3600
                     
-                    # SUSPICIOUS VALUE CHECK: 3 and 30 are common placeholders from bad regex
-                    is_suspicious = existing.video_count in [3, 30]
+                    # SUSPICIOUS VALUE CHECK: 3, 4, and 30 are common placeholders from bad regex
+                    is_suspicious = existing.video_count in [3, 4, 30]
                     
                     if is_suspicious:
                         print(f"DEBUG: Cache Bypass for {raw_pid} - Suspicious Stats detected: Vids={existing.video_count}")
