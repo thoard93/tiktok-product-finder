@@ -55,6 +55,8 @@ app = Flask(__name__, static_folder='pwa')
 if WhiteNoise:
     app.wsgi_app = WhiteNoise(app.wsgi_app, root='pwa/')
 
+executor = ThreadPoolExecutor(max_workers=4) # Global executor for background tasks
+
 # Force absolute path for SQLite to prevent subprocess mismatches
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'products.db')
