@@ -265,9 +265,7 @@ def extract_metadata_from_echotik(d):
     res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or d.get('influencer_count') or d.get('ifl_cnt') or d.get('iflCnt') or 0)
     res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or d.get('video_count') or d.get('video_cnt') or d.get('videoCnt') or 0)
     
-    # Internal Fallbacks - ONLY for same-period keys (e.g. video_7d -> sales_7d if desperate, but careful)
-    if res['sales_7d'] == 0:
-        res['sales_7d'] = get_num(d.get('total_video_7d_cnt') or d.get('video_7d') or d.get('video7d') or 0)
+    # Internal Fallbacks removed (e.g. video_7d -> sales_7d was causing confusion)
         
     raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or d.get('commission_rate') or d.get('commission') or 0)
     res['commission_rate'] = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
@@ -552,6 +550,7 @@ def fetch_product_details_echotik_web(product_id):
             try:
                 # More flexible regex that handles tags like <span>7D Sales</span> <span>1.2K</span>
                 # We look for the label, skip some junk/tags, then find the value
+                # CRITICAL: Do NOT capture "30" from "30 Days" - we use negative lookahead (?! Days)
                 sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Sales|Total\s*Sales)[^>]*?>?\s*([\d\.,]+[KMB]?)', html, re.I)
                 if sales_match:
                     label = sales_match.group(1).lower()
@@ -562,12 +561,12 @@ def fetch_product_details_echotik_web(product_id):
                         data['total_sale_cnt'] = val
                     print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
                 
-                # Look for influencers/videos with tag-awareness
-                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos)[^>]*?>?\s*([\d\.,]+[KMB]?)', html, re.I)
+                # Look for influencers/videos with tag-awareness and exclusion of "Days" labels
+                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos)[^>]*?>?\s*([\d\.,]+[KMB]?(?!\s*Days))', html, re.I)
                 if v_match:
                     data['total_video_cnt'] = v_match.group(2)
                 
-                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl|Influencer)[^>]*?>?\s*([\d\.,]+[KMB]?)', html, re.I)
+                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl|Influencer)[^>]*?>?\s*([\d\.,]+[KMB]?(?!\s*Days))', html, re.I)
                 if i_match:
                     data['total_ifl_cnt'] = i_match.group(2)
 
