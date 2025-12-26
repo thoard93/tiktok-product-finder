@@ -257,25 +257,30 @@ def extract_metadata_from_echotik(d):
         if isinstance(val, (int, float)): return int(val)
         return parse_kmb_string(str(val))
     
-    # 1. Top Level Mapping (V3 / Realtime Standard)
-    res['sales'] = get_num(d.get('totalSaleCnt') or d.get('total_sale_cnt') or 0)
-    res['sales_7d'] = get_num(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or 0)
-    res['sales_30d'] = get_num(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or 0)
-    res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or 0)
-    res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or 0)
+    # 1. Top Level Mapping (V3 / Realtime Standard / Scanner Bridge)
+    res['sales'] = get_num(d.get('totalSaleCnt') or d.get('total_sale_cnt') or d.get('sales') or 0)
+    res['sales_7d'] = get_num(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or d.get('sales_7d') or 0)
+    res['sales_30d'] = get_num(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or d.get('sales_30d') or 0)
+    res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or d.get('influencer_count') or 0)
+    res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or d.get('video_count') or 0)
     
-    # Internal Fallbacks for shorthand data
-    if res['sales'] > 0 and res['sales_7d'] == 0:
-        res['sales_7d'] = res['sales']
-    if res['sales'] > 0 and res['sales_30d'] == 0:
-        res['sales_30d'] = res['sales']
-    
-    raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or 0)
+    # Internal Fallbacks - ONLY for same-period keys
+    if res['sales_7d'] == 0:
+        res['sales_7d'] = get_num(d.get('total_video_7d_cnt') or d.get('video_7d') or 0) # Just checking if keys were mixed
+        
+    raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or d.get('commission_rate') or 0)
     res['commission_rate'] = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
     
     res['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price') or d.get('price') or 0)
     res['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or d.get('productName') or d.get('product_name')
-    res['image_url'] = d.get('cover') or d.get('image_url') or d.get('cover_url') or d.get('product_image') or d.get('product_img_url')
+    
+    # Robust Image Hunt
+    p_img = d.get('product_image') or d.get('image') or d.get('cover') or d.get('image_url') or d.get('cover_url') or d.get('product_img_url')
+    if isinstance(p_img, dict):
+        res['image_url'] = p_img.get('url') or p_img.get('url_list', [None])[0] or p_img.get('thumb_url')
+    else:
+        res['image_url'] = p_img
+        
     res['product_url'] = d.get('product_url') or d.get('productUrl')
     
     res['seller_name'] = (
@@ -540,18 +545,23 @@ def fetch_product_details_echotik_web(product_id):
         # 2. Regex Fallback for common stats if JSON extraction fails or is incomplete
         if not data.get('total_sale_cnt') and not data.get('totalSaleCnt'):
             try:
-                # Look for patterns like "1.2K Sales" or "Sales: 1.2K"
-                sales_match = re.search(r'(Sales|Total Sales):?\s*([\d\.]+[KMB]?)', html, re.I)
+                # Look for patterns like "1.2K Sales" or "Sales: 1.2K" or "7D Sales: ..."
+                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Sales|Total\s*Sales):?\s*([\d\.,]+[KMB]?)', html, re.I)
                 if sales_match:
-                    data['total_sale_cnt'] = sales_match.group(2)
-                    print(f"DEBUG: Regex Fallback Sales: {data['total_sale_cnt']}")
+                    label = sales_match.group(1).lower()
+                    val = sales_match.group(2)
+                    if '7' in label:
+                        data['sales_7d'] = val
+                    else:
+                        data['total_sale_cnt'] = val
+                    print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
                 
                 # Look for influencers/videos
-                v_match = re.search(r'(Videos|Total Videos):?\s*([\d\.]+[KMB]?)', html, re.I)
+                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos):?\s*([\d\.,]+[KMB]?)', html, re.I)
                 if v_match:
                     data['total_video_cnt'] = v_match.group(2)
                 
-                i_match = re.search(r'(Influencers|Creators):?\s*([\d\.]+[KMB]?)', html, re.I)
+                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl):?\s*([\d\.,]+[KMB]?)', html, re.I)
                 if i_match:
                     data['total_ifl_cnt'] = i_match.group(2)
 
@@ -585,6 +595,14 @@ def fetch_product_details_echotik_web(product_id):
             except: pass
 
         if data:
+            # Standardize keys so other functions can find them easily
+            if not data.get('sales_7d'):
+                data['sales_7d'] = data.get('totalSale7dCnt') or data.get('total_sale_7d_cnt') or data.get('sale7d')
+            if not data.get('video_count'):
+                data['video_count'] = data.get('totalVideoCnt') or data.get('total_video_cnt') or data.get('videoCnt')
+            if not data.get('influencer_count'):
+                data['influencer_count'] = data.get('totalIflCnt') or data.get('total_ifl_cnt') or data.get('iflCnt')
+
             print(f"DEBUG: EchoTik Web successfully extracted product {raw_pid}")
             # Inject source
             return data, "web_scraper"
@@ -617,7 +635,10 @@ def fetch_product_details_echotik(product_id, region='US', force=False, allow_pa
                 existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
                 if existing and existing.last_updated:
                     age = (datetime.utcnow() - existing.last_updated).total_seconds()
-                    if age < 86400: # 24 hours
+                    # Only reuse cache if it's young AND has some signals (otherwise we keep it at 0 forever)
+                    has_signals = (existing.sales_7d and existing.sales_7d > 0) or (existing.video_count and existing.video_count > 0)
+                    
+                    if age < 86400 and has_signals:
                         print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({int(age/3600)}h old)")
                         cached_data = {
                             'product_id': existing.product_id,
@@ -704,8 +725,13 @@ def fetch_product_details_echotik(product_id, region='US', force=False, allow_pa
     return None, "All sources failed"
 
 def parse_cover_url(url):
-    """Clean up cover URL which may be a JSON array string or list."""
+    """Clean up cover URL which may be a JSON array string or list or dict."""
     if not url: return ""
+    
+    # If already a dictionary
+    if isinstance(url, dict):
+        return url.get('url') or url.get('url_list', [None])[0] or ""
+        
     # If already a list (from some parsers)
     if isinstance(url, list):
         if len(url) > 0:
@@ -1924,25 +1950,7 @@ def get_auth():
     """Get HTTPBasicAuth object for EchoTik API"""
     return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
 
-def parse_cover_url(raw):
-    """Extract clean URL from cover_url which may be a JSON array string."""
-    if not raw:
-        return None
-    if isinstance(raw, str):
-        if raw.startswith('['):
-            try:
-                urls = json.loads(raw)
-                if urls and isinstance(urls, list) and len(urls) > 0:
-                    # Sort by index and get first
-                    urls.sort(key=lambda x: x.get('index', 0) if isinstance(x, dict) else 0)
-                    return urls[0].get('url') if isinstance(urls[0], dict) else urls[0]
-            except json.JSONDecodeError:
-                return raw if raw.startswith('http') else None
-        elif raw.startswith('http'):
-            return raw
-    elif isinstance(raw, list) and len(raw) > 0:
-        return raw[0].get('url') if isinstance(raw[0], dict) else raw[0]
-    return None
+# parse_cover_url removed - standardized version at line 706
 
 def get_cached_image_urls(cover_urls):
     """
