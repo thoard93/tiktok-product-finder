@@ -7663,30 +7663,46 @@ def scan_partner_opportunity_live():
                 break
                 
             data = res.json()
-            products = data.get('data', {}).get('opportunity_product_list', [])
+            products = data.get('data', {}).get('products', [])
             
             if not products:
-                print(f"[Partner Scan] No more products found. Raw Response (first 500 chars): {str(data)[:500]}")
+                print(f"[Partner Scan] No more products found on page {page}. Raw Response (first 500 chars): {str(data)[:500]}")
                 break
                 
             with app.app_context():
                 for p in products:
                     try:
-                        # Map TikTok Partner fields to our Product model
-                        # Example fields from observed API structure:
-                        # product_id, title, img_url, price, sales, commission_rate, etc.
                         pid = p.get('product_id')
                         if not pid: continue
                         
-                        # Data Mapping
+                        # Data Mapping from actual API observation
+                        # Price: looks like "$58.37"
+                        raw_price = p.get('price', {}).get('floor_price', '0').replace('$', '').replace(',', '')
+                        try:
+                            price_val = float(raw_price)
+                        except:
+                            price_val = 0
+                            
+                        # Sales: looks like "87.4K sold"
+                        sales_str = p.get('sales', '0').split(' ')[0]
+                        if 'K' in sales_str:
+                            sales_val = int(float(sales_str.replace('K', '')) * 1000)
+                        elif 'M' in sales_str:
+                            sales_val = int(float(sales_str.replace('M', '')) * 1000000)
+                        else:
+                            try:
+                                sales_val = int(sales_str.replace(',', ''))
+                            except:
+                                sales_val = 0
+
                         p_data = {
                             'product_id': pid,
                             'product_name': p.get('title', 'Unknown Product'),
-                            'image_url': p.get('img_url'),
-                            'price': float(p.get('price', {}).get('price_with_vat_val', 0)) if isinstance(p.get('price'), dict) else 0,
-                            'sales_7d': int(p.get('sales', 0)), # Partner center usually shows total sales, but we'll use it as baseline
-                            'commission_rate': float(p.get('commission_info', {}).get('commission_rate', 0)) / 100 if isinstance(p.get('commission_info'), dict) else 0,
-                            'seller_name': p.get('seller_info', {}).get('name', 'Classified') if isinstance(p.get('seller_info'), dict) else 'Classified',
+                            'image_url': p.get('img_url') or p.get('image'), 
+                            'price': price_val,
+                            'sales_7d': sales_val, 
+                            'commission_rate': float(p.get('commission_rate', 0)) / 100, 
+                            'seller_name': p.get('shop_info', {}).get('shop_name', 'Classified'),
                             'product_url': f"https://shop.tiktok.com/view/product/{pid}?region=US"
                         }
                         
