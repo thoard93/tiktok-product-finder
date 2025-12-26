@@ -524,7 +524,11 @@ def fetch_product_details_echotik_web(product_id):
                             elif str(obj['baseInfo'].get('id')) == raw_pid: is_match = True
                         
                         if is_match:
-                            # Verify it has some meat (sometimes ID is present in breadcrumbs with no data)
+                            # Verify it has some meat AND crucial stats
+                            # If we find a version with sales/vids, that's the hero
+                            if any(k in obj for k in ['totalSaleCnt', 'total_sale_cnt', 'totalSale7dCnt', 'totalSale']):
+                                return obj
+                            # Fallback if no meatier one found yet
                             if len(obj.keys()) > 5:
                                 return obj
                         
@@ -546,8 +550,9 @@ def fetch_product_details_echotik_web(product_id):
         # 2. Regex Fallback for common stats if JSON extraction fails or is incomplete
         if not data.get('total_sale_cnt') and not data.get('totalSaleCnt'):
             try:
-                # Look for patterns like "1.2K Sales" or "Sales: 1.2K" or "7D Sales: ..."
-                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Sales|Total\s*Sales):?\s*([\d\.,]+[KMB]?)', html, re.I)
+                # More flexible regex that handles tags like <span>7D Sales</span> <span>1.2K</span>
+                # We look for the label, skip some junk/tags, then find the value
+                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Sales|Total\s*Sales)[^>]*?>?\s*([\d\.,]+[KMB]?)', html, re.I)
                 if sales_match:
                     label = sales_match.group(1).lower()
                     val = sales_match.group(2)
@@ -557,12 +562,12 @@ def fetch_product_details_echotik_web(product_id):
                         data['total_sale_cnt'] = val
                     print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
                 
-                # Look for influencers/videos
-                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos):?\s*([\d\.,]+[KMB]?)', html, re.I)
+                # Look for influencers/videos with tag-awareness
+                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos)[^>]*?>?\s*([\d\.,]+[KMB]?)', html, re.I)
                 if v_match:
                     data['total_video_cnt'] = v_match.group(2)
                 
-                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl):?\s*([\d\.,]+[KMB]?)', html, re.I)
+                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl|Influencer)[^>]*?>?\s*([\d\.,]+[KMB]?)', html, re.I)
                 if i_match:
                     data['total_ifl_cnt'] = i_match.group(2)
 
@@ -635,23 +640,19 @@ def fetch_product_details_echotik(product_id, region='US', force=False, allow_pa
         try:
             with app.app_context():
                 existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
-                if existing and existing.last_updated:
-                    age = (datetime.utcnow() - existing.last_updated).total_seconds()
-                    # Only reuse cache if it's young AND has some signals (otherwise we keep it at 0 forever)
-                    has_signals = (existing.sales_7d and existing.sales_7d > 0) or (existing.video_count and existing.video_count > 0)
-                    
-                    if age < 86400 and has_signals:
-                        print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({int(age/3600)}h old)")
+                if existing and not force:
+                    cache_age = (datetime.utcnow() - (existing.last_updated or datetime.min)).total_seconds() / 3600
+                    # If cache is fresh AND has meaningful stats AND has an image, reuse it
+                    if cache_age < 24 and (existing.sales_7d > 0 or existing.video_count > 0) and existing.image_url:
+                        print(f"[CREDIT SAVED] ♻️ Reusing DB cache for {raw_pid} ({cache_age:.1f}h old)")
                         cached_data = {
-                            'product_id': existing.product_id,
-                            'product_name': existing.product_name,
-                            'image_url': existing.image_url,
-                            'price': existing.price,
                             'sales_7d': existing.sales_7d,
                             'video_count': existing.video_count,
                             'influencer_count': existing.influencer_count,
+                            'price': existing.price,
                             'commission_rate': existing.commission_rate,
-                            'seller_id': existing.seller_id,
+                            'image_url': existing.image_url,
+                            'product_name': existing.product_name,
                             'seller_name': existing.seller_name
                         }
                         return cached_data, "db_cache"
@@ -5744,7 +5745,8 @@ def api_products():
 
         # 3. Apply Sorting
         if sort_by in ['sales_desc', 'sales_7d']:
-            query = query.order_by(Product.sales_7d.desc())
+            # Secondary sort by total sales and date to prevent random shifting on ties
+            query = query.order_by(Product.sales_7d.desc(), Product.sales.desc(), Product.last_updated.desc())
         elif sort_by == 'sales_asc':
             query = query.order_by(Product.sales_7d.asc())
         elif sort_by == 'inf_asc':
@@ -7825,9 +7827,23 @@ def scan_partner_opportunity_live():
                         print(f"[Partner Scan] Hydra-Enriching {pid} via EchoTik...")
                         echotik_data, source = fetch_product_details_echotik(pid)
                         if echotik_data:
-                            # Normalize with extract_metadata before merging to ensure types and defaults are correct
+                            # Normalize with extract_metadata before merging
                             normalized = extract_metadata_from_echotik(echotik_data)
-                            p_data.update(normalized)
+                            
+                            # PROTECT PARTNER DATA: Only update fields if EchoTik has truthy values
+                            if normalized.get('sales_7d', 0) > 0: p_data['sales_7d'] = normalized['sales_7d']
+                            if normalized.get('video_count', 0) > 0: p_data['video_count'] = normalized['video_count']
+                            if normalized.get('influencer_count', 0) > 0: p_data['influencer_count'] = normalized['influencer_count']
+                            if normalized.get('image_url') and normalized.get('image_url') != p_data.get('image_url'):
+                                p_data['image_url'] = normalized['image_url']
+                            if normalized.get('product_name') and len(normalized['product_name']) > 5:
+                                p_data['product_name'] = normalized['product_name']
+                            
+                            if not p_data.get('image_url'):
+                                # FORENSIC DISCOVERY: Dump full keys if image is missing to find hidden keys
+                                print(f"CRITICAL DEBUG: No image for {pid}. FULL KEYS: {list(p.keys())}")
+                                if 'shop_info' in p: print(f"DEBUG: shop_info keys for {pid}: {list(p['shop_info'].keys())}")
+                            
                             print(f"[Partner Scan] ✅ Enriched {pid} ({source}) - Sales7D: {p_data.get('sales_7d', 0)}, Vids: {p_data.get('video_count', 0)}, Image: {'YES' if p_data.get('image_url') else 'MISSING'}")
                         else:
                             print(f"[Partner Scan] ⚠️ Enrichment failed for {pid}, using TikTok fallback data.")
