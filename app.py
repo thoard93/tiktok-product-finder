@@ -7666,7 +7666,7 @@ def scan_partner_opportunity_live():
             products = data.get('data', {}).get('opportunity_product_list', [])
             
             if not products:
-                print("[Partner Scan] No more products found.")
+                print(f"[Partner Scan] No more products found. Raw Response (first 500 chars): {str(data)[:500]}")
                 break
                 
             with app.app_context():
