@@ -5532,8 +5532,10 @@ def image_proxy(product_id):
                 if str(product_id).startswith('http'):
                     target_url = product_id
                 else:
-                    # Final ditch effort: check if the product_id itself contains the image key via meta
+                    print(f"DEBUG: Proxy Image Failed - No URL found for {product_id}")
                     return redirect('/vantage_logo.png')
+
+            print(f"DEBUG: Proxying Image for {product_id} -> {target_url[:100]}...")
 
             # Dynamic Headers: TikTok/Volcengine are extremely sensitive
             headers = {
@@ -7626,11 +7628,15 @@ def scan_partner_opportunity_live():
             # If it's 20.0 (2000%) or 2000.0, we want to normalize it.
             p_targets = Product.query.filter(Product.scan_type == 'partner_opportunity', Product.commission_rate > 1.0).all()
             for pt in p_targets:
-                if pt.commission_rate > 100.0: pt.commission_rate /= 10000.0
-                elif pt.commission_rate > 1.0: pt.commission_rate /= 100.0
+                if pt.commission_rate >= 10.0: # 10% or 1000BP
+                    pt.commission_rate /= 100.0
+                elif pt.commission_rate > 1.0:
+                    pt.commission_rate /= 10.0
             
             # Fix misleading 7D sales (reset those that were just total sales clones)
-            count2 = Product.query.filter(Product.scan_type == 'partner_opportunity', Product.sales_7d == Product.sales, Product.sales > 0).update({Product.sales_7d: 0})
+            # Also ensure we don't accidentally wipe real EchoTik data if it matched by chance
+            # (but usually 7D won't exactly match Total for high volume)
+            count2 = Product.query.filter(Product.scan_type == 'partner_opportunity', Product.sales_7d == Product.sales, Product.sales > 100).update({Product.sales_7d: 0})
             db.session.commit()
             if p_targets or count2:
                 print(f"[Partner Scan] Cleanup phase complete: Repaired commissions and {count2} sales entries.")
@@ -7775,14 +7781,19 @@ def scan_partner_opportunity_live():
 
                         # Commission: Basis points (10000 = 100%) or decimal
                         comm_raw = float(p.get('commission_rate', 0))
-                        # If it's something like 2000, it's BP. If it's 20, it's % (usually seller center). 
-                        # Partner API usually uses BP.
-                        comm_val = comm_raw / 10000.0 if comm_raw > 1.0 else comm_raw
+                        # Sample shows '2000' for 20%
+                        comm_val = comm_raw / 10000.0 if comm_raw > 100 else comm_raw / 100.0
 
-                        # Image Hunting: Very robust search
-                        img_url = p.get('img_url') or p.get('image') or p.get('product_image') or p.get('cover') or p.get('image_url') or p.get('imageUrl')
-                        if not img_url and isinstance(p.get('image'), dict):
-                             img_url = p.get('image', {}).get('url') or p.get('image', {}).get('thumb_url')
+                        # Image Hunting: Verified key is 'product_image' -> 'url_list'
+                        img_url = None
+                        p_img_obj = p.get('product_image')
+                        if isinstance(p_img_obj, dict):
+                            urls = p_img_obj.get('url_list', [])
+                            if urls:
+                                img_url = urls[0]
+                        
+                        if not img_url:
+                            img_url = p.get('img_url') or p.get('image') or p.get('cover') or p.get('image_url')
 
                         p_data = {
                             'product_id': pid,
@@ -7813,9 +7824,9 @@ def scan_partner_opportunity_live():
                 
                 db.session.commit()
                 
-            # SAFETY PROTOCOL: 12 second delay between pages
-            print(f"[Partner Scan] Page {page} processed. Sleeping 12s...")
-            time.sleep(12)
+            # SAFETY PROTOCOL: 15 second delay between pages
+            print(f"[Partner Scan] Page {page} processed. Sleeping 15s...")
+            time.sleep(15)
             
         except Exception as e:
             import traceback
