@@ -7619,6 +7619,24 @@ def scan_partner_opportunity_live():
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
     }
     
+    with app.app_context():
+        # Clean up existing corrupted data from the first buggy runtime
+        try:
+            # Fix huge commissions (anything > 1.0 is likely representation error)
+            # If it's 20.0 (2000%) or 2000.0, we want to normalize it.
+            p_targets = Product.query.filter(Product.scan_type == 'partner_opportunity', Product.commission_rate > 1.0).all()
+            for pt in p_targets:
+                if pt.commission_rate > 100.0: pt.commission_rate /= 10000.0
+                elif pt.commission_rate > 1.0: pt.commission_rate /= 100.0
+            
+            # Fix misleading 7D sales (reset those that were just total sales clones)
+            count2 = Product.query.filter(Product.scan_type == 'partner_opportunity', Product.sales_7d == Product.sales, Product.sales > 0).update({Product.sales_7d: 0})
+            db.session.commit()
+            if p_targets or count2:
+                print(f"[Partner Scan] Cleanup phase complete: Repaired commissions and {count2} sales entries.")
+        except Exception as e_clean:
+            print(f"[Partner Scan] Cleanup phase error: {e_clean}")
+
     proxies = None
     if ECHOTIK_PROXY_STRING:
         p_parts = ECHOTIK_PROXY_STRING.split(':')
@@ -7629,7 +7647,7 @@ def scan_partner_opportunity_live():
             }
 
     total_saved = 0
-    max_pages = 5 # Start small for safety
+    max_pages = 10 # Deeper scan
     
     for page in range(1, max_pages + 1):
         print(f"[Partner Scan] Fetching page {page}...")
@@ -7646,31 +7664,79 @@ def scan_partner_opportunity_live():
         }
         
         try:
-            res = curl_requests.post(
-                target_url,
-                params=params,
-                headers=headers,
-                json=payload,
-                proxies=proxies,
-                impersonate="chrome110",
-                timeout=30
-            )
+            print(f"[Partner Scan] Requesting: {target_url} (Page {page})")
+            res = None
+            last_err = None
+            
+            # Stage 1: curl_cffi with Proxy
+            try:
+                res = curl_requests.post(
+                    target_url,
+                    params=params,
+                    headers=headers,
+                    json=payload,
+                    proxies=proxies,
+                    impersonate="chrome110",
+                    timeout=30
+                )
+                print(f"[Partner Scan] Stage 1 (Proxy Curl) -> Status {res.status_code}")
+            except Exception as e1:
+                last_err = e1
+                print(f"[Partner Scan] Stage 1 failed: {e1}")
+                
+            # Stage 2: curl_cffi DIRECT (if Stage 1 failed or 403/499)
+            if not res or res.status_code in [403, 499, 502, 522]:
+                try:
+                    res = curl_requests.post(
+                        target_url,
+                        params=params,
+                        headers=headers,
+                        json=payload,
+                        impersonate="chrome110",
+                        timeout=30
+                    )
+                    print(f"[Partner Scan] Stage 2 (Direct Curl) -> Status {res.status_code}")
+                except Exception as e2:
+                    last_err = e2
+                    print(f"[Partner Scan] Stage 2 failed: {e2}")
+
+            # Stage 3: Standard Requests (Last Resort)
+            if not res or res.status_code in [403, 499, 502, 522]:
+                try:
+                    res = requests.post(
+                        target_url,
+                        params=params,
+                        headers=headers,
+                        json=payload,
+                        proxies=proxies,
+                        timeout=30
+                    )
+                    print(f"[Partner Scan] Stage 3 (Standard Requests) -> Status {res.status_code}")
+                except Exception as e3:
+                    last_err = e3
+                    print(f"[Partner Scan] Stage 3 failed: {e3}")
+
+            if not res:
+                raise Exception(f"All request stages failed. Last error: {last_err}")
             
             if res.status_code != 200:
-                print(f"[Partner Scan] Error {res.status_code}: {res.text[:200]}")
+                print(f"[Partner Scan] Error {res.status_code}: {res.text[:500]}")
                 break
                 
             data = res.json()
-            products = data.get('data', {}).get('products', [])
+            # TikTok Partner API often uses 'data' -> 'products' or 'data' -> 'opportunity_product_list'
+            # Let's be extra robust by checking 'products' first then 'opportunity_product_list'
+            d_obj = data.get('data', {})
+            products = d_obj.get('products') or d_obj.get('opportunity_product_list') or []
             
             if not products:
-                print(f"[Partner Scan] No more products found on page {page}. Raw Response (first 500 chars): {str(data)[:500]}")
+                print(f"[Partner Scan] No more products found on page {page}. Raw Response Keys: {list(data.keys())} | Data Keys: {list(d_obj.keys())}")
                 break
             
             # DEBUG: See what we are dealing with
             if page == 1:
                 print(f"[Partner Scan] SAMPLE PRODUCT KEYS: {list(products[0].keys())}")
-                print(f"[Partner Scan] SAMPLE PRODUCT DATA (TOP 10%): {str(products[0])[:1000]}")
+                print(f"[Partner Scan] SAMPLE PRODUCT DATA (TOP 500 chars): {str(products[0])[:500]}")
                 
             with app.app_context():
                 for p in products:
@@ -7679,34 +7745,44 @@ def scan_partner_opportunity_live():
                         if not pid: continue
                         
                         # Data Mapping from actual API observation (Fallback)
-                        # Price: looks like "$58.37"
-                        raw_price = p.get('price', {}).get('floor_price', '0').replace('$', '').replace(',', '')
+                        price_obj = p.get('price') or {}
+                        if isinstance(price_obj, str):
+                            raw_price = price_obj.replace('$', '').replace(',', '')
+                        else:
+                            raw_price = str(price_obj.get('floor_price') or price_obj.get('min_price') or '0').replace('$', '').replace(',', '')
+                        
                         try:
                             price_val = float(raw_price)
                         except:
                             price_val = 0
                             
-                        # Sales: looks like "87.4K sold"
-                        sales_str = p.get('sales', '0').split(' ')[0]
-                        if 'K' in sales_str:
-                            sales_val = int(float(sales_str.replace('K', '')) * 1000)
-                        elif 'M' in sales_str:
-                            sales_val = int(float(sales_str.replace('M', '')) * 1000000)
+                        # Sales: "87.4K sold" or "100" or {"count": "100"}
+                        sales_raw = p.get('sales') or '0'
+                        if isinstance(sales_raw, dict):
+                            sales_str = str(sales_raw.get('count', '0'))
+                        else:
+                            sales_str = str(sales_raw).split(' ')[0]
+                            
+                        if 'K' in sales_str.upper():
+                            sales_val = int(float(sales_str.upper().replace('K', '')) * 1000)
+                        elif 'M' in sales_str.upper():
+                            sales_val = int(float(sales_str.upper().replace('M', '')) * 1000000)
                         else:
                             try:
                                 sales_val = int(sales_str.replace(',', ''))
                             except:
                                 sales_val = 0
 
-                        # Commission: Basis points (10000 = 100%)
+                        # Commission: Basis points (10000 = 100%) or decimal
                         comm_raw = float(p.get('commission_rate', 0))
+                        # If it's something like 2000, it's BP. If it's 20, it's % (usually seller center). 
+                        # Partner API usually uses BP.
                         comm_val = comm_raw / 10000.0 if comm_raw > 1.0 else comm_raw
 
-                        # Image Hunting: TikTok Partner API uses nested 'img_url' or 'image' or 'item_image'
-                        img_url = p.get('img_url') or p.get('image') or p.get('product_image') or p.get('cover')
-                        if not img_url and isinstance(p.get('price'), dict):
-                             # Sometimes hidden in price sibling or shop_info? Let's check common keys
-                             img_url = p.get('image_url') or p.get('imageUrl')
+                        # Image Hunting: Very robust search
+                        img_url = p.get('img_url') or p.get('image') or p.get('product_image') or p.get('cover') or p.get('image_url') or p.get('imageUrl')
+                        if not img_url and isinstance(p.get('image'), dict):
+                             img_url = p.get('image', {}).get('url') or p.get('image', {}).get('thumb_url')
 
                         p_data = {
                             'product_id': pid,
@@ -7722,10 +7798,8 @@ def scan_partner_opportunity_live():
 
                         # HYDRA-ENRICHMENT: Use EchoTik as a bridge for high-fidelity data (7D Sales & Video Count)
                         print(f"[Partner Scan] Hydra-Enriching {pid} via EchoTik...")
-                        # Priority enrichment
                         echotik_data, source = fetch_product_details_echotik(pid)
                         if echotik_data:
-                            # Merge enrichment data - save_or_update_product handles preference
                             p_data.update(echotik_data)
                             print(f"[Partner Scan] ✅ Enriched {pid} ({source}) - Sales7D: {echotik_data.get('sales_7d')}, Vids: {echotik_data.get('video_count')}")
                         else:
@@ -7739,12 +7813,14 @@ def scan_partner_opportunity_live():
                 
                 db.session.commit()
                 
-            # SAFETY PROTOCOL: 10-15 second delay between pages
+            # SAFETY PROTOCOL: 12 second delay between pages
             print(f"[Partner Scan] Page {page} processed. Sleeping 12s...")
             time.sleep(12)
             
         except Exception as e:
-            print(f"[Partner Scan] Fatal request error: {e}")
+            import traceback
+            print(f"[Partner Scan] Fatal request error Page {page}: {e}")
+            print(traceback.format_exc())
             break
             
     print(f"[Partner Scan] Finished. Total new/updated opportunities: {total_saved}")
