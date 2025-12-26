@@ -258,21 +258,22 @@ def extract_metadata_from_echotik(d):
         return parse_kmb_string(str(val))
     
     # 1. Top Level Mapping (V3 / Realtime Standard / Scanner Bridge)
-    res['sales'] = get_num(d.get('totalSaleCnt') or d.get('total_sale_cnt') or d.get('sales') or 0)
-    res['sales_7d'] = get_num(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or d.get('sales_7d') or 0)
-    res['sales_30d'] = get_num(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or d.get('sales_30d') or 0)
-    res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or d.get('influencer_count') or 0)
-    res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or d.get('video_count') or 0)
+    # Be extremely redundant with keys
+    res['sales'] = get_num(d.get('totalSaleCnt') or d.get('total_sale_cnt') or d.get('totalSale') or d.get('sales') or d.get('sale_cnt') or 0)
+    res['sales_7d'] = get_num(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or d.get('totalSale7d') or d.get('sales_7d') or d.get('sale7d') or 0)
+    res['sales_30d'] = get_num(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or d.get('totalSale30d') or d.get('sales_30d') or d.get('sale30d') or 0)
+    res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or d.get('influencer_count') or d.get('ifl_cnt') or d.get('iflCnt') or 0)
+    res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or d.get('video_count') or d.get('video_cnt') or d.get('videoCnt') or 0)
     
-    # Internal Fallbacks - ONLY for same-period keys
+    # Internal Fallbacks - ONLY for same-period keys (e.g. video_7d -> sales_7d if desperate, but careful)
     if res['sales_7d'] == 0:
-        res['sales_7d'] = get_num(d.get('total_video_7d_cnt') or d.get('video_7d') or 0) # Just checking if keys were mixed
+        res['sales_7d'] = get_num(d.get('total_video_7d_cnt') or d.get('video_7d') or d.get('video7d') or 0)
         
-    raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or d.get('commission_rate') or 0)
+    raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or d.get('commission_rate') or d.get('commission') or 0)
     res['commission_rate'] = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
     
-    res['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price') or d.get('price') or 0)
-    res['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or d.get('productName') or d.get('product_name')
+    res['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price') or d.get('price') or d.get('avg_price') or 0)
+    res['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or d.get('productName') or d.get('product_name') or d.get('name')
     
     # Robust Image Hunt
     p_img = d.get('product_image') or d.get('image') or d.get('cover') or d.get('image_url') or d.get('cover_url') or d.get('product_img_url')
@@ -508,25 +509,25 @@ def fetch_product_details_echotik_web(product_id):
                 
                 # Dig for the product object
                 def recursive_find_product(obj, depth=0):
-                    if depth > 10: return None # Safety
+                    if depth > 15: return None # Deeper safety
                     if isinstance(obj, dict):
                         # print(f"DEBUG: Depth {depth} Keys: {list(obj.keys())[:5]}")
                         # Common EchoTik keys
-                        if 'product_id' in obj and str(obj.get('product_id')) == raw_pid:
-                            return obj
-                        if 'productId' in obj and str(obj.get('productId')) == raw_pid:
-                            return obj
-                        if 'id' in obj and str(obj.get('id')) == raw_pid:
-                            return obj
-                        if 'spu_id' in obj and str(obj.get('spu_id')) == raw_pid:
-                            return obj
-                        if 'itemId' in obj and str(obj.get('itemId')) == raw_pid:
-                            return obj
-                        if 'baseInfo' in obj and isinstance(obj['baseInfo'], dict):
-                            if str(obj['baseInfo'].get('productId')) == raw_pid:
+                        is_match = False
+                        if 'product_id' in obj and str(obj.get('product_id')) == raw_pid: is_match = True
+                        elif 'productId' in obj and str(obj.get('productId')) == raw_pid: is_match = True
+                        elif 'id' in obj and str(obj.get('id')) == raw_pid: is_match = True
+                        elif 'spu_id' in obj and str(obj.get('spu_id')) == raw_pid: is_match = True
+                        elif 'itemId' in obj and str(obj.get('itemId')) == raw_pid: is_match = True
+                        elif 'baseInfo' in obj and isinstance(obj['baseInfo'], dict):
+                            if str(obj['baseInfo'].get('productId')) == raw_pid: is_match = True
+                            elif str(obj['baseInfo'].get('id')) == raw_pid: is_match = True
+                        
+                        if is_match:
+                            # Verify it has some meat (sometimes ID is present in breadcrumbs with no data)
+                            if len(obj.keys()) > 5:
                                 return obj
-                            if str(obj['baseInfo'].get('id')) == raw_pid:
-                                return obj
+                        
                         for v in obj.values():
                             found = recursive_find_product(v, depth + 1)
                             if found: return found
@@ -596,14 +597,15 @@ def fetch_product_details_echotik_web(product_id):
 
         if data:
             # Standardize keys so other functions can find them easily
+            # Use 'or 0' to avoid propagating None values
             if not data.get('sales_7d'):
-                data['sales_7d'] = data.get('totalSale7dCnt') or data.get('total_sale_7d_cnt') or data.get('sale7d')
+                data['sales_7d'] = data.get('totalSale7dCnt') or data.get('total_sale_7d_cnt') or data.get('sale7d') or 0
             if not data.get('video_count'):
-                data['video_count'] = data.get('totalVideoCnt') or data.get('total_video_cnt') or data.get('videoCnt')
+                data['video_count'] = data.get('totalVideoCnt') or data.get('total_video_cnt') or data.get('videoCnt') or 0
             if not data.get('influencer_count'):
-                data['influencer_count'] = data.get('totalIflCnt') or data.get('total_ifl_cnt') or data.get('iflCnt')
+                data['influencer_count'] = data.get('totalIflCnt') or data.get('total_ifl_cnt') or data.get('iflCnt') or 0
 
-            print(f"DEBUG: EchoTik Web successfully extracted product {raw_pid}")
+            print(f"DEBUG: EchoTik Web successfully extracted product {raw_pid} - Sales7D: {data.get('sales_7d')}, Vids: {data.get('video_count')}")
             # Inject source
             return data, "web_scraper"
             
@@ -7799,6 +7801,10 @@ def scan_partner_opportunity_live():
                             urls = p_img_obj.get('url_list', [])
                             if urls:
                                 img_url = urls[0]
+                            else:
+                                print(f"DEBUG: product_image found but url_list empty for {pid}. Keys: {list(p_img_obj.keys())}")
+                        else:
+                            print(f"DEBUG: product_image NOT a dict for {pid}: {type(p_img_obj)}")
                         
                         if not img_url:
                             img_url = p.get('img_url') or p.get('image') or p.get('cover') or p.get('image_url')
@@ -7819,8 +7825,10 @@ def scan_partner_opportunity_live():
                         print(f"[Partner Scan] Hydra-Enriching {pid} via EchoTik...")
                         echotik_data, source = fetch_product_details_echotik(pid)
                         if echotik_data:
-                            p_data.update(echotik_data)
-                            print(f"[Partner Scan] ✅ Enriched {pid} ({source}) - Sales7D: {echotik_data.get('sales_7d')}, Vids: {echotik_data.get('video_count')}")
+                            # Normalize with extract_metadata before merging to ensure types and defaults are correct
+                            normalized = extract_metadata_from_echotik(echotik_data)
+                            p_data.update(normalized)
+                            print(f"[Partner Scan] ✅ Enriched {pid} ({source}) - Sales7D: {p_data.get('sales_7d', 0)}, Vids: {p_data.get('video_count', 0)}, Image: {'YES' if p_data.get('image_url') else 'MISSING'}")
                         else:
                             print(f"[Partner Scan] ⚠️ Enrichment failed for {pid}, using TikTok fallback data.")
                         
