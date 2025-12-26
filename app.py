@@ -7675,15 +7675,13 @@ def scan_partner_opportunity_live():
                         pid = p.get('product_id')
                         if not pid: continue
                         
-                        # Data Mapping from actual API observation
-                        # Price: looks like "$58.37"
+                        # Data Mapping from actual API observation (Fallback)
                         raw_price = p.get('price', {}).get('floor_price', '0').replace('$', '').replace(',', '')
                         try:
                             price_val = float(raw_price)
                         except:
                             price_val = 0
                             
-                        # Sales: looks like "87.4K sold"
                         sales_str = p.get('sales', '0').split(' ')[0]
                         if 'K' in sales_str:
                             sales_val = int(float(sales_str.replace('K', '')) * 1000)
@@ -7700,11 +7698,22 @@ def scan_partner_opportunity_live():
                             'product_name': p.get('title', 'Unknown Product'),
                             'image_url': p.get('img_url') or p.get('image'), 
                             'price': price_val,
-                            'sales_7d': sales_val, 
+                            'sales': sales_val, # Use Partner total sales as baseline
+                            'sales_7d': sales_val, # Fallback
                             'commission_rate': float(p.get('commission_rate', 0)) / 100, 
                             'seller_name': p.get('shop_info', {}).get('shop_name', 'Classified'),
                             'product_url': f"https://shop.tiktok.com/view/product/{pid}?region=US"
                         }
+
+                        # HYDRA-ENRICHMENT: Use EchoTik as a bridge for high-fidelity data (7D Sales & Video Count)
+                        print(f"[Partner Scan] Hydra-Enriching {pid} via EchoTik...")
+                        echotik_data, source = fetch_product_details_echotik(pid)
+                        if echotik_data:
+                            # Merge enrichment data - save_or_update_product handles preference
+                            p_data.update(echotik_data)
+                            print(f"[Partner Scan] ✅ Enriched {pid} ({source}) - Sales7D: {echotik_data.get('sales_7d')}, Vids: {echotik_data.get('video_count')}")
+                        else:
+                            print(f"[Partner Scan] ⚠️ Enrichment failed for {pid}, using TikTok fallback data.")
                         
                         if save_or_update_product(p_data, scan_type='partner_opportunity'):
                             total_saved += 1
