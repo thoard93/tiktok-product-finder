@@ -153,6 +153,11 @@
                             class="input-premium w-full pl-11 border-white/5">
                     </div>
                     <div class="relative group">
+                        <i class="fas fa-barcode absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                        <input type="text" id="partnerFp" placeholder="Paste Fingerprint (fp)..."
+                            class="input-premium w-full pl-11 border-white/5">
+                    </div>
+                    <div class="relative group">
                         <i class="fas fa-cookie absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
                         <input type="password" id="partnerCookie" placeholder="Paste TikTok Partner Cookie..."
                             class="input-premium w-full pl-11 border-white/5">
@@ -261,6 +266,9 @@
                     const paid = data.settings.find(s => s.key === 'TIKTOK_AID');
                     if (paid && paid.value) document.getElementById('partnerAid').value = paid.value;
 
+                    const pfp = data.settings.find(s => s.key === 'TIKTOK_FP');
+                    if (pfp && pfp.value) document.getElementById('partnerFp').value = pfp.value;
+
                     const es = data.settings.find(s => s.key === 'ECHOTIK_USE_WEB_SCRAPER');
                     if (es && es.value === 'true') toggleScraper(true);
                 }
@@ -276,6 +284,7 @@
             const ptCookie = document.getElementById('partnerCookie').value.trim();
             const ptId = document.getElementById('partnerId').value.trim();
             const ptAid = document.getElementById('partnerAid').value.trim();
+            const ptFp = document.getElementById('partnerFp').value.trim();
 
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
@@ -320,6 +329,14 @@
                         key: 'TIKTOK_AID',
                         value: ptAid,
                         description: 'TikTok AID'
+                    });
+                }
+
+                if (ptFp) {
+                    updates.push({
+                        key: 'TIKTOK_FP',
+                        value: ptFp,
+                        description: 'TikTok Browser Fingerprint (fp)'
                     });
                 }
 

@@ -7704,12 +7704,14 @@ def scan_partner_opportunity_live():
     try:
         target_url = "https://partner.us.tiktokshop.com/api/v1/affiliate/partner/product/opportunity_product/list"
         
-        # Load IDs at runtime from DB (priority) or Env
+        # Load IDs and DNA at runtime from DB (priority) or Env
         db_partner_id = get_config_value('TIKTOK_PARTNER_ID')
         db_aid = get_config_value('TIKTOK_AID')
+        db_fp = get_config_value('TIKTOK_FP')
         
         active_partner_id = db_partner_id if db_partner_id else '8653231797418889998'
         active_aid = db_aid if db_aid else '359713'
+        active_fp = db_fp if db_fp else 'verify_mjiwfxfc_9k8DpPTf_DdjR_4JGE_Bvx7_nVbrXHj81VV5'
 
         params = {
             'user_language': 'en',
@@ -7717,7 +7719,7 @@ def scan_partner_opportunity_live():
             'aid': active_aid,
             'app_name': 'i18n_ecom_alliance',
             'device_id': '0',
-            'fp': 'verify_mjiwfxfc_9k8DpPTf_DdjR_4JGE_Bvx7_nVbrXHj81VV5',
+            'fp': active_fp,
             'device_platform': 'web',
             'cookie_enabled': 'true',
             'screen_width': '1536',
@@ -7730,7 +7732,7 @@ def scan_partner_opportunity_live():
             'timezone_name': 'America/New_York'
         }
         
-        print(f"[Partner Scan] Using Partner ID: {active_partner_id} | AID: {active_aid}", flush=True)
+        print(f"[Partner Scan] DNA Target -> Partner: {active_partner_id} | AID: {active_aid} | FP: {active_fp[:20]}...", flush=True)
         
         # Load Cookie at runtime from DB (priority) or Env
         db_cookie = get_config_value('TIKTOK_PARTNER_COOKIE')
