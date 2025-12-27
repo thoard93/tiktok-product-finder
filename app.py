@@ -229,6 +229,18 @@ def parse_kmb_string(s):
         except: return 0
 
 
+def safe_float(val, default=0.0):
+    if val is None: return default
+    if isinstance(val, (int, float)): return float(val)
+    s = str(val).strip().replace(',', '')
+    if s.upper() == 'N/A' or not s: return default
+    # Remove currency symbols and common non-numeric prefix/suffix
+    s = re.sub(r'[^\d\.\-]', '', s)
+    try:
+        return float(s)
+    except:
+        return default
+
 def extract_metadata_from_echotik(d):
     """
     Robustly extract product metadata from EchoTik API response (d).
@@ -266,11 +278,11 @@ def extract_metadata_from_echotik(d):
     res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or d.get('video_count') or d.get('video_cnt') or d.get('videoCnt') or 0)
     
     # Internal Fallbacks removed (e.g. video_7d -> sales_7d was causing confusion)
-        
-    raw_comm = float(d.get('productCommissionRate') or d.get('product_commission_rate') or d.get('commission_rate') or d.get('commission') or 0)
-    res['commission_rate'] = (raw_comm / 100.0) if raw_comm > 1 else raw_comm
     
-    res['price'] = float(d.get('spuAvgPrice') or d.get('spu_avg_price') or d.get('price') or d.get('avg_price') or 0)
+    res['commission_rate'] = safe_float(d.get('productCommissionRate') or d.get('product_commission_rate') or d.get('commission_rate') or d.get('commission') or 0)
+    if res['commission_rate'] > 1: res['commission_rate'] /= 100.0
+    
+    res['price'] = safe_float(d.get('spuAvgPrice') or d.get('spu_avg_price') or d.get('price') or d.get('avg_price') or 0)
     res['product_name'] = d.get('title') or d.get('productTitle') or d.get('product_title') or d.get('productName') or d.get('product_name') or d.get('name')
     
     # Robust Image Hunt
@@ -498,9 +510,13 @@ def fetch_product_details_echotik_web(product_id):
             # Helper: Score a candidate object for "meaty" stats
             def score_match(m):
                 if not isinstance(m, dict): return 0
-                score = len(m.keys())
-                if any(k in m for k in ['totalSale7dCnt', 'total_sale7d_cnt', 'totalSaleCnt', 'totalSale', 'sales_7d']): score += 100
-                if any(k in m for k in ['totalVideoCnt', 'total_video_cnt', 'videoCnt', 'video_count']): score += 50
+                # Cap the contribution of sheer number of keys to prioritize statistical "meatiness"
+                score = min(len(m.keys()), 5)
+                # Significantly higher weights for statistical keys
+                if any(k in m for k in ['totalSale7dCnt', 'total_sale7d_cnt', 'totalSale7d', 'sales_7d', 'sale7d']): score += 1000
+                if any(k in m for k in ['totalSaleCnt', 'total_sale_cnt', 'totalSale', 'sales']): score += 500
+                if any(k in m for k in ['totalVideoCnt', 'total_video_cnt', 'videoCnt', 'video_count']): score += 300
+                if any(k in m for k in ['totalIflCnt', 'total_ifl_cnt', 'influencer_count', 'ifl_cnt']): score += 100
                 if any(k in m for k in ['product_name', 'productName', 'title']): score += 10
                 return score
 
@@ -570,12 +586,8 @@ def fetch_product_details_echotik_web(product_id):
 
         if is_zero_stats:
             try:
-                # CRITICAL: Use VERY SPECIFIC label patterns to avoid matching ratings (4.0, 4.5) or pagination
-                # Require the label to be followed by a colon, closing tag, or specific separator
-                # Only match values that look like product stats (100+, 1.2K, etc.) not single digits that could be ratings
-                
-                # Sales: Look for "7D Sales", "Total Sales", etc. followed by a large-ish number
-                # Require the number to be either 0 OR > 9 (to avoid ratings) OR have K/M/B
+                # 2.1 Regex Fallback - Sales
+                # Look for distinctive container labels first
                 sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Total\s*Sales).{0,50}?\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if sales_match:
                     label = sales_match.group(1).lower()
