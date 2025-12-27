@@ -7704,10 +7704,17 @@ def scan_partner_opportunity_live():
     try:
         target_url = "https://partner.us.tiktokshop.com/api/v1/affiliate/partner/product/opportunity_product/list"
         
+        # Load IDs at runtime from DB (priority) or Env
+        db_partner_id = get_config_value('TIKTOK_PARTNER_ID')
+        db_aid = get_config_value('TIKTOK_AID')
+        
+        active_partner_id = db_partner_id if db_partner_id else '8653231797418889998'
+        active_aid = db_aid if db_aid else '359713'
+
         params = {
             'user_language': 'en',
-            'partner_id': '8653231797418889998', 
-            'aid': '359713',
+            'partner_id': active_partner_id, 
+            'aid': active_aid,
             'app_name': 'i18n_ecom_alliance',
             'device_id': '0',
             'fp': 'verify_mjiwfxfc_9k8DpPTf_DdjR_4JGE_Bvx7_nVbrXHj81VV5',
@@ -7722,6 +7729,8 @@ def scan_partner_opportunity_live():
             'browser_online': 'true',
             'timezone_name': 'America/New_York'
         }
+        
+        print(f"[Partner Scan] Using Partner ID: {active_partner_id} | AID: {active_aid}", flush=True)
         
         # Load Cookie at runtime from DB (priority) or Env
         db_cookie = get_config_value('TIKTOK_PARTNER_COOKIE')

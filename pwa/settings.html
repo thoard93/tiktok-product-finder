@@ -142,8 +142,18 @@
                     Integration</label>
                 <div class="space-y-3">
                     <div class="relative group">
+                        <i class="fas fa-id-badge absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                        <input type="text" id="partnerId" placeholder="Paste Partner ID..."
+                            class="input-premium w-full pl-11 border-white/5">
+                    </div>
+                    <div class="relative group">
                         <i
-                            class="fas fa-user-friends absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                            class="fas fa-fingerprint absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                        <input type="text" id="partnerAid" placeholder="Paste AID..."
+                            class="input-premium w-full pl-11 border-white/5">
+                    </div>
+                    <div class="relative group">
+                        <i class="fas fa-cookie absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
                         <input type="password" id="partnerCookie" placeholder="Paste TikTok Partner Cookie..."
                             class="input-premium w-full pl-11 border-white/5">
                         <button onclick="togglePassword('partnerCookie')"
@@ -151,17 +161,19 @@
                             <i class="fas fa-eye text-xs"></i>
                         </button>
                     </div>
-                    <div class="glass p-4 rounded-xl border border-white/5">
-                        <p class="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-2">How to get your
-                            partner cookie:</p>
-                        <ol class="text-[10px] text-slate-400 space-y-1 list-decimal ml-4">
-                            <li>Log in to <a href="https://partner.us.tiktokshop.com" target="_blank"
-                                    class="text-white hover:underline">TikTok Partner</a></li>
-                            <li>Open DevTools (F12) -> <span class="text-white">Network</span> tab</li>
-                            <li>Refresh & find 'opportunity_product_list' -> Copy the entire <span
-                                    class="text-white">cookie</span> header.</li>
-                        </ol>
-                    </div>
+                </div>
+                <div class="glass p-4 rounded-xl border border-white/5">
+                    <p class="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-2">How to get your
+                        account DNA:</p>
+                    <ol class="text-[10px] text-slate-400 space-y-1 list-decimal ml-4">
+                        <li>Log in to <a href="https://partner.us.tiktokshop.com" target="_blank"
+                                class="text-white hover:underline">TikTok Partner</a></li>
+                        <li>Open DevTools (F12) -> <span class="text-white">Network</span> tab</li>
+                        <li>Refresh & find <span class="text-white">opportunity_product_list</span></li>
+                        <li>Copy <span class="text-white">partner_id</span> and <span class="text-white">aid</span> from
+                            the <span class="text-cyan-400 font-bold">Query String Parameters</span></li>
+                        <li>Copy the entire <span class="text-white">cookie</span> header as well.</li>
+                    </ol>
                 </div>
             </div>
 
@@ -243,6 +255,12 @@
                     const pc = data.settings.find(s => s.key === 'TIKTOK_PARTNER_COOKIE');
                     if (pc && pc.value) document.getElementById('partnerCookie').placeholder = pc.value;
 
+                    const pid = data.settings.find(s => s.key === 'TIKTOK_PARTNER_ID');
+                    if (pid && pid.value) document.getElementById('partnerId').value = pid.value;
+
+                    const paid = data.settings.find(s => s.key === 'TIKTOK_AID');
+                    if (paid && paid.value) document.getElementById('partnerAid').value = paid.value;
+
                     const es = data.settings.find(s => s.key === 'ECHOTIK_USE_WEB_SCRAPER');
                     if (es && es.value === 'true') toggleScraper(true);
                 }
@@ -256,6 +274,8 @@
             const dvToken = document.getElementById('dvToken').value.trim();
             const ecCookie = document.getElementById('echotikCookie').value.trim();
             const ptCookie = document.getElementById('partnerCookie').value.trim();
+            const ptId = document.getElementById('partnerId').value.trim();
+            const ptAid = document.getElementById('partnerAid').value.trim();
 
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
@@ -284,6 +304,22 @@
                         key: 'TIKTOK_PARTNER_COOKIE',
                         value: ptCookie,
                         description: 'TikTok Partner Center Cookie'
+                    });
+                }
+
+                if (ptId) {
+                    updates.push({
+                        key: 'TIKTOK_PARTNER_ID',
+                        value: ptId,
+                        description: 'TikTok Partner ID'
+                    });
+                }
+
+                if (ptAid) {
+                    updates.push({
+                        key: 'TIKTOK_AID',
+                        value: ptAid,
+                        description: 'TikTok AID'
                     });
                 }
 
