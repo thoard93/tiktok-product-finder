@@ -548,13 +548,14 @@ def fetch_product_details_echotik_web(product_id):
                 # This is a heuristic based on common EchoTik structures
                 product_data = None
                 
-                # Dig for the product object
-                def recursive_find_product(obj, depth=0):
-                    if depth > 15: return None # Deeper safety
+                # Dig for all product objects and pick the "meatiest" one
+                def recursive_find_all_products(obj, matches=None, depth=0):
+                    if matches is None: matches = []
+                    if depth > 15: return matches # Deeper safety
+                    
                     if isinstance(obj, dict):
-                        # print(f"DEBUG: Depth {depth} Keys: {list(obj.keys())[:5]}")
-                        # Common EchoTik keys
                         is_match = False
+                        # Common EchoTik keys
                         if 'product_id' in obj and str(obj.get('product_id')) == raw_pid: is_match = True
                         elif 'productId' in obj and str(obj.get('productId')) == raw_pid: is_match = True
                         elif 'id' in obj and str(obj.get('id')) == raw_pid: is_match = True
@@ -565,25 +566,31 @@ def fetch_product_details_echotik_web(product_id):
                             elif str(obj['baseInfo'].get('id')) == raw_pid: is_match = True
                         
                         if is_match:
-                            # Verify it has some meat AND crucial stats
-                            # If we find a version with sales/vids, that's the hero
-                            if any(k in obj for k in ['totalSaleCnt', 'total_sale_cnt', 'totalSale7dCnt', 'totalSale']):
-                                return obj
-                            # Fallback if no meatier one found yet
-                            if len(obj.keys()) > 5:
-                                return obj
+                            matches.append(obj)
                         
                         for v in obj.values():
-                            found = recursive_find_product(v, depth + 1)
-                            if found: return found
+                            recursive_find_all_products(v, matches, depth + 1)
                     elif isinstance(obj, list):
                         for item in obj:
-                            found = recursive_find_product(item, depth + 1)
-                            if found: return found
-                    return None
+                            recursive_find_all_products(item, matches, depth + 1)
+                    return matches
 
-                product_data = recursive_find_product(state)
-                if product_data:
+                all_matches = recursive_find_all_products(state)
+                if all_matches:
+                    # Pick the best match: One with the most keys or specifically with sales data
+                    def score_match(m):
+                        score = len(m.keys())
+                        # Big boost for having actual sales stats
+                        if any(k in m for k in ['totalSale7dCnt', 'total_sale7d_cnt', 'totalSaleCnt', 'totalSale']):
+                            score += 100
+                        # Boost for having product name
+                        if any(k in m for k in ['product_name', 'productName', 'title']):
+                            score += 10
+                        return score
+                    
+                    all_matches.sort(key=score_match, reverse=True)
+                    product_data = all_matches[0]
+                    print(f"DEBUG: Found {len(all_matches)} Nuxt matches, picked best (Score: {score_match(product_data)})")
                     data = product_data
         except Exception as e:
             print(f"DEBUG: EchoTik Nuxt parse failed: {e}")
@@ -699,7 +706,14 @@ def fetch_product_details_echotik_web(product_id):
                 print(f"DEBUG: Zero stats extracted for {raw_pid}. HTML Snippet: {html_clean}")
                 if state:
                     # If Nuxt 3 flat array, log its length to verify data presence
-                    print(f"DEBUG: State type: {type(state)}, size: {len(state) if hasattr(state, '__len__') else 'N/A'}")
+                    print(f"DEBUG: Nuxt State structure: {type(state)}, size: {len(state) if hasattr(state, '__len__') else 'N/A'}")
+                    # If data was extracted from a Nuxt match, show its guts
+                    if data and isinstance(data, dict):
+                        sample_keys = list(data.keys())[:15]
+                        print(f"DEBUG: Best Match Keys: {sample_keys}")
+                        # Show some values to see if they are empty/null
+                        sample_vals = {k: data[k] for k in sample_keys[:5]}
+                        print(f"DEBUG: Best Match Sample: {sample_vals}")
 
             data['sales_7d'] = s7d
             data['video_count'] = v_cnt
