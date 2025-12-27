@@ -582,31 +582,34 @@ def fetch_product_details_echotik_web(product_id):
                 # Only match values that look like product stats (100+, 1.2K, etc.) not single digits that could be ratings
                 
                 # Sales: Look for "7D Sales", "Total Sales", etc. followed by a large-ish number
-                # Loosened: Don't require strict > immediate proximity
-                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Total\s*Sales)[^0-9]*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
+                # Tighter window: only skip up to 50 characters, and don't skip across too many tags
+                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Total\s*Sales).{0,50}?\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if sales_match:
                     label = sales_match.group(1).lower()
                     val = sales_match.group(2)
-                    # SANITY CHECK: Skip single-digit values (likely ratings) unless they have K/M/B suffix
-                    if len(val) > 1 or val.upper().endswith(('K', 'M', 'B')):
+                    # SANITY CHECK: 
+                    # 1. Reject small decimals (4.8, 5.0) which are almost certainly ratings
+                    is_rating = '.' in val and float(val.replace(',', '')) < 10 and not val.upper().endswith(('K', 'M', 'B'))
+                    # 2. Reject if too far from digits
+                    if not is_rating:
                         if '7' in label:
                             data['sales_7d'] = val
                         else:
                             data['total_sale_cnt'] = val
                         print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
                     else:
-                        print(f"DEBUG: Regex REJECTED Sales ({label}): {val} - Too short, likely rating")
+                        print(f"DEBUG: Regex REJECTED Sales ({label}): {val} - Looks like rating")
                 
-                # Videos: Look for "7D Videos", "Total Videos", etc.
-                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos)[^0-9]*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
+                # Videos: Similar logic
+                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos).{0,50}?\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if v_match:
                     val = v_match.group(2)
-                    # SANITY CHECK: Skip single-digit values (like "4")
-                    if len(val) > 1 or val.upper().endswith(('K', 'M', 'B')):
+                    is_rating = '.' in val and float(val.replace(',', '')) < 10 and not val.upper().endswith(('K', 'M', 'B'))
+                    if not is_rating:
                         data['total_video_cnt'] = val
                         print(f"DEBUG: Regex Fallback Videos: {val}")
                     else:
-                        print(f"DEBUG: Regex REJECTED Videos: {val} - Too short, likely rating")
+                        print(f"DEBUG: Regex REJECTED Videos: {val} - Looks like rating")
                 
                 # Influencers: Look for "Influencers", "Creators", etc.
                 i_match = re.search(r'(Influencers|Creators|Total\s*Ifl)[^0-9]*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
@@ -648,10 +651,17 @@ def fetch_product_details_echotik_web(product_id):
         if data:
             # Standardize keys so other functions can find them easily
             # Use 'or 0' to avoid propagating None values
-            if not data.get('sales_7d'):
-                data['sales_7d'] = data.get('totalSale7dCnt') or data.get('total_sale_7d_cnt') or data.get('sale7d') or 0
-            if not data.get('video_count'):
-                data['video_count'] = data.get('totalVideoCnt') or data.get('total_video_cnt') or data.get('videoCnt') or 0
+            s7d = data.get('sales_7d') or data.get('totalSale7dCnt') or data.get('total_sale_7d_cnt') or data.get('sale7d') or 0
+            v_cnt = data.get('video_count') or data.get('totalVideoCnt') or data.get('total_video_cnt') or data.get('videoCnt') or 0
+            
+            # DIAGNOSTIC: If we have zero stats but a valid page, log why
+            if s7d == 0 and v_cnt == 0:
+                print(f"DEBUG: Zero stats extracted for {raw_pid}. HTML Snippet: {html[:300].replace('\n', ' ')}")
+                if state:
+                    print(f"DEBUG: State keys: {list(state.keys()) if isinstance(state, dict) else 'LIST'}")
+
+            data['sales_7d'] = s7d
+            data['video_count'] = v_cnt
             if not data.get('influencer_count'):
                 data['influencer_count'] = data.get('totalIflCnt') or data.get('total_ifl_cnt') or data.get('iflCnt') or 0
 
