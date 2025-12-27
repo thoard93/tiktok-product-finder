@@ -7723,11 +7723,21 @@ def scan_partner_opportunity_live():
             'timezone_name': 'America/New_York'
         }
         
+        # Load Cookie at runtime from DB (priority) or Env
+        db_cookie = get_config_value('TIKTOK_PARTNER_COOKIE')
+        active_cookie = db_cookie if db_cookie else TIKTOK_PARTNER_COOKIE
+        
+        if not active_cookie:
+            print("[Partner Scan] FATAL: No TIKTOK_PARTNER_COOKIE found in DB or Environment.", flush=True)
+            return
+
+        print(f"[Partner Scan] Cookie Source: {'DATABASE' if db_cookie else 'ENV_VAR'}", flush=True)
+
         headers = {
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'en-US,en;q=0.9',
             'content-type': 'application/json',
-            'cookie': TIKTOK_PARTNER_COOKIE,
+            'cookie': active_cookie,
             'origin': 'https://partner.us.tiktokshop.com',
             'referer': 'https://partner.us.tiktokshop.com/affiliate-product-management/opportunity-product-pool?prePage=product_marketplace&market=100',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
