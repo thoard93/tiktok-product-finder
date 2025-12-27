@@ -691,7 +691,8 @@ def fetch_product_details_echotik_web(product_id):
             
             # DIAGNOSTIC: If we have zero stats but a valid page, log why
             if s7d == 0 and v_cnt == 0:
-                print(f"DEBUG: Zero stats extracted for {raw_pid}. HTML Snippet: {html[:300].replace('\n', ' ')}")
+                html_clean = html[:300].replace('\n', ' ')
+                print(f"DEBUG: Zero stats extracted for {raw_pid}. HTML Snippet: {html_clean}")
                 if state:
                     print(f"DEBUG: State keys: {list(state.keys()) if isinstance(state, dict) else 'LIST'}")
 
