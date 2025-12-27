@@ -1458,7 +1458,7 @@ class Product(db.Model):
     prev_sales_30d = db.Column(db.Integer, default=0)
     sales_velocity = db.Column(db.Float, default=0)  # Percentage change in sales
     
-    scan_type = db.Column(db.String(50), default='brand_hunter')
+    scan_type = db.Column(db.String(50), default='brand_hunter', index=True)
     is_ad_driven = db.Column(db.Boolean, default=False) # Track if found via ad scan
     
     # Composite indexes for common query patterns
@@ -7697,273 +7697,209 @@ def scan_partner_opportunity_live():
     """
     from curl_cffi import requests as curl_requests
     import time
-    
-    print("[Partner Scan] Starting High Opportunity scan...")
-    
-    target_url = "https://partner.us.tiktokshop.com/api/v1/affiliate/partner/product/opportunity_product/list"
-    
-    # These params were extracted from the user's cURL.
-    # Note: partner_id and fp are likely session-specific.
-    params = {
-        'user_language': 'en',
-        'partner_id': '8653231797418889998', 
-        'aid': '359713',
-        'app_name': 'i18n_ecom_alliance',
-        'device_id': '0',
-        'fp': 'verify_mjiwfxfc_9k8DpPTf_DdjR_4JGE_Bvx7_nVbrXHj81VV5',
-        'device_platform': 'web',
-        'cookie_enabled': 'true',
-        'screen_width': '1536',
-        'screen_height': '864',
-        'browser_language': 'en-US',
-        'browser_platform': 'Win32',
-        'browser_name': 'Mozilla',
-        'browser_version': '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-        'browser_online': 'true',
-        'timezone_name': 'America/New_York'
-    }
-    
-    headers = {
-        'accept': 'application/json, text/plain, */*',
-        'accept-language': 'en-US,en;q=0.9',
-        'content-type': 'application/json',
-        'cookie': TIKTOK_PARTNER_COOKIE,
-        'origin': 'https://partner.us.tiktokshop.com',
-        'referer': 'https://partner.us.tiktokshop.com/affiliate-product-management/opportunity-product-pool?prePage=product_marketplace&market=100',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-    }
-    
-    with app.app_context():
-        # Clean up existing corrupted data from the first buggy runtime
-        try:
-            # Fix huge commissions (anything > 1.0 is likely representation error)
-            # If it's 20.0 (2000%) or 2000.0, we want to normalize it.
-            p_targets = Product.query.filter(Product.scan_type == 'partner_opportunity', Product.commission_rate > 1.0).all()
-            for pt in p_targets:
-                if pt.commission_rate >= 10.0: # 10% or 1000BP
-                    pt.commission_rate /= 100.0
-                elif pt.commission_rate > 1.0:
-                    pt.commission_rate /= 10.0
-            
-            # Fix misleading 7D sales (reset those that were just total sales clones)
-            # Also ensure we don't accidentally wipe real EchoTik data if it matched by chance
-            # (but usually 7D won't exactly match Total for high volume)
-            count2 = Product.query.filter(Product.scan_type == 'partner_opportunity', Product.sales_7d == Product.sales, Product.sales > 100).update({Product.sales_7d: 0})
-            db.session.commit()
-            if p_targets or count2:
-                print(f"[Partner Scan] Cleanup phase complete: Repaired commissions and {count2} sales entries.")
-        except Exception as e_clean:
-            print(f"[Partner Scan] Cleanup phase error: {e_clean}")
+    import traceback
 
-    proxies = None
-    if ECHOTIK_PROXY_STRING:
-        p_parts = ECHOTIK_PROXY_STRING.split(':')
-        if len(p_parts) == 4:
-            proxies = {
-                "http": f"http://{p_parts[2]}:{p_parts[3]}@{p_parts[0]}:{p_parts[1]}",
-                "https": f"http://{p_parts[2]}:{p_parts[3]}@{p_parts[0]}:{p_parts[1]}"
-            }
-
-    total_saved = 0
-    max_pages = 10 # Deeper scan
+    print("[Partner Scan] Starting High Opportunity scan...", flush=True)
     
-    for page in range(1, max_pages + 1):
-        print(f"[Partner Scan] Fetching page {page}...")
+    try:
+        target_url = "https://partner.us.tiktokshop.com/api/v1/affiliate/partner/product/opportunity_product/list"
         
-        payload = {
-            "filter": {
-                "product_source": [],
-                "campaign_type": [],
-                "label_type": [],
-                "product_status": 1
-            },
-            "page_size": 15,
-            "page": page
+        params = {
+            'user_language': 'en',
+            'partner_id': '8653231797418889998', 
+            'aid': '359713',
+            'app_name': 'i18n_ecom_alliance',
+            'device_id': '0',
+            'fp': 'verify_mjiwfxfc_9k8DpPTf_DdjR_4JGE_Bvx7_nVbrXHj81VV5',
+            'device_platform': 'web',
+            'cookie_enabled': 'true',
+            'screen_width': '1536',
+            'screen_height': '864',
+            'browser_language': 'en-US',
+            'browser_platform': 'Win32',
+            'browser_name': 'Mozilla',
+            'browser_version': '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+            'browser_online': 'true',
+            'timezone_name': 'America/New_York'
         }
         
-        try:
-            print(f"[Partner Scan] Requesting: {target_url} (Page {page})")
-            res = None
-            last_err = None
-            
-            # Stage 1: curl_cffi with Proxy
+        headers = {
+            'accept': 'application/json, text/plain, */*',
+            'accept-language': 'en-US,en;q=0.9',
+            'content-type': 'application/json',
+            'cookie': TIKTOK_PARTNER_COOKIE,
+            'origin': 'https://partner.us.tiktokshop.com',
+            'referer': 'https://partner.us.tiktokshop.com/affiliate-product-management/opportunity-product-pool?prePage=product_marketplace&market=100',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+        }
+        
+        # 1. Cleanup Phase (Optimized)
+        with app.app_context():
+            print("[Partner Scan] Running database cleanup phase...", flush=True)
             try:
-                res = curl_requests.post(
-                    target_url,
-                    params=params,
-                    headers=headers,
-                    json=payload,
-                    proxies=proxies,
-                    impersonate="chrome110",
-                    timeout=30
-                )
-                print(f"[Partner Scan] Stage 1 (Proxy Curl) -> Status {res.status_code}")
-            except Exception as e1:
-                last_err = e1
-                print(f"[Partner Scan] Stage 1 failed: {e1}")
+                # Use raw SQL or optimized queries for mass cleanup to avoid identity map overhead
+                Product.query.filter(Product.scan_type == 'partner_opportunity', Product.commission_rate > 1.0).update({Product.commission_rate: Product.commission_rate / 100.0}, synchronize_session=False)
                 
-            # Stage 2: curl_cffi DIRECT (if Stage 1 failed or 403/499)
-            if not res or res.status_code in [403, 499, 502, 522]:
-                try:
-                    res = curl_requests.post(
-                        target_url,
-                        params=params,
-                        headers=headers,
-                        json=payload,
-                        impersonate="chrome110",
-                        timeout=30
-                    )
-                    print(f"[Partner Scan] Stage 2 (Direct Curl) -> Status {res.status_code}")
-                except Exception as e2:
-                    last_err = e2
-                    print(f"[Partner Scan] Stage 2 failed: {e2}")
-
-            # Stage 3: Standard Requests (Last Resort)
-            if not res or res.status_code in [403, 499, 502, 522]:
-                try:
-                    res = requests.post(
-                        target_url,
-                        params=params,
-                        headers=headers,
-                        json=payload,
-                        proxies=proxies,
-                        timeout=30
-                    )
-                    print(f"[Partner Scan] Stage 3 (Standard Requests) -> Status {res.status_code}")
-                except Exception as e3:
-                    last_err = e3
-                    print(f"[Partner Scan] Stage 3 failed: {e3}")
-
-            if not res:
-                raise Exception(f"All request stages failed. Last error: {last_err}")
-            
-            if res.status_code != 200:
-                print(f"[Partner Scan] Error {res.status_code}: {res.text[:500]}")
-                break
-                
-            data = res.json()
-            # TikTok Partner API often uses 'data' -> 'products' or 'data' -> 'opportunity_product_list'
-            # Let's be extra robust by checking 'products' first then 'opportunity_product_list'
-            d_obj = data.get('data', {})
-            products = d_obj.get('products') or d_obj.get('opportunity_product_list') or []
-            
-            if not products:
-                print(f"[Partner Scan] No more products found on page {page}. Raw Response Keys: {list(data.keys())} | Data Keys: {list(d_obj.keys())}")
-                break
-            
-            # DEBUG: See what we are dealing with
-            if page == 1:
-                print(f"[Partner Scan] SAMPLE PRODUCT KEYS: {list(products[0].keys())}")
-                print(f"[Partner Scan] SAMPLE PRODUCT DATA (TOP 500 chars): {str(products[0])[:500]}")
-                
-            with app.app_context():
-                for p in products:
-                    try:
-                        pid = p.get('product_id')
-                        if not pid: continue
-                        
-                        # Data Mapping from actual API observation (Fallback)
-                        price_obj = p.get('price') or {}
-                        if isinstance(price_obj, str):
-                            raw_price = price_obj.replace('$', '').replace(',', '')
-                        else:
-                            raw_price = str(price_obj.get('floor_price') or price_obj.get('min_price') or '0').replace('$', '').replace(',', '')
-                        
-                        try:
-                            price_val = float(raw_price)
-                        except:
-                            price_val = 0
-                            
-                        # Sales: "87.4K sold" or "100" or {"count": "100"}
-                        sales_raw = p.get('sales') or '0'
-                        if isinstance(sales_raw, dict):
-                            sales_str = str(sales_raw.get('count', '0'))
-                        else:
-                            sales_str = str(sales_raw).split(' ')[0]
-                            
-                        if 'K' in sales_str.upper():
-                            sales_val = int(float(sales_str.upper().replace('K', '')) * 1000)
-                        elif 'M' in sales_str.upper():
-                            sales_val = int(float(sales_str.upper().replace('M', '')) * 1000000)
-                        else:
-                            try:
-                                sales_val = int(sales_str.replace(',', ''))
-                            except:
-                                sales_val = 0
-
-                        # Commission: Basis points (10000 = 100%) or decimal
-                        comm_raw = float(p.get('commission_rate', 0))
-                        # Sample shows '2000' for 20%
-                        comm_val = comm_raw / 10000.0 if comm_raw > 100 else comm_raw / 100.0
-
-                        # Image Hunting: Verified key is 'product_image' -> 'url_list'
-                        img_url = None
-                        p_img_obj = p.get('product_image')
-                        if isinstance(p_img_obj, dict):
-                            urls = p_img_obj.get('url_list', [])
-                            if urls:
-                                img_url = urls[0]
-                            else:
-                                print(f"DEBUG: product_image found but url_list empty for {pid}. Keys: {list(p_img_obj.keys())}")
-                        else:
-                            print(f"DEBUG: product_image NOT a dict for {pid}: {type(p_img_obj)}")
-                        
-                        if not img_url:
-                            img_url = p.get('img_url') or p.get('image') or p.get('cover') or p.get('image_url')
-
-                        p_data = {
-                            'product_id': pid,
-                            'product_name': p.get('title', 'Unknown Product'),
-                            'image_url': img_url, 
-                            'price': price_val,
-                            'sales': sales_val, # Use Partner total sales as baseline
-                            'sales_7d': 0, # DO NOT fallback to total sales for 7D, keep it 0 if unknown
-                            'commission_rate': comm_val, 
-                            'seller_name': p.get('shop_info', {}).get('shop_name', 'Classified'),
-                            'product_url': f"https://shop.tiktok.com/view/product/{pid}?region=US"
-                        }
-
-                        # HYDRA-ENRICHMENT: Use EchoTik as a bridge for high-fidelity data (7D Sales & Video Count)
-                        print(f"[Partner Scan] Hydra-Enriching {pid} via EchoTik...")
-                        echotik_data, source = fetch_product_details_echotik(pid)
-                        if echotik_data:
-                            # Normalize with extract_metadata before merging
-                            normalized = extract_metadata_from_echotik(echotik_data)
-                            
-                            # PROTECT PARTNER DATA: Only update fields if EchoTik has truthy values
-                            if normalized.get('sales_7d', 0) > 0: p_data['sales_7d'] = normalized['sales_7d']
-                            if normalized.get('video_count', 0) > 0: p_data['video_count'] = normalized['video_count']
-                            if normalized.get('influencer_count', 0) > 0: p_data['influencer_count'] = normalized['influencer_count']
-                            if normalized.get('image_url') and normalized.get('image_url') != p_data.get('image_url'):
-                                p_data['image_url'] = normalized['image_url']
-                            if normalized.get('product_name') and len(normalized['product_name']) > 5:
-                                p_data['product_name'] = normalized['product_name']
-                            
-                            if not p_data.get('image_url'):
-                                # FORENSIC DISCOVERY: Dump full keys if image is missing to find hidden keys
-                                print(f"CRITICAL DEBUG: No image for {pid}. FULL KEYS: {list(p.keys())}")
-                                if 'shop_info' in p: print(f"DEBUG: shop_info keys for {pid}: {list(p['shop_info'].keys())}")
-                            
-                            print(f"[Partner Scan] ✅ Enriched {pid} ({source}) - Sales7D: {p_data.get('sales_7d', 0)}, Vids: {p_data.get('video_count', 0)}, Image: {'YES' if p_data.get('image_url') else 'MISSING'}")
-                        else:
-                            print(f"[Partner Scan] ⚠️ Enrichment failed for {pid}, using TikTok fallback data.")
-                        
-                        if save_or_update_product(p_data, scan_type='partner_opportunity'):
-                            total_saved += 1
-                            
-                    except Exception as e_p:
-                        print(f"[Partner Scan] Error mapping product {p.get('product_id')}: {e_p}")
+                # Reset Sales 7D if it exactly matches Total Sales (indicates incorrect fallback)
+                count2 = Product.query.filter(Product.scan_type == 'partner_opportunity', Product.sales_7d == Product.sales, Product.sales > 100).update({Product.sales_7d: 0}, synchronize_session=False)
                 
                 db.session.commit()
-                
-            # SAFETY PROTOCOL: 15 second delay between pages
-            print(f"[Partner Scan] Page {page} processed. Sleeping 15s...")
-            time.sleep(15)
+                print(f"[Partner Scan] Cleanup complete. Reset {count2} suspicious sales entries.", flush=True)
+            except Exception as e_clean:
+                print(f"[Partner Scan] Cleanup phase error: {e_clean}", flush=True)
+                db.session.rollback()
+
+        proxies = None
+        if ECHOTIK_PROXY_STRING:
+            p_parts = ECHOTIK_PROXY_STRING.split(':')
+            if len(p_parts) == 4:
+                proxies = {
+                    "http": f"http://{p_parts[2]}:{p_parts[3]}@{p_parts[0]}:{p_parts[1]}",
+                    "https": f"http://{p_parts[2]}:{p_parts[3]}@{p_parts[0]}:{p_parts[1]}"
+                }
+
+        total_saved = 0
+        max_pages = 10 
+        
+        for page in range(1, max_pages + 1):
+            print(f"[Partner Scan] --- Processing Page {page} ---", flush=True)
             
-        except Exception as e:
-            import traceback
-            print(f"[Partner Scan] Fatal request error Page {page}: {e}")
-            print(traceback.format_exc())
-            break
+            payload = {
+                "filter": {
+                    "product_source": [],
+                    "campaign_type": [],
+                    "label_type": [],
+                    "product_status": 1
+                },
+                "page_size": 15,
+                "page": page
+            }
+            
+            try:
+                res = None
+                last_err = None
+                
+                # Stage 1: curl_cffi with Proxy
+                try:
+                    res = curl_requests.post(target_url, params=params, headers=headers, json=payload, proxies=proxies, impersonate="chrome110", timeout=30)
+                except Exception as e1:
+                    last_err = e1
+                    
+                # Stage 2: curl_cffi DIRECT
+                if not res or res.status_code in [403, 499, 502, 522]:
+                    try:
+                        res = curl_requests.post(target_url, params=params, headers=headers, json=payload, impersonate="chrome110", timeout=30)
+                    except Exception as e2:
+                        last_err = e2
+
+                # Stage 3: Standard Requests
+                if not res or res.status_code in [403, 499, 502, 522]:
+                    try:
+                        res = requests.post(target_url, params=params, headers=headers, json=payload, proxies=proxies, timeout=30)
+                    except Exception as e3:
+                        last_err = e3
+
+                if not res:
+                    print(f"[Partner Scan] Page {page} failed all request stages. Skipping.", flush=True)
+                    continue
+                
+                if res.status_code != 200:
+                    print(f"[Partner Scan] Page {page} error {res.status_code}. Breaking.", flush=True)
+                    break
+                    
+                data = res.json()
+                d_obj = data.get('data', {})
+                products = d_obj.get('products') or d_obj.get('opportunity_product_list') or []
+                
+                if not products:
+                    print(f"[Partner Scan] No more products found on page {page}.", flush=True)
+                    break
+                    
+                with app.app_context():
+                    for p in products:
+                        try:
+                            pid = p.get('product_id')
+                            if not pid: continue
+                            
+                            # Price
+                            price_obj = p.get('price') or {}
+                            if isinstance(price_obj, str):
+                                raw_price = price_obj.replace('$', '').replace(',', '')
+                            else:
+                                raw_price = str(price_obj.get('floor_price') or price_obj.get('min_price') or '0').replace('$', '').replace(',', '')
+                            price_val = safe_float(raw_price)
+                            
+                            # Sales
+                            sales_raw = p.get('sales') or '0'
+                            if isinstance(sales_raw, dict):
+                                sales_str = str(sales_raw.get('count', '0'))
+                            else:
+                                sales_str = str(sales_raw).split(' ')[0]
+                            sales_val = parse_kmb_string(sales_str)
+
+                            # Commission
+                            comm_raw = safe_float(p.get('commission_rate', 0))
+                            comm_val = comm_raw / 10000.0 if comm_raw > 100 else comm_raw / 100.0
+
+                            # Image
+                            img_url = None
+                            p_img_obj = p.get('product_image')
+                            if isinstance(p_img_obj, dict):
+                                urls = p_img_obj.get('url_list', [])
+                                if urls: img_url = urls[0]
+                            
+                            if not img_url:
+                                img_url = p.get('img_url') or p.get('image') or p.get('cover') or p.get('image_url')
+
+                            p_data = {
+                                'product_id': pid,
+                                'product_name': p.get('title', 'Unknown Product'),
+                                'image_url': img_url, 
+                                'price': price_val,
+                                'sales': sales_val, 
+                                'sales_7d': 0, 
+                                'commission_rate': comm_val, 
+                                'seller_name': p.get('shop_info', {}).get('shop_name', 'Classified'),
+                                'product_url': f"https://shop.tiktok.com/view/product/{pid}?region=US"
+                            }
+
+                            # Hydra-Enrichment
+                            echotik_data, source = fetch_product_details_echotik(pid)
+                            if echotik_data:
+                                normalized = extract_metadata_from_echotik(echotik_data)
+                                if normalized.get('sales_7d', 0) > 0: p_data['sales_7d'] = normalized['sales_7d']
+                                if normalized.get('video_count', 0) > 0: p_data['video_count'] = normalized['video_count']
+                                if normalized.get('influencer_count', 0) > 0: p_data['influencer_count'] = normalized['influencer_count']
+                                if normalized.get('image_url'): p_data['image_url'] = normalized['image_url']
+                                if normalized.get('product_name') and len(normalized['product_name']) > 5:
+                                    p_data['product_name'] = normalized['product_name']
+                            
+                            if save_or_update_product(p_data, scan_type='partner_opportunity'):
+                                total_saved += 1
+                                
+                        except Exception as e_p:
+                            print(f"[Partner Scan] Error processing product {p.get('product_id')}: {e_p}", flush=True)
+                    
+                    db.session.commit()
+                
+                print(f"[Partner Scan] Page {page} sync complete. Total saved: {total_saved}", flush=True)
+                time.sleep(15)
+                
+            except Exception as e_page:
+                print(f"[Partner Scan] Error on Page {page}: {e_page}", flush=True)
+                print(traceback.format_exc(), flush=True)
+                continue
+
+        print(f"[Partner Scan] Scan complete! Total products synced: {total_saved}", flush=True)
+
+    except Exception as e_fatal:
+        print(f"[Partner Scan] FATAL ERROR: {e_fatal}", flush=True)
+        print(traceback.format_exc(), flush=True)
+        try:
+            send_telegram_alert(f"⚠️ **Partner Scan Failed**\nError: `{str(e_fatal)[:200]}`")
+        except: pass
+    finally:
+        with app.app_context():
+            db.session.remove()
             
     print(f"[Partner Scan] Finished. Total new/updated opportunities: {total_saved}")
