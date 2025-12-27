@@ -524,8 +524,22 @@ def fetch_product_details_echotik_web(product_id):
                 m_data = re.search(r'<script id="__NUXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL)
                 if m_data:
                     try: 
-                        state = json.loads(m_data.group(1))
-                        print(f"DEBUG: Found Nuxt 3 Data Script for {raw_pid}")
+                        raw_json = json.loads(m_data.group(1))
+                        # Nuxt 3 often uses a flat array where objects point to other indices
+                        # We try to reconstruct it or at least find the meat
+                        if isinstance(raw_json, list) and len(raw_json) > 5:
+                            # Simple Nuxt 3 Reconstructor
+                            def reconstruct_nuxt3(val, source_list):
+                                if isinstance(val, int) and 0 <= val < len(source_list):
+                                    return source_list[val]
+                                return val
+                            
+                            # For our purposes, we'll just search the flat list for objects with product keys
+                            state = raw_json
+                            print(f"DEBUG: Found Nuxt 3 Data Script (Flat Array) for {raw_pid}")
+                        else:
+                            state = raw_json
+                            print(f"DEBUG: Found Nuxt 3 Data Script for {raw_pid}")
                     except: pass
             
             if state:
@@ -582,34 +596,55 @@ def fetch_product_details_echotik_web(product_id):
                 # Only match values that look like product stats (100+, 1.2K, etc.) not single digits that could be ratings
                 
                 # Sales: Look for "7D Sales", "Total Sales", etc. followed by a large-ish number
-                # Tighter window: only skip up to 50 characters, and don't skip across too many tags
+                # Require the number to be either 0 OR > 9 (to avoid ratings) OR have K/M/B
                 sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Total\s*Sales).{0,50}?\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if sales_match:
                     label = sales_match.group(1).lower()
                     val = sales_match.group(2)
+                    clean_val = val.replace(',', '')
+                    
                     # SANITY CHECK: 
-                    # 1. Reject small decimals (4.8, 5.0) which are almost certainly ratings
-                    is_rating = '.' in val and float(val.replace(',', '')) < 10 and not val.upper().endswith(('K', 'M', 'B'))
-                    # 2. Reject if too far from digits
-                    if not is_rating:
+                    # 1. Allow "0" (very common valid stat)
+                    # 2. Reject small decimals (4.8, 5.0) which are almost certainly ratings
+                    # 3. Allow large numbers (> 9) or metrics (K/M/B)
+                    is_valid = False
+                    if clean_val == "0": is_valid = True
+                    elif val.upper().endswith(('K', 'M', 'B')): is_valid = True
+                    elif '.' in val:
+                        try:
+                            if float(clean_val) >= 10: is_valid = True
+                        except: pass
+                    elif len(clean_val) > 1: is_valid = True # Multi-digit like 10, 20
+                    
+                    if is_valid:
                         if '7' in label:
                             data['sales_7d'] = val
                         else:
                             data['total_sale_cnt'] = val
                         print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
                     else:
-                        print(f"DEBUG: Regex REJECTED Sales ({label}): {val} - Looks like rating")
+                        print(f"DEBUG: Regex REJECTED Sales ({label}): {val} - Likely rating or irrelevant small number")
                 
                 # Videos: Similar logic
                 v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos).{0,50}?\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if v_match:
                     val = v_match.group(2)
-                    is_rating = '.' in val and float(val.replace(',', '')) < 10 and not val.upper().endswith(('K', 'M', 'B'))
-                    if not is_rating:
+                    clean_val = val.replace(',', '')
+                    
+                    is_valid = False
+                    if clean_val == "0": is_valid = True
+                    elif val.upper().endswith(('K', 'M', 'B')): is_valid = True
+                    elif '.' in val:
+                        try:
+                            if float(clean_val) >= 10: is_valid = True
+                        except: pass
+                    elif len(clean_val) > 1: is_valid = True
+                    
+                    if is_valid:
                         data['total_video_cnt'] = val
                         print(f"DEBUG: Regex Fallback Videos: {val}")
                     else:
-                        print(f"DEBUG: Regex REJECTED Videos: {val} - Looks like rating")
+                        print(f"DEBUG: Regex REJECTED Videos: {val} - Likely rating or irrelevant small number")
                 
                 # Influencers: Look for "Influencers", "Creators", etc.
                 i_match = re.search(r'(Influencers|Creators|Total\s*Ifl)[^0-9]*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
