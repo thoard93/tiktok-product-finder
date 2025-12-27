@@ -476,28 +476,33 @@ def fetch_product_details_echotik_web(product_id):
         # Usually window.__NUXT__ or window.__INITIAL_STATE__
         data = {}
         
-        # 1. Try to find the JSON in initial state
-        # 1. Try to find the data in the page source
-        try:
-            print(f"DEBUG: Attempting EchoTik Web scrape for {raw_pid}...")
-            # Pattern for Nuxt state (common on EchoTik)
-            # Use raw strings and avoid escaping backslashes in a way that breaks multi-line python strings
-            # Improved Nuxt/Initial state capture
-            # Try to find the block first, then extract the JSON-like payload
+            # 1. Try to find the JSON in initial state
+            # Supports Nuxt 2 (window.__NUXT__) and Nuxt 3 (__NUXT_DATA__)
             m = re.search(r'window\.__NUXT__\s*=\s*(.*?)</script>', html, re.DOTALL)
             if not m:
                  m = re.search(r'window\.__INITIAL_STATE__\s*=\s*(.*?)</script>', html, re.DOTALL)
+            if not m:
+                 # Nuxt 3 JSON data block
+                 m = re.search(r'<script id="__NUXT_DATA__"[^>]*?>(.*?)</script>', html, re.DOTALL)
             
             state = None
             state_json = ""
             if m:
                 state_raw = m.group(1).strip()
-                # Remove trailing semicolon if present
-                if state_raw.endswith(';'): state_raw = state_raw[:-1]
-                
-                print(f"DEBUG: Found Nuxt/Initial state blob for {raw_pid}")
-                
-                # If wrapped in (function(...){...})(...), try to find the inner object
+                # Nuxt 3 data is often standard JSON, Nuxt 2 is JS object
+                if state_raw.startswith('['): # Nuxt 3 JSON
+                    try:
+                        nuxt_data = json.loads(state_raw)
+                        # Nuxt 3 data structure is complex, recursive_find_product handles it well
+                        data = recursive_find_product(nuxt_data) or {}
+                        print(f"DEBUG: Found Nuxt 3 DATA block for {raw_pid}")
+                    except: pass
+                else:
+                    # Remove trailing semicolon if present (Nuxt 2/Initial State)
+                    if state_raw.endswith(';'): state_raw = state_raw[:-1]
+                    print(f"DEBUG: Found Nuxt/Initial state blob for {raw_pid}")
+                    
+                    # If wrapped in (function(...){...})(...), try to find the inner object
                 if state_raw.startswith('('):
                     json_match = re.search(r'(\{.*\})', state_raw, re.DOTALL)
                     if json_match:
@@ -575,7 +580,8 @@ def fetch_product_details_echotik_web(product_id):
                 # Only match values that look like product stats (100+, 1.2K, etc.) not single digits that could be ratings
                 
                 # Sales: Look for "7D Sales", "Total Sales", etc. followed by a large-ish number
-                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Total\s*Sales)[^>]*?>\s*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
+                # Loosened: Don't require strict > immediate proximity
+                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Total\s*Sales)[^0-9]*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if sales_match:
                     label = sales_match.group(1).lower()
                     val = sales_match.group(2)
@@ -590,10 +596,10 @@ def fetch_product_details_echotik_web(product_id):
                         print(f"DEBUG: Regex REJECTED Sales ({label}): {val} - Too short, likely rating")
                 
                 # Videos: Look for "7D Videos", "Total Videos", etc.
-                v_match = re.search(r'(7D\s*Videos|Total\s*Videos)[^>]*?>\s*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
+                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos)[^0-9]*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if v_match:
                     val = v_match.group(2)
-                    # SANITY CHECK: Skip single-digit values
+                    # SANITY CHECK: Skip single-digit values (like "4")
                     if len(val) > 1 or val.upper().endswith(('K', 'M', 'B')):
                         data['total_video_cnt'] = val
                         print(f"DEBUG: Regex Fallback Videos: {val}")
@@ -601,7 +607,7 @@ def fetch_product_details_echotik_web(product_id):
                         print(f"DEBUG: Regex REJECTED Videos: {val} - Too short, likely rating")
                 
                 # Influencers: Look for "Influencers", "Creators", etc.
-                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl)[^>]*?>\s*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
+                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl)[^0-9]*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if i_match:
                     val = i_match.group(2)
                     if len(val) > 1 or val.upper().endswith(('K', 'M', 'B')):
