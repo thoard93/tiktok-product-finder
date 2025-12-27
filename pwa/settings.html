@@ -158,6 +158,11 @@
                             class="input-premium w-full pl-11 border-white/5">
                     </div>
                     <div class="relative group">
+                        <i class="fas fa-key absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                        <input type="text" id="partnerMsToken" placeholder="Paste msToken..."
+                            class="input-premium w-full pl-11 border-white/5">
+                    </div>
+                    <div class="relative group">
                         <i class="fas fa-cookie absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
                         <input type="password" id="partnerCookie" placeholder="Paste TikTok Partner Cookie..."
                             class="input-premium w-full pl-11 border-white/5">
@@ -174,10 +179,12 @@
                         <li>Log in to <a href="https://partner.us.tiktokshop.com" target="_blank"
                                 class="text-white hover:underline">TikTok Partner</a></li>
                         <li>Open DevTools (F12) -> <span class="text-white">Network</span> tab</li>
-                        <li>Refresh & find <span class="text-white">opportunity_product_list</span></li>
-                        <li>Copy <span class="text-white">partner_id</span> and <span class="text-white">aid</span> from
-                            the <span class="text-cyan-400 font-bold">Query String Parameters</span></li>
-                        <li>Copy the entire <span class="text-white">cookie</span> header as well.</li>
+                        <li>Refresh & find <span class="text-white">opportunity_product_list</span> or <span
+                                class="text-white">list</span></li>
+                        <li>Go to the <span class="text-cyan-400 font-bold">Payload</span> tab</li>
+                        <li>Copy <span class="text-white">partner_id</span>, <span class="text-white">aid</span>, <span
+                                class="text-white">fp</span>, and <span class="text-white">msToken</span>.</li>
+                        <li>Copy the entire <span class="text-white">cookie</span> from the **Headers** tab.</li>
                     </ol>
                 </div>
             </div>
@@ -269,6 +276,9 @@
                     const pfp = data.settings.find(s => s.key === 'TIKTOK_FP');
                     if (pfp && pfp.value) document.getElementById('partnerFp').value = pfp.value;
 
+                    const pms = data.settings.find(s => s.key === 'TIKTOK_MS_TOKEN');
+                    if (pms && pms.value) document.getElementById('partnerMsToken').value = pms.value;
+
                     const es = data.settings.find(s => s.key === 'ECHOTIK_USE_WEB_SCRAPER');
                     if (es && es.value === 'true') toggleScraper(true);
                 }
@@ -285,6 +295,7 @@
             const ptId = document.getElementById('partnerId').value.trim();
             const ptAid = document.getElementById('partnerAid').value.trim();
             const ptFp = document.getElementById('partnerFp').value.trim();
+            const ptMsToken = document.getElementById('partnerMsToken').value.trim();
 
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
@@ -337,6 +348,14 @@
                         key: 'TIKTOK_FP',
                         value: ptFp,
                         description: 'TikTok Browser Fingerprint (fp)'
+                    });
+                }
+
+                if (ptMsToken) {
+                    updates.push({
+                        key: 'TIKTOK_MS_TOKEN',
+                        value: ptMsToken,
+                        description: 'TikTok Browser msToken'
                     });
                 }
 
