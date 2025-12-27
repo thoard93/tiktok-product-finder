@@ -478,125 +478,97 @@ def fetch_product_details_echotik_web(product_id):
         
         try:
             print(f"DEBUG: Attempting EchoTik Web scrape for {raw_pid}...")
-            # 1. Try to find the JSON in initial state
-            # Supports Nuxt 2 (window.__NUXT__) and Nuxt 3 (__NUXT_DATA__)
-            m = re.search(r'window\.__NUXT__\s*=\s*(.*?)</script>', html, re.DOTALL)
-            if not m:
-                 m = re.search(r'window\.__INITIAL_STATE__\s*=\s*(.*?)</script>', html, re.DOTALL)
-            if not m:
-                 # Nuxt 3 JSON data block
-                 m = re.search(r'<script id="__NUXT_DATA__"[^>]*?>(.*?)</script>', html, re.DOTALL)
-            
-            state = None
-            state_json = ""
-            if m:
-                state_raw = m.group(1).strip()
-                # Nuxt 3 data is often standard JSON, Nuxt 2 is JS object
-                if state_raw.startswith('['): # Nuxt 3 JSON
-                    try:
-                        nuxt_data = json.loads(state_raw)
-                        # Nuxt 3 data structure is complex, recursive_find_product handles it well
-                        data = recursive_find_product(nuxt_data) or {}
-                        print(f"DEBUG: Found Nuxt 3 DATA block for {raw_pid}")
-                    except: pass
-                else:
-                    # Remove trailing semicolon if present (Nuxt 2/Initial State)
-                    if state_raw.endswith(';'): state_raw = state_raw[:-1]
-                    print(f"DEBUG: Found Nuxt/Initial state blob for {raw_pid}")
+            # 1. Try to find the JSON state across multiple sources (Nuxt 2, Nuxt 3, Custom JSON)
+            # Helper: Recursive hunter for product objects
+            def recursive_find_all_products(obj, matches=None, depth=0):
+                if matches is None: matches = []
+                if depth > 18: return matches
+                if isinstance(obj, dict):
+                    match_keys = ['product_id', 'productId', 'id', 'spu_id', 'itemId']
+                    is_match = any(str(obj.get(k)) == raw_pid for k in match_keys)
+                    if not is_match and 'baseInfo' in obj and isinstance(obj['baseInfo'], dict):
+                        is_match = any(str(obj['baseInfo'].get(k)) == raw_pid for k in ['productId', 'id'])
                     
-                    # If wrapped in (function(...){...})(...), try to find the inner object
-                if state_raw.startswith('('):
-                    json_match = re.search(r'(\{.*\})', state_raw, re.DOTALL)
-                    if json_match:
-                         state_json = json_match.group(1)
-                else:
-                    state_json = state_raw
+                    if is_match: matches.append(obj)
+                    for v in obj.values(): recursive_find_all_products(v, matches, depth + 1)
+                elif isinstance(obj, list):
+                    for item in obj: recursive_find_all_products(item, matches, depth + 1)
+                return matches
 
-                if state_json:
-                    # Nuxt/JS state often has 'undefined' or '!0' etc.
-                    state_json = state_json.replace(':undefined', ':null').replace(': undefined', ': null')
-                    state_json = state_json.replace(':!0', ':true').replace(':!1', ':false')
-                    try: state = json.loads(state_json)
-                    except: pass
+            # Helper: Score a candidate object for "meaty" stats
+            def score_match(m):
+                if not isinstance(m, dict): return 0
+                score = len(m.keys())
+                if any(k in m for k in ['totalSale7dCnt', 'total_sale7d_cnt', 'totalSaleCnt', 'totalSale', 'sales_7d']): score += 100
+                if any(k in m for k in ['totalVideoCnt', 'total_video_cnt', 'videoCnt', 'video_count']): score += 50
+                if any(k in m for k in ['product_name', 'productName', 'title']): score += 10
+                return score
 
-            # Nuxt 3 Data Script Fallback (Flexible attributes)
-            if not state:
-                m_data = re.search(r'<script[^>]*?id="__NUXT_DATA__"[^>]*?>(.*?)</script>', html, re.DOTALL)
-                if m_data:
-                    try: 
-                        raw_json = json.loads(m_data.group(1))
-                        # Nuxt 3 often uses a flat array where objects point to other indices
-                        # We try to reconstruct it or at least find the meat
-                        if isinstance(raw_json, list) and len(raw_json) > 5:
-                            # Simple Nuxt 3 Reconstructor
-                            def reconstruct_nuxt3(val, source_list):
-                                if isinstance(val, int) and 0 <= val < len(source_list):
-                                    return source_list[val]
-                                return val
-                            
-                            # For our purposes, we'll just search the flat list for objects with product keys
-                            state = raw_json
-                            print(f"DEBUG: Found Nuxt 3 Data Script (Flat Array) for {raw_pid}")
-                        else:
-                            state = raw_json
-                            print(f"DEBUG: Found Nuxt 3 Data Script for {raw_pid}")
-                    except: pass
+            states_found = []
             
-            if state:
-                print(f"DEBUG: EchoTik state found, analyzing... (len: {len(str(state))})")
-                # Extract product data - structure depends on their Nuxt implementation
-                # This is a heuristic based on common EchoTik structures
-                product_data = None
+            # Pattern 1: Classical Nuxt/Initial State
+            for m in re.finditer(r'window\.(?:__NUXT__|__INITIAL_STATE__)\s*=\s*(.*?);\s*</script>', html, re.DOTALL):
+                raw = m.group(1).strip()
+                if raw.startswith('('):
+                    jm = re.search(r'(\{.*\})', raw, re.DOTALL)
+                    if jm: raw = jm.group(1)
+                raw = raw.replace(':undefined', ':null').replace(':!0', ':true').replace(':!1', ':false')
+                try: states_found.append(json.loads(raw))
+                except: pass
+
+            # Pattern 2: Nuxt 3 Data Blocks (By ID)
+            for m in re.finditer(r'<script id="__NUXT_DATA__"[^>]*?>(.*?)</script>', html, re.DOTALL):
+                try: states_found.append(json.loads(m.group(1)))
+                except: pass
+
+            # Pattern 3: Generic JSON blocks containing our ID
+            for m in re.finditer(r'<script[^>]*?type="application/json"[^>]*?>(.*?)</script>', html, re.DOTALL):
+                content = m.group(1)
+                if raw_pid in content:
+                    try: states_found.append(json.loads(content))
+                    except: pass
+
+            # Extraction phase: Pick the best match
+            best_obj = None
+            max_score = -1
+            for s in states_found:
+                candidates = recursive_find_all_products(s)
+                for cand in candidates:
+                    s_val = score_match(cand)
+                    if s_val > max_score:
+                        max_score = s_val
+                        best_obj = cand
+            
+            if best_obj:
+                data = best_obj
+                print(f"DEBUG: Found best Nuxt match across {len(states_found)} sources (Score: {max_score})")
                 
-                # Dig for all product objects and pick the "meatiest" one
-                def recursive_find_all_products(obj, matches=None, depth=0):
-                    if matches is None: matches = []
-                    if depth > 15: return matches # Deeper safety
-                    
-                    if isinstance(obj, dict):
-                        is_match = False
-                        # Common EchoTik keys
-                        if 'product_id' in obj and str(obj.get('product_id')) == raw_pid: is_match = True
-                        elif 'productId' in obj and str(obj.get('productId')) == raw_pid: is_match = True
-                        elif 'id' in obj and str(obj.get('id')) == raw_pid: is_match = True
-                        elif 'spu_id' in obj and str(obj.get('spu_id')) == raw_pid: is_match = True
-                        elif 'itemId' in obj and str(obj.get('itemId')) == raw_pid: is_match = True
-                        elif 'baseInfo' in obj and isinstance(obj['baseInfo'], dict):
-                            if str(obj['baseInfo'].get('productId')) == raw_pid: is_match = True
-                            elif str(obj['baseInfo'].get('id')) == raw_pid: is_match = True
-                        
-                        if is_match:
-                            matches.append(obj)
-                        
-                        for v in obj.values():
-                            recursive_find_all_products(v, matches, depth + 1)
-                    elif isinstance(obj, list):
-                        for item in obj:
-                            recursive_find_all_products(item, matches, depth + 1)
-                    return matches
-
-                all_matches = recursive_find_all_products(state)
-                if all_matches:
-                    # Pick the best match: One with the most keys or specifically with sales data
-                    def score_match(m):
-                        score = len(m.keys())
-                        # Big boost for having actual sales stats
-                        if any(k in m for k in ['totalSale7dCnt', 'total_sale7d_cnt', 'totalSaleCnt', 'totalSale']):
-                            score += 100
-                        # Boost for having product name
-                        if any(k in m for k in ['product_name', 'productName', 'title']):
-                            score += 10
-                        return score
-                    
-                    all_matches.sort(key=score_match, reverse=True)
-                    product_data = all_matches[0]
-                    print(f"DEBUG: Found {len(all_matches)} Nuxt matches, picked best (Score: {score_match(product_data)})")
-                    data = product_data
         except Exception as e:
-            print(f"DEBUG: EchoTik Nuxt parse failed: {e}")
+            print(f"DEBUG: EchoTik Nuxt extraction failed: {e}")
 
         # 2. Regex Fallback for common stats if JSON extraction fails or is incomplete
-        if not data.get('total_sale_cnt') and not data.get('totalSaleCnt'):
+        # Also include Contextual Forensics for zero-stat debugging
+        is_zero_stats = not data.get('total_sale_cnt') and not data.get('totalSaleCnt')
+        if is_zero_stats:
+            try:
+                # Log contextual snippets around potential labels to see what we're missing
+                for label in ['Videos', 'Sales', 'Influencer', 'Recent']:
+                    idx = html.find(label)
+                    if idx != -1:
+                        snippet = html[max(0, idx-100):min(len(html), idx+300)]
+                        # Sanitize snippet for logging (remove excessive whitespace)
+                        clean_snippet = re.sub(r'\s+', ' ', snippet).strip()
+                        print(f"DEBUG: Context for '{label}': {clean_snippet[:200]}...")
+                
+                # Also log the "meaty" keys we DID find if any
+                if data:
+                    print(f"DEBUG: Best Match Keys: {list(data.keys())[:15]}")
+                    # Sample some values (numeric ones)
+                    samples = {k: v for k, v in data.items() if isinstance(v, (int, float, str)) and k.lower() != 'id' and len(str(v)) < 50}
+                    print(f"DEBUG: Best Match Sample: {dict(list(samples.items())[:8])}")
+            except: pass
+
+        if is_zero_stats:
             try:
                 # CRITICAL: Use VERY SPECIFIC label patterns to avoid matching ratings (4.0, 4.5) or pagination
                 # Require the label to be followed by a colon, closing tag, or specific separator
@@ -704,16 +676,13 @@ def fetch_product_details_echotik_web(product_id):
             if is_zero_s7d and is_zero_vids:
                 html_clean = html[:400].replace('\n', ' ')
                 print(f"DEBUG: Zero stats extracted for {raw_pid}. HTML Snippet: {html_clean}")
-                if state:
-                    # If Nuxt 3 flat array, log its length to verify data presence
-                    print(f"DEBUG: Nuxt State structure: {type(state)}, size: {len(state) if hasattr(state, '__len__') else 'N/A'}")
-                    # If data was extracted from a Nuxt match, show its guts
-                    if data and isinstance(data, dict):
-                        sample_keys = list(data.keys())[:15]
-                        print(f"DEBUG: Best Match Keys: {sample_keys}")
-                        # Show some values to see if they are empty/null
-                        sample_vals = {k: data[k] for k in sample_keys[:5]}
-                        print(f"DEBUG: Best Match Sample: {sample_vals}")
+                
+                # NEW: Contextual Forensics
+                for label in ["Videos", "Sales", "Influencer", "Recent"]:
+                    idx = html.lower().find(label.lower())
+                    if idx != -1:
+                        ctx = html[max(0, idx-100):idx+150].replace('\n', ' ')
+                        print(f"DEBUG: Context for '{label}': ...{ctx}...")
 
             data['sales_7d'] = s7d
             data['video_count'] = v_cnt
