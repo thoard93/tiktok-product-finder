@@ -476,6 +476,8 @@ def fetch_product_details_echotik_web(product_id):
         # Usually window.__NUXT__ or window.__INITIAL_STATE__
         data = {}
         
+        try:
+            print(f"DEBUG: Attempting EchoTik Web scrape for {raw_pid}...")
             # 1. Try to find the JSON in initial state
             # Supports Nuxt 2 (window.__NUXT__) and Nuxt 3 (__NUXT_DATA__)
             m = re.search(r'window\.__NUXT__\s*=\s*(.*?)</script>', html, re.DOTALL)
