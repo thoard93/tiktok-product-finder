@@ -519,9 +519,9 @@ def fetch_product_details_echotik_web(product_id):
                     try: state = json.loads(state_json)
                     except: pass
 
-            # Nuxt 3 Data Script Fallback
+            # Nuxt 3 Data Script Fallback (Flexible attributes)
             if not state:
-                m_data = re.search(r'<script id="__NUXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL)
+                m_data = re.search(r'<script[^>]*?id="__NUXT_DATA__"[^>]*?>(.*?)</script>', html, re.DOTALL)
                 if m_data:
                     try: 
                         raw_json = json.loads(m_data.group(1))
@@ -690,11 +690,16 @@ def fetch_product_details_echotik_web(product_id):
             v_cnt = data.get('video_count') or data.get('totalVideoCnt') or data.get('total_video_cnt') or data.get('videoCnt') or 0
             
             # DIAGNOSTIC: If we have zero stats but a valid page, log why
-            if s7d == 0 and v_cnt == 0:
-                html_clean = html[:300].replace('\n', ' ')
+            # Check for both integer and string zero
+            is_zero_s7d = str(s7d) == "0"
+            is_zero_vids = str(v_cnt) == "0"
+            
+            if is_zero_s7d and is_zero_vids:
+                html_clean = html[:400].replace('\n', ' ')
                 print(f"DEBUG: Zero stats extracted for {raw_pid}. HTML Snippet: {html_clean}")
                 if state:
-                    print(f"DEBUG: State keys: {list(state.keys()) if isinstance(state, dict) else 'LIST'}")
+                    # If Nuxt 3 flat array, log its length to verify data presence
+                    print(f"DEBUG: State type: {type(state)}, size: {len(state) if hasattr(state, '__len__') else 'N/A'}")
 
             data['sales_7d'] = s7d
             data['video_count'] = v_cnt
@@ -734,9 +739,9 @@ def fetch_product_details_echotik(product_id, region='US', force=False, allow_pa
                 if existing and not force:
                     cache_age = (datetime.utcnow() - (existing.last_updated or datetime.min)).total_seconds() / 3600
                     
-                    # SUSPICIOUS VALUE CHECK: 3, 4, and 30 are common placeholders from bad regex
-                    is_suspicious = existing.video_count in [3, 4, 30]
-                    
+                    # SUSPICIOUS VALUE CHECK: 3, 4, 30 placeholders OR 0/0 failures
+                    # Bypass the cache to force a fresh scan if we suspect stale or bad data
+                    is_suspicious = (existing.video_count in [3, 4, 30]) or (existing.video_count == 0 and existing.sales_7d == 0)
                     if is_suspicious:
                         print(f"DEBUG: Cache Bypass for {raw_pid} - Suspicious Stats detected: Vids={existing.video_count}")
                     
