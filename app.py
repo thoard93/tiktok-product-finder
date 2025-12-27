@@ -7782,29 +7782,32 @@ def scan_partner_opportunity_live():
                 # Stage 1: curl_cffi with Proxy
                 try:
                     res = curl_requests.post(target_url, params=params, headers=headers, json=payload, proxies=proxies, impersonate="chrome110", timeout=30)
+                    if res: print(f"[Partner Scan] Page {page} Stage 1 (Proxy) -> Status {res.status_code}", flush=True)
                 except Exception as e1:
-                    last_err = e1
+                    print(f"[Partner Scan] Page {page} Stage 1 failed: {e1}", flush=True)
                     
                 # Stage 2: curl_cffi DIRECT
                 if not res or res.status_code in [403, 499, 502, 522]:
                     try:
                         res = curl_requests.post(target_url, params=params, headers=headers, json=payload, impersonate="chrome110", timeout=30)
+                        if res: print(f"[Partner Scan] Page {page} Stage 2 (Direct) -> Status {res.status_code}", flush=True)
                     except Exception as e2:
-                        last_err = e2
+                        print(f"[Partner Scan] Page {page} Stage 2 failed: {e2}", flush=True)
 
                 # Stage 3: Standard Requests
                 if not res or res.status_code in [403, 499, 502, 522]:
                     try:
                         res = requests.post(target_url, params=params, headers=headers, json=payload, proxies=proxies, timeout=30)
+                        if res: print(f"[Partner Scan] Page {page} Stage 3 (Standard) -> Status {res.status_code}", flush=True)
                     except Exception as e3:
-                        last_err = e3
+                        print(f"[Partner Scan] Page {page} Stage 3 failed: {e3}", flush=True)
 
                 if not res:
-                    print(f"[Partner Scan] Page {page} failed all request stages. Skipping.", flush=True)
+                    print(f"[Partner Scan] Page {page} failed all request stages. skipping.", flush=True)
                     continue
                 
                 if res.status_code != 200:
-                    print(f"[Partner Scan] Page {page} error {res.status_code}. Breaking.", flush=True)
+                    print(f"[Partner Scan] Page {page} error {res.status_code}: {res.text[:500]}", flush=True)
                     break
                     
                 data = res.json()
@@ -7812,7 +7815,7 @@ def scan_partner_opportunity_live():
                 products = d_obj.get('products') or d_obj.get('opportunity_product_list') or []
                 
                 if not products:
-                    print(f"[Partner Scan] No more products found on page {page}.", flush=True)
+                    print(f"[Partner Scan] No products found on page {page}. Raw Response: {res.text[:800]}", flush=True)
                     break
                     
                 with app.app_context():
