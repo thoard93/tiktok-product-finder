@@ -570,27 +570,43 @@ def fetch_product_details_echotik_web(product_id):
         # 2. Regex Fallback for common stats if JSON extraction fails or is incomplete
         if not data.get('total_sale_cnt') and not data.get('totalSaleCnt'):
             try:
-                # More flexible regex that handles tags like <span>7D Sales</span> <span>1.2K</span>
-                # CRITICAL: Use word boundary \b to prevent partial matches
-                # CRITICAL: Use tag-aware negative lookahead and ensure it starts with a digit
-                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Sales|Total\s*Sales)[^>]*?>?\s*\b(\d[\d\.,]*[KMB]?)\b(?:(?![^<]*Days?\b)|$)', html, re.I)
+                # CRITICAL: Use VERY SPECIFIC label patterns to avoid matching ratings (4.0, 4.5) or pagination
+                # Require the label to be followed by a colon, closing tag, or specific separator
+                # Only match values that look like product stats (100+, 1.2K, etc.) not single digits that could be ratings
+                
+                # Sales: Look for "7D Sales", "Total Sales", etc. followed by a large-ish number
+                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Total\s*Sales)[^>]*?>\s*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if sales_match:
                     label = sales_match.group(1).lower()
                     val = sales_match.group(2)
-                    if '7' in label:
-                        data['sales_7d'] = val
+                    # SANITY CHECK: Skip single-digit values (likely ratings) unless they have K/M/B suffix
+                    if len(val) > 1 or val.upper().endswith(('K', 'M', 'B')):
+                        if '7' in label:
+                            data['sales_7d'] = val
+                        else:
+                            data['total_sale_cnt'] = val
+                        print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
                     else:
-                        data['total_sale_cnt'] = val
-                    print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
+                        print(f"DEBUG: Regex REJECTED Sales ({label}): {val} - Too short, likely rating")
                 
-                # Look for influencers/videos with tag-awareness and exclusion of "Days" labels
-                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos)[^>]*?>?\s*\b(\d[\d\.,]*[KMB]?)\b(?:(?![^<]*Days?\b)|$)', html, re.I)
+                # Videos: Look for "7D Videos", "Total Videos", etc.
+                v_match = re.search(r'(7D\s*Videos|Total\s*Videos)[^>]*?>\s*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if v_match:
-                    data['total_video_cnt'] = v_match.group(2)
+                    val = v_match.group(2)
+                    # SANITY CHECK: Skip single-digit values
+                    if len(val) > 1 or val.upper().endswith(('K', 'M', 'B')):
+                        data['total_video_cnt'] = val
+                        print(f"DEBUG: Regex Fallback Videos: {val}")
+                    else:
+                        print(f"DEBUG: Regex REJECTED Videos: {val} - Too short, likely rating")
                 
-                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl|Influencer)[^>]*?>?\s*\b(\d[\d\.,]*[KMB]?)\b(?:(?![^<]*Days?\b)|$)', html, re.I)
+                # Influencers: Look for "Influencers", "Creators", etc.
+                i_match = re.search(r'(Influencers|Creators|Total\s*Ifl)[^>]*?>\s*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
                 if i_match:
-                    data['total_ifl_cnt'] = i_match.group(2)
+                    val = i_match.group(2)
+                    if len(val) > 1 or val.upper().endswith(('K', 'M', 'B')):
+                        data['total_ifl_cnt'] = val
+                        print(f"DEBUG: Regex Fallback Influencers: {val}")
 
                 # Look for price
                 price_match = re.search(r'\$([\d\.,]+)', html)
