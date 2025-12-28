@@ -510,14 +510,20 @@ def fetch_product_details_echotik_web(product_id):
             # Helper: Score a candidate object for "meaty" stats
             def score_match(m):
                 if not isinstance(m, dict): return 0
-                # Cap the contribution of sheer number of keys to prioritize statistical "meatiness"
+                # Cap the contribution of sheer number of keys
                 score = min(len(m.keys()), 5)
-                # Significantly higher weights for statistical keys
-                if any(k in m for k in ['totalSale7dCnt', 'total_sale7d_cnt', 'totalSale7d', 'sales_7d', 'sale7d']): score += 1000
-                if any(k in m for k in ['totalSaleCnt', 'total_sale_cnt', 'totalSale', 'sales']): score += 500
-                if any(k in m for k in ['totalVideoCnt', 'total_video_cnt', 'videoCnt', 'video_count']): score += 300
-                if any(k in m for k in ['totalIflCnt', 'total_ifl_cnt', 'influencer_count', 'ifl_cnt']): score += 100
-                if any(k in m for k in ['product_name', 'productName', 'title']): score += 10
+                
+                # Higher weights for statistical keys
+                # Top Tier (1000): Recent 7D performance
+                if any(k in m for k in ['totalSale7dCnt', 'total_sale7d_cnt', 'totalSale7d', 'sales_7d', 'sale7d', 'sales7d']): score += 1000
+                # Mid Tier (500): Lifetime performance
+                if any(k in m for k in ['totalSaleCnt', 'total_sale_cnt', 'totalSale', 'sales', 'sale_cnt']): score += 500
+                # Content Tier (300): Reach metrics
+                if any(k in m for k in ['totalVideoCnt', 'total_video_cnt', 'videoCnt', 'video_count', 'total_video']): score += 300
+                # Social Tier (100): Influencers
+                if any(k in m for k in ['totalIflCnt', 'total_ifl_cnt', 'influencer_count', 'ifl_cnt', 'influencer_cnt']): score += 100
+                # Identity Tier (10): Names/Titles
+                if any(k in m for k in ['product_name', 'productName', 'title', 'product_title']): score += 10
                 return score
 
             states_found = []
@@ -586,56 +592,43 @@ def fetch_product_details_echotik_web(product_id):
 
         if is_zero_stats:
             try:
-                # 2.1 Regex Fallback - Sales
-                # Look for distinctive container labels first
-                sales_match = re.search(r'(7D\s*Sales|Recent\s*7\s*Days|Total\s*Sales).{0,50}?\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
-                if sales_match:
-                    label = sales_match.group(1).lower()
-                    val = sales_match.group(2)
-                    clean_val = val.replace(',', '')
-                    
-                    # SANITY CHECK: 
-                    # 1. Allow "0" (very common valid stat)
-                    # 2. Reject small decimals (4.8, 5.0) which are almost certainly ratings
-                    # 3. Allow large numbers (> 9) or metrics (K/M/B)
-                    is_valid = False
-                    if clean_val == "0": is_valid = True
-                    elif val.upper().endswith(('K', 'M', 'B')): is_valid = True
-                    elif '.' in val:
-                        try:
-                            if float(clean_val) >= 10: is_valid = True
-                        except: pass
-                    elif len(clean_val) > 1: is_valid = True # Multi-digit like 10, 20
-                    
-                    if is_valid:
-                        if '7' in label:
-                            data['sales_7d'] = val
-                        else:
-                            data['total_sale_cnt'] = val
-                        print(f"DEBUG: Regex Fallback Sales ({label}): {val}")
-                    else:
-                        print(f"DEBUG: Regex REJECTED Sales ({label}): {val} - Likely rating or irrelevant small number")
+                # 2.1 Regex Fallback - Enhanced Bi-Directional (Range: 300)
+                # Look for numbers BEFORE or AFTER labels to handle mobile/desktop shifts and SVG noise
                 
-                # Videos: Similar logic
-                v_match = re.search(r'(7D\s*Videos|Total\s*Videos|Videos).{0,50}?\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
-                if v_match:
-                    val = v_match.group(2)
+                def hunt_stat(labels, html_content):
+                    for label in labels:
+                        # Pattern A: Label ... [Number] (Desktop/Standard)
+                        match_after = re.search(f'{label}.{{0,300}}?\\b(\\d[\\d\\.,]*[KMB]?)\\b', html_content, re.I | re.DOTALL)
+                        if match_after: return match_after.group(1), f"After {label}"
+                        
+                        # Pattern B: [Number] ... Label (Mobile/Compact)
+                        match_before = re.search(f'(\\b\\d[\\d\\.,]*[KMB]?\\b).{{0,300}}?{label}', html_content, re.I | re.DOTALL)
+                        if match_before: return match_before.group(1), f"Before {label}"
+                    return None, None
+
+                # Sales
+                val, source = hunt_stat(['7D Sales', 'Recent 7 Days', 'Total Sales', 'Sales', 'Selling'], html)
+                if val:
                     clean_val = val.replace(',', '')
-                    
-                    is_valid = False
-                    if clean_val == "0": is_valid = True
-                    elif val.upper().endswith(('K', 'M', 'B')): is_valid = True
-                    elif '.' in val:
-                        try:
-                            if float(clean_val) >= 10: is_valid = True
-                        except: pass
-                    elif len(clean_val) > 1: is_valid = True
-                    
+                    is_valid = (clean_val == "0") or (val.upper().endswith(('K', 'M', 'B'))) or (len(clean_val) > 1)
                     if is_valid:
-                        data['total_video_cnt'] = val
-                        print(f"DEBUG: Regex Fallback Videos: {val}")
-                    else:
-                        print(f"DEBUG: Regex REJECTED Videos: {val} - Likely rating or irrelevant small number")
+                        data['sales_7d'] = val
+                        print(f"DEBUG: Regex Fallback Sales ({source}): {val}")
+                
+                # Videos
+                val, source = hunt_stat(['7D Videos', 'Total Videos', 'Videos', 'Related Videos'], html)
+                if val:
+                    clean_val = val.replace(',', '')
+                    is_valid = (clean_val == "0") or (val.upper().endswith(('K', 'M', 'B'))) or (len(clean_val) > 1)
+                    if is_valid:
+                        data['video_count'] = val
+                        print(f"DEBUG: Regex Fallback Videos ({source}): {val}")
+                
+                # Influencers
+                val, source = hunt_stat(['7D Creators', 'Total Influencers', 'Influencers', 'Creators', 'Ifl'], html)
+                if val:
+                    data['influencer_count'] = val
+                    print(f"DEBUG: Regex Fallback Influencers ({source}): {val}")
                 
                 # Influencers: Look for "Influencers", "Creators", etc.
                 i_match = re.search(r'(Influencers|Creators|Total\s*Ifl)[^0-9]*\b(\d[\d\.,]*[KMB]?)\b', html, re.I)
