@@ -259,13 +259,13 @@
                 const data = await res.json();
                 if (data.settings) {
                     const dv = data.settings.find(s => s.key === 'DAILYVIRALS_TOKEN');
-                    if (dv && dv.value) document.getElementById('dvToken').placeholder = dv.value;
+                    if (dv && dv.value) document.getElementById('dvToken').value = dv.value;
 
                     const ec = data.settings.find(s => s.key === 'ECHOTIK_COOKIE');
-                    if (ec && ec.value) document.getElementById('echotikCookie').placeholder = ec.value;
+                    if (ec && ec.value) document.getElementById('echotikCookie').value = ec.value;
 
                     const pc = data.settings.find(s => s.key === 'TIKTOK_PARTNER_COOKIE');
-                    if (pc && pc.value) document.getElementById('partnerCookie').placeholder = pc.value;
+                    if (pc && pc.value) document.getElementById('partnerCookie').value = pc.value;
 
                     const pid = data.settings.find(s => s.key === 'TIKTOK_PARTNER_ID');
                     if (pid && pid.value) document.getElementById('partnerId').value = pid.value;

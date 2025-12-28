@@ -7485,11 +7485,15 @@ def scan_dailyvirals_live():
         start_date = (now - timedelta(days=days_int)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
         
         # 2. Get Token (DB or Env fallback)
-        token = get_config_value('DAILYVIRALS_TOKEN', DV_API_TOKEN)
+        db_dv = get_config_value('DAILYVIRALS_TOKEN')
+        token = db_dv if db_dv else DV_API_TOKEN
+        
         # Handle if the user pasted the word "Bearer " into the setting
         if token and token.lower().startswith('bearer '):
             token = token[7:].strip()
-        print(f"[DV Live] Using token (prefix: {token[:8]}... len: {len(token) if token else 0})")
+            
+        token_src = "[DB]" if db_dv else "[ENV]"
+        print(f"[DV Live] Auth Source: {token_src} (Len: {len(token) if token else 0})", flush=True)
         
         # 3. Map filters to DV API terms
         is_paid = "true" if is_paid_input in ['paid', 'mixed'] else "false"
@@ -7705,24 +7709,32 @@ def scan_partner_opportunity_live():
         target_url = "https://partner.us.tiktokshop.com/api/v1/affiliate/partner/product/opportunity_product/list"
         
         # Load IDs and DNA at runtime from DB (priority) or Env
-        db_partner_id = get_config_value('TIKTOK_PARTNER_ID')
-        db_aid = get_config_value('TIKTOK_AID')
+        db_p_id = get_config_value('TIKTOK_PARTNER_ID')
+        db_a_id = get_config_value('TIKTOK_AID')
         db_fp = get_config_value('TIKTOK_FP')
-        db_mstoken = get_config_value('TIKTOK_MS_TOKEN')
+        db_ms = get_config_value('TIKTOK_MS_TOKEN')
         
-        active_partner_id = db_partner_id if db_partner_id else '8653231797418889998'
-        active_aid = db_aid if db_aid else '359713'
+        active_p_id = db_p_id if db_p_id else '8653231797418889998'
+        active_a_id = db_a_id if db_a_id else '359713'
         active_fp = db_fp if db_fp else 'verify_mjiwfxfc_9k8DpPTf_DdjR_4JGE_Bvx7_nVbrXHj81VV5'
-        active_mstoken = db_mstoken if db_mstoken else ''
+        active_ms = db_ms if db_ms else ''
+
+        # DNA Source Diagnostics
+        dna_sources = {
+            "PID": "[DB]" if db_p_id else "[DEF]",
+            "AID": "[DB]" if db_a_id else "[DEF]",
+            "FP": "[DB]" if db_fp else "[DEF]",
+            "MS": "[DB]" if db_ms else "[DEF]"
+        }
 
         params = {
             'user_language': 'en',
-            'partner_id': active_partner_id, 
-            'aid': active_aid,
+            'partner_id': active_p_id, 
+            'aid': active_a_id,
             'app_name': 'i18n_ecom_alliance',
             'device_id': '0',
             'fp': active_fp,
-            'msToken': active_mstoken,
+            'msToken': active_ms,
             'device_platform': 'web',
             'cookie_enabled': 'true',
             'screen_width': '1536',
@@ -7735,7 +7747,7 @@ def scan_partner_opportunity_live():
             'timezone_name': 'America/New_York'
         }
         
-        print(f"[Partner Scan] DNA Target -> Partner: {active_partner_id} | AID: {active_aid} | FP: {active_fp[:20]}... | MS: {active_mstoken[:10]}...", flush=True)
+        print(f"[Partner Scan] DNA Link -> {dna_sources['PID']}PID:{active_p_id} | {dna_sources['AID']}AID:{active_a_id} | {dna_sources['FP']}FP:{active_fp[:20]}... | {dna_sources['MS']}MS:{active_ms[:10]}...", flush=True)
         
         # Load Cookie at runtime from DB (priority) or Env
         db_cookie = get_config_value('TIKTOK_PARTNER_COOKIE')
@@ -7745,7 +7757,8 @@ def scan_partner_opportunity_live():
             print("[Partner Scan] FATAL: No TIKTOK_PARTNER_COOKIE found in DB or Environment.", flush=True)
             return
 
-        print(f"[Partner Scan] Cookie Source: {'DATABASE' if db_cookie else 'ENV_VAR'}", flush=True)
+        cookie_src = "[DB]" if db_cookie else "[ENV]"
+        print(f"[Partner Scan] Cookie Linked -> {cookie_src} (Len: {len(active_cookie) if active_cookie else 0})", flush=True)
 
         headers = {
             'accept': 'application/json, text/plain, */*',
