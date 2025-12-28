@@ -270,12 +270,12 @@ def extract_metadata_from_echotik(d):
         return parse_kmb_string(str(val))
     
     # 1. Top Level Mapping (V3 / Realtime Standard / Scanner Bridge)
-    # Be extremely redundant with keys
-    res['sales'] = get_num(d.get('totalSaleCnt') or d.get('total_sale_cnt') or d.get('totalSale') or d.get('sales') or d.get('sale_cnt') or 0)
-    res['sales_7d'] = get_num(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or d.get('totalSale7d') or d.get('sales_7d') or d.get('sale7d') or 0)
-    res['sales_30d'] = get_num(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or d.get('totalSale30d') or d.get('sales_30d') or d.get('sale30d') or 0)
-    res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or d.get('influencer_count') or d.get('ifl_cnt') or d.get('iflCnt') or 0)
-    res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or d.get('video_count') or d.get('video_cnt') or d.get('videoCnt') or 0)
+    # Be extremely redundant with keys to minimize fallback reliance
+    res['sales'] = get_num(d.get('totalSaleCnt') or d.get('total_sale_cnt') or d.get('totalSale') or d.get('sales') or d.get('sale_cnt') or d.get('total_sales') or 0)
+    res['sales_7d'] = get_num(d.get('totalSale7dCnt') or d.get('total_sale_7d_cnt') or d.get('totalSale7d') or d.get('sales_7d') or d.get('sale7d') or d.get('sales7d') or 0)
+    res['sales_30d'] = get_num(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or d.get('totalSale30d') or d.get('sales_30d') or d.get('sale30d') or d.get('sales30d') or 0)
+    res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or d.get('influencer_count') or d.get('ifl_cnt') or d.get('iflCnt') or d.get('influencer_cnt') or 0)
+    res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or d.get('video_count') or d.get('video_cnt') or d.get('videoCnt') or d.get('total_video') or 0)
     
     # Internal Fallbacks removed (e.g. video_7d -> sales_7d was causing confusion)
     
@@ -569,26 +569,9 @@ def fetch_product_details_echotik_web(product_id):
             print(f"DEBUG: EchoTik Nuxt extraction failed: {e}")
 
         # 2. Regex Fallback for common stats if JSON extraction fails or is incomplete
-        # Also include Contextual Forensics for zero-stat debugging
-        is_zero_stats = not data.get('total_sale_cnt') and not data.get('totalSaleCnt')
-        if is_zero_stats:
-            try:
-                # Log contextual snippets around potential labels to see what we're missing
-                for label in ['Videos', 'Sales', 'Influencer', 'Recent']:
-                    idx = html.find(label)
-                    if idx != -1:
-                        snippet = html[max(0, idx-100):min(len(html), idx+300)]
-                        # Sanitize snippet for logging (remove excessive whitespace)
-                        clean_snippet = re.sub(r'\s+', ' ', snippet).strip()
-                        print(f"DEBUG: Context for '{label}': {clean_snippet[:200]}...")
-                
-                # Also log the "meaty" keys we DID find if any
-                if data:
-                    print(f"DEBUG: Best Match Keys: {list(data.keys())[:15]}")
-                    # Sample some values (numeric ones)
-                    samples = {k: v for k, v in data.items() if isinstance(v, (int, float, str)) and k.lower() != 'id' and len(str(v)) < 50}
-                    print(f"DEBUG: Best Match Sample: {dict(list(samples.items())[:8])}")
-            except: pass
+        # Update is_zero_stats to properly reflect the richness of current EchoTik keys
+        # If score was > 100, we found AT LEAST some stats, so we skip fallback unless it's truly hollow
+        is_zero_stats = max_score < 400 
 
         if is_zero_stats:
             try:
@@ -596,13 +579,17 @@ def fetch_product_details_echotik_web(product_id):
                 # Look for numbers BEFORE or AFTER labels to handle mobile/desktop shifts and SVG noise
                 
                 def hunt_stat(labels, html_content):
+                    # Exclude the noisy SubMenu/Leaderboard sections where "ghost stats" live
+                    # We look for labels that are NOT inside a SubMenu or Leaderboard anchor
+                    clean_html = re.sub(r'<a[^>]*?(SubMenu|leaderboard)[^>]*?>.*?</a>', ' [LINK_HIDDEN] ', html_content, flags=re.I | re.DOTALL)
+                    
                     for label in labels:
                         # Pattern A: Label ... [Number] (Desktop/Standard)
-                        match_after = re.search(f'{label}.{{0,300}}?\\b(\\d[\\d\\.,]*[KMB]?)\\b', html_content, re.I | re.DOTALL)
+                        match_after = re.search(f'{label}.{{0,150}}?\\b(\\d[\\d\\.,]*[KMB]?)\\b', clean_html, re.I | re.DOTALL)
                         if match_after: return match_after.group(1), f"After {label}"
                         
                         # Pattern B: [Number] ... Label (Mobile/Compact)
-                        match_before = re.search(f'(\\b\\d[\\d\\.,]*[KMB]?\\b).{{0,300}}?{label}', html_content, re.I | re.DOTALL)
+                        match_before = re.search(f'(\\b\\d[\\d\\.,]*[KMB]?\\b).{{0,150}}?{label}', clean_html, re.I | re.DOTALL)
                         if match_before: return match_before.group(1), f"Before {label}"
                     return None, None
 
@@ -6472,7 +6459,7 @@ def refresh_all_products():
         failed = 0
         errors = []
         
-        print(f"🔄 Refreshing {total_products} products (offset={offset}, limit={limit})...")
+        print(f"🔄 [Global Refresh] Starting sync for {total_products} products (offset={offset}, limit={limit})...")
         
         for i, product in enumerate(products):
             try:
