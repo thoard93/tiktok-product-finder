@@ -711,7 +711,7 @@ def fetch_product_details_echotik(product_id, region='US', force=False, allow_pa
         try:
             with app.app_context():
                 existing = Product.query.get(f"shop_{raw_pid}") or Product.query.get(raw_pid)
-                if existing and not force:
+                if existing:
                     cache_age = (datetime.utcnow() - (existing.last_updated or datetime.min)).total_seconds() / 3600
                     
                     # SUSPICIOUS VALUE CHECK: 3, 4, 30 placeholders OR 0/0 failures
@@ -4162,10 +4162,11 @@ def refresh_images():
         is_admin = True # Since we use login_required and it's a private tool
         
         if force:
+            # When forcing, we want to hit the oldest or broken ones first
             products = Product.query.filter(
                 Product.image_url.isnot(None),
                 Product.image_url != ''
-            ).limit(batch_size).all()
+            ).order_by(Product.image_cached_at.asc()).limit(batch_size).all()
         else:
             # Calculate stale threshold (48 hours - TikTok CDN URLs expire)
             stale_threshold = datetime.utcnow() - timedelta(hours=48)
@@ -4182,9 +4183,10 @@ def refresh_images():
                     Product.image_cached_at.is_(None),
                     Product.image_cached_at < stale_threshold,
                     Product.image_url.contains('volces.com'),   # Always check if it's already a signed link
-                    Product.cached_image_url.contains('volces.com')
+                    Product.cached_image_url.contains('volces.com'),
+                    Product.cached_image_url.is_(None) # Missing cache is an automatic stale
                 )
-            ).limit(batch_size).all()
+            ).order_by(Product.image_cached_at.asc()).limit(batch_size).all()
             
             # If none of those, get products with NO image_url (need API fetch)
             if not products:
@@ -4228,7 +4230,8 @@ def refresh_images():
                 
                 # No image_url (or force refresh) - fetch from centralized tiered fetcher
                 # This prioritizes the free web scraper to save credits
-                d, source = fetch_product_details_echotik(product.product_id)
+                # Pass force=True to ensure tiered fetcher doesn't just return the same DB cache
+                d, source = fetch_product_details_echotik(product.product_id, force=True)
                 
                 if d:
                     # Robustly extract metadata (handles both V3 and Scraped formats)
