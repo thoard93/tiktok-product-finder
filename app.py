@@ -2073,6 +2073,10 @@ def get_cached_image_urls(cover_urls):
                 # V3 Batch Cover returns DICT: {orig: new, ...} based on user screenshot
                 imgs = data['data']
                 if isinstance(imgs, dict):
+                     # Log if any requested URLs were NOT returned in the mapping
+                     missing = [u for u in valid_urls[:10] if u not in imgs]
+                     if missing:
+                         print(f"DEBUG: EchoTik Signer could not map {len(missing)} URLs (likely already signed or invalid)")
                      return imgs # Direct mapping
                 
                 # Fallback for List format if API behaves like V2
@@ -4168,6 +4172,7 @@ def refresh_images():
             
             # Products missing cached images OR with stale cache
             # First get products that HAVE image_url but need signing/refreshing
+            # [LOGIC]: Treat volces.com URLs as priority for refresh since they expire fast
             products = Product.query.filter(
                 Product.image_url.isnot(None),
                 Product.image_url != '',
@@ -4175,7 +4180,9 @@ def refresh_images():
                     Product.cached_image_url.is_(None),
                     Product.cached_image_url == '',
                     Product.image_cached_at.is_(None),
-                    Product.image_cached_at < stale_threshold
+                    Product.image_cached_at < stale_threshold,
+                    Product.image_url.contains('volces.com'),   # Always check if it's already a signed link
+                    Product.cached_image_url.contains('volces.com')
                 )
             ).limit(batch_size).all()
             
@@ -4197,17 +4204,27 @@ def refresh_images():
         
         for product in products:
             try:
-                # If product already has image_url, just get signed URL
+                # If product already has image_url, check if it's a "broken" EchoTik link
                 if product.image_url:
                     parsed_url = parse_cover_url(product.image_url)
-                    if parsed_url:
+                    
+                    # DETECTION: If the source URL is already an echosell/volces link, 
+                    # EchoTik's batch signer will likely fail to "re-sign" it.
+                    # We MUST force a fresh scrape in this case.
+                    is_pre_signed = "volces.com" in (parsed_url or "").lower() or "echosell" in (parsed_url or "").lower()
+                    
+                    if parsed_url and not is_pre_signed:
                         signed_urls = get_cached_image_urls([parsed_url])
                         if signed_urls.get(parsed_url):
                             product.cached_image_url = signed_urls[parsed_url]
                             product.image_cached_at = datetime.utcnow()
                             updated += 1
-                    time.sleep(0.1)
-                    continue
+                            time.sleep(0.1)
+                            continue
+                    
+                    # If it was pre-signed or batch signing failed, fall through to fetch_product_details_echotik
+                    if is_pre_signed:
+                        print(f"DEBUG: [Image Refresh] Expired signature detected for {product.product_id}. Forcing full re-scrape.")
                 
                 # No image_url (or force refresh) - fetch from centralized tiered fetcher
                 # This prioritizes the free web scraper to save credits
@@ -5727,6 +5744,11 @@ def image_proxy(product_id):
             
             if not resp or resp.status_code != 200:
                 print(f"Proxy Final Error: {last_status} for {target_url}")
+                # FALLBACK: If we got a 403 on a signed EchoTik link, it's definitively EXPIRED.
+                # Redirect to a placeholder to avoid empty images, but keep the original URL in logs.
+                if "403" in str(last_status) and ("volces.com" in lower_url or "echosell" in lower_url):
+                    print(f"DEBUG: Definitive Signature Expiration for {product_id}. Needs Refresh.")
+                    return redirect('/vantage_logo.png')
                 return redirect(target_url)
 
             # Re-wrap headers for Flask Response
