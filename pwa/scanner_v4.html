@@ -472,10 +472,17 @@
                             page_count: document.getElementById('dv-page-count').value
                         })
                     });
+                    if (!res.ok) {
+                        const text = await res.text();
+                        log(`!! CLOUD ERROR: ${res.status} - ${text.substring(0, 100)}`, 'error');
+                        return;
+                    }
                     const data = await res.json();
                     if (data.success) log(`>> DATA STREAM SECURED: ${data.message}`, 'success');
                     else log(`!! CLOUD ERROR: ${data.error}`, 'error');
-                } catch (e) { log(`Protocol Error: ${e.message}`, 'error'); }
+                } catch (e) {
+                    log(`Protocol Error: ${e.message}. This usually means the server returned HTML/WAF error instead of data.`, 'error');
+                }
                 finally {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-satellite-dish mr-2"></i> Sync Cloud';

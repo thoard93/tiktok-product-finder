@@ -655,10 +655,10 @@ def fetch_product_details_echotik_web(product_id):
             except: pass
 
         if data:
-            # Standardize keys so other functions can find them easily
-            # Use 'or 0' to avoid propagating None values
-            s7d = data.get('sales_7d') or data.get('totalSale7dCnt') or data.get('total_sale_7d_cnt') or data.get('sale7d') or 0
-            v_cnt = data.get('video_count') or data.get('totalVideoCnt') or data.get('total_video_cnt') or data.get('videoCnt') or 0
+            # Standardize keys and FORCE them into integers to prevent 'N/A' from breaking DB
+            # We use str(val) to ensure parse_kmb_string doesn't fail on complex objects
+            s7d = parse_kmb_string(str(data.get('sales_7d') or data.get('totalSale7dCnt') or data.get('total_sale_7d_cnt') or data.get('sale7d') or 0))
+            v_cnt = parse_kmb_string(str(data.get('video_count') or data.get('totalVideoCnt') or data.get('total_video_cnt') or data.get('videoCnt') or 0))
             
             # DIAGNOSTIC: If we have zero stats but a valid page, log why
             # Check for both integer and string zero
@@ -7583,7 +7583,14 @@ def scan_dailyvirals_live():
                     print(f"[DV Live] Skipping page {p_idx} due to multiple failures.")
                     continue
 
-                dv_data = res.json()
+                # JSON Safety check
+                try:
+                    dv_data = res.json()
+                except Exception as je:
+                    print(f"[DV Live] Uplink Error: Received non-JSON response (likely HTML/WAF). Content starts with: {res.text[:50]}")
+                    last_error = f"Uplink Protocol Error: DailyVirals returned HTML instead of data. This usually means a Cloudflare block or token expiration."
+                    continue
+
                 if not dv_data:
                     print(f"[DV Live] Empty JSON from page {p_idx}")
                     continue

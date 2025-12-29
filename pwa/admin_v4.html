@@ -296,11 +296,18 @@
                 let more = true;
                 while (more) {
                     const res = await fetch(`/api/refresh-all-products?limit=100&offset=${offset}`);
+                    if (!res.ok) {
+                        alert(`Sync Protocol Failed: HTTP ${res.status}. Your session may have expired or you are hitting a rate limit.`);
+                        break;
+                    }
                     const data = await res.json();
                     if (data.success) {
                         if (data.count < 100) more = false;
                         else offset += 100;
-                    } else break;
+                    } else {
+                        alert(`Sync Logic Error: ${data.error || 'Unknown'}`);
+                        break;
+                    }
                 }
                 alert('Intelligence Synchronization Complete.');
                 window.location.reload();
