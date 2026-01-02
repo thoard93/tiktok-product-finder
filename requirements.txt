@@ -5,3 +5,4 @@ gunicorn
 curl_cffi
 apscheduler
 emoji
+psycopg2-binary
