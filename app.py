@@ -4231,7 +4231,8 @@ def refresh_images():
                 # No image_url (or force refresh) - fetch from centralized tiered fetcher
                 # This prioritizes the free web scraper to save credits
                 # Pass force=True to ensure tiered fetcher doesn't just return the same DB cache
-                d, source = fetch_product_details_echotik(product.product_id, force=True)
+                # ENABLE PAID API FALLBACK: User explicitly requested high priority fix and has credits.
+                d, source = fetch_product_details_echotik(product.product_id, force=True, allow_paid=True)
                 
                 if d:
                     # Robustly extract metadata (handles both V3 and Scraped formats)
@@ -7308,8 +7309,6 @@ def api_scan_brand_pages(seller_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
     
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
 
 
 # =============================================================================
@@ -7955,3 +7954,94 @@ def scan_partner_opportunity_live():
             db.session.remove()
             
     print(f"[Partner Scan] Finished. Total new/updated opportunities: {total_saved}")
+
+# --- Background Scheduler for Daily Refresh ---
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    import atexit
+
+    def scheduled_global_refresh():
+        """Run daily refresh of all product stats and images."""
+        print("[SCHEDULER] ⏰ Starting Daily Global Refresh Protocol...")
+        with app.app_context():
+            # 1. Refresh Stats (limit=5000 to cover most users catalogue)
+            try:
+                print("[SCHEDULER] 🔄 Phase 1: Refreshing Product Stats...")
+                # Re-use the logic from refresh_all_products route but without pagination limits
+                products = Product.query.order_by(Product.last_updated.asc()).limit(200).all() # Process 200 oldest per run
+                print(f"[SCHEDULER] Found {len(products)} products to update.")
+                
+                success_count = 0
+                for p in products:
+                    try:
+                        # ENABLE PAID API for scheduler too since user wants high priority updates
+                        d, src = fetch_product_details_echotik(p.product_id, force=True, allow_paid=True)
+                        if d:
+                            meta = extract_metadata_from_echotik(d)
+                            update_product_from_metadata(p, meta)
+                            success_count += 1
+                        time.sleep(0.5) # Rate limit protection
+                    except Exception as e:
+                        print(f"[SCHEDULER] Error updating {p.product_id}: {e}")
+                
+                db.session.commit()
+                print(f"[SCHEDULER] ✅ Stats Refresh Complete: {success_count}/{len(products)} updated.")
+                
+            except Exception as e:
+                print(f"[SCHEDULER] ❌ Stats Refresh Failed: {e}")
+
+            # 2. Refresh Images (Renew signatures)
+            try:
+                print("[SCHEDULER] 🖼️ Phase 2: Renewing Image Signatures...")
+                # Re-use logic from refresh_images but simplified
+                stale_threshold = datetime.utcnow() - timedelta(hours=48)
+                products = Product.query.filter(
+                    Product.image_url.isnot(None), 
+                    Product.image_url != '',
+                    db.or_(
+                        Product.cached_image_url.is_(None),
+                        Product.image_cached_at < stale_threshold,
+                        Product.image_url.contains('volces.com')
+                    )
+                ).limit(100).all()
+                
+                updated_imgs = 0
+                for product in products:
+                    try:
+                        # Direct "Scrape-First" logic for scheduler
+                        d, source = fetch_product_details_echotik(product.product_id, force=True, allow_paid=True)
+                        if d:
+                            res = extract_metadata_from_echotik(d)
+                            cover_url = res.get('image_url')
+                            if cover_url:
+                                parsed = parse_cover_url(cover_url)
+                                if parsed:
+                                    product.image_url = parsed
+                                    # Sign it
+                                    signed = get_cached_image_urls([parsed])
+                                    if signed.get(parsed):
+                                        product.cached_image_url = signed[parsed]
+                                        product.image_cached_at = datetime.utcnow()
+                                        updated_imgs += 1
+                        time.sleep(0.5)
+                    except Exception: pass
+                
+                db.session.commit()
+                print(f"[SCHEDULER] ✅ Image Refresh Complete: {updated_imgs} signed.")
+
+            except Exception as e:
+                print(f"[SCHEDULER] ❌ Image Refresh Failed: {e}")
+
+    # Initialize Scheduler
+    scheduler = BackgroundScheduler()
+    # Run every 24 hours
+    scheduler.add_job(func=scheduled_global_refresh, trigger="interval", hours=24)
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown())
+    print("[SYSTEM] 🕰️ Daily Stats & Image Refresh Scheduler Online.")
+
+except ImportError:
+    print("[SYSTEM] ⚠️ APScheduler not found. Auto-refresh disabled. Install 'apscheduler' to enable.")
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
