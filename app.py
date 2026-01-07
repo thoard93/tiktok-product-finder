@@ -7359,7 +7359,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
     
     for v in videos:
         # DEBUG: Inspect raw product data for keys
-        if saved_count &lt; 3: print(f"[DEBUG] Raw Product Data: {json.dumps(v, default=str)}")
+        if saved_count < 3: print(f"[DEBUG] Raw Product Data: {json.dumps(v, default=str)}")
         try:
             product_id = str(v.get('productId', ''))
             if not product_id:
