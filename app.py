@@ -1092,18 +1092,36 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     # Extract Data from Best Match
     v = best_match
     
+    # Debug: Log keys for analysis (first run only usually, but good for now)
+    # print(f"DEBUG_COPILOT_KEYS: {list(v.keys())}") 
+    
     # Update Fields
     sv(p, 'product_name', v.get('productTitle') or gv(p, 'product_name'))
     sv(p, 'seller_name', v.get('sellerName') or gv(p, 'seller_name'))
     sv(p, 'image_url', v.get('productImageUrl') or gv(p, 'image_url'))
     
     gmv = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
-    sales = int(v.get('periodUnits') or 0)
+    sales_period = int(v.get('periodUnits') or v.get('units') or 0)
     
+    # Ratings & Reviews (Try common keys)
+    rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or 0)
+    reviews = int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0)
+    if rating > 0: sv(p, 'product_rating', rating)
+    if reviews > 0: sv(p, 'review_count', reviews)
+
     if gmv > 0: sv(p, 'gmv', gmv)
-    if sales > 0: 
-        sv(p, 'sales_7d', sales) # Approximate to 7d/current timeframe
+    if sales_period > 0: 
+        sv(p, 'sales_7d', sales_period)
         
+        # If Total Sales missing, at least use Period Sales
+        current_total = int(gv(p, 'sales', 0))
+        if current_total < sales_period:
+            sv(p, 'sales', sales_period)
+            
+    # Try generic Total Sales keys
+    total_sales = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or 0)
+    if total_sales > 0: sv(p, 'sales', total_sales)
+
     sv(p, 'video_count', int(v.get('productVideoCount') or gv(p, 'video_count', 0)))
     sv(p, 'influencer_count', int(v.get('productCreatorCount') or gv(p, 'influencer_count', 0)))
     
@@ -8187,8 +8205,6 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             # FILTER: Skip placeholder/glitched data AND organic-only products from Copilot
             # Only keep products WITH ad spend (we want ad-driven products, not organic)
             is_placeholder = (
-                ad_spend <= 0 or  # NO AD SPEND = Organic only, skip
-                (video_count == 1 and creator_count == 1) or  # Common "1/1" glitch
                 (video_count == 0 and creator_count == 0)  # No stat data at all
             )
             if is_placeholder:
@@ -8206,8 +8222,23 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 existing.image_url = v.get('productImageUrl') or existing.image_url
                 gmv_val = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
                 if gmv_val > 0: existing.gmv = gmv_val
-                sales_val = int(v.get('periodUnits') or 0)
-                if sales_val > 0: existing.sales_7d = sales_val
+                
+                sales_val = int(v.get('periodUnits') or v.get('units') or 0)
+                if sales_val > 0: 
+                    existing.sales_7d = sales_val
+                    # Fallback Total Sales
+                    if existing.sales < sales_val: existing.sales = sales_val
+
+                # Ratings
+                rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or 0)
+                reviews = int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0)
+                if rating > 0: existing.product_rating = rating
+                if reviews > 0: existing.review_count = reviews
+                
+                # Try explicit total
+                total_s = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or 0)
+                if total_s > 0: existing.sales = total_s
+
                 if video_count > 0: existing.video_count = video_count
                 if creator_count > 0: existing.influencer_count = creator_count
                 comm_rate = float(v.get('tapCommissionRate') or 0) / 10000.0
@@ -8225,7 +8256,10 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                     seller_name=v.get('sellerName', ''),
                     image_url=v.get('productImageUrl', ''),
                     gmv=float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0),
-                    sales_7d=int(v.get('periodUnits') or 0),
+                    sales_7d=int(v.get('periodUnits') or v.get('units') or 0),
+                    sales=int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or v.get('periodUnits') or v.get('units') or 0), # Use 7d sales as fallback for total sales
+                    product_rating=float(v.get('productRating') or v.get('rating') or v.get('avgRating') or 0),
+                    review_count=int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0),
                     video_count=video_count,
                     influencer_count=creator_count,
                     commission_rate=float(v.get('tapCommissionRate') or 0) / 10000.0,
