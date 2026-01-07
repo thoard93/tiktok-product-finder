@@ -163,7 +163,6 @@ def save_product_to_db(product_data):
 
 def get_product_from_api(product_id):
     """
-    """
     Search Copilot for product stats.
     """
     try:
