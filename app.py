@@ -3399,6 +3399,18 @@ def list_products():
             # Products with GMV > $1000 typically have significant ad spend
             query = query.filter(Product.gmv > 1000)
             query = query.filter(Product.scan_type == 'copilot')
+
+        # GLOBAL SEARCH (User Request)
+        search_query = request.args.get('search', '').strip()
+        if search_query:
+            search_term = f"%{search_query}%"
+            query = query.filter(
+                db.or_(
+                    Product.product_name.ilike(search_term),
+                    Product.seller_name.ilike(search_term),
+                    Product.product_id.ilike(search_term)
+                )
+            )
         
         # Scan type filter
         scan_type = request.args.get('scan_type')
@@ -7374,22 +7386,36 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             video_count = int(v.get('productVideoCount') or 0)
             creator_count = int(v.get('productCreatorCount') or 0)
             
-            # FILTER: Skip placeholder/glitched data AND organic-only products from Copilot
-            # Only keep products WITH ad spend (we want ad-driven products, not organic)
-            # FILTER: Strict Quality Control (User Request: 5+ Videos)
-            # If product has < 5 videos, it's considered "low quality" or "placeholder"
-            if video_count < 5:
+            # [NEW] Extract Sales for Filtering
+            sales_7d = int(v.get('periodUnits') or v.get('units') or 0)
+            total_sales = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or v.get('product_total_sales') or v.get('total_sales') or 0)
+
+            # FILTER: Strict Quality Control
+            # 1. Video Count < 5
+            # 2. Total Sales == 0 (Placeholder)
+            # 3. Sales 7D < 20 (Momentum)
+            filter_reason = None
+            if video_count < 5: filter_reason = f"Low Videos ({video_count})"
+            elif total_sales == 0: filter_reason = "Zero Total Sales"
+            elif sales_7d < 20: filter_reason = f"Low Momentum (7D: {sales_7d})"
+
+            if filter_reason:
                 # Check if it exists to HIDE it (Active Cleanup)
+                # EXCEPTION: If it is a FAVORITE, Keep it!
                 existing_check = Product.query.get(product_id)
-                if existing_check:
-                    print(f"[Copilot Sync] Hiding {product_id} (Videos: {video_count} < 5)")
+                if existing_check and existing_check.is_favorite:
+                     pass # Keep favorites even if they drop criteria
+                elif existing_check:
+                    print(f"[Copilot Sync] Hiding {product_id} ({filter_reason})")
                     existing_check.product_status = 'unavailable'
-                    existing_check.status_note = f'Low video count ({video_count})'
+                    existing_check.status_note = filter_reason
                     existing_check.last_updated = datetime.utcnow()
-                    saved_count += 1 # Count as "processed" or "saved" update
+                    saved_count += 1 
                 else:
-                    print(f"[Copilot Sync] Skipping {product_id} (Videos: {video_count} < 5)")
-                continue
+                    print(f"[Copilot Sync] Skipping {product_id} ({filter_reason})")
+                
+                if not (existing_check and existing_check.is_favorite):
+                    continue
             
             winner_score = calculate_winner_score(ad_spend, video_count, creator_count)
             
@@ -7414,11 +7440,12 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 # Update Ad Spend
                 if ad_spend > 0: existing.ad_spend = ad_spend
                 
-                sales_val = int(v.get('periodUnits') or v.get('units') or 0)
-                if sales_val > 0: 
-                    existing.sales_7d = sales_val
+                if sales_7d > 0: 
+                    existing.sales_7d = sales_7d
                     # Fallback Total Sales
-                    if existing.sales < sales_val: existing.sales = sales_val
+                    if existing.sales < sales_7d: existing.sales = sales_7d
+                
+                if total_sales > 0: existing.sales = total_sales
 
                 # Ratings (Enhanced Extraction)
                 rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or v.get('reviewScore') or v.get('score') or 0)
@@ -7426,9 +7453,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 if rating > 0: existing.product_rating = rating
                 if reviews > 0: existing.review_count = reviews
                 
-                # Try explicit total (Expanded Keys)
-                total_s = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or v.get('product_total_sales') or v.get('total_sales') or 0)
-                if total_s > 0: existing.sales = total_s
+
 
                 if video_count > 0: existing.video_count = video_count
                 if creator_count > 0: existing.influencer_count = creator_count

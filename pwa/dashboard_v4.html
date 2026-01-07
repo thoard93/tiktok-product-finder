@@ -413,6 +413,7 @@
                 sessionStorage.setItem('vantage_filter', JSON.stringify(curFilter));
 
                 const params = new URLSearchParams({ page: page, limit: 24, ...curFilter });
+                if (curFilter.search) params.set('search', curFilter.search);
 
                 // Loading state
                 document.getElementById('productGrid').innerHTML = `
@@ -526,13 +527,9 @@
             function searchProducts(query) {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
-                    const lower = query.toLowerCase();
-                    document.querySelectorAll('.glass-card').forEach(card => {
-                        const title = card.querySelector('h3').innerText.toLowerCase();
-                        const shop = card.querySelector('.text-slate-500').innerText.toLowerCase();
-                        card.style.display = (title.includes(lower) || shop.includes(lower)) ? 'flex' : 'none';
-                    });
-                }, 300);
+                    curFilter.search = query.trim();
+                    loadProducts(1);
+                }, 500); // 500ms debounce
             }
 
             function searchBrands(query) { searchProducts(query); }
