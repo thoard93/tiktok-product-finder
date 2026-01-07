@@ -7413,6 +7413,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 views_val = int(v.get('periodViews') or 0)
                 if views_val > 0: existing.views_count = views_val
                 existing.last_updated = datetime.utcnow()
+                existing.product_status = 'active' # Force visible on sync
                 existing.scan_type = 'copilot'
             else:
                 # Create new product
@@ -7597,10 +7598,10 @@ try:
     scheduler.add_job(func=scheduled_stale_refresh, trigger="interval", hours=4)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
-    print("[SYSTEM] 🕰️ TikTokCopilot Auto-Sync Scheduler Online (every 12 hours).")
+    print("[SYSTEM] [CLOCK] TikTokCopilot Auto-Sync Scheduler Online (every 12 hours).")
 
 except ImportError:
-    print("[SYSTEM] ⚠️ APScheduler not found. Auto-refresh disabled. Install 'apscheduler' to enable.")
+    print("[SYSTEM] [WARN] APScheduler not found. Auto-refresh disabled. Install 'apscheduler' to enable.")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
