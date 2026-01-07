@@ -220,6 +220,7 @@
                     <div class="flex gap-4 w-full xl:w-auto overflow-x-auto no-scrollbar pb-2 xl:pb-0">
                         <select onchange="updateSort(this.value)"
                             class="bg-black/40 border border-white/5 rounded-2xl px-5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer shrink-0">
+                            <option value="gem_score">Sort: 💎 Gem Score (Smart)</option>
                             <option value="sales_7d">Sort: 7D Volume</option>
                             <option value="video_count">Sort: Highest Videos</option>
                             <option value="vids_asc">Sort: Least Videos</option>
@@ -352,7 +353,7 @@
 
         <script>
             let curPage = parseInt(sessionStorage.getItem('vantage_page')) || 1;
-            let curFilter = JSON.parse(sessionStorage.getItem('vantage_filter')) || { sort_by: 'sales_7d' };
+            let curFilter = JSON.parse(sessionStorage.getItem('vantage_filter')) || { sort_by: 'gem_score' };
             let searchTimeout;
 
             async function loadDashboard() {
@@ -461,9 +462,9 @@
                         <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" loading="lazy" onerror="this.src='https://placehold.co/400x400/05070a/white?text=No+Data'">
                         
                         <div class="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-                            ${p.is_ad_driven ? '<span class="badge-premium bg-violet-600 text-white shadow-lg shadow-violet-500/30">Ad Engine</span>' : ''}
-                            ${p.is_favorite ? '<span class="badge-premium bg-rose-500/90 text-white border border-rose-400/20">Watchlist</span>' : ''}
-                            ${p.video_count < 30 ? '<span class="badge-premium bg-cyan-500 text-white shadow-lg shadow-cyan-500/30">Untapped</span>' : ''}
+                            ${p.gmv > 10000 ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-lg">💰 High GMV</span>' : ''}
+                            ${p.is_favorite ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white shadow-lg">⭐ Watchlist</span>' : ''}
+                            ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-600 text-white shadow-lg">💎 Untapped</span>' : ''}
                         </div>
                         
                         <div class="absolute inset-0 bg-violet-900/40 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center backdrop-blur-[2px] z-20">
@@ -482,8 +483,8 @@
                         
                         <div class="mt-auto grid grid-cols-3 gap-2 md:gap-3">
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">${p.gmv > 0 ? '💰 GMV' : (p.sales_7d > 0 ? '7D Vol' : 'Sales')}</p>
-                                <p class="text-xs font-bold ${p.gmv > 0 ? 'text-emerald-400' : 'text-white'} tracking-widest">${p.gmv > 0 ? '$' + Math.round(p.gmv).toLocaleString() : (p.sales_7d > 0 ? p.sales_7d : (p.sales || 0)).toLocaleString()}</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">7D Sales</p>
+                                <p class="text-xs font-bold text-white tracking-widest">${(p.sales_7d || 0).toLocaleString()}</p>
                             </div>
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
                                 <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Videos</p>

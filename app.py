@@ -4116,14 +4116,8 @@ def get_stats():
                 'freeship': freeship_count,
                 'avg_commission': avg_comm,
                 'ad_winners': Product.query.filter(
-                    db.or_(
-                        db.and_(
-                            Product.sales_7d > 50,
-                            Product.influencer_count < 5,
-                            Product.video_count < 5
-                        ),
-                        Product.scan_type.in_(['apify_ad', 'daily_virals'])
-                    )
+                    Product.gmv > 1000,
+                    Product.scan_type == 'copilot'
                 ).count(),
                 'apify_count': Product.query.filter(Product.scan_type == 'apify_shop').count(),
                 'discovery_count': Product.query.filter(Product.scan_type == 'discovery').count()
@@ -4213,6 +4207,12 @@ def list_products():
             query = query.order_by(Product.last_updated.desc().nullslast())
         elif sort_by == 'commission_rate':
             query = query.order_by(Product.commission_rate.desc().nullslast())
+        elif sort_by == 'gem_score':
+            # Efficiency Score: High Sales + Low Videos
+            # We add 1 to video_count to avoid division by zero
+            # Boost score if GMV > 0 (ad spend present)
+            score = (Product.sales_7d / (func.coalesce(Product.video_count, 0) + 1))
+            query = query.order_by(score.desc().nullslast())
         else:
             query = query.order_by(Product.sales_7d.desc().nullslast())
         

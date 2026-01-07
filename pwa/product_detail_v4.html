@@ -147,7 +147,8 @@
                     <!-- Stats Grid -->
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div class="glass-card p-5 group hover:border-cyan-400/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">All-Time
+                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest"
+                                id="lblStat1">All-Time
                                 Units</p>
                             <p class="text-2xl font-bold text-white font-heading" id="statSales">0</p>
                             <div class="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
@@ -281,7 +282,15 @@
             if (data.is_ad_driven) document.getElementById('badgeAd').classList.remove('hidden');
             if (data.sales_7d > 200) document.getElementById('badgeHot').classList.remove('hidden');
 
-            document.getElementById('statSales').textContent = (data.sales || 0).toLocaleString();
+            if (data.gmv > 0) {
+                document.getElementById('lblStat1').textContent = "Total Ad Spend";
+                document.getElementById('statSales').textContent = '$' + Math.round(data.gmv).toLocaleString();
+                document.getElementById('statSales').className = "text-2xl font-bold text-emerald-400 font-heading";
+            } else {
+                document.getElementById('lblStat1').textContent = "All-Time Units";
+                document.getElementById('statSales').textContent = (data.sales || 0).toLocaleString();
+                document.getElementById('statSales').className = "text-2xl font-bold text-white font-heading";
+            }
             document.getElementById('statRev').textContent = '$' + (data.gmv_30d || (data.sales_7d || 0) * (data.price || 20)).toLocaleString();
             document.getElementById('statInfluencers').textContent = data.influencer_count || 0;
             document.getElementById('statVideos').textContent = data.video_count || 0;
