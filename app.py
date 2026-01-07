@@ -33,6 +33,7 @@ from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory, redirect, session, url_for, render_template, make_response, Response
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func, or_
 from sqlalchemy.pool import NullPool
 from functools import wraps
 import time
@@ -7602,6 +7603,45 @@ try:
 
 except ImportError:
     print("[SYSTEM] [WARN] APScheduler not found. Auto-refresh disabled. Install 'apscheduler' to enable.")
+
+def ensure_schema_integrity():
+    """Auto-heal schema for SQLite/Postgres to prevent missing column errors"""
+    with app.app_context():
+        try:
+            from sqlalchemy import text, inspect
+            
+            # Simple check if table exists
+            inspector = inspect(db.engine)
+            if not inspector.has_table('products'):
+                return # Create_all handles it
+
+            columns = [c['name'] for c in inspector.get_columns('products')]
+            
+            with db.engine.connect() as conn:
+                if 'product_status' not in columns:
+                    print("[SCHEMA] Adding missing column: product_status")
+                    conn.execute(text("ALTER TABLE products ADD COLUMN product_status TEXT DEFAULT 'active'"))
+                
+                if 'scan_type' not in columns:
+                    print("[SCHEMA] Adding missing column: scan_type")
+                    conn.execute(text("ALTER TABLE products ADD COLUMN scan_type TEXT DEFAULT 'copilot'"))
+
+                if 'sales_7d' not in columns:
+                     print("[SCHEMA] Adding missing column: sales_7d")
+                     conn.execute(text("ALTER TABLE products ADD COLUMN sales_7d INTEGER DEFAULT 0"))
+                
+                if 'video_count' not in columns:
+                     print("[SCHEMA] Adding missing column: video_count")
+                     conn.execute(text("ALTER TABLE products ADD COLUMN video_count INTEGER DEFAULT 0"))
+
+                conn.commit()
+            print("[SCHEMA] Integrity Check Complete.")
+        except Exception as e:
+            # Don't crash app on schema check failure (e.g. invalid permissions)
+            print(f"[SCHEMA] Warning: Integrity check skipped: {e}")
+
+# Run on module load (ensures it runs on Render gunicorn start)
+ensure_schema_integrity()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
