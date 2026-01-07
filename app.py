@@ -7955,90 +7955,268 @@ def scan_partner_opportunity_live():
             
     print(f"[Partner Scan] Finished. Total new/updated opportunities: {total_saved}")
 
-# --- Background Scheduler for Daily Refresh ---
+# =============================================================================
+# TIKTOKCOPILOT INTEGRATION 🕵️‍♂️
+# =============================================================================
+
+COPILOT_API_BASE = "https://www.tiktokcopilot.com/api"
+
+def get_copilot_cookie():
+    """Get TikTokCopilot session cookie from DB or Env"""
+    return get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
+
+def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US'):
+    """
+    Fetch trending products from TikTokCopilot API.
+    
+    Args:
+        timeframe: 1d, 3d, 7d, 14d, 30d
+        sort_by: revenue, views, etc
+        limit: products per page (max ~50)
+        page: page number for pagination
+        region: US, etc
+    
+    Returns:
+        dict with product data or None on error
+    """
+    cookie_str = get_copilot_cookie()
+    if not cookie_str:
+        print("[Copilot] ❌ No cookie configured!")
+        return None
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cookie": cookie_str,
+        "Referer": "https://www.tiktokcopilot.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin"
+    }
+    
+    params = {
+        "timeframe": timeframe,
+        "sortBy": sort_by,
+        "feedType": "for-you",
+        "limit": limit,
+        "page": page,
+        "region": region,
+        "sAggMode": "net"
+    }
+    
+    try:
+        res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
+        if res.status_code == 200:
+            return res.json()
+        else:
+            print(f"[Copilot] API Error: {res.status_code}")
+            return None
+    except Exception as e:
+        print(f"[Copilot] Exception: {e}")
+        return None
+
+def calculate_winner_score(ad_spend, video_count, creator_count):
+    """
+    Calculate Winner Score for a product.
+    High ad spend + low videos + low creators = Better opportunity!
+    
+    Formula: (ad_spend * 2) / (video_count + creator_count + 1)
+    """
+    try:
+        numerator = float(ad_spend or 0) * 2
+        denominator = int(video_count or 0) + int(creator_count or 0) + 1
+        return round(numerator / denominator, 2)
+    except:
+        return 0
+
+def sync_copilot_products(timeframe='7d', limit=50, page=0):
+    """
+    Core sync function - fetches from Copilot and saves to DB.
+    Returns (saved_count, total_in_response) tuple.
+    """
+    result = fetch_copilot_trending(timeframe=timeframe, limit=limit, page=page)
+    
+    if not result:
+        return 0, 0
+    
+    videos = result.get('videos', [])
+    if not videos:
+        return 0, 0
+    
+    saved_count = 0
+    
+    for v in videos:
+        try:
+            product_id = str(v.get('productId', ''))
+            if not product_id:
+                continue
+            
+            # Normalize to our shop_ prefix
+            if not product_id.startswith('shop_'):
+                product_id = f"shop_{product_id}"
+            
+            # Calculate Winner Score
+            ad_spend = float(v.get('periodAdSpend') or 0)
+            video_count = int(v.get('productVideoCount') or 0)
+            creator_count = int(v.get('productCreatorCount') or 0)
+            winner_score = calculate_winner_score(ad_spend, video_count, creator_count)
+            
+            # Save or Update Product
+            existing = Product.query.get(product_id)
+            if existing:
+                # Update existing product with Copilot data
+                existing.product_name = v.get('productTitle') or existing.product_name
+                existing.seller_name = v.get('sellerName') or existing.seller_name
+                existing.image_url = v.get('productImageUrl') or existing.image_url
+                gmv_val = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
+                if gmv_val > 0: existing.gmv = gmv_val
+                sales_val = int(v.get('periodUnits') or 0)
+                if sales_val > 0: existing.sales_7d = sales_val
+                if video_count > 0: existing.video_count = video_count
+                if creator_count > 0: existing.influencer_count = creator_count
+                comm_rate = float(v.get('tapCommissionRate') or 0) / 10000.0
+                if comm_rate > 0: existing.commission_rate = comm_rate
+                views_val = int(v.get('periodViews') or 0)
+                if views_val > 0: existing.views_count = views_val
+                existing.last_updated = datetime.utcnow()
+                existing.scan_type = 'copilot'
+            else:
+                # Create new product
+                new_product = Product(
+                    product_id=product_id,
+                    product_name=v.get('productTitle', ''),
+                    seller_id=str(v.get('sellerId', '')),
+                    seller_name=v.get('sellerName', ''),
+                    image_url=v.get('productImageUrl', ''),
+                    gmv=float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0),
+                    sales_7d=int(v.get('periodUnits') or 0),
+                    video_count=video_count,
+                    influencer_count=creator_count,
+                    commission_rate=float(v.get('tapCommissionRate') or 0) / 10000.0,
+                    views_count=int(v.get('periodViews') or 0),
+                    scan_type='copilot',
+                    first_seen=datetime.utcnow(),
+                    product_status='active'
+                )
+                db.session.add(new_product)
+            
+            saved_count += 1
+            
+        except Exception as e:
+            print(f"[Copilot Sync] Error saving product: {e}")
+            continue
+    
+    db.session.commit()
+    return saved_count, len(videos)
+
+@app.route('/api/copilot/sync', methods=['POST'])
+@login_required
+def copilot_sync():
+    """
+    Sync trending products from TikTokCopilot.
+    
+    POST body (optional):
+    {
+        "timeframe": "7d",  // 1d, 3d, 7d, 14d, 30d
+        "limit": 50,
+        "page": 0
+    }
+    """
+    user = get_current_user()
+    data = request.get_json() or {}
+    
+    timeframe = data.get('timeframe', '7d')
+    limit = min(int(data.get('limit', 50)), 100)  # Cap at 100
+    page = int(data.get('page', 0))
+    
+    print(f"[Copilot Sync] Starting... Timeframe={timeframe}, Limit={limit}, Page={page}")
+    
+    saved_count, total = sync_copilot_products(timeframe=timeframe, limit=limit, page=page)
+    
+    if total == 0:
+        return jsonify({'success': False, 'error': 'Failed to fetch from Copilot. Check cookie.'}), 500
+    
+    log_activity(user.id, 'copilot_sync', {'timeframe': timeframe, 'saved': saved_count})
+    
+    return jsonify({
+        'success': True,
+        'message': f'Synced {saved_count} products from Copilot!',
+        'saved': saved_count,
+        'total_in_response': total
+    })
+
+@app.route('/api/copilot/test')
+@login_required
+def copilot_test():
+    """Test TikTokCopilot connection"""
+    cookie = get_copilot_cookie()
+    if not cookie:
+        return jsonify({'success': False, 'error': 'No Copilot cookie configured. Please set TIKTOK_COPILOT_COOKIE in Settings.'})
+    
+    result = fetch_copilot_trending(limit=5)
+    if result and result.get('videos'):
+        return jsonify({
+            'success': True,
+            'message': f"Connected! Found {len(result['videos'])} videos.",
+            'sample': result['videos'][0].get('productTitle', 'N/A') if result['videos'] else None
+        })
+    else:
+        return jsonify({'success': False, 'error': 'Failed to fetch data. Cookie may be expired.'})
+
+@app.route('/api/config/copilot-cookie', methods=['POST'])
+@login_required
+@admin_required
+def save_copilot_cookie():
+    """Save TikTokCopilot cookie to database config"""
+    data = request.get_json() or {}
+    cookie = data.get('cookie', '')
+    
+    if not cookie:
+        return jsonify({'success': False, 'error': 'Cookie is required'})
+    
+    set_config_value('TIKTOK_COPILOT_COOKIE', cookie, 'TikTokCopilot session cookie for API access')
+    
+    return jsonify({'success': True, 'message': 'Copilot cookie saved!'})
+
+# --- Background Scheduler for Daily Refresh (Now using Copilot!) ---
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     import atexit
 
-    def scheduled_global_refresh():
-        """Run daily refresh of all product stats and images."""
-        print("[SCHEDULER] ⏰ Starting Daily Global Refresh Protocol...")
+    def scheduled_copilot_refresh():
+        """Daily background job to sync products from TikTokCopilot"""
         with app.app_context():
-            # 1. Refresh Stats (limit=5000 to cover most users catalogue)
+            print("[SCHEDULER] 🕰️ Starting Daily Copilot Sync...")
+            
             try:
-                print("[SCHEDULER] 🔄 Phase 1: Refreshing Product Stats...")
-                # Re-use the logic from refresh_all_products route but without pagination limits
-                products = Product.query.order_by(Product.last_updated.asc()).limit(200).all() # Process 200 oldest per run
-                print(f"[SCHEDULER] Found {len(products)} products to update.")
+                # Sync multiple pages for comprehensive coverage
+                total_saved = 0
+                for page in range(3):  # Sync 3 pages = ~150 products
+                    saved, _ = sync_copilot_products(timeframe='7d', limit=50, page=page)
+                    total_saved += saved
+                    time.sleep(2)  # Rate limit protection
                 
-                success_count = 0
-                for p in products:
-                    try:
-                        # ENABLE PAID API for scheduler too since user wants high priority updates
-                        d, src = fetch_product_details_echotik(p.product_id, force=True, allow_paid=True)
-                        if d:
-                            meta = extract_metadata_from_echotik(d)
-                            update_product_from_metadata(p, meta)
-                            success_count += 1
-                        time.sleep(0.5) # Rate limit protection
-                    except Exception as e:
-                        print(f"[SCHEDULER] Error updating {p.product_id}: {e}")
+                print(f"[SCHEDULER] ✅ Copilot Sync Complete: {total_saved} products updated.")
                 
-                db.session.commit()
-                print(f"[SCHEDULER] ✅ Stats Refresh Complete: {success_count}/{len(products)} updated.")
+                # Send Telegram notification
+                try:
+                    send_telegram_alert(f"🕵️ **Daily Copilot Sync Complete!**\n✅ Updated {total_saved} products from trending feed.")
+                except: pass
                 
             except Exception as e:
-                print(f"[SCHEDULER] ❌ Stats Refresh Failed: {e}")
-
-            # 2. Refresh Images (Renew signatures)
-            try:
-                print("[SCHEDULER] 🖼️ Phase 2: Renewing Image Signatures...")
-                # Re-use logic from refresh_images but simplified
-                stale_threshold = datetime.utcnow() - timedelta(hours=48)
-                products = Product.query.filter(
-                    Product.image_url.isnot(None), 
-                    Product.image_url != '',
-                    db.or_(
-                        Product.cached_image_url.is_(None),
-                        Product.image_cached_at < stale_threshold,
-                        Product.image_url.contains('volces.com')
-                    )
-                ).limit(100).all()
-                
-                updated_imgs = 0
-                for product in products:
-                    try:
-                        # Direct "Scrape-First" logic for scheduler
-                        d, source = fetch_product_details_echotik(product.product_id, force=True, allow_paid=True)
-                        if d:
-                            res = extract_metadata_from_echotik(d)
-                            cover_url = res.get('image_url')
-                            if cover_url:
-                                parsed = parse_cover_url(cover_url)
-                                if parsed:
-                                    product.image_url = parsed
-                                    # Sign it
-                                    signed = get_cached_image_urls([parsed])
-                                    if signed.get(parsed):
-                                        product.cached_image_url = signed[parsed]
-                                        product.image_cached_at = datetime.utcnow()
-                                        updated_imgs += 1
-                        time.sleep(0.5)
-                    except Exception: pass
-                
-                db.session.commit()
-                print(f"[SCHEDULER] ✅ Image Refresh Complete: {updated_imgs} signed.")
-
-            except Exception as e:
-                print(f"[SCHEDULER] ❌ Image Refresh Failed: {e}")
+                print(f"[SCHEDULER] ❌ Copilot Sync Failed: {e}")
+                try:
+                    send_telegram_alert(f"⚠️ **Daily Sync Failed**\nError: `{str(e)[:200]}`")
+                except: pass
 
     # Initialize Scheduler
     scheduler = BackgroundScheduler()
-    # Run every 24 hours
-    scheduler.add_job(func=scheduled_global_refresh, trigger="interval", hours=24)
+    # Run every 12 hours (twice daily for fresh data)
+    scheduler.add_job(func=scheduled_copilot_refresh, trigger="interval", hours=12)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
-    print("[SYSTEM] 🕰️ Daily Stats & Image Refresh Scheduler Online.")
+    print("[SYSTEM] 🕰️ TikTokCopilot Auto-Sync Scheduler Online (every 12 hours).")
 
 except ImportError:
     print("[SYSTEM] ⚠️ APScheduler not found. Auto-refresh disabled. Install 'apscheduler' to enable.")
