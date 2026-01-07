@@ -88,17 +88,7 @@
                 <span>Shops Library</span>
             </a>
 
-            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Quick Actions</div>
-            <button onclick="document.getElementById('importModal').classList.remove('hidden')"
-                class="sidebar-link w-full text-left bg-transparent border-0 cursor-pointer">
-                <i class="fas fa-plus-circle w-5"></i>
-                <span>Quick Import</span>
-            </button>
-            <button onclick="document.getElementById('batchModal').classList.remove('hidden')"
-                class="sidebar-link w-full text-left bg-transparent border-0 cursor-pointer">
-                <i class="fas fa-list-ul w-5"></i>
-                <span>Batch Scan</span>
-            </button>
+            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">System</div>
             <a href="/admin" class="sidebar-link">
                 <i class="fas fa-terminal w-5"></i>
                 <span>Terminal</span>
@@ -141,27 +131,10 @@
             </div>
 
             <div class="flex items-center gap-4">
-                <button onclick="document.getElementById('batchModal').classList.remove('hidden')"
-                    class="glass py-2 px-4 rounded-xl text-xs font-bold text-rose-400 border-rose-500/20 hover:bg-rose-500/10 transition-all hidden sm:flex items-center gap-2">
-                    <i class="fas fa-list-ul"></i>
-                    <span>Batch Scan</span>
-                </button>
-                <button onclick="syncOpportunities()"
-                    class="glass py-2 px-4 rounded-xl text-xs font-bold text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/10 transition-all hidden sm:flex items-center gap-2">
-                    <i class="fas fa-sync-alt"></i>
-                    <span>Sync Opportunities</span>
-                </button>
-                <button onclick="purgeLowSignal()"
-                    class="glass py-2 px-4 rounded-xl text-xs font-bold text-amber-400 border-amber-500/20 hover:bg-amber-500/10 transition-all hidden sm:flex items-center gap-2"
-                    title="Delete products with 0 or 1 total videos">
-                    <i class="fas fa-broom"></i>
-                    <span>Purge Low Signal</span>
-                </button>
-                <button onclick="document.getElementById('importModal').classList.remove('hidden')"
-                    class="btn-premium py-2 px-5 text-sm hidden sm:flex">
-                    <i class="fas fa-plus mr-2"></i>
-                    <span>Import</span>
-                </button>
+                <a href="/scanner" class="btn-premium py-2 px-5 text-sm hidden sm:flex">
+                    <i class="fas fa-gem mr-2"></i>
+                    <span>Sync Products</span>
+                </a>
                 <div class="md:hidden">
                     <button onclick="toggleSidebar()" class="glass p-2 rounded-xl text-white">
                         <i class="fas fa-bars"></i>
@@ -231,16 +204,17 @@
                         <button onclick="applyFilter('all', this)"
                             class="filter-tab active-tab px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap">All
                             Products</button>
-                        <button onclick="applyFilter('gmv_max', this)"
-                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">GMV
-                            Max</button>
+                        <button onclick="applyFilter('high_spend', this)"
+                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">💰
+                            High
+                            Ad Spend</button>
                         <button onclick="applyFilter('gems', this)"
-                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">Hidden
+                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">💎
+                            Hidden
                             Gems</button>
                         <button onclick="applyFilter('favorites', this)"
-                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">Watchlist</button>
-                        <button onclick="applyFilter('opportunities', this)"
-                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap border-l border-white/10 ml-1 pl-4">Opportunities</button>
+                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">⭐
+                            Watchlist</button>
                     </div>
 
                     <div class="flex gap-4 w-full xl:w-auto overflow-x-auto no-scrollbar pb-2 xl:pb-0">
@@ -508,11 +482,11 @@
                         
                         <div class="mt-auto grid grid-cols-3 gap-2 md:gap-3">
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">${p.sales_7d > 0 ? '7D Vol' : 'All-Time'}</p>
-                                <p class="text-xs font-bold text-white tracking-widest">${(p.sales_7d > 0 ? p.sales_7d : (p.sales || 0)).toLocaleString()}</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">${p.gmv > 0 ? '💰 GMV' : (p.sales_7d > 0 ? '7D Vol' : 'Sales')}</p>
+                                <p class="text-xs font-bold ${p.gmv > 0 ? 'text-emerald-400' : 'text-white'} tracking-widest">${p.gmv > 0 ? '$' + Math.round(p.gmv).toLocaleString() : (p.sales_7d > 0 ? p.sales_7d : (p.sales || 0)).toLocaleString()}</p>
                             </div>
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Total Videos</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Videos</p>
                                 <p class="text-xs font-bold ${p.video_count > 100 ? 'text-rose-400' : 'text-cyan-400'} tracking-widest">${p.video_count || 0}</p>
                             </div>
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
@@ -534,10 +508,9 @@
                 const savedSort = curFilter.sort_by || 'sales_7d';
 
                 if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
-                else if (type === 'gmv_max') curFilter = { scan_type: 'daily_virals,dv_live,dv_import' };
+                else if (type === 'high_spend') curFilter = { high_ad_spend: 'true' };
                 else if (type === 'favorites') curFilter = { favorites_only: 'true' };
-                else if (type === 'opportunities') curFilter = { scan_type: 'partner_opportunity', min_vids: 0, min_videos: 0 };
-                else if (type === 'all') curFilter = { min_videos: 0, min_vids: 0 };
+                else if (type === 'all') curFilter = { min_videos: 0 };
 
                 curFilter.sort_by = savedSort;
                 sessionStorage.setItem('vantage_tab_type', type);

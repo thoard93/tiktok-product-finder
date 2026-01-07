@@ -4147,6 +4147,99 @@ def get_stats():
         })
 
 
+# =============================================================================
+# PRODUCT LISTING API - Main Dashboard Endpoint
+# =============================================================================
+@app.route('/api/products', methods=['GET'])
+@login_required
+def list_products():
+    """
+    List products with filtering and pagination.
+    Used by dashboard_v4.html to display the product grid.
+    
+    Query Parameters:
+        page: Page number (1-indexed, default 1)
+        limit: Products per page (default 24)
+        sort_by: sales_7d, video_count, vids_asc, first_seen, updated, commission_rate
+        favorites_only: 'true' to show only watchlist items
+        gems_only: 'true' to show hidden gems (low video count)
+        high_ad_spend: 'true' to show only high ad spend products
+        max_videos: Max videos filter (for gems)
+        min_videos: Min videos filter
+        scan_type: Filter by scan type
+    """
+    try:
+        page = int(request.args.get('page', 1))
+        limit = min(int(request.args.get('limit', 24)), 100)  # Cap at 100
+        sort_by = request.args.get('sort_by', 'sales_7d')
+        
+        # Start with base query
+        query = Product.query.filter(Product.product_status != 'unavailable')
+        
+        # Favorites filter
+        if request.args.get('favorites_only') == 'true':
+            query = query.filter(Product.is_favorite == True)
+        
+        # Hidden Gems filter (low video count = opportunity)
+        if request.args.get('gems_only') == 'true':
+            max_vids = int(request.args.get('max_videos', 30))
+            min_vids = int(request.args.get('min_videos', 1))
+            query = query.filter(Product.video_count <= max_vids)
+            query = query.filter(Product.video_count >= min_vids)
+        
+        # High Ad Spend filter - products with significant ad investment
+        if request.args.get('high_ad_spend') == 'true':
+            # For Copilot products, filter by GMV which correlates with ad spend
+            # Products with GMV > $1000 typically have significant ad spend
+            query = query.filter(Product.gmv > 1000)
+            query = query.filter(Product.scan_type == 'copilot')
+        
+        # Scan type filter
+        scan_type = request.args.get('scan_type')
+        if scan_type:
+            scan_types = scan_type.split(',')
+            query = query.filter(Product.scan_type.in_(scan_types))
+        
+        # Sorting
+        if sort_by == 'sales_7d':
+            query = query.order_by(Product.sales_7d.desc().nullslast())
+        elif sort_by == 'video_count':
+            query = query.order_by(Product.video_count.desc().nullslast())
+        elif sort_by == 'vids_asc':
+            query = query.order_by(Product.video_count.asc().nullsfirst())
+        elif sort_by == 'first_seen':
+            query = query.order_by(Product.first_seen.desc().nullslast())
+        elif sort_by == 'updated':
+            query = query.order_by(Product.last_updated.desc().nullslast())
+        elif sort_by == 'commission_rate':
+            query = query.order_by(Product.commission_rate.desc().nullslast())
+        else:
+            query = query.order_by(Product.sales_7d.desc().nullslast())
+        
+        # Get total count before pagination
+        total_count = query.count()
+        
+        # Pagination
+        offset = (page - 1) * limit
+        products = query.offset(offset).limit(limit).all()
+        
+        # Convert to dict
+        products_data = [p.to_dict() for p in products]
+        
+        return jsonify({
+            'success': True,
+            'products': products_data,
+            'count': total_count,
+            'page': page,
+            'limit': limit,
+            'total_pages': (total_count + limit - 1) // limit  # Ceiling division
+        })
+        
+    except Exception as e:
+        print(f"[API/Products] Error: {e}")
+        return jsonify({'success': False, 'error': str(e), 'products': [], 'count': 0})
+
+
 @app.route('/api/refresh-images', methods=['POST', 'GET'])
 @login_required # Only allow logged in users
 def refresh_images():
@@ -8061,15 +8154,15 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             video_count = int(v.get('productVideoCount') or 0)
             creator_count = int(v.get('productCreatorCount') or 0)
             
-            # FILTER: Skip placeholder/glitched data from Copilot
-            # Products with exactly 1 video + 1 creator, or 0/0, are likely placeholders
+            # FILTER: Skip placeholder/glitched data AND organic-only products from Copilot
+            # Only keep products WITH ad spend (we want ad-driven products, not organic)
             is_placeholder = (
+                ad_spend <= 0 or  # NO AD SPEND = Organic only, skip
                 (video_count == 1 and creator_count == 1) or  # Common "1/1" glitch
-                (video_count == 0 and creator_count == 0 and ad_spend == 0) or  # No data at all
-                (video_count <= 1 and creator_count <= 1 and ad_spend < 100)  # Low signal + low spend
+                (video_count == 0 and creator_count == 0)  # No stat data at all
             )
             if is_placeholder:
-                print(f"[Copilot Sync] Skipping placeholder product {product_id} (V:{video_count}/C:{creator_count}/Ad:${ad_spend:.0f})")
+                print(f"[Copilot Sync] Skipping {product_id} (Ad:${ad_spend:.0f}/V:{video_count}/C:{creator_count})")
                 continue
             
             winner_score = calculate_winner_score(ad_spend, video_count, creator_count)
