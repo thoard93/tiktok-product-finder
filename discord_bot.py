@@ -372,7 +372,7 @@ def create_product_embed(p, title_prefix=""):
     # embed.add_field(name="📦 Stock", value=f"{stock:,}", inline=True) <-- REMOVED
     
     embed.add_field(name="📉 7 Day Sales", value=f"{sales_7d:,}", inline=True)
-    embed.add_field(name="💰 Price", value=price_display, inline=True)
+    embed.add_field(name="💸 Ad Spend", value=f"${float(get_val('ad_spend', 0)):,.2f}", inline=True) # Replaced Price with Ad Spend
     embed.add_field(name="💵 Commission", value=f"{commission:.1f}%", inline=True)
     embed.add_field(name="✨ Total Sales", value=f"{total_sales:,}", inline=True) # Added Total Sales
     embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)

@@ -650,6 +650,7 @@ class Product(db.Model):
     
     scan_type = db.Column(db.String(50), default='brand_hunter', index=True)
     is_ad_driven = db.Column(db.Boolean, default=False) # Track if found via ad scan
+    ad_spend = db.Column(db.Float, default=0) # New Ad Spend Column
     
     # Composite indexes for common query patterns
     __table_args__ = (
@@ -702,7 +703,8 @@ class Product(db.Model):
             'sales_velocity': self.sales_velocity or 0,
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
-            'last_updated': self.last_updated.isoformat() if self.last_updated else None
+            'last_updated': self.last_updated.isoformat() if self.last_updated else None,
+            'ad_spend': self.ad_spend,
         }
 
 # =============================================================================
@@ -7356,6 +7358,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
     saved_count = 0
     
     for v in videos:
+        # DEBUG: Inspect raw product data for keys
+        if saved_count &lt; 3: print(f"[DEBUG] Raw Product Data: {json.dumps(v, default=str)}")
         try:
             product_id = str(v.get('productId', ''))
             if not product_id:
@@ -7403,8 +7407,12 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                     existing.cached_image_url = None # Force re-download of new image
                 elif not existing.image_url and new_img:
                      existing.image_url = new_img
+                
                 gmv_val = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
                 if gmv_val > 0: existing.gmv = gmv_val
+                
+                # Update Ad Spend
+                if ad_spend > 0: existing.ad_spend = ad_spend
                 
                 sales_val = int(v.get('periodUnits') or v.get('units') or 0)
                 if sales_val > 0: 
@@ -7648,6 +7656,10 @@ def ensure_schema_integrity():
                 if 'video_count' not in columns:
                      print("[SCHEMA] Adding missing column: video_count")
                      conn.execute(text("ALTER TABLE products ADD COLUMN video_count INTEGER DEFAULT 0"))
+
+                if 'ad_spend' not in columns:
+                     print("[SCHEMA] Adding missing column: ad_spend")
+                     conn.execute(text("ALTER TABLE products ADD COLUMN ad_spend FLOAT DEFAULT 0"))
 
                 conn.commit()
             print("[SCHEMA] Integrity Check Complete.")
