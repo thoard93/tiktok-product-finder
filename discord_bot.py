@@ -608,51 +608,45 @@ async def lookup_command(ctx, *, query: str = None):
     await ctx.message.add_reaction('✅')
 
 def get_hot_products():
-    """Get Top Products from the New Scraper Tab (Apify Shop)"""
+    """Get Top Products - Sorted by Ad Spend (high first), then Video Count"""
     from datetime import timedelta
     
     with app.app_context():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: 
-        # 1. High 7D Sales (MIN_SALES_7D = 50)
-        # 2. Low Video Count (MAX_VIDEO_COUNT = 30) for low competition
-        # 3. Not shown recently
-        # Query: Gem Score = Sales / (Videos + 1)
-        # Prioritize efficient winners (Ad Spend + Low Comp)
-        gem_score = (Product.sales_7d / (db.func.coalesce(Product.video_count, 0) + 1))
-        
+        # Query: Products with 5+ videos that haven't been shown recently
+        # Sort by: Ad Spend (highest first), then Video Count (highest second)
         products = Product.query.filter(
-            Product.sales_7d >= 20,   # Minimum viable signal
-            Product.video_count >= 5, # Filter out placeholders (1-4 videos)
+            Product.video_count >= 5,  # Filter out placeholders
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date
             )
         ).order_by(
-            gem_score.desc()
+            db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 1: High Ad Spend
+            db.func.coalesce(Product.video_count, 0).desc()  # Priority 2: High Video Count
         ).limit(MAX_DAILY_POSTS).all()
         
         # Convert to dicts BEFORE commit to avoid DetachedInstanceError
-        # (Commit expires objects, so accessing them later fails without a session)
         product_dicts = []
         for p in products:
             p_dict = {
                 'product_id': p.product_id,
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
-                'sales': p.sales, # Fixed: Include Total Sales
+                'sales': p.sales,
                 'sales_7d': p.sales_7d,
                 'sales_30d': p.sales_30d,
                 'influencer_count': p.influencer_count,
                 'video_count': p.video_count,
                 'commission_rate': p.commission_rate,
                 'price': p.price,
+                'ad_spend': p.ad_spend,  # FIXED: Include ad_spend!
                 'image_url': p.cached_image_url or p.image_url,
                 'cached_image_url': p.cached_image_url,
                 'has_free_shipping': p.has_free_shipping,
-                'live_count': p.live_count, # Include live_count/stock
+                'live_count': p.live_count,
                 'stock': p.live_count
             }
             product_dicts.append(p_dict)
