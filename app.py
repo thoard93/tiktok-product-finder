@@ -1,6 +1,6 @@
 """
-TikTok Product Finder - Brand Hunter (Community Edition)
-Scans TOP BRANDS directly - no follow workflow needed
+Gem Hunter - TikTok Shop Intelligence Platform
+Powered by TikTokCopilot API for real-time trending product data
 
 Features:
 - Discord OAuth login (server members only)
@@ -11,8 +11,8 @@ Features:
 - Admin dashboard
 
 Strategy: 
-- Get top brands by GMV from EchoTik
-- Scan their products sorted by 7-DAY SALES DESCENDING
+- Fetch trending products from TikTokCopilot
+- Filter by winner score (high ad spend + low competition)
 - Filter for low influencer count (1-100)
 - Save hidden gems automatically
 """
@@ -8056,10 +8056,22 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             if not product_id.startswith('shop_'):
                 product_id = f"shop_{product_id}"
             
-            # Calculate Winner Score
+            # Calculate stats
             ad_spend = float(v.get('periodAdSpend') or 0)
             video_count = int(v.get('productVideoCount') or 0)
             creator_count = int(v.get('productCreatorCount') or 0)
+            
+            # FILTER: Skip placeholder/glitched data from Copilot
+            # Products with exactly 1 video + 1 creator, or 0/0, are likely placeholders
+            is_placeholder = (
+                (video_count == 1 and creator_count == 1) or  # Common "1/1" glitch
+                (video_count == 0 and creator_count == 0 and ad_spend == 0) or  # No data at all
+                (video_count <= 1 and creator_count <= 1 and ad_spend < 100)  # Low signal + low spend
+            )
+            if is_placeholder:
+                print(f"[Copilot Sync] Skipping placeholder product {product_id} (V:{video_count}/C:{creator_count}/Ad:${ad_spend:.0f})")
+                continue
+            
             winner_score = calculate_winner_score(ad_spend, video_count, creator_count)
             
             # Save or Update Product

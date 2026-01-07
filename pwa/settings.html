@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings | Vantage Intelligence</title>
+    <title>Settings | Gem Hunter</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
@@ -58,7 +58,6 @@
 
 <body class="flex justify-center min-h-screen p-6 overflow-y-auto bg-[#05070a]">
     <div class="settings-bg">
-
         <div class="glow-orb"></div>
     </div>
 
@@ -70,123 +69,98 @@
             </div>
             <div>
                 <h1 class="text-3xl font-heading font-bold text-white tracking-tight">System Settings</h1>
-                <p class="text-slate-400 text-sm font-medium">Manage your credentials and protocols</p>
+                <p class="text-slate-400 text-sm font-medium">Manage your Gem Hunter configuration</p>
             </div>
         </div>
 
         <div class="space-y-8">
-            <!-- EchoTik Integration -->
+            <!-- TikTokCopilot Integration (PRIMARY) -->
             <div class="space-y-4">
                 <div class="flex items-center justify-between">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1">EchoTik
-                        Integration</label>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase">Use Scraper</span>
-                        <div id="echotikScraperToggle" onclick="toggleScraper()"
-                            class="w-10 h-6 bg-slate-800 rounded-full relative cursor-pointer border border-white/5 transition-colors">
-                            <div class="dot absolute left-1 top-1 w-4 h-4 bg-slate-500 rounded-full transition-all">
-                            </div>
-                        </div>
-                    </div>
+                    <label class="block text-[10px] font-bold text-cyan-400 uppercase tracking-[0.2em] ml-1">
+                        <i class="fas fa-gem mr-2"></i>TikTokCopilot Integration (NEW!)
+                    </label>
+                    <span
+                        class="badge-premium bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[9px]">PRIMARY</span>
                 </div>
 
                 <div class="space-y-3">
                     <div class="relative group">
                         <i class="fas fa-cookie absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="password" id="echotikCookie" placeholder="Paste EchoTik Session Cookie..."
-                            class="input-premium w-full pl-11 border-white/5">
-                        <button onclick="togglePassword('echotikCookie')"
+                        <input type="password" id="copilotCookie" placeholder="Paste TikTokCopilot Session Cookie..."
+                            class="input-premium w-full pl-11 border-cyan-500/30">
+                        <button onclick="togglePassword('copilotCookie')"
                             class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
                             <i class="fas fa-eye text-xs"></i>
                         </button>
                     </div>
 
-                    <div class="glass p-4 rounded-xl border border-white/5">
+                    <div class="glass p-4 rounded-xl border border-cyan-500/20">
                         <p class="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-2">How to get your
                             cookie:</p>
                         <ol class="text-[10px] text-slate-400 space-y-1 list-decimal ml-4">
-                            <li>Log in to <a href="https://echotik.live" target="_blank"
-                                    class="text-white hover:underline">EchoTik</a></li>
-                            <li>Open DevTools (F12) -> <span class="text-white">Application</span> tab -> <span
-                                    class="text-white">Cookies</span></li>
-                            <li>Find <span class="text-white">echotik.live</span> -> Copy the entire <span
-                                    class="text-white">Cookie</span> header value.</li>
-                            <li><span class="text-cyan-500 font-bold">Pro Tip:</span> Copy the whole string from your
-                                browser's network request for the most reliable results.</li>
+                            <li>Log in to <a href="https://www.tiktokcopilot.com" target="_blank"
+                                    class="text-cyan-400 hover:underline">TikTokCopilot.com</a></li>
+                            <li>Open DevTools (F12) -> <span class="text-white">Network</span> tab</li>
+                            <li>Refresh & find any <span class="text-white">api/trending</span> request</li>
+                            <li>Go to <span class="text-cyan-400 font-bold">Headers</span> tab</li>
+                            <li>Copy the entire <span class="text-white">Cookie</span> header value.</li>
                         </ol>
                     </div>
+
+                    <button onclick="testCopilotConnection()" id="btnTestCopilot"
+                        class="glass px-4 py-2 rounded-xl border-emerald-500/30 hover:border-emerald-400 text-emerald-400 flex items-center gap-2 text-xs font-bold transition-all">
+                        <i class="fas fa-plug"></i>
+                        Test Connection
+                    </button>
                 </div>
             </div>
 
-            <!-- DailyVirals Config -->
+            <!-- Telegram Notifications -->
             <div class="space-y-4 pt-4 border-t border-white/5">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1">DailyVirals
-                    Integration</label>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <i class="fab fa-telegram mr-2"></i>Telegram Notifications
+                </label>
                 <div class="space-y-3">
                     <div class="relative group">
-                        <i
-                            class="fas fa-shield-alt absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="password" id="dvToken" placeholder="Paste DailyVirals Bearer Token..."
+                        <i class="fas fa-robot absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                        <input type="text" id="telegramBotToken" placeholder="Bot Token (from @BotFather)..."
                             class="input-premium w-full pl-11 border-white/5">
-                        <button onclick="togglePassword('dvToken')"
-                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
-                            <i class="fas fa-eye text-xs"></i>
-                        </button>
+                    </div>
+                    <div class="relative group">
+                        <i class="fas fa-hashtag absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                        <input type="text" id="telegramChatId" placeholder="Chat ID..."
+                            class="input-premium w-full pl-11 border-white/5">
                     </div>
                 </div>
             </div>
 
-            <!-- TikTok Partner Config -->
-            <div class="space-y-4 pt-4 border-t border-white/5">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1">TikTok Partner
-                    Integration</label>
-                <div class="space-y-3">
-                    <div class="relative group">
-                        <i class="fas fa-id-badge absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="text" id="partnerId" placeholder="Paste Partner ID..."
-                            class="input-premium w-full pl-11 border-white/5">
+            <!-- TikTok Partner Config (Legacy) -->
+            <div class="space-y-4 pt-4 border-t border-white/5 opacity-60">
+                <details>
+                    <summary
+                        class="cursor-pointer text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1 hover:text-slate-300 transition-colors">
+                        <i class="fas fa-chevron-right mr-2"></i>TikTok Partner Integration (Legacy)
+                    </summary>
+                    <div class="space-y-3 mt-4">
+                        <div class="relative group">
+                            <i
+                                class="fas fa-id-badge absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                            <input type="text" id="partnerId" placeholder="Paste Partner ID..."
+                                class="input-premium w-full pl-11 border-white/5">
+                        </div>
+                        <div class="relative group">
+                            <i
+                                class="fas fa-cookie absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
+                            <input type="password" id="partnerCookie" placeholder="Paste TikTok Partner Cookie..."
+                                class="input-premium w-full pl-11 border-white/5">
+                            <button onclick="togglePassword('partnerCookie')"
+                                class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+                                <i class="fas fa-eye text-xs"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="relative group">
-                        <i
-                            class="fas fa-fingerprint absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="text" id="partnerAid" placeholder="Paste AID..."
-                            class="input-premium w-full pl-11 border-white/5">
-                    </div>
-                    <div class="relative group">
-                        <i class="fas fa-barcode absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="text" id="partnerFp" placeholder="Paste Fingerprint (fp)..."
-                            class="input-premium w-full pl-11 border-white/5">
-                    </div>
-                    <div class="relative group">
-                        <i class="fas fa-key absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="text" id="partnerMsToken" placeholder="Paste msToken..."
-                            class="input-premium w-full pl-11 border-white/5">
-                    </div>
-                    <div class="relative group">
-                        <i class="fas fa-cookie absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="password" id="partnerCookie" placeholder="Paste TikTok Partner Cookie..."
-                            class="input-premium w-full pl-11 border-white/5">
-                        <button onclick="togglePassword('partnerCookie')"
-                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
-                            <i class="fas fa-eye text-xs"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="glass p-4 rounded-xl border border-white/5">
-                    <p class="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-2">How to get your
-                        account DNA:</p>
-                    <ol class="text-[10px] text-slate-400 space-y-1 list-decimal ml-4">
-                        <li>Log in to <a href="https://partner.us.tiktokshop.com" target="_blank"
-                                class="text-white hover:underline">TikTok Partner</a></li>
-                        <li>Open DevTools (F12) -> <span class="text-white">Network</span> tab</li>
-                        <li>Refresh & find <span class="text-white">opportunity_product_list</span> or <span
-                                class="text-white">list</span></li>
-                        <li>Go to the <span class="text-cyan-400 font-bold">Payload</span> tab</li>
-                        <li>Copy <span class="text-white">partner_id</span>, <span class="text-white">aid</span>, <span
-                                class="text-white">fp</span>, and <span class="text-white">msToken</span>.</li>
-                        <li>Copy the entire <span class="text-white">cookie</span> from the **Headers** tab.</li>
-                    </ol>
-                </div>
+                </details>
             </div>
 
             <div class="space-y-4 pt-4 border-t border-white/5">
@@ -208,18 +182,15 @@
         <div class="mt-12 flex items-center justify-between">
             <a href="/"
                 class="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-[0.2em] transition-colors flex items-center gap-2">
-                <i class="fas fa-arrow-left text-[10px]"></i> Abort to Base
+                <i class="fas fa-arrow-left text-[10px]"></i> Back to Dashboard
             </a>
             <button onclick="saveAllConfig()" class="btn-premium px-10 py-3 shadow-xl">
-                Update Protocols
+                Save Settings
             </button>
-
         </div>
     </div>
 
     <script>
-        let echotikScraperActive = false;
-
         function togglePassword(id) {
             const el = document.getElementById(id);
             const icon = el.nextElementSibling.querySelector('i');
@@ -232,37 +203,13 @@
             }
         }
 
-        function toggleScraper(forceState = null) {
-            const toggle = document.getElementById('echotikScraperToggle');
-            const dot = toggle.querySelector('.dot');
-
-            echotikScraperActive = forceState !== null ? forceState : !echotikScraperActive;
-
-            if (echotikScraperActive) {
-                toggle.classList.replace('bg-slate-800', 'bg-cyan-500/20');
-                toggle.classList.add('border-cyan-500/30');
-                dot.classList.replace('bg-slate-500', 'bg-cyan-400');
-                dot.classList.replace('left-1', 'left-5');
-                dot.classList.add('shadow-[0_0_8px_rgba(6,182,212,0.8)]');
-            } else {
-                toggle.classList.replace('bg-cyan-500/20', 'bg-slate-800');
-                toggle.classList.remove('border-cyan-500/30');
-                dot.classList.replace('bg-cyan-400', 'bg-slate-500');
-                dot.classList.replace('left-5', 'left-1');
-                dot.classList.remove('shadow-[0_0_8px_rgba(6,182,212,0.8)]');
-            }
-        }
-
         async function loadConfig() {
             try {
                 const res = await fetch('/api/admin/config');
                 const data = await res.json();
                 if (data.settings) {
-                    const dv = data.settings.find(s => s.key === 'DAILYVIRALS_TOKEN');
-                    if (dv && dv.value) document.getElementById('dvToken').value = dv.value;
-
-                    const ec = data.settings.find(s => s.key === 'ECHOTIK_COOKIE');
-                    if (ec && ec.value) document.getElementById('echotikCookie').value = ec.value;
+                    const copilot = data.settings.find(s => s.key === 'TIKTOK_COPILOT_COOKIE');
+                    if (copilot && copilot.value) document.getElementById('copilotCookie').value = copilot.value;
 
                     const pc = data.settings.find(s => s.key === 'TIKTOK_PARTNER_COOKIE');
                     if (pc && pc.value) document.getElementById('partnerCookie').value = pc.value;
@@ -270,52 +217,58 @@
                     const pid = data.settings.find(s => s.key === 'TIKTOK_PARTNER_ID');
                     if (pid && pid.value) document.getElementById('partnerId').value = pid.value;
 
-                    const paid = data.settings.find(s => s.key === 'TIKTOK_AID');
-                    if (paid && paid.value) document.getElementById('partnerAid').value = paid.value;
+                    const tgBot = data.settings.find(s => s.key === 'TELEGRAM_BOT_TOKEN');
+                    if (tgBot && tgBot.value) document.getElementById('telegramBotToken').value = tgBot.value;
 
-                    const pfp = data.settings.find(s => s.key === 'TIKTOK_FP');
-                    if (pfp && pfp.value) document.getElementById('partnerFp').value = pfp.value;
-
-                    const pms = data.settings.find(s => s.key === 'TIKTOK_MS_TOKEN');
-                    if (pms && pms.value) document.getElementById('partnerMsToken').value = pms.value;
-
-                    const es = data.settings.find(s => s.key === 'ECHOTIK_USE_WEB_SCRAPER');
-                    if (es && es.value === 'true') toggleScraper(true);
+                    const tgChat = data.settings.find(s => s.key === 'TELEGRAM_CHAT_ID');
+                    if (tgChat && tgChat.value) document.getElementById('telegramChatId').value = tgChat.value;
                 }
             } catch (e) {
                 console.error('Failed to load config:', e);
             }
         }
 
+        async function testCopilotConnection() {
+            const btn = document.getElementById('btnTestCopilot');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/copilot/test');
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✅ Connected! ' + data.message, 'success');
+                } else {
+                    showToast('❌ ' + data.error, 'error');
+                }
+            } catch (e) {
+                showToast('Network Error: ' + e.message, 'error');
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
         async function saveAllConfig() {
             const btn = document.querySelector('button[onclick="saveAllConfig()"]');
-            const dvToken = document.getElementById('dvToken').value.trim();
-            const ecCookie = document.getElementById('echotikCookie').value.trim();
+            const copilotCookie = document.getElementById('copilotCookie').value.trim();
             const ptCookie = document.getElementById('partnerCookie').value.trim();
             const ptId = document.getElementById('partnerId').value.trim();
-            const ptAid = document.getElementById('partnerAid').value.trim();
-            const ptFp = document.getElementById('partnerFp').value.trim();
-            const ptMsToken = document.getElementById('partnerMsToken').value.trim();
+            const tgBot = document.getElementById('telegramBotToken').value.trim();
+            const tgChat = document.getElementById('telegramChatId').value.trim();
 
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Saving...';
 
             try {
                 const updates = [];
 
-                if (dvToken) {
+                if (copilotCookie) {
                     updates.push({
-                        key: 'DAILYVIRALS_TOKEN',
-                        value: dvToken.replace('Bearer ', '').trim(),
-                        description: 'DailyVirals API Authorization Token'
-                    });
-                }
-
-                if (ecCookie) {
-                    updates.push({
-                        key: 'ECHOTIK_COOKIE',
-                        value: ecCookie,
-                        description: 'EchoTik Web Session Cookies'
+                        key: 'TIKTOK_COPILOT_COOKIE',
+                        value: copilotCookie,
+                        description: 'TikTokCopilot Session Cookie for API Access'
                     });
                 }
 
@@ -335,36 +288,21 @@
                     });
                 }
 
-                if (ptAid) {
+                if (tgBot) {
                     updates.push({
-                        key: 'TIKTOK_AID',
-                        value: ptAid,
-                        description: 'TikTok AID'
+                        key: 'TELEGRAM_BOT_TOKEN',
+                        value: tgBot,
+                        description: 'Telegram Bot Token'
                     });
                 }
 
-                if (ptFp) {
+                if (tgChat) {
                     updates.push({
-                        key: 'TIKTOK_FP',
-                        value: ptFp,
-                        description: 'TikTok Browser Fingerprint (fp)'
+                        key: 'TELEGRAM_CHAT_ID',
+                        value: tgChat,
+                        description: 'Telegram Chat ID'
                     });
                 }
-
-                if (ptMsToken) {
-                    updates.push({
-                        key: 'TIKTOK_MS_TOKEN',
-                        value: ptMsToken,
-                        description: 'TikTok Browser msToken'
-                    });
-                }
-
-                // Always save toggle state
-                updates.push({
-                    key: 'ECHOTIK_USE_WEB_SCRAPER',
-                    value: echotikScraperActive ? 'true' : 'false',
-                    description: 'Enable EchoTik Web Scraper Fallback'
-                });
 
                 for (const update of updates) {
                     await fetch('/api/admin/config', {
@@ -374,21 +312,23 @@
                     });
                 }
 
-                showToast('Protocols Updated Successfully');
+                showToast('Settings Saved Successfully! 💎');
                 setTimeout(() => location.reload(), 1000);
             } catch (e) {
-                alert('System Fault: ' + e.message);
+                alert('Error: ' + e.message);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = 'Update Protocols';
+                btn.innerHTML = 'Save Settings';
             }
         }
 
-        function showToast(msg) {
+        function showToast(msg, type = 'success') {
             const t = document.createElement('div');
-            t.className = 'fixed bottom-8 left-1/2 -translate-x-1/2 glass px-6 py-3 rounded-xl text-xs font-bold text-white uppercase tracking-widest animate-bounce z-50 border border-white/5';
+            const bgColor = type === 'error' ? 'bg-rose-500/20 border-rose-500/30 text-rose-400' : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400';
+            t.className = `fixed bottom-8 left-1/2 -translate-x-1/2 glass px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest z-50 border ${bgColor}`;
             t.textContent = msg;
             document.body.appendChild(t);
+            setTimeout(() => t.remove(), 4000);
         }
 
         document.addEventListener('DOMContentLoaded', loadConfig);
