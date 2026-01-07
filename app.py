@@ -7372,11 +7372,19 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             
             # FILTER: Skip placeholder/glitched data AND organic-only products from Copilot
             # Only keep products WITH ad spend (we want ad-driven products, not organic)
-            is_placeholder = (
-                (video_count == 0 and creator_count == 0)  # No stat data at all
-            )
-            if is_placeholder:
-                print(f"[Copilot Sync] Skipping {product_id} (Ad:${ad_spend:.0f}/V:{video_count}/C:{creator_count})")
+            # FILTER: Strict Quality Control (User Request: 5+ Videos)
+            # If product has < 5 videos, it's considered "low quality" or "placeholder"
+            if video_count < 5:
+                # Check if it exists to HIDE it (Active Cleanup)
+                existing_check = Product.query.get(product_id)
+                if existing_check:
+                    print(f"[Copilot Sync] Hiding {product_id} (Videos: {video_count} < 5)")
+                    existing_check.product_status = 'unavailable'
+                    existing_check.status_note = f'Low video count ({video_count})'
+                    existing_check.last_updated = datetime.utcnow()
+                    saved_count += 1 # Count as "processed" or "saved" update
+                else:
+                    print(f"[Copilot Sync] Skipping {product_id} (Videos: {video_count} < 5)")
                 continue
             
             winner_score = calculate_winner_score(ad_spend, video_count, creator_count)
@@ -7397,8 +7405,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                     # Fallback Total Sales
                     if existing.sales < sales_val: existing.sales = sales_val
 
-                # Ratings
-                rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or 0)
+                # Ratings (Enhanced Extraction)
+                rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or v.get('reviewScore') or v.get('score') or 0)
                 reviews = int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0)
                 if rating > 0: existing.product_rating = rating
                 if reviews > 0: existing.review_count = reviews
