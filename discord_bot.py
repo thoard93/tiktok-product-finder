@@ -12,12 +12,11 @@ from discord.ext import commands, tasks
 from discord import Embed
 from datetime import datetime, time, timezone
 import requests
-from requests.auth import HTTPBasicAuth
 import asyncio
 
 # Database setup - Import from main application to ensure model consistency
 # Database setup - Import from main application to ensure model consistency
-from app import app, db, Product, User, ApiKey, ECHOTIK_REALTIME_BASE, get_auth
+from app import app, db, Product, User, ApiKey
 
 # Discord Config
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
@@ -30,12 +29,7 @@ MAX_VIDEO_COUNT = 30  # Low competition
 MAX_DAILY_POSTS = 5  # Top 5 daily
 DAYS_BEFORE_REPEAT = 3  # Don't show same product for 3 days
 
-def get_auth():
-    """Get HTTP Basic Auth for EchoTik"""
-    # Import config from app context or env
-    ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
-    ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
-    return HTTPBasicAuth(ECHOTIK_USERNAME, ECHOTIK_PASSWORD)
+# Discord Config
 
 # Model imported from app.py
 
@@ -68,23 +62,8 @@ def extract_product_id(text):
 
 def resolve_tiktok_share_link(url):
     """Resolve TikTok share link to get Product ID via EchoTik Realtime API"""
-    print(f"Resolving share link via API: {url}")
-    try:
-        res = requests.get(
-            f"{ECHOTIK_REALTIME_BASE}/extract_product_id",
-            params={'share_url': url},
-            auth=get_auth(),
-            timeout=15
-        )
-        if res.status_code == 200:
-            data = res.json()
-            # Response: {code: 0, data: {productId: "...", ...}}
-            if data.get('data'):
-                # Handle camelCase
-                d = data['data']
-                return d.get('productId') or d.get('product_id'), d.get('region', 'US')
-    except Exception as e:
-        print(f"API Resolution Error: {e}")
+    print(f"Resolving share link via fallback: {url}")
+    # Removed Echotik API Resolution
     
     # Fallback: Manual Redirect Follow (Standard HTTP)
     try:
@@ -184,10 +163,11 @@ def save_product_to_db(product_data):
 
 def get_product_from_api(product_id):
     """
-    Search Echotik for product stats.
+    """
+    Search Copilot for product stats.
     """
     try:
-        print(f"🚀 Triggering Echotik Search for {product_id}...")
+        print(f"🚀 Triggering Copilot Search for {product_id}...")
         
         # Create a temp product dict to pass to enricher
         # We need to create a skeletal DB object or just a dict?
@@ -233,10 +213,10 @@ def get_product_from_api(product_id):
             success, msg = enrich_product_data(temp_p, force=True)
             
             if success:
-                print(f"✅ Echotik found stats for {product_id}")
+                print(f"✅ Copilot found stats for {product_id}")
                 
                 # Update Real DB Object
-                p.scan_type = 'echotik_bot_lookup'
+                p.scan_type = 'bot_lookup'
                 p.product_name = temp_p.get('product_name') or p.product_name or "Unknown Product"
                 p.image_url = temp_p.get('image_url') or p.image_url
                 p.sales = temp_p.get('sales', 0)
@@ -267,7 +247,7 @@ def get_product_from_api(product_id):
                     'from_api': True
                 }
             else:
-                print(f"❌ Echotik search failed: {msg}")
+                print(f"❌ Copilot search failed: {msg}")
                 return None
 
     except Exception as e:
@@ -304,7 +284,8 @@ def get_product_data(product_id):
             }
     
     # Not found OR needs upgrade -> Call Scanner
-    print(f"🔍 Product {product_id} needs scan/upgrade, calling EchoTik...")
+    # Not found OR needs upgrade -> Call Scanner
+    print(f"🔍 Product {product_id} needs scan/upgrade, calling Copilot...")
     return get_product_from_api(product_id)
 
 
@@ -511,7 +492,7 @@ async def on_message(message):
             
             # If not in DB, try to fetch from API
             if not product:
-                status_msg = await message.reply(f"🔎 Fetching fresh data from EchoTik for `{product_id}`...", mention_author=False)
+                status_msg = await message.reply(f"🔎 Fetching fresh data from Copilot for `{product_id}`...", mention_author=False)
                 
                 # We need a dummy dict to pass to enrich_product_data since it expects a dict
                 dummy_p = {'product_id': product_id, 'region': region}
@@ -525,7 +506,7 @@ async def on_message(message):
                     if new_prod:
                          product = new_prod
                 else:
-                    await message.reply(f"❌ Echotik search failed: {msg}", mention_author=False)
+                    await message.reply(f"❌ Copilot search failed: {msg}", mention_author=False)
                     return
 
             if not product:
@@ -592,7 +573,7 @@ async def lookup_command(ctx, *, query: str = None):
     
     # If not in DB, try to fetch from API
     if not product:
-        await status_msg.edit(content=f"🔎 Fetching fresh data from EchoTik for `{product_id}`...")
+        await status_msg.edit(content=f"🔎 Fetching fresh data from Copilot for `{product_id}`...")
         
         # We need a dummy dict to pass to enrich_product_data since it expects a dict
         dummy_p = {'product_id': product_id, 'region': region}
@@ -604,7 +585,7 @@ async def lookup_command(ctx, *, query: str = None):
             if new_prod:
                 product = new_prod
         else:
-             await status_msg.edit(content=f"❌ Echotik search failed: {msg}")
+             await status_msg.edit(content=f"❌ Copilot search failed: {msg}")
              return
     
     if not product:

@@ -1051,16 +1051,9 @@ def fetch_seller_name(seller_id):
 
 def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     """
-    Global Helper: Search Echotik for product stats based on Title then Brand.
+    Global Helper: Search/Upgrade product using TikTokCopilot API.
     """
-    # Helper: Clean title
-    def clean_title_for_search(t):
-        if not t: return ""
-        t = re.sub(r'#\w+', '', t) # Remove hashtags
-        t = re.sub(r'[^\w\s]', '', t) # Remove emojis/punctuation
-        return t.strip()
-
-    # Helper for robust attribute access (handles both dict and Product model)
+    # Helper for robust attribute access
     def gv(obj, key, default=None):
         if isinstance(obj, dict): return obj.get(key, default)
         return getattr(obj, key, default)
@@ -1069,35 +1062,56 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
         if isinstance(obj, dict): obj[key] = val
         else: setattr(obj, key, val)
 
-    # 1. Direct ID Check
     pid = gv(p, 'product_id')
+    if not pid: return False, "No Product ID"
+    
+    # Strip shop_ for search
     raw_pid = str(pid).replace('shop_', '')
-    if pid and not pid.startswith('ad_') and (force or not gv(p, 'is_enriched')):
-        d, source = fetch_product_details_echotik(raw_pid, region=gv(p, 'region', 'US'), force=force, allow_paid=allow_paid)
+    
+    print(f"{i_log_prefix} 🕵️‍♂️ Searching Copilot for {raw_pid}...")
+    
+    # Search via Copilot Trending with Keyword
+    # We use timeframe='30d' to cast a wide net
+    res = fetch_copilot_trending(timeframe='30d', limit=20, keywords=raw_pid)
+    
+    if not res or not res.get('videos'):
+        return False, "Copilot Search Found Nothing"
         
-        if d:
-            print(f"DEBUG: Enriched {pid} via {source}")
-            p_meta = extract_metadata_from_echotik(d)
+    # Find exact match or best match
+    best_match = None
+    for v in res['videos']:
+        v_pid = str(v.get('productId', ''))
+        if raw_pid in v_pid:
+            best_match = v
+            break
             
-            # Special Mapping for Cached DB & Web Scraper (which share similar flat structures)
-            if source in ['cached_db', 'web_scraper']:
-                # Debug: Log the raw response to see what keys are available
-                print(f"DEBUG: Cached DB keys for {pid}: {list(d.keys())[:15]}")
-                
-                # Extract stats from Cached DB - PRESERVE original DV values if API returns 0
-                sv(p, 'product_name', d.get('product_name') or d.get('productName') or gv(p, 'product_name'))
-                
-                # Sales: Use API if available, otherwise keep DV value
-                api_sales = int(d.get('total_sale_cnt') or 0)
-                api_sales_7d = int(d.get('total_sale_7d_cnt') or 0)
-                api_sales_30d = int(d.get('total_sale_30d_cnt') or 0)
-                
-                sv(p, 'sales', api_sales if api_sales > 0 else gv(p, 'sales', 0))
-                sv(p, 'sales_7d', api_sales_7d if api_sales_7d > 0 else gv(p, 'sales_7d', 0))
-                sv(p, 'sales_30d', api_sales_30d if api_sales_30d > 0 else gv(p, 'sales_30d', 0))
-                
-                # Price: Use API if available, otherwise keep DV value
-                api_price = float(d.get('spu_avg_price') or 0)
+    if not best_match:
+        # Fallback to first result
+        best_match = res['videos'][0]
+        
+    # Extract Data from Best Match
+    v = best_match
+    
+    # Update Fields
+    sv(p, 'product_name', v.get('productTitle') or gv(p, 'product_name'))
+    sv(p, 'seller_name', v.get('sellerName') or gv(p, 'seller_name'))
+    sv(p, 'image_url', v.get('productImageUrl') or gv(p, 'image_url'))
+    
+    gmv = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
+    sales = int(v.get('periodUnits') or 0)
+    
+    if gmv > 0: sv(p, 'gmv', gmv)
+    if sales > 0: 
+        sv(p, 'sales_7d', sales) # Approximate to 7d/current timeframe
+        
+    sv(p, 'video_count', int(v.get('productVideoCount') or gv(p, 'video_count', 0)))
+    sv(p, 'influencer_count', int(v.get('productCreatorCount') or gv(p, 'influencer_count', 0)))
+    
+    # Dates
+    sv(p, 'last_updated', datetime.utcnow())
+    sv(p, 'is_enriched', True)
+    
+    return True, "Enriched via Copilot"
                 sv(p, 'price', api_price if api_price > 0 else gv(p, 'price', 0))
                 
                 # Video/Influencer counts - these should come from API
@@ -8067,7 +8081,7 @@ def get_copilot_cookie():
     """Get TikTokCopilot session cookie from DB or Env"""
     return get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
 
-def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US'):
+def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US', **kwargs):
     """
     Fetch trending products from TikTokCopilot API.
     
@@ -8077,6 +8091,7 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         limit: products per page (max ~50)
         page: page number for pagination
         region: US, etc
+        keywords: Optional search query (e.g. product ID)
     
     Returns:
         dict with product data or None on error
@@ -8104,8 +8119,14 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         "limit": limit,
         "page": page,
         "region": region,
+        "page": page,
+        "region": region,
         "sAggMode": "net"
     }
+    
+    # Add keyword search if provided
+    if kwargs.get('keywords'):
+        params['keywords'] = kwargs.get('keywords')
     
     try:
         res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
