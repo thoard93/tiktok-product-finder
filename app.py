@@ -7390,14 +7390,10 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             sales_7d = int(v.get('periodUnits') or v.get('units') or 0)
             total_sales = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or v.get('product_total_sales') or v.get('total_sales') or 0)
 
-            # FILTER: Strict Quality Control
-            # 1. Video Count < 5
-            # 2. Total Sales == 0 (Placeholder)
-            # 3. Sales 7D < 20 (Momentum)
+            # FILTER: Quality Control (Video Count Only)
+            # Sales filters removed - API often returns 0 even for valid products
             filter_reason = None
             if video_count < 5: filter_reason = f"Low Videos ({video_count})"
-            elif total_sales == 0: filter_reason = "Zero Total Sales"
-            elif sales_7d < 20: filter_reason = f"Low Momentum (7D: {sales_7d})"
 
             if filter_reason:
                 # Check if it exists to HIDE it (Active Cleanup)
