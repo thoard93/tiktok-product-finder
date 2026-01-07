@@ -8293,6 +8293,14 @@ def save_copilot_cookie():
     
     return jsonify({'success': True, 'message': 'Copilot cookie saved!'})
 
+@app.route('/api/debug/force-refresh-stale')
+@login_required
+@admin_required
+def debug_force_stale():
+    """Trigger stale refresh manually"""
+    executor.submit(scheduled_stale_refresh)
+    return jsonify({'success': True, 'message': 'Triggered stale refresh job in background.'})
+
 # --- Background Scheduler for Daily Refresh (Now using Copilot!) ---
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -8324,10 +8332,47 @@ try:
                     send_telegram_alert(f"⚠️ **Daily Sync Failed**\nError: `{str(e)[:200]}`")
                 except: pass
 
+    def scheduled_stale_refresh():
+        """Auto-refresh stats for stale products (>24h since update)"""
+        with app.app_context():
+            print("[SCHEDULER] ♻️ Starting Stale Product Refresh...")
+            try:
+                cutoff = datetime.utcnow() - timedelta(hours=24)
+                
+                # Priority: Active winners (Sales > 0) to save API credits
+                stale_products = Product.query.filter(
+                    db.or_(Product.last_updated < cutoff, Product.last_updated == None),
+                    Product.sales_7d > 0,
+                    Product.scan_type != 'removed'
+                ).order_by(Product.sales_7d.desc()).limit(50).all()
+                
+                if not stale_products:
+                    print("[SCHEDULER] 😴 No stale high-priority products found.")
+                    return
+
+                print(f"[SCHEDULER] 🔄 Refreshing {len(stale_products)} stale products...")
+                refreshed = 0
+                for p in stale_products:
+                    try:
+                        # Force refresh
+                        enrich_product_data(p, force=True, i_log_prefix="[StaleRefresh]")
+                        refreshed += 1
+                        time.sleep(1) # Gentle rate limiting
+                    except Exception as e:
+                        print(f"[SCHEDULER] Failed to refresh {p.product_id}: {e}")
+                
+                db.session.commit()
+                print(f"[SCHEDULER] ✅ Stale Refresh Complete: {refreshed} products updated.")
+                
+            except Exception as e:
+                print(f"[SCHEDULER] ❌ Stale Refresh Error: {e}")
+
     # Initialize Scheduler
     scheduler = BackgroundScheduler()
     # Run every 12 hours (twice daily for fresh data)
     scheduler.add_job(func=scheduled_copilot_refresh, trigger="interval", hours=12)
+    # Run Stale Refresh every 4 hours
+    scheduler.add_job(func=scheduled_stale_refresh, trigger="interval", hours=4)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
     print("[SYSTEM] 🕰️ TikTokCopilot Auto-Sync Scheduler Online (every 12 hours).")
