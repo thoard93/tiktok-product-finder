@@ -7411,8 +7411,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 if rating > 0: existing.product_rating = rating
                 if reviews > 0: existing.review_count = reviews
                 
-                # Try explicit total
-                total_s = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or 0)
+                # Try explicit total (Expanded Keys)
+                total_s = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or v.get('product_total_sales') or v.get('total_sales') or 0)
                 if total_s > 0: existing.sales = total_s
 
                 if video_count > 0: existing.video_count = video_count

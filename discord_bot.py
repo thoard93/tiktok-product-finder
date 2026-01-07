@@ -625,7 +625,7 @@ def get_hot_products():
         
         products = Product.query.filter(
             Product.sales_7d >= 20,   # Minimum viable signal
-            Product.video_count >= 0,
+            Product.video_count >= 5, # Filter out placeholders (1-4 videos)
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date
@@ -642,6 +642,7 @@ def get_hot_products():
                 'product_id': p.product_id,
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
+                'sales': p.sales, # Fixed: Include Total Sales
                 'sales_7d': p.sales_7d,
                 'sales_30d': p.sales_30d,
                 'influencer_count': p.influencer_count,
