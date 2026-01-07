@@ -175,23 +175,17 @@
         <!-- System Controls -->
         <div class="glass-card p-8 bg-gradient-to-br from-midnight to-black/40 border-white/10">
             <h3 class="font-heading font-bold text-xl mb-8 flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center">
-                    <i class="fas fa-skull text-rose-500 text-sm"></i>
+                <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                    <i class="fas fa-gem text-cyan-500 text-sm"></i>
                 </div>
-                Danger Zone: Protocol Overrides
+                Gem Hunter Controls
             </h3>
 
-            <div class="flex flex-wrap gap-4">
-                <button onclick="refreshAllStats()" id="btnStats"
-                    class="glass px-6 py-3 rounded-2xl border-cyan-500/30 hover:border-cyan-400 text-cyan-400 flex items-center gap-3 transition-all">
-                    <i class="fas fa-sync-alt text-xs"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Refresh Global Stats</span>
-                </button>
-
-                <button onclick="refreshAllImages()" id="btnImages"
-                    class="glass px-6 py-3 rounded-2xl border-violet-500/30 hover:border-violet-400 text-violet-400 flex items-center gap-3 transition-all">
-                    <i class="fas fa-image text-xs"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Sign Image Keys</span>
+            <div class="flex flex-wrap gap-4 mb-8">
+                <button onclick="syncCopilot()" id="btnCopilot"
+                    class="glass px-6 py-3 rounded-2xl border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-500/10 text-emerald-400 flex items-center gap-3 transition-all">
+                    <i class="fas fa-gem text-xs"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest">Sync from Copilot</span>
                 </button>
 
                 <button onclick="runCleanup()"
@@ -199,7 +193,10 @@
                     <i class="fas fa-broom text-xs"></i>
                     <span class="text-xs font-bold uppercase tracking-widest">Vacuum DB</span>
                 </button>
+            </div>
 
+            <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Danger Zone</h4>
+            <div class="flex flex-wrap gap-4">
                 <button onclick="nukeProducts()"
                     class="glass px-6 py-3 rounded-2xl border-rose-500/30 hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group">
                     <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
@@ -265,6 +262,34 @@
                     document.getElementById('logTableBody').innerHTML = rows || '<tr><td colspan="4" class="py-8 text-center text-slate-600">ZERO ACTIVITY DETECTED</td></tr>';
                 }
             } catch (e) { console.error("Admin Load Error", e); }
+        }
+
+        async function syncCopilot() {
+            const btn = document.getElementById('btnCopilot');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Syncing...</span>';
+            btn.disabled = true;
+
+            try {
+                let totalSaved = 0;
+                for (let page = 0; page < 3; page++) {
+                    const res = await fetch('/api/copilot/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ timeframe: '7d', limit: 50, page })
+                    });
+                    const data = await res.json();
+                    if (data.success) totalSaved += data.saved;
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+                alert(`✅ Copilot Sync Complete! Saved ${totalSaved} products.`);
+                window.location.reload();
+            } catch (e) {
+                alert('Sync Error: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
         }
 
         async function nukeProducts() {

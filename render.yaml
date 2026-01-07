@@ -1,7 +1,7 @@
 services:
-  # Main Web Service
+  # Main Web Service (Gem Hunter)
   - type: web
-    name: tiktok-product-finder
+    name: gem-hunter
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --workers 3 --threads 2 --timeout 120
@@ -13,28 +13,13 @@ services:
           name: tiktok-db
           property: connectionString
 
-  # Daily Scanner - Finds NEW products from top brands
+  # Copilot Sync - Auto-sync trending products from TikTokCopilot every 12 hours
   - type: cron
-    name: daily-scanner
+    name: copilot-sync
     runtime: python
-    schedule: "0 1 * * *"  # 1:00 AM UTC daily
+    schedule: "0 */12 * * *"  # Every 12 hours
     buildCommand: pip install -r requirements.txt
-    startCommand: python daily_scanner.py
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.0"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: tiktok-db
-          property: connectionString
-
-  # Stats Refresher - Updates ALL existing product stats
-  - type: cron
-    name: stats-refresher
-    runtime: python
-    schedule: "0 2 * * *"  # 2:00 AM UTC daily
-    buildCommand: pip install -r requirements.txt
-    startCommand: python stats_refresher.py
+    startCommand: python -c "from app import sync_copilot_products; [sync_copilot_products(page=p) for p in range(3)]"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
