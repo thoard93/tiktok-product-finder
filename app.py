@@ -7395,7 +7395,14 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 # Update existing product with Copilot data
                 existing.product_name = v.get('productTitle') or existing.product_name
                 existing.seller_name = v.get('sellerName') or existing.seller_name
-                existing.image_url = v.get('productImageUrl') or existing.image_url
+                
+                # Image Update with Cache Invalidation
+                new_img = v.get('productImageUrl')
+                if new_img and new_img != existing.image_url:
+                    existing.image_url = new_img
+                    existing.cached_image_url = None # Force re-download of new image
+                elif not existing.image_url and new_img:
+                     existing.image_url = new_img
                 gmv_val = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
                 if gmv_val > 0: existing.gmv = gmv_val
                 
