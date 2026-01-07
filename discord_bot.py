@@ -639,16 +639,19 @@ def get_hot_products():
         # 1. High 7D Sales (MIN_SALES_7D = 50)
         # 2. Low Video Count (MAX_VIDEO_COUNT = 30) for low competition
         # 3. Not shown recently
+        # Query: Gem Score = Sales / (Videos + 1)
+        # Prioritize efficient winners (Ad Spend + Low Comp)
+        gem_score = (Product.sales_7d / (db.func.coalesce(Product.video_count, 0) + 1))
+        
         products = Product.query.filter(
-            Product.sales_7d >= MIN_SALES_7D,   # High 7D sales (50+)
-            Product.video_count > 0,            # At least some videos (verified)
-            Product.video_count <= MAX_VIDEO_COUNT,  # Low competition (<=30 videos)
+            Product.sales_7d >= 20,   # Minimum viable signal
+            Product.video_count >= 0,
             db.or_(
-                Product.last_shown_hot == None,  # Never shown
-                Product.last_shown_hot < cutoff_date  # Or shown more than 3 days ago
+                Product.last_shown_hot == None,
+                Product.last_shown_hot < cutoff_date
             )
         ).order_by(
-            Product.sales_7d.desc() # Top Sales first
+            gem_score.desc()
         ).limit(MAX_DAILY_POSTS).all()
         
         # Convert to dicts BEFORE commit to avoid DetachedInstanceError

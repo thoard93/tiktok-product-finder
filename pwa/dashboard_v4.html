@@ -462,9 +462,9 @@
                         <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" loading="lazy" onerror="this.src='https://placehold.co/400x400/05070a/white?text=No+Data'">
                         
                         <div class="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-                            ${p.gmv > 10000 ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-lg">💰 High GMV</span>' : ''}
-                            ${p.is_favorite ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white shadow-lg">⭐ Watchlist</span>' : ''}
-                            ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-600 text-white shadow-lg">💎 Untapped</span>' : ''}
+                            ${p.gmv > 10000 ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-700 text-white shadow-lg">💰 High GMV</span>' : ''}
+                            ${p.is_favorite ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-700 text-white shadow-lg">⭐ Watchlist</span>' : ''}
+                            ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-700 text-white shadow-lg">💎 Untapped</span>' : ''}
                         </div>
                         
                         <div class="absolute inset-0 bg-violet-900/40 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center backdrop-blur-[2px] z-20">

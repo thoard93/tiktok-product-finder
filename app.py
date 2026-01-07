@@ -260,6 +260,8 @@ def extract_metadata_from_echotik(d):
         'seller_id': None,
         'live_count': 0,
         'views_count': 0,
+        'product_rating': 0.0,
+        'review_count': 0,
         'product_url': None
     }
     
@@ -276,6 +278,8 @@ def extract_metadata_from_echotik(d):
     res['sales_30d'] = get_num(d.get('totalSale30dCnt') or d.get('total_sale_30d_cnt') or d.get('totalSale30d') or d.get('sales_30d') or d.get('sale30d') or d.get('sales30d') or 0)
     res['influencer_count'] = get_num(d.get('totalIflCnt') or d.get('total_ifl_cnt') or d.get('influencer_count') or d.get('ifl_cnt') or d.get('iflCnt') or d.get('influencer_cnt') or 0)
     res['video_count'] = get_num(d.get('totalVideoCnt') or d.get('total_video_cnt') or d.get('video_count') or d.get('video_cnt') or d.get('videoCnt') or d.get('total_video') or 0)
+    res['product_rating'] = safe_float(d.get('productRating') or d.get('product_rating') or d.get('rating') or d.get('star') or d.get('score') or 0)
+    res['review_count'] = get_num(d.get('review_count') or d.get('reviewCnt') or d.get('reviews') or d.get('total_review_cnt') or 0)
     
     # Internal Fallbacks removed (e.g. video_7d -> sales_7d was causing confusion)
     
@@ -895,7 +899,10 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
         existing.video_7d = parse_kmb_string(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or res.get('video_7d') or existing.video_7d or 0)
         existing.video_30d = parse_kmb_string(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or res.get('video_30d') or existing.video_30d or 0)
         existing.live_count = res['live_count'] or parse_kmb_string(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or existing.live_count or 0)
+        existing.live_count = res['live_count'] or parse_kmb_string(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or existing.live_count or 0)
         existing.views_count = parse_kmb_string(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or existing.views_count or 0)
+        existing.product_rating = res['product_rating'] or existing.product_rating or 0
+        existing.review_count = res['review_count'] or existing.review_count or 0
         
         # Update seller info
         new_name = str(res['seller_name'] or "").strip()
@@ -933,6 +940,8 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
             video_30d=int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or 0),
             live_count=res['live_count'] or int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or 0),
             views_count=int(p_data.get('total_views_cnt') or p_data.get('totalViewsCnt') or 0),
+            product_rating=res['product_rating'],
+            review_count=res['review_count'],
             seller_name=final_seller,
             seller_id=res['seller_id'] or p_data.get('seller_id') or p_data.get('shop_id'),
             scan_type=scan_type,
@@ -8297,7 +8306,7 @@ try:
             try:
                 # Sync multiple pages for comprehensive coverage
                 total_saved = 0
-                for page in range(3):  # Sync 3 pages = ~150 products
+                for page in range(10):  # Sync 10 pages = ~500 products
                     saved, _ = sync_copilot_products(timeframe='7d', limit=50, page=page)
                     total_saved += saved
                     time.sleep(2)  # Rate limit protection

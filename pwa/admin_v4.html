@@ -272,7 +272,7 @@
 
             try {
                 let totalSaved = 0;
-                for (let page = 0; page < 3; page++) {
+                for (let page = 0; page < 20; page++) {
                     const res = await fetch('/api/copilot/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
