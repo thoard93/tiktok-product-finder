@@ -7386,7 +7386,13 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             # Calculate stats
             # Extract Ad Spend (7D and Total)
             ad_spend_7d = float(v.get('periodAdSpend') or 0)
-            ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or v.get('adSpend') or 0)
+            # Try multiple possible field names for total ad spend
+            ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or v.get('adSpend') or v.get('productAdSpend') or v.get('allTimeAdSpend') or 0)
+            
+            # DEBUG: Log all ad-spend related keys for first 3 products
+            if saved_count < 3:
+                ad_keys = {k: v.get(k) for k in v.keys() if 'ad' in k.lower() or 'spend' in k.lower()}
+                print(f"[DEBUG] Product {product_id} Ad-Spend Fields: {ad_keys}")
             
             video_count = int(v.get('productVideoCount') or 0)
             creator_count = int(v.get('productCreatorCount') or 0)
