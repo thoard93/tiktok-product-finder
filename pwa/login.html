@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Gem Hunter</title>
+    <title>Login | Vantage</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
@@ -15,9 +15,13 @@
             theme: {
                 extend: {
                     colors: {
-                        midnight: '#05070a',
-                        cyan: '#06b6d4',
-                        violet: '#7c3aed',
+                        midnight: '#020617',
+                        slate: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        primary: '#2563eb',
                     }
                 }
             }
@@ -90,21 +94,21 @@
     </style>
 </head>
 
-<body class="flex items-center justify-center min-h-screen p-4 overflow-hidden">
+<body class="flex items-center justify-center min-h-screen p-4 overflow-hidden bg-slate-950 text-slate-200">
     <div class="login-bg">
         <div class="glow-orb"></div>
         <div class="glow-orb glow-orb-2"></div>
     </div>
 
-    <div class="glass-card login-card animate-float relative z-10">
+    <div class="bg-slate-900 border border-white/5 rounded-2xl login-card animate-float relative z-10 shadow-2xl">
         <div class="logo-box glass rounded-3xl mb-8">
             <img src="/vantage_logo.png" class="w-full h-full object-cover rounded-2xl p-1"
                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
             <span style="display:none">💎</span>
         </div>
 
-        <h1 class="text-4xl font-bold mb-2 tracking-tight text-white font-heading">Gem Hunter</h1>
-        <p class="text-slate-400 mb-8 font-medium">TikTok Shop Intelligence by Copilot</p>
+        <h1 class="text-3xl font-bold mb-2 tracking-tight text-white font-heading">Vantage</h1>
+        <p class="text-slate-400 mb-8 font-medium">Intelligence Platform</p>
 
         <div id="error-container"></div>
 
@@ -139,10 +143,10 @@
         <p class="mt-8 text-sm text-slate-500 leading-relaxed">
             Authorized access only. By continuing, you agree to our
             <a href="/terms"
-                class="text-slate-400 hover:text-cyan-400 transition-colors underline decoration-slate-700 underline-offset-4">Terms</a>
+                class="text-slate-400 hover:text-primary transition-colors underline decoration-slate-700 underline-offset-4">Terms</a>
             and
             <a href="/privacy"
-                class="text-slate-400 hover:text-cyan-400 transition-colors underline decoration-slate-700 underline-offset-4">Privacy
+                class="text-slate-400 hover:text-primary transition-colors underline decoration-slate-700 underline-offset-4">Privacy
                 Policy</a>.
         </p>
     </div>

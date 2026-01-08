@@ -16,9 +16,13 @@
             theme: {
                 extend: {
                     colors: {
-                        midnight: '#05070a',
-                        cyan: '#06b6d4',
-                        violet: '#7c3aed',
+                        midnight: '#020617',
+                        slate: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        primary: '#2563eb',
                     }
                 }
             }
@@ -49,55 +53,53 @@
     </style>
 </head>
 
-<body class="flex h-screen overflow-hidden bg-midnight">
+<body class="flex h-screen overflow-hidden bg-slate-950 text-slate-200">
 
     <!-- Sidebar (Desktop) -->
-    <aside class="hidden md:flex flex-col w-72 glass border-r border-white/5 z-30">
-        <div class="p-8 text-center md:text-left">
+    <aside class="hidden md:flex flex-col w-72 bg-slate-900 border-r border-white/5 z-30">
+        <div class="p-8">
             <div class="flex items-center gap-3 group cursor-pointer"
                 onclick="sessionStorage.clear(); window.location.href='/'">
                 <div
-                    class="w-12 h-12 rounded-2xl glass flex items-center justify-center relative overflow-hidden shrink-0">
+                    class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center relative overflow-hidden shrink-0 shadow-lg shadow-primary/20">
                     <img src="/vantage_logo.png" class="w-full h-full object-cover p-1.5"
                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                    <span style="display:none" class="text-2xl h-full w-full items-center justify-center">💎</span>
-                    <div class="absolute inset-0 bg-cyan-400/10 opacity-0 group-hover:opacity-100 transition-opacity">
-                    </div>
+                    <span style="display:none" class="text-xl h-full w-full items-center justify-center">V</span>
                 </div>
                 <div>
-                    <h1 class="font-heading font-bold text-2xl tracking-tight text-white">Vantage</h1>
-                    <p class="text-[10px] text-cyan-400 font-bold tracking-widest uppercase opacity-70">Commerce
-                        Intelligence</p>
+                    <h1 class="font-heading font-bold text-xl tracking-tight text-white">Vantage</h1>
+                    <p class="text-[9px] text-primary font-bold tracking-widest uppercase opacity-80">Intelligence
+                        Platform</p>
                 </div>
             </div>
         </div>
 
-        <nav class="flex-1 px-4 space-y-2 overflow-y-auto no-scrollbar">
-            <div class="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Navigation</div>
+        <nav class="flex-1 px-3 space-y-1 overflow-y-auto no-scrollbar">
+            <div class="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">Main Menu
+            </div>
             <a href="/" class="sidebar-link active">
-                <i class="fas fa-th-large w-5"></i>
+                <i class="fas fa-grid-2 w-5 text-sm"></i>
                 <span>Dashboard</span>
             </a>
             <a href="/scanner" id="sidebarScannerLink" class="sidebar-link hidden">
-                <i class="fas fa-radar w-5"></i>
-                <span>Scanners</span>
-                <span class="ml-auto text-[10px] glass px-2 py-0.5 rounded-full text-cyan-400 font-bold">V4</span>
+                <i class="fas fa-sync-alt w-5 text-sm"></i>
+                <span>Sync Center</span>
             </a>
-            <!-- Shops Library Disabled -->
 
-            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">System</div>
+            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">
+                Configuration</div>
             <a href="/admin" class="sidebar-link">
-                <i class="fas fa-terminal w-5"></i>
+                <i class="fas fa-shield-alt w-5 text-sm"></i>
                 <span>Terminal</span>
             </a>
             <a href="/settings" class="sidebar-link">
-                <i class="fas fa-cog w-5"></i>
+                <i class="fas fa-sliders-h w-5 text-sm"></i>
                 <span>Settings</span>
             </a>
         </nav>
 
-        <div class="p-6 border-t border-white/5">
-            <div class="glass-card p-4 flex items-center gap-3">
+        <div class="p-4 border-t border-white/5">
+            <div class="bg-slate-800/50 rounded-2xl p-3 flex items-center gap-3 border border-white/5">
                 <div
                     class="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center overflow-hidden shrink-0">
                     <img id="userAvatar" src="" class="w-full h-full object-cover"
@@ -112,28 +114,31 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col relative overflow-hidden">
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-950">
         <!-- Dashboard Header -->
-        <header class="glass h-20 flex items-center justify-between px-8 border-b border-white/5 sticky top-0 z-20">
-            <div class="flex items-center gap-6 flex-1">
-                <h2 class="font-heading font-bold text-xl text-white whitespace-nowrap hidden sm:block">Insights
-                    Dashboard</h2>
+        <header
+            class="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md sticky top-0 z-20">
+            <div class="flex items-center gap-8 flex-1">
+                <h2 class="font-heading font-bold text-lg text-white whitespace-nowrap hidden lg:block">Market Insights
+                </h2>
 
-                <div class="relative flex-1 max-w-xl">
-                    <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-                    <input type="text" id="globalSearch" placeholder="Search products, brands, or IDs..."
-                        class="w-full bg-black/20 border border-white/5 rounded-2xl py-2.5 pl-11 pr-4 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-slate-600"
+                <div class="relative flex-1 max-w-xl group">
+                    <i
+                        class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-focus-within:text-primary"></i>
+                    <input type="text" id="globalSearch" placeholder="Search by SKU, Brand, or Keyword..."
+                        class="w-full bg-slate-950/50 border border-white/5 rounded-xl py-2 pl-11 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 transition-all placeholder:text-slate-600 shadow-inner"
                         onkeyup="searchProducts(this.value)">
                 </div>
             </div>
 
             <div class="flex items-center gap-4">
-                <a href="/scanner" class="btn-premium py-2 px-5 text-sm hidden sm:flex">
-                    <i class="fas fa-gem mr-2"></i>
-                    <span>Sync Products</span>
+                <a href="/scanner" class="btn-premium py-2 px-4 text-xs hidden sm:flex">
+                    <i class="fas fa-bolt text-[10px]"></i>
+                    <span>Sync Center</span>
                 </a>
                 <div class="md:hidden">
-                    <button onclick="toggleSidebar()" class="glass p-2 rounded-xl text-white">
+                    <button onclick="toggleSidebar()"
+                        class="bg-slate-900 p-2 rounded-lg text-white border border-white/5">
                         <i class="fas fa-bars"></i>
                     </button>
                 </div>
@@ -141,84 +146,78 @@
         </header>
 
         <!-- Dynamic Content -->
-        <div class="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar pb-32">
+        <div class="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar pb-32">
 
             <!-- Global Stats Ribbon -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
-                <div class="glass-card p-5 md:p-6 relative overflow-hidden group">
-                    <div
-                        class="absolute -right-4 -bottom-4 w-24 h-24 bg-cyan-500/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700">
-                    </div>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">Total Database
-                    </p>
-                    <div class="text-2xl md:text-3xl font-heading font-bold text-white flex items-center gap-2">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-8">
+                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl relative overflow-hidden group">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Total
+                        Intelligence</p>
+                    <div class="text-2xl font-heading font-bold text-white flex items-baseline gap-2">
                         <span id="statTotal">--</span>
-                        <span class="text-xs text-cyan-400 opacity-50 font-normal">SKUs</span>
+                        <span class="text-[10px] text-slate-500 font-normal uppercase tracking-tighter">SKUs</span>
                     </div>
                 </div>
-                <div class="glass-card p-5 md:p-6 relative overflow-hidden group">
-                    <div
-                        class="absolute -right-4 -bottom-4 w-24 h-24 bg-violet-500/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700">
-                    </div>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">Ad Winners</p>
-                    <div class="text-2xl md:text-3xl font-heading font-bold text-violet-400 flex items-center gap-2">
+                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl relative overflow-hidden group">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">High
+                        Performers</p>
+                    <div class="text-2xl font-heading font-bold text-primary flex items-baseline gap-2">
                         <span id="statAdWinners">--</span>
-                        <div class="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></div>
+                        <div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
                     </div>
                 </div>
-                <div class="glass-card p-5 md:p-6 relative overflow-hidden group">
-                    <div
-                        class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700">
-                    </div>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">Hidden Gems</p>
-                    <div class="text-2xl md:text-3xl font-heading font-bold text-emerald-400">
+                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl relative overflow-hidden group">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">
+                        Opportunity Gems</p>
+                    <div class="text-2xl font-heading font-bold text-emerald-500">
                         <span id="statGems">--</span>
                     </div>
                 </div>
-                <div class="glass-card p-5 md:p-6 relative overflow-hidden group">
-                    <div
-                        class="absolute -right-4 -bottom-4 w-24 h-24 bg-rose-500/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700">
-                    </div>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">System Status</p>
-                    <div
-                        class="text-2xl md:text-3xl font-heading font-bold text-rose-400 flex items-center gap-3 uppercase tracking-tighter">
-                        Active
-                        <div class="flex gap-1">
-                            <div class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-bounce"></div>
-                            <div class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-bounce"
-                                style="animation-delay: 0.2s"></div>
-                            <div class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-bounce"
-                                style="animation-delay: 0.4s"></div>
+                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl relative overflow-hidden group">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Real-time
+                        Uptime</p>
+                    <div class="text-2xl font-heading font-bold text-emerald-400 flex items-center gap-2">
+                        Operational
+                        <div class="flex gap-0.5">
+                            <span class="w-1 h-3 bg-emerald-500/30 rounded-full"></span>
+                            <span class="w-1 h-4 bg-emerald-500/50 rounded-full"></span>
+                            <span class="w-1 h-5 bg-emerald-500 rounded-full animate-bounce"></span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Main Control Panel -->
-            <div class="space-y-8">
-                <div class="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center">
-                    <div class="flex gap-1 p-1.5 glass rounded-2xl overflow-x-auto no-scrollbar w-full xl:w-auto">
-                        <button onclick="applyFilter('all', this)"
-                            class="filter-tab active-tab px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap">All
-                            Products</button>
-                        <button onclick="applyFilter('high_spend', this)"
-                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">💰
-                            High
-                            Ad Spend</button>
-                        <button onclick="applyFilter('gems', this)"
-                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">💎
-                            Opportunity
-                            Gems</button>
-                        <button onclick="applyFilter('favorites', this)"
-                            class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">⭐
-                            Watchlist</button>
-                    </div>
+            <!-- Filters & Controls -->
+            <div class="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center mb-8">
+                <!-- Filter Tabs -->
+                <div class="flex flex-wrap gap-2 w-full xl:w-auto">
+                    <button onclick="applyFilter('all', this)"
+                        class="filter-tab active-tab px-4 py-2 rounded-xl text-xs font-bold transition-all border border-transparent whitespace-nowrap bg-primary text-white shadow-lg shadow-primary/25">
+                        All Intelligence
+                    </button>
+                    <button onclick="applyFilter('high_spend', this)"
+                        class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
+                        <i class="fas fa-fire mr-1.5 text-orange-500"></i> High Ad Spend
+                    </button>
+                    <button onclick="applyFilter('gems', this)"
+                        class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
+                        <i class="fas fa-gem mr-1.5 text-emerald-500"></i> Opportunity Gems
+                    </button>
+                    <button onclick="applyFilter('favorites', this)"
+                        class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
+                        <i class="fas fa-star mr-1.5 text-amber-500"></i> Watchlist
+                    </button>
+                </div>
 
-                    <div class="flex gap-4 w-full xl:w-auto overflow-x-auto no-scrollbar pb-2 xl:pb-0">
+                <!-- Sort & Search -->
+                <div class="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+                    <div class="relative group w-full sm:w-64">
+                        <i
+                            class="fas fa-sort-amount-down absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-hover:text-primary"></i>
                         <select onchange="updateSort(this.value)"
-                            class="bg-black/40 border border-white/5 rounded-2xl px-5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer shrink-0">
-                            <option value="gem_score">Sort: 🎯 Opportunity Score</option>
-                            <option value="efficiency">Sort: 🚀 Opportunity ($/Vid)</option>
+                            class="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 appearance-none cursor-pointer transition-all hover:border-white/20 font-medium">
+                            <option value="gem_score">Sort: Opportunity Score</option>
+                            <option value="efficiency">Sort: Efficiency ($/Vid)</option>
                             <option value="sales_7d">Sort: 7D Volume</option>
                             <option value="video_count">Sort: Highest Videos</option>
                             <option value="vids_asc">Sort: Least Videos</option>
@@ -226,48 +225,50 @@
                             <option value="updated">Sort: Recently Scanned</option>
                             <option value="commission_rate">Sort: High Margin</option>
                         </select>
-
-                        <div class="relative shrink-0 w-48 md:w-64">
-                            <i class="fas fa-tag absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-                            <input type="text" placeholder="Filter Brand..."
-                                class="w-full bg-black/40 border border-white/5 rounded-2xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-slate-600"
-                                onkeyup="searchBrands(this.value)">
-                        </div>
+                        <i
+                            class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
                     </div>
-                </div>
 
-                <!-- Intelligence Grid -->
-                <div id="productGrid"
-                    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 md:gap-8">
-                    <!-- Loading Sequence -->
-                    <div class="col-span-full py-32 flex flex-col items-center justify-center space-y-6">
-                        <div class="w-16 h-16 relative">
-                            <div class="absolute inset-0 border-4 border-cyan-500/20 rounded-full"></div>
-                            <div
-                                class="absolute inset-0 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin">
-                            </div>
-                        </div>
-                        <p
-                            class="font-heading font-bold text-xl text-slate-400 tracking-widest uppercase animate-pulse">
-                            Loading Insights...</p>
+                    <div class="relative w-full sm:w-64 group">
+                        <i
+                            class="fas fa-tag absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-focus-within:text-primary"></i>
+                        <input type="text" placeholder="Filter by Brand..."
+                            class="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 transition-all placeholder:text-slate-600 shadow-inner"
+                            onkeyup="searchBrands(this.value)">
                     </div>
-                </div>
-
-                <!-- Navigation Controls -->
-                <div class="flex justify-center items-center gap-8 mt-12 py-12 border-t border-white/5">
-                    <button id="btnPrev" onclick="changePage(-1)"
-                        class="glass p-4 rounded-2xl text-slate-400 hover:text-cyan-400 disabled:opacity-20 transition-all group">
-                        <i class="fas fa-chevron-left group-hover:-translate-x-1 transition-transform"></i>
-                    </button>
-                    <div id="pageIndicator"
-                        class="font-heading font-bold text-white tracking-widest uppercase text-sm md:text-base">Page
-                        01</div>
-                    <button id="btnNext" onclick="changePage(1)"
-                        class="glass p-4 rounded-2xl text-slate-400 hover:text-cyan-400 disabled:opacity-20 transition-all group">
-                        <i class="fas fa-chevron-right group-hover:translate-x-1 transition-transform"></i>
-                    </button>
                 </div>
             </div>
+
+            <!-- Intelligence Grid -->
+            <div id="productGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 md:gap-8">
+                <!-- Loading Sequence -->
+                <div class="col-span-full py-32 flex flex-col items-center justify-center space-y-6">
+                    <div class="w-16 h-16 relative">
+                        <div class="absolute inset-0 border-4 border-cyan-500/20 rounded-full"></div>
+                        <div
+                            class="absolute inset-0 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin">
+                        </div>
+                    </div>
+                    <p class="font-heading font-bold text-xl text-slate-400 tracking-widest uppercase animate-pulse">
+                        Loading Insights...</p>
+                </div>
+            </div>
+
+            <!-- Navigation Controls -->
+            <div class="flex justify-center items-center gap-8 mt-12 py-12 border-t border-white/5">
+                <button id="btnPrev" onclick="changePage(-1)"
+                    class="glass p-4 rounded-2xl text-slate-400 hover:text-cyan-400 disabled:opacity-20 transition-all group">
+                    <i class="fas fa-chevron-left group-hover:-translate-x-1 transition-transform"></i>
+                </button>
+                <div id="pageIndicator"
+                    class="font-heading font-bold text-white tracking-widest uppercase text-sm md:text-base">Page
+                    01</div>
+                <button id="btnNext" onclick="changePage(1)"
+                    class="glass p-4 rounded-2xl text-slate-400 hover:text-cyan-400 disabled:opacity-20 transition-all group">
+                    <i class="fas fa-chevron-right group-hover:translate-x-1 transition-transform"></i>
+                </button>
+            </div>
+        </div>
         </div>
 
         <!-- Import Modal Overlay -->
@@ -511,13 +512,13 @@
                 grid.innerHTML = '';
 
                 if (products.length === 0) {
-                    grid.innerHTML = `<div class="col-span-full text-center text-slate-600 font-bold py-20 uppercase tracking-[0.2em] border-2 border-dashed border-white/5 rounded-3xl">Zero matching items in local databanks</div>`;
+                    grid.innerHTML = `<div class="col-span-full text-center text-slate-500 font-bold py-20 uppercase tracking-widest border border-dashed border-white/5 rounded-3xl bg-slate-900/50">Zero Intelligence Found</div>`;
                     return;
                 }
 
                 products.forEach(p => {
                     const card = document.createElement('div');
-                    card.className = 'glass-card group flex flex-col relative cursor-pointer overflow-hidden transform-gpu';
+                    card.className = 'bg-slate-900 border border-white/5 rounded-2xl group flex flex-col relative cursor-pointer overflow-hidden transition-all hover:border-white/10 hover:shadow-2xl shadow-black/50';
                     card.onclick = (e) => {
                         if (!e.target.closest('a') && !e.target.closest('button'))
                             window.location.href = `/product/${p.product_id}`;
@@ -527,41 +528,43 @@
                     const ttLink = p.product_url || `https://shop.tiktok.com/search/product?q=${encodeURIComponent(p.product_name)}`;
 
                     card.innerHTML = `
-                    <div class="relative aspect-square overflow-hidden bg-black/20 card-image-gradient">
-                        <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" loading="lazy" onerror="this.src='https://placehold.co/400x400/05070a/white?text=No+Data'">
+                    <div class="relative aspect-[4/3] overflow-hidden bg-slate-950">
+                        <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" loading="lazy" onerror="this.src='/vantage_logo.png'">
                         
                         <div class="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-                            ${p.gmv > 10000 ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-700 text-white shadow-lg">💰 High GMV</span>' : ''}
-                            ${p.is_favorite ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-700 text-white shadow-lg">⭐ Watchlist</span>' : ''}
-                            ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-700 text-white shadow-lg">💎 Untapped</span>' : ''}
+                            ${p.gmv > 10000 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-emerald-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">💰 High Volume</span>' : ''}
+                            ${p.is_favorite ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">⭐ Watchlist</span>' : ''}
+                            ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary/90 text-white shadow-lg backdrop-blur-md border border-white/10">💎 Opportunity</span>' : ''}
                         </div>
                         
-                        <div class="absolute inset-0 bg-violet-900/40 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center backdrop-blur-[2px] z-20">
-                            <a href="${ttLink}" target="_blank" class="glass w-12 h-12 flex items-center justify-center rounded-2xl text-white hover:bg-cyan-500 transition-all border-white/10 hover:border-cyan-400/50 transform translate-y-4 group-hover:translate-y-0 duration-500 no-underline" onclick="event.stopPropagation()">
-                                <i class="fab fa-tiktok text-xl"></i>
+                        <div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
+
+                        <div class="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
+                            <a href="${ttLink}" target="_blank" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white text-black hover:bg-primary hover:text-white transition-colors shadow-lg" onclick="event.stopPropagation()">
+                                <i class="fab fa-tiktok text-sm"></i>
                             </a>
                         </div>
                     </div>
                     
-                    <div class="p-4 md:p-5 flex-1 flex flex-col">
-                        <div class="flex items-center gap-2 mb-3">
-                            <span class="w-1.5 h-1.5 rounded-full ${p.seller_name && p.seller_name !== 'Unknown' ? 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'bg-slate-700'}"></span>
-                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[150px]">${p.seller_name || 'Classified'}</span>
+                    <div class="p-4 flex-1 flex flex-col pt-2">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-1.5 h-1.5 rounded-full ${p.seller_name && p.seller_name !== 'Unknown' ? 'bg-primary' : 'bg-slate-700'}"></div>
+                            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[150px]">${p.seller_name || 'Restricted Info'}</span>
                         </div>
-                        <h3 class="font-bold text-white text-sm line-clamp-2 min-h-[2.5rem] mb-5 leading-relaxed opacity-90 group-hover:opacity-100 transition-opacity font-heading">${p.product_name}</h3>
+                        <h3 class="font-bold text-slate-200 text-sm line-clamp-2 min-h-[2.5rem] mb-4 leading-snug group-hover:text-white transition-colors font-heading">${p.product_name}</h3>
                         
-                        <div class="mt-auto grid grid-cols-3 gap-2 md:gap-3">
-                            <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02] relative group/stat">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">7D Ad $</p>
-                                <p class="text-xs font-bold text-emerald-400 tracking-widest">$${((p.ad_spend || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                        <div class="mt-auto grid grid-cols-3 gap-2">
+                            <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">7D Sales</p>
+                                <p class="text-xs font-bold text-white tracking-wide">${((p.sales_7d || 0)).toLocaleString()}</p>
                             </div>
-                            <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Spend/Vid</p>
-                                <p class="text-xs font-bold ${p.ad_spend_per_video > 200 ? 'text-amber-400 animate-pulse' : 'text-cyan-400'} tracking-widest">$${Math.round(p.ad_spend_per_video || 0)}</p>
+                            <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Eff. Score</p>
+                                <p class="text-xs font-bold ${p.ad_spend_per_video > 200 ? 'text-emerald-400' : 'text-primary-light'} tracking-wide">$${Math.round(p.ad_spend_per_video || 0)}</p>
                             </div>
-                            <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Videos</p>
-                                <p class="text-xs font-bold ${p.video_count > 100 ? 'text-rose-400' : 'text-slate-400'} tracking-widest">${p.video_count || 0}</p>
+                            <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Videos</p>
+                                <p class="text-xs font-bold ${p.video_count > 100 ? 'text-slate-400' : 'text-white'} tracking-wide">${p.video_count || 0}</p>
                             </div>
                         </div>
                     </div>

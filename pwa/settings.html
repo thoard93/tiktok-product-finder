@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings | Gem Hunter</title>
+    <title>Settings | Vantage</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
@@ -16,9 +16,13 @@
             theme: {
                 extend: {
                     colors: {
-                        midnight: '#05070a',
-                        cyan: '#06b6d4',
-                        violet: '#7c3aed',
+                        midnight: '#020617',
+                        slate: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        primary: '#2563eb',
                     }
                 }
             }
@@ -56,20 +60,22 @@
     </style>
 </head>
 
-<body class="flex justify-center min-h-screen p-6 overflow-y-auto bg-[#05070a]">
+<body class="flex justify-center min-h-screen p-6 overflow-y-auto bg-slate-950 text-slate-200">
     <div class="settings-bg">
         <div class="glow-orb"></div>
     </div>
 
-    <div class="glass-card max-w-xl w-full p-8 md:p-12 relative animate-float mt-10 mb-10">
+    <div
+        class="bg-slate-900 border border-white/5 rounded-2xl max-w-xl w-full p-8 md:p-12 relative animate-float mt-10 mb-10 shadow-2xl">
 
         <div class="flex items-center gap-4 mb-10">
-            <div class="w-12 h-12 rounded-2xl glass flex items-center justify-center text-cyan-400">
+            <div
+                class="w-12 h-12 rounded-2xl bg-slate-900 border border-white/5 flex items-center justify-center text-primary">
                 <i class="fas fa-cog text-xl"></i>
             </div>
             <div>
                 <h1 class="text-3xl font-heading font-bold text-white tracking-tight">System Settings</h1>
-                <p class="text-slate-400 text-sm font-medium">Manage your Gem Hunter configuration</p>
+                <p class="text-slate-400 text-sm font-medium">Manage your Vantage configuration</p>
             </div>
         </div>
 

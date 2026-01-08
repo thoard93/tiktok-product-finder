@@ -2430,113 +2430,10 @@ def get_stats():
 
 
 # =============================================================================
-# PRODUCT LISTING API - Main Dashboard Endpoint
+# PRODUCT LISTING API - Main Dashboard Endpoint (Unified)
 # =============================================================================
-@app.route('/api/products', methods=['GET'])
-@login_required
-def list_products():
-    """
-    List products with filtering and pagination.
-    Used by dashboard_v4.html to display the product grid.
-    
-    Query Parameters:
-        page: Page number (1-indexed, default 1)
-        limit: Products per page (default 24)
-        sort_by: sales_7d, video_count, vids_asc, first_seen, updated, commission_rate
-        favorites_only: 'true' to show only watchlist items
-        gems_only: 'true' to show hidden gems (low video count)
-        high_ad_spend: 'true' to show only high ad spend products
-        max_videos: Max videos filter (for gems)
-        min_videos: Min videos filter
-        scan_type: Filter by scan type
-    """
-    try:
-        page = int(request.args.get('page', 1))
-        limit = min(int(request.args.get('limit', 24)), 100)  # Cap at 100
-        sort_by = request.args.get('sort_by', 'sales_7d')
-        
-        # Start with base query - Allow NULL status (migrated data)
-        query = Product.query.filter(db.or_(Product.product_status == None, Product.product_status != 'unavailable'))
-        
-        # Favorites filter
-        if request.args.get('favorites_only') == 'true':
-            query = query.filter(Product.is_favorite == True)
-        
-        # Hidden Gems filter (low video count = opportunity)
-        if request.args.get('gems_only') == 'true':
-            max_vids = int(request.args.get('max_videos', 30))
-            min_vids = int(request.args.get('min_videos', 1))
-            query = query.filter(Product.video_count <= max_vids)
-            query = query.filter(Product.video_count >= min_vids)
-        
-        # High Ad Spend filter - products with significant ad investment
-        if request.args.get('high_ad_spend') == 'true':
-            # For Copilot products, filter by GMV which correlates with ad spend
-            # Products with GMV > $1000 typically have significant ad spend
-            query = query.filter(Product.gmv > 1000)
-            query = query.filter(Product.scan_type == 'copilot')
+# Consolidated into /api/products definition below (api_products function)
 
-        # GLOBAL SEARCH (User Request)
-        search_query = request.args.get('search', '').strip()
-        if search_query:
-            search_term = f"%{search_query}%"
-            query = query.filter(
-                db.or_(
-                    Product.product_name.ilike(search_term),
-                    Product.seller_name.ilike(search_term),
-                    Product.product_id.ilike(search_term)
-                )
-            )
-        
-        # Scan type filter
-        scan_type = request.args.get('scan_type')
-        if scan_type:
-            scan_types = scan_type.split(',')
-            query = query.filter(Product.scan_type.in_(scan_types))
-        
-        # Sorting
-        if sort_by == 'sales_7d':
-            query = query.order_by(Product.sales_7d.desc().nullslast())
-        elif sort_by == 'video_count':
-            query = query.order_by(Product.video_count.desc().nullslast())
-        elif sort_by == 'vids_asc':
-            query = query.order_by(Product.video_count.asc().nullsfirst())
-        elif sort_by == 'first_seen':
-            query = query.order_by(Product.first_seen.desc().nullslast())
-        elif sort_by == 'updated':
-            query = query.order_by(Product.last_updated.desc().nullslast())
-        elif sort_by == 'commission_rate':
-            query = query.order_by(Product.commission_rate.desc().nullslast())
-        elif sort_by == 'gem_score':
-            # Efficiency Score: High Sales + Low Videos
-            # Use coalesce to handle NULLs in sales_7d and video_count
-            score = (func.coalesce(Product.sales_7d, 0) / (func.coalesce(Product.video_count, 0) + 1))
-            query = query.order_by(score.desc().nullslast())
-        else:
-            query = query.order_by(Product.sales_7d.desc().nullslast())
-        
-        # Get total count before pagination
-        total_count = query.count()
-        
-        # Pagination
-        offset = (page - 1) * limit
-        products = query.offset(offset).limit(limit).all()
-        
-        # Convert to dict
-        products_data = [p.to_dict() for p in products]
-        
-        return jsonify({
-            'success': True,
-            'products': products_data,
-            'count': total_count,
-            'page': page,
-            'limit': limit,
-            'total_pages': (total_count + limit - 1) // limit  # Ceiling division
-        })
-        
-    except Exception as e:
-        print(f"[API/Products] Error: {e}")
-        return jsonify({'success': False, 'error': str(e), 'products': [], 'count': 0})
 
 
 @app.route('/api/refresh-images', methods=['POST', 'GET'])
@@ -4172,13 +4069,13 @@ def api_products():
         max_inf = request.args.get('max_inf', type=int)
         min_inf = request.args.get('min_inf', type=int)
         
-        # Default to 2 videos unless searching specifically for lower (e.g. for debugging)
+        # Default to 2 videos unless searching specifically for lower
         min_vids = request.args.get('min_vids', 2, type=int)
-        
         max_vids = request.args.get('max_vids', type=int)
+        
         scan_type = request.args.get('scan_type')
         seller_id = request.args.get('seller_id')
-        keyword = request.args.get('keyword')
+        keyword = request.args.get('keyword') or request.args.get('search')
         
         # Favorite alias
         is_favorite = (request.args.get('favorite', 'false').lower() == 'true' or 
@@ -4186,9 +4083,13 @@ def api_products():
 
         # Gems alias
         is_gems = request.args.get('gems_only', 'false').lower() == 'true'
+        
+        # High Ad Spend alias
+        is_high_ad = request.args.get('high_ad_spend', 'false').lower() == 'true'
 
         # 2. Build Query
-        query = Product.query
+        # Base filter: Exclude unavailable products
+        query = Product.query.filter(or_(Product.product_status == None, Product.product_status != 'unavailable'))
 
         if is_favorite:
             query = query.filter(Product.is_favorite == True)
@@ -4201,6 +4102,11 @@ def api_products():
                 Product.influencer_count >= 1,
                 Product.video_count >= 2
             )
+            
+        if is_high_ad:
+            # Products with GMV > $1000 typically have significant ad spend
+            query = query.filter(Product.gmv > 1000)
+            query = query.filter(Product.scan_type == 'copilot')
 
         if seller_id:
             query = query.filter(Product.seller_id == seller_id)
@@ -4211,16 +4117,13 @@ def api_products():
                 query = query.filter(Product.scan_type.in_(types))
             else:
                 query = query.filter(Product.scan_type == scan_type)
-        else:
-             # Default view: Include EVERYTHING. 
-             # We previously excluded automated scans to avoid "clutter", 
-             # but users want to see the newest items everywhere.
-             pass
 
         if keyword:
+            keyword_term = f"%{keyword}%"
             query = query.filter(db.or_(
-                Product.product_name.ilike(f'%{keyword}%'),
-                Product.seller_name.ilike(f'%{keyword}%')
+                Product.product_name.ilike(keyword_term),
+                Product.seller_name.ilike(keyword_term),
+                Product.product_id.ilike(keyword_term)
             ))
 
         if min_sales is not None:
@@ -4240,26 +4143,29 @@ def api_products():
 
         # 3. Apply Sorting
         if sort_by in ['sales_desc', 'sales_7d']:
-            # Secondary sort by total sales and date to prevent random shifting on ties
-            query = query.order_by(Product.sales_7d.desc(), Product.sales.desc(), Product.last_updated.desc())
+            query = query.order_by(Product.sales_7d.desc().nullslast(), Product.sales.desc().nullslast())
         elif sort_by == 'sales_asc':
-            query = query.order_by(Product.sales_7d.asc())
+            query = query.order_by(Product.sales_7d.asc().nullsfirst())
         elif sort_by == 'inf_asc':
-            query = query.order_by(Product.influencer_count.asc())
+            query = query.order_by(Product.influencer_count.asc().nullsfirst())
         elif sort_by in ['inf_desc', 'influencer_count']:
-            query = query.order_by(Product.influencer_count.desc())
+            query = query.order_by(Product.influencer_count.desc().nullslast())
         elif sort_by in ['commission', 'commission_rate']:
-            query = query.order_by(Product.commission_rate.desc())
+            query = query.order_by(Product.commission_rate.desc().nullslast())
         elif sort_by in ['newest', 'first_seen']:
-            query = query.order_by(Product.first_seen.desc(), Product.last_updated.desc())
+            query = query.order_by(Product.first_seen.desc().nullslast(), Product.last_updated.desc().nullslast())
         elif sort_by in ['updated', 'last_updated']:
-            query = query.order_by(Product.last_updated.desc())
+            query = query.order_by(Product.last_updated.desc().nullslast())
         elif sort_by == 'video_count':
-            query = query.order_by(Product.video_count.desc())
+            query = query.order_by(Product.video_count.desc().nullslast())
         elif sort_by in ['vids_asc', 'video_asc']:
-            query = query.order_by(Product.video_count.asc())
+            query = query.order_by(Product.video_count.asc().nullsfirst())
+        elif sort_by in ['gem_score', 'efficiency']:
+            # Efficiency Score: High Sales + Low Videos
+            score = (func.coalesce(Product.sales_7d, 0) / (func.coalesce(Product.video_count, 0) + 1))
+            query = query.order_by(score.desc().nullslast())
         else:
-            query = query.order_by(Product.first_seen.desc(), Product.last_updated.desc())
+            query = query.order_by(Product.first_seen.desc().nullslast())
 
         # 4. Pagination & Execution
         total = query.count()
@@ -4271,12 +4177,14 @@ def api_products():
             'count': total, # Compatibility
             'page': page,
             'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page,
             'products': [p.to_dict() for p in products]
         })
 
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 
 # =============================================================================

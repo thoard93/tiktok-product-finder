@@ -16,9 +16,13 @@
             theme: {
                 extend: {
                     colors: {
-                        midnight: '#05070a',
-                        cyan: '#06b6d4',
-                        violet: '#7c3aed',
+                        midnight: '#020617',
+                        slate: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        primary: '#2563eb',
                     }
                 }
             }
@@ -56,25 +60,27 @@
     </style>
 </head>
 
-<body class="bg-midnight min-h-screen text-white overflow-x-hidden pb-32">
+<body class="bg-slate-950 min-h-screen text-slate-200 overflow-x-hidden pb-32">
 
     <!-- Top Nav -->
-    <nav class="glass px-6 h-20 flex justify-between items-center sticky top-0 z-50 border-b border-white/5">
+    <nav
+        class="bg-slate-900/50 backdrop-blur-md px-6 h-16 flex justify-between items-center sticky top-0 z-50 border-b border-white/5">
         <div class="flex items-center gap-6">
             <a href="/"
-                class="flex items-center gap-3 glass py-2 px-4 rounded-xl group hover:border-cyan-400/50 transition-all border-white/5">
-                <i class="fas fa-chevron-left text-slate-500 group-hover:text-cyan-400"></i>
-                <span class="font-heading font-medium text-sm text-slate-300 group-hover:text-white">Back to
+                class="flex items-center gap-3 bg-slate-900 py-2 px-4 rounded-xl group hover:border-primary/50 transition-all border border-white/5">
+                <i class="fas fa-chevron-left text-slate-500 group-hover:text-primary"></i>
+                <span class="font-heading font-medium text-xs text-slate-300 group-hover:text-white">Back to
                     Dashboard</span>
             </a>
-            <div class="h-6 w-px bg-white/10 hidden md:block"></div>
-            <h1 class="font-heading font-bold text-xl text-white hidden md:block">Admin Console</h1>
+            <div class="h-4 w-px bg-white/10 hidden md:block"></div>
+            <h1 class="font-heading font-bold text-lg text-white hidden md:block">Admin Console</h1>
         </div>
 
         <div class="flex items-center gap-3">
-            <div id="statusIndicator" class="flex items-center gap-2 glass px-4 py-2 rounded-xl border-white/5">
-                <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-                <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">System Active</span>
+            <div id="statusIndicator"
+                class="flex items-center gap-2 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span class="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">System Active</span>
             </div>
         </div>
     </nav>
@@ -83,24 +89,26 @@
 
         <!-- Stats Grid -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="glass-card p-8 group transition-all hover:border-cyan-400/30">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Authenticated Users</p>
-                <div class="text-3xl font-heading font-bold text-white flex items-center gap-3">
+            <div
+                class="bg-slate-900 border border-white/5 rounded-2xl p-6 group transition-all hover:border-primary/30">
+                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Authenticated Users</p>
+                <div class="text-2xl font-heading font-bold text-white flex items-center gap-3">
                     <span id="statUsers">--</span>
-                    <i class="fas fa-users text-sm text-cyan-400 opacity-50"></i>
+                    <i class="fas fa-users text-xs text-primary opacity-50"></i>
                 </div>
             </div>
-            <div class="glass-card p-8 group transition-all hover:border-violet-400/30">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Total Database SKUs</p>
-                <div class="text-3xl font-heading font-bold text-cyan-400 flex items-center gap-3">
+            <div
+                class="bg-slate-900 border border-white/5 rounded-2xl p-6 group transition-all hover:border-violet-500/30">
+                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total Database SKUs</p>
+                <div class="text-2xl font-heading font-bold text-white flex items-center gap-3">
                     <span id="statProducts">--</span>
-                    <i class="fas fa-database text-sm opacity-50"></i>
+                    <i class="fas fa-database text-xs text-violet-500 opacity-50"></i>
                 </div>
             </div>
-            <div class="glass-card p-8 border-t-4 border-t-emerald-500/50">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Platform Version</p>
-                <div class="text-3xl font-heading font-bold text-emerald-400 flex items-center gap-3">
-                    V4.0.2
+            <div class="bg-slate-900 border border-white/5 rounded-2xl p-6 border-t-4 border-t-emerald-500">
+                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Platform Version</p>
+                <div class="text-2xl font-heading font-bold text-emerald-400 flex items-center gap-3">
+                    V4.1.0
                     <div class="flex gap-1">
                         <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                     </div>
@@ -110,13 +118,14 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <!-- Left: User Registry -->
-            <div class="lg:col-span-12 glass border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative">
-                <div class="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                    <h2 class="font-heading font-bold text-lg flex items-center gap-3">
-                        <i class="fas fa-id-badge text-violet-400"></i>
+            <div
+                class="lg:col-span-12 bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg relative">
+                <div class="p-5 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+                    <h2 class="font-heading font-bold text-sm flex items-center gap-3 text-white">
+                        <i class="fas fa-id-badge text-violet-500"></i>
                         Authorized Users
                     </h2>
-                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Registry Sync:
+                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Registry Sync:
                         Active</span>
                 </div>
                 <div class="overflow-x-auto no-scrollbar">
@@ -132,7 +141,7 @@
                         <tbody id="userTable">
                             <tr>
                                 <td colspan="4"
-                                    class="py-12 text-center text-slate-600 font-bold uppercase tracking-[0.2em]">
+                                    class="py-12 text-center text-slate-600 font-bold uppercase tracking-widest text-xs">
                                     Synchronizing Registry...</td>
                             </tr>
                         </tbody>
@@ -141,19 +150,20 @@
             </div>
 
             <!-- Full Width: System Mainframe Logs -->
-            <div class="lg:col-span-12 glass border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative">
-                <div class="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                    <h2 class="font-heading font-bold text-lg flex items-center gap-3">
-                        <i class="fas fa-terminal text-cyan-400"></i>
+            <div
+                class="lg:col-span-12 bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg relative">
+                <div class="p-5 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+                    <h2 class="font-heading font-bold text-sm flex items-center gap-3 text-white">
+                        <i class="fas fa-terminal text-primary"></i>
                         Activity Logs
                     </h2>
                     <button onclick="window.location.reload()"
-                        class="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Refresh
+                        class="text-[9px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Refresh
                         Logs</button>
                 </div>
                 <div class="overflow-x-auto max-h-[500px] no-scrollbar">
                     <table class="w-full admin-table border-collapse">
-                        <thead class="sticky top-0 glass z-10">
+                        <thead class="sticky top-0 bg-slate-900 z-10 shadow-sm">
                             <tr>
                                 <th>Timestamp</th>
                                 <th>Operator</th>
@@ -161,7 +171,7 @@
                                 <th>Parameters</th>
                             </tr>
                         </thead>
-                        <tbody id="logTableBody" class="font-mono text-[11px] text-slate-400 tabular-nums">
+                        <tbody id="logTableBody" class="font-mono text-[10px] text-slate-400 tabular-nums">
                             <tr>
                                 <td colspan="4" class="py-12 text-center text-slate-600">Connection active.
                                     Awaiting logs...</td>
@@ -173,33 +183,33 @@
         </div>
 
         <!-- System Controls -->
-        <div class="glass-card p-8 bg-gradient-to-br from-midnight to-black/40 border-white/10">
-            <h3 class="font-heading font-bold text-xl mb-8 flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                    <i class="fas fa-gem text-cyan-500 text-sm"></i>
+        <div class="bg-slate-900 border border-white/5 rounded-2xl p-8 shadow-lg">
+            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 text-white">
+                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-database text-primary text-xs"></i>
                 </div>
                 Database Controls
             </h3>
 
             <div class="flex flex-wrap gap-4 mb-8">
                 <button onclick="syncCopilot()" id="btnCopilot"
-                    class="glass px-6 py-3 rounded-2xl border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-500/10 text-emerald-400 flex items-center gap-3 transition-all">
-                    <i class="fas fa-gem text-xs"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Sync from Copilot</span>
+                    class="btn-premium px-6 py-3 shadow-lg shadow-primary/20">
+                    <i class="fas fa-bolt mr-2"></i>
+                    Execute Sync
                 </button>
 
                 <button onclick="runCleanup()"
-                    class="glass px-6 py-3 rounded-2xl border-amber-500/30 hover:border-amber-400 text-amber-400 flex items-center gap-3 transition-all">
+                    class="bg-slate-950 border border-white/10 px-6 py-3 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-broom text-xs"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Optimize Database</span>
+                    <span>Optimize Database</span>
                 </button>
             </div>
 
-            <h3 class="font-heading font-bold text-xl mb-8 flex items-center gap-3 mt-12">
+            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
                 <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                    <i class="fas fa-robot text-violet-500 text-sm"></i>
+                    <i class="fas fa-robot text-violet-500 text-xs"></i>
                 </div>
-                Vantage AI Config
+                AI Configuration
             </h3>
 
             <div class="space-y-6 max-w-2xl">
@@ -208,21 +218,23 @@
                         API Key</label>
                     <div class="flex gap-4">
                         <input type="password" id="anthropicKeyInput" placeholder="sk-ant-..."
-                            class="glass-card flex-1 bg-black/20 border-white/5 px-4 py-3 text-sm font-mono text-cyan-400 focus:border-cyan-400/50 outline-none transition-all">
+                            class="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-cyan-400 focus:border-cyan-400/50 outline-none transition-all">
                         <button onclick="saveAnthropicKey()"
-                            class="glass px-8 py-3 rounded-2xl border-cyan-500/30 hover:bg-cyan-500 hover:text-white text-cyan-400 text-xs font-bold uppercase tracking-widest transition-all">
+                            class="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-violet-500/20">
                             Save Key
                         </button>
                     </div>
                 </div>
             </div>
 
-            <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4 mt-12">Danger Zone</h4>
+            <h4
+                class="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4 mt-12 border-t border-white/5 pt-8">
+                Danger Zone</h4>
             <div class="flex flex-wrap gap-4">
                 <button onclick="nukeProducts()"
-                    class="glass px-6 py-3 rounded-2xl border-rose-500/30 hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group">
+                    class="bg-rose-950/20 border border-rose-500/20 px-6 py-3 rounded-xl hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Safety Reset (Clear DB)</span>
+                    <span>System Reset</span>
                 </button>
             </div>
         </div>
