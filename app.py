@@ -149,7 +149,7 @@ def ai_chat():
                 "content-type": "application/json"
             },
             json={
-                "model": "claude-3-5-sonnet-20240620",
+                "model": "claude-3-sonnet-20240229",
                 "max_tokens": 1024,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": message}]
@@ -5031,6 +5031,10 @@ def init_database():
             ('stock_alert_sent', 'TIMESTAMP'),
             ('is_ad_driven', 'BOOLEAN DEFAULT FALSE'),
             ('product_url', 'VARCHAR(500)'),
+            ('ad_spend', 'FLOAT DEFAULT 0'),
+            ('ad_spend_total', 'FLOAT DEFAULT 0'),
+            ('gmv_growth', 'FLOAT DEFAULT 0'),
+            ('scan_type', 'VARCHAR(50) DEFAULT \'brand_hunter\''),
         ]
         
         added = []
@@ -5220,22 +5224,32 @@ def check_and_migrate_db():
             inspector = db.inspect(db.engine)
             if not inspector: return
             
-            # Check Products table
             if 'products' in inspector.get_tables():
                 columns = [c['name'] for c in inspector.get_columns('products')]
                 
-                if 'original_price' not in columns:
-                    print(">> MIGRATION: Adding 'original_price' column to products table...")
-                    try:
-                        if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
-                            db.session.execute(db.text('ALTER TABLE products ADD COLUMN original_price FLOAT DEFAULT 0'))
-                        else:
-                            db.session.execute(db.text('ALTER TABLE products ADD COLUMN IF NOT EXISTS original_price FLOAT DEFAULT 0'))
-                        db.session.commit()
-                        print(">> MIGRATION: Success!")
-                    except Exception as e:
-                        print(f"!! MIGRATION FAILED: {e}")
-                        db.session.rollback()
+                # List of columns to potentialy add
+                cols_to_check = [
+                    ('original_price', 'FLOAT DEFAULT 0'),
+                    ('ad_spend', 'FLOAT DEFAULT 0'),
+                    ('ad_spend_total', 'FLOAT DEFAULT 0'),
+                    ('gmv_growth', 'FLOAT DEFAULT 0'),
+                    ('scan_type', "VARCHAR(50) DEFAULT 'brand_hunter'")
+                ]
+
+                for col_name, col_def in cols_to_check:
+                    if col_name not in columns:
+                        print(f">> MIGRATION: Adding '{col_name}' column to products table...")
+                        try:
+                            # Postgres uses IF NOT EXISTS, SQLite does not support it in ADD COLUMN usually easily but we check first
+                            if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
+                                db.session.execute(db.text(f'ALTER TABLE products ADD COLUMN {col_name} {col_def.split(" ")[0]}'))
+                            else:
+                                db.session.execute(db.text(f'ALTER TABLE products ADD COLUMN IF NOT EXISTS {col_name} {col_def}'))
+                            db.session.commit()
+                            print(f">> MIGRATION: Added {col_name} Success!")
+                        except Exception as e:
+                            print(f"!! MIGRATION FAILED for {col_name}: {e}")
+                            db.session.rollback()
         except:
             pass
 
