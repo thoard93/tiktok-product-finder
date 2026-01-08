@@ -559,8 +559,8 @@
                                 <p class="text-xs font-bold text-white tracking-wide">${((p.sales_7d || 0)).toLocaleString()}</p>
                             </div>
                             <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Eff. Score</p>
-                                <p class="text-xs font-bold ${p.ad_spend_per_video > 200 ? 'text-emerald-400' : 'text-primary-light'} tracking-wide">$${Math.round(p.ad_spend_per_video || 0)}</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">7D Ad Spend</p>
+                                <p class="text-xs font-bold ${p.ad_spend > 5000 ? 'text-emerald-400' : 'text-primary-light'} tracking-wide">$${formatKMB(p.ad_spend || 0)}</p>
                             </div>
                             <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
                                 <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Videos</p>

@@ -149,7 +149,7 @@ def ai_chat():
                 "content-type": "application/json"
             },
             json={
-                "model": "claude-3-5-sonnet-20241022",
+                "model": "claude-3-5-sonnet-20240620",
                 "max_tokens": 1024,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": message}]
@@ -4140,18 +4140,23 @@ def api_products():
             query = query.filter(Product.is_favorite == True)
         
         if is_gems:
-            # Selling well, low competition, high signal (2+ videos)
+            # Opportunity Gems: High Sales, Low Competition
+            # Relaxed criteria to ensure results
             query = query.filter(
-                Product.sales_7d >= 20,
-                Product.influencer_count <= 30,
-                Product.influencer_count >= 1,
-                Product.video_count >= 2
+                Product.sales_7d >= 10,  # Was 20
+                Product.influencer_count <= 50, # Was 30
+                Product.video_count <= 20 # New cap to ensure "opportunity"
             )
             
         if is_high_ad:
-            # Products with GMV > $1000 typically have significant ad spend
-            query = query.filter(Product.gmv > 1000)
-            query = query.filter(Product.scan_type == 'copilot')
+            # High Ad Spend: High Volume & Copilot Scan
+            # This is distinct from Gems (which focuses on low saturation)
+            query = query.filter(
+                db.or_(
+                    Product.ad_spend > 500,
+                    Product.scan_type == 'copilot'
+                )
+            )
 
         if seller_id:
             query = query.filter(Product.seller_id == seller_id)
