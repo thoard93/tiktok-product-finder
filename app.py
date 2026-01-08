@@ -58,6 +58,10 @@ if WhiteNoise:
 
 executor = ThreadPoolExecutor(max_workers=4) # Global executor for background tasks
 
+@app.route('/vantage_logo.png')
+def serve_logo():
+    return send_from_directory('pwa', 'vantage_logo.png')
+
 # Force absolute path for SQLite to prevent subprocess mismatches
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'products.db')
