@@ -149,7 +149,7 @@ def ai_chat():
                 "content-type": "application/json"
             },
             json={
-                "model": "claude-3-sonnet-20240229",
+                "model": "claude-3-5-sonnet-20241022",
                 "max_tokens": 1024,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": message}]
@@ -167,6 +167,26 @@ def ai_chat():
         
     except Exception as e:
         print(f"[AI] Exception: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/fix-schema', methods=['GET'])
+def manual_fix_schema():
+    """Force add columns directly via SQL"""
+    try:
+        with db.engine.connect() as conn:
+            from sqlalchemy import text
+            try:
+                conn.execute(text("ALTER TABLE products ADD COLUMN ad_spend FLOAT DEFAULT 0"))
+                conn.execute(text("ALTER TABLE products ADD COLUMN ad_spend_total FLOAT DEFAULT 0"))
+                conn.execute(text("ALTER TABLE products ADD COLUMN scan_type TEXT DEFAULT 'copilot'"))
+                conn.execute(text("ALTER TABLE products ADD COLUMN gmv_growth FLOAT DEFAULT 0"))
+                conn.commit()
+                msg = "Added columns successfully (some might have failed if existed)"
+            except Exception as e:
+                msg = f"Partial execution: {e}"
+                
+        return jsonify({"success": True, "message": msg})
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/debug-products')
