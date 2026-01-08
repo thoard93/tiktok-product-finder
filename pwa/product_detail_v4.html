@@ -169,10 +169,10 @@
                             </div>
                         </div>
 
-                        <!-- 3. Ad Spend -->
+                        <!-- 3. Total Ad Spend -->
                         <div class="glass-card p-5 group hover:border-amber-400/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Ad Spend
-                                Estimate</p>
+                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Total Ad
+                                Spend</p>
                             <p class="text-2xl font-bold text-amber-400 font-heading" id="statAdSpend">--</p>
                             <div class="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
                                 <div class="h-full bg-amber-500" style="width: 55%"></div>
@@ -315,8 +315,8 @@
             // Stats
             document.getElementById('statSales').textContent = (data.sales || 0).toLocaleString();
 
-            // Ad Spend
-            document.getElementById('statAdSpend').textContent = (data.gmv > 0) ? ('$' + Math.round(data.gmv).toLocaleString()) : 'N/A';
+            // Total Ad Spend
+            document.getElementById('statAdSpend').textContent = (data.ad_spend_total > 0) ? ('$' + Math.round(data.ad_spend_total).toLocaleString()) : 'N/A';
 
             // Rating
             if (data.product_rating > 0) {

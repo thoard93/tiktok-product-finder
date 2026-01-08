@@ -650,7 +650,8 @@ class Product(db.Model):
     
     scan_type = db.Column(db.String(50), default='brand_hunter', index=True)
     is_ad_driven = db.Column(db.Boolean, default=False) # Track if found via ad scan
-    ad_spend = db.Column(db.Float, default=0) # New Ad Spend Column
+    ad_spend = db.Column(db.Float, default=0)  # 7D Ad Spend
+    ad_spend_total = db.Column(db.Float, default=0)  # Lifetime/Total Ad Spend
     
     # Composite indexes for common query patterns
     __table_args__ = (
@@ -704,7 +705,8 @@ class Product(db.Model):
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None,
-            'ad_spend': self.ad_spend,
+            'ad_spend': self.ad_spend,  # 7D Ad Spend
+            'ad_spend_total': self.ad_spend_total,  # Total Ad Spend
         }
 
 # =============================================================================
@@ -7382,16 +7384,18 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 product_id = f"shop_{product_id}"
             
             # Calculate stats
-            ad_spend = float(v.get('periodAdSpend') or 0)
+            # Extract Ad Spend (7D and Total)
+            ad_spend_7d = float(v.get('periodAdSpend') or 0)
+            ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or v.get('adSpend') or 0)
+            
             video_count = int(v.get('productVideoCount') or 0)
             creator_count = int(v.get('productCreatorCount') or 0)
             
-            # [NEW] Extract Sales for Filtering
+            # Extract Sales for Filtering
             sales_7d = int(v.get('periodUnits') or v.get('units') or 0)
             total_sales = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or v.get('product_total_sales') or v.get('total_sales') or 0)
 
             # FILTER: Quality Control (Video Count Only)
-            # Sales filters removed - Copilot API returns 0 for most products
             filter_reason = None
             if video_count < 5: filter_reason = f"Low Videos ({video_count})"
 
@@ -7413,7 +7417,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 if not (existing_check and existing_check.is_favorite):
                     continue
             
-            winner_score = calculate_winner_score(ad_spend, video_count, creator_count)
+            winner_score = calculate_winner_score(ad_spend_7d, video_count, creator_count)
             
             # Save or Update Product
             existing = Product.query.get(product_id)
@@ -7433,8 +7437,9 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 gmv_val = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
                 if gmv_val > 0: existing.gmv = gmv_val
                 
-                # Update Ad Spend
-                if ad_spend > 0: existing.ad_spend = ad_spend
+                # Update Ad Spend (7D and Total)
+                if ad_spend_7d > 0: existing.ad_spend = ad_spend_7d
+                if ad_spend_total > 0: existing.ad_spend_total = ad_spend_total
                 
                 if sales_7d > 0: 
                     existing.sales_7d = sales_7d
@@ -7681,6 +7686,10 @@ def ensure_schema_integrity():
                 if 'ad_spend' not in columns:
                      print("[SCHEMA] Adding missing column: ad_spend")
                      conn.execute(text("ALTER TABLE products ADD COLUMN ad_spend FLOAT DEFAULT 0"))
+
+                if 'ad_spend_total' not in columns:
+                     print("[SCHEMA] Adding missing column: ad_spend_total")
+                     conn.execute(text("ALTER TABLE products ADD COLUMN ad_spend_total FLOAT DEFAULT 0"))
 
                 conn.commit()
             print("[SCHEMA] Integrity Check Complete.")

@@ -484,8 +484,8 @@
                         
                         <div class="mt-auto grid grid-cols-3 gap-2 md:gap-3">
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">7D Sales</p>
-                                <p class="text-xs font-bold text-white tracking-widest">${(p.sales_7d || 0).toLocaleString()}</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">7D Ad $</p>
+                                <p class="text-xs font-bold text-emerald-400 tracking-widest">$${((p.ad_spend || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                             </div>
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
                                 <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Videos</p>
