@@ -1,5 +1,5 @@
 """
-Gem Hunter - TikTok Shop Intelligence Platform
+Vantage - TikTok Shop Intelligence Platform
 Powered by TikTokCopilot API for real-time trending product data
 
 Features:
@@ -89,6 +89,81 @@ def get_scan_status():
     return SCAN_LOCK
 
 
+
+def get_anthropic_key():
+    return get_config_value('ANTHROPIC_API_KEY') or os.environ.get('ANTHROPIC_API_KEY')
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    """Vantage AI Chatbot - Claude-powered TikTok Shop Expert"""
+    try:
+        api_key = get_anthropic_key()
+        if not api_key:
+            return jsonify({"success": False, "error": "Anthropic API Key not configured. Please set it in Admin or Environment."}), 500
+            
+        data = request.json
+        message = data.get('message', '')
+        if not message:
+            return jsonify({"success": False, "error": "No message provided"}), 400
+            
+        # Context: Get top 50 products by Ad Spend as a proxy for "interesting" data
+        products = Product.query.filter(Product.ad_spend > 0).order_by(Product.ad_spend.desc()).limit(50).all()
+        
+        # Format context for Claude
+        product_list = []
+        for p in products:
+            product_list.append({
+                "name": p.product_name,
+                "ad_spend": p.ad_spend,
+                "videos": p.video_count,
+                "efficiency": (p.ad_spend / p.video_count) if (p.video_count and p.video_count > 0) else 0,
+                "gmv": p.gmv,
+                "roas": (p.gmv / p.ad_spend) if (p.ad_spend and p.ad_spend > 0) else 0,
+                "seller": p.seller_name
+            })
+            
+        system_prompt = f"""You are 'Vantage AI', the core intelligence of the Vantage platform.
+        You are a world-class TikTok Shop marketing expert.
+        
+        GOAL: Help the user find 'Gems' (products with high ad spend but few videos).
+        
+        USER DATABASE CONTEXT (Top Products):
+        {json.dumps(product_list, default=str)}
+        
+        INSTRUCTIONS:
+        1. Be professional, concise, and helpful.
+        2. If asked for 'gems', identify products with high 'efficiency' (Ad Spend / Videos).
+        3. Explain WHY a product is a good gem (e.g. "Brand X is spending $20k with only 40 videos").
+        4. Refer to the platform as 'Vantage'.
+        """
+        
+        anthropic_res = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            },
+            json={
+                "model": "claude-3-5-sonnet-20241022",
+                "max_tokens": 1024,
+                "system": system_prompt,
+                "messages": [{"role": "user", "content": message}]
+            },
+            timeout=30
+        )
+        
+        if anthropic_res.status_code != 200:
+            return jsonify({"success": False, "error": f"AI Error: {anthropic_res.text}"}), 500
+            
+        ai_data = anthropic_res.json()
+        ai_response = ai_data['content'][0]['text']
+        
+        return jsonify({"success": True, "response": ai_response})
+        
+    except Exception as e:
+        print(f"[AI] Exception: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/debug-products')
 def debug_products_dump():
@@ -458,6 +533,16 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     sv(p, 'video_count', int(v.get('productVideoCount') or gv(p, 'video_count', 0)))
     sv(p, 'influencer_count', int(v.get('productCreatorCount') or gv(p, 'influencer_count', 0)))
     
+    # Extract Ad Spend
+    ad_spend_7d = float(v.get('periodAdSpend') or 0)
+    ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or v.get('adSpend') or 0)
+    if ad_spend_7d > 0: sv(p, 'ad_spend', ad_spend_7d)
+    if ad_spend_total > 0: sv(p, 'ad_spend_total', ad_spend_total)
+    
+    # Extract Growth
+    growth_val = float(v.get('growthPercentage') or v.get('periodGrowth') or 0)
+    if growth_val != 0: sv(p, 'gmv_growth', growth_val)
+    
     # Dates
     sv(p, 'last_updated', datetime.utcnow())
     sv(p, 'is_enriched', True)
@@ -652,6 +737,7 @@ class Product(db.Model):
     is_ad_driven = db.Column(db.Boolean, default=False) # Track if found via ad scan
     ad_spend = db.Column(db.Float, default=0)  # 7D Ad Spend
     ad_spend_total = db.Column(db.Float, default=0)  # Lifetime/Total Ad Spend
+    gmv_growth = db.Column(db.Float, default=0)  # 7D GMV Growth Percentage
     
     # Composite indexes for common query patterns
     __table_args__ = (
@@ -707,6 +793,10 @@ class Product(db.Model):
             'last_updated': self.last_updated.isoformat() if self.last_updated else None,
             'ad_spend': self.ad_spend,  # 7D Ad Spend
             'ad_spend_total': self.ad_spend_total,  # Total Ad Spend
+            'ad_spend_per_video': (self.ad_spend / self.video_count) if (self.video_count and self.video_count > 0) else 0,
+            'roas': (self.gmv / self.ad_spend) if (self.ad_spend and self.ad_spend > 0) else 0,
+            'est_profit': (self.gmv * self.commission_rate),
+            'gmv_growth': self.gmv_growth or 0,
         }
 
 # =============================================================================
@@ -7389,10 +7479,12 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             # Try multiple possible field names for total ad spend
             ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or v.get('adSpend') or v.get('productAdSpend') or v.get('allTimeAdSpend') or 0)
             
-            # DEBUG: Log all ad-spend related keys for first 3 products
-            if saved_count < 3:
-                ad_keys = {k: v.get(k) for k in v.keys() if 'ad' in k.lower() or 'spend' in k.lower()}
-                print(f"[DEBUG] Product {product_id} Ad-Spend Fields: {ad_keys}")
+            # DEBUG: Log ALL data for products with ad spend to find the persistent total spend field
+            if ad_spend_7d > 0:
+                print(f"[SPEND_DEBUG] Product {product_id} has 7D Spend {ad_spend_7d}. Full keys: {list(v.keys())}")
+                # Log keys containing typical spend terms
+                interesting = {k: v.get(k) for k in v.keys() if any(x in k.lower() for x in ['ad', 'spend', 'revenue', 'gmv', 'total'])}
+                print(f"[SPEND_DEBUG] Interesting fields: {interesting}")
             
             video_count = int(v.get('productVideoCount') or 0)
             creator_count = int(v.get('productCreatorCount') or 0)
@@ -7442,6 +7534,10 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 
                 gmv_val = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
                 if gmv_val > 0: existing.gmv = gmv_val
+                
+                # Extract GMV Growth
+                growth_val = float(v.get('growthPercentage') or v.get('periodGrowth') or v.get('gmvGrowth') or 0)
+                if growth_val != 0: existing.gmv_growth = growth_val
                 
                 # Update Ad Spend (7D and Total)
                 if ad_spend_7d > 0: existing.ad_spend = ad_spend_7d
@@ -7557,20 +7653,30 @@ def copilot_test():
     else:
         return jsonify({'success': False, 'error': 'Failed to fetch data. Cookie may be expired.'})
 
-@app.route('/api/config/copilot-cookie', methods=['POST'])
+
+@app.route('/api/admin/config/<key>', methods=['GET'])
 @login_required
 @admin_required
-def save_copilot_cookie():
-    """Save TikTokCopilot cookie to database config"""
+def admin_get_config(key):
+    """Get a config value (masked if secret)"""
+    val = get_config_value(key)
+    if val and any(x in key.lower() for x in ['key', 'secret', 'token', 'cookie', 'password']):
+        return jsonify({'success': True, 'value': '••••••••••••••••'})
+    return jsonify({'success': True, 'value': val})
+
+@app.route('/api/admin/config/<key>', methods=['POST'])
+@login_required
+@admin_required
+def admin_set_config(key):
+    """Set a config value"""
     data = request.get_json() or {}
-    cookie = data.get('cookie', '')
+    val = data.get('value', '')
+    if not val:
+        return jsonify({'success': False, 'error': 'Value is required'}), 400
     
-    if not cookie:
-        return jsonify({'success': False, 'error': 'Cookie is required'})
-    
-    set_config_value('TIKTOK_COPILOT_COOKIE', cookie, 'TikTokCopilot session cookie for API access')
-    
-    return jsonify({'success': True, 'message': 'Copilot cookie saved!'})
+    set_config_value(key, val, f'System config: {key}')
+    log_activity(session.get('user_id'), 'config_update', {'key': key})
+    return jsonify({'success': True, 'message': f'Config {key} updated!'})
 
 @app.route('/api/debug/force-refresh-stale')
 @login_required
@@ -7696,6 +7802,10 @@ def ensure_schema_integrity():
                 if 'ad_spend_total' not in columns:
                      print("[SCHEMA] Adding missing column: ad_spend_total")
                      conn.execute(text("ALTER TABLE products ADD COLUMN ad_spend_total FLOAT DEFAULT 0"))
+
+                if 'gmv_growth' not in columns:
+                     print("[SCHEMA] Adding missing column: gmv_growth")
+                     conn.execute(text("ALTER TABLE products ADD COLUMN gmv_growth FLOAT DEFAULT 0"))
 
                 conn.commit()
             print("[SCHEMA] Integrity Check Complete.")

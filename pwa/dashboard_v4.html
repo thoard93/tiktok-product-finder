@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gem Hunter | TikTok Shop Intelligence</title>
+    <title>Vantage | TikTok Shop Intelligence</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
@@ -65,9 +65,9 @@
                     </div>
                 </div>
                 <div>
-                    <h1 class="font-heading font-bold text-2xl tracking-tight text-white">Gem Hunter</h1>
-                    <p class="text-[10px] text-cyan-400 font-bold tracking-widest uppercase opacity-70">TikTok Shop
-                        Intel</p>
+                    <h1 class="font-heading font-bold text-2xl tracking-tight text-white">Vantage</h1>
+                    <p class="text-[10px] text-cyan-400 font-bold tracking-widest uppercase opacity-70">Commerce
+                        Intelligence</p>
                 </div>
             </div>
         </div>
@@ -119,8 +119,8 @@
         <!-- Dashboard Header -->
         <header class="glass h-20 flex items-center justify-between px-8 border-b border-white/5 sticky top-0 z-20">
             <div class="flex items-center gap-6 flex-1">
-                <h2 class="font-heading font-bold text-xl text-white whitespace-nowrap hidden sm:block">Intelligence
-                    Control</h2>
+                <h2 class="font-heading font-bold text-xl text-white whitespace-nowrap hidden sm:block">Insights
+                    Dashboard</h2>
 
                 <div class="relative flex-1 max-w-xl">
                     <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
@@ -152,7 +152,7 @@
                     <div
                         class="absolute -right-4 -bottom-4 w-24 h-24 bg-cyan-500/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700">
                     </div>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">Total Intelligence
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">Total Database
                     </p>
                     <div class="text-2xl md:text-3xl font-heading font-bold text-white flex items-center gap-2">
                         <span id="statTotal">--</span>
@@ -182,7 +182,7 @@
                     <div
                         class="absolute -right-4 -bottom-4 w-24 h-24 bg-rose-500/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700">
                     </div>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">Operation Mode</p>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">System Status</p>
                     <div
                         class="text-2xl md:text-3xl font-heading font-bold text-rose-400 flex items-center gap-3 uppercase tracking-tighter">
                         Active
@@ -210,7 +210,7 @@
                             Ad Spend</button>
                         <button onclick="applyFilter('gems', this)"
                             class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">💎
-                            Hidden
+                            Opportunity
                             Gems</button>
                         <button onclick="applyFilter('favorites', this)"
                             class="filter-tab px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-white transition-all whitespace-nowrap">⭐
@@ -220,7 +220,8 @@
                     <div class="flex gap-4 w-full xl:w-auto overflow-x-auto no-scrollbar pb-2 xl:pb-0">
                         <select onchange="updateSort(this.value)"
                             class="bg-black/40 border border-white/5 rounded-2xl px-5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer shrink-0">
-                            <option value="gem_score">Sort: 💎 Gem Score (Smart)</option>
+                            <option value="gem_score">Sort: 🎯 Opportunity Score</option>
+                            <option value="efficiency">Sort: 🚀 Opportunity ($/Vid)</option>
                             <option value="sales_7d">Sort: 7D Volume</option>
                             <option value="video_count">Sort: Highest Videos</option>
                             <option value="vids_asc">Sort: Least Videos</option>
@@ -251,7 +252,7 @@
                         </div>
                         <p
                             class="font-heading font-bold text-xl text-slate-400 tracking-widest uppercase animate-pulse">
-                            Establishing Uplink...</p>
+                            Loading Insights...</p>
                     </div>
                 </div>
 
@@ -262,7 +263,7 @@
                         <i class="fas fa-chevron-left group-hover:-translate-x-1 transition-transform"></i>
                     </button>
                     <div id="pageIndicator"
-                        class="font-heading font-bold text-white tracking-widest uppercase text-sm md:text-base">Sector
+                        class="font-heading font-bold text-white tracking-widest uppercase text-sm md:text-base">Page
                         01</div>
                     <button id="btnNext" onclick="changePage(1)"
                         class="glass p-4 rounded-2xl text-slate-400 hover:text-cyan-400 disabled:opacity-20 transition-all group">
@@ -282,9 +283,9 @@
                     <i class="fas fa-times text-xl"></i>
                 </div>
 
-                <h3 class="font-heading font-bold text-2xl mb-2 text-white">Neural Import</h3>
-                <p class="text-slate-400 mb-8 text-sm">Paste a TikTok product link or SPU ID to integrate it into the
-                    collective intelligence.</p>
+                <h3 class="font-heading font-bold text-2xl mb-2 text-white">Manual Import</h3>
+                <p class="text-slate-400 mb-8 text-sm">Paste a TikTok product link or SPU ID to integrate it into your
+                    insights.</p>
 
                 <textarea id="importInput" class="input-premium w-full h-32 mb-6 font-mono text-sm leading-relaxed"
                     placeholder="https://shop.tiktok.com/pdp/..."></textarea>
@@ -306,7 +307,7 @@
                 <!-- Modal Header -->
                 <div class="flex items-center justify-between">
                     <div>
-                        <h3 class="font-heading font-bold text-3xl text-white">Batch Intelligence Recon</h3>
+                        <h3 class="font-heading font-bold text-3xl text-white">Batch Product Lookup</h3>
                         <p class="text-slate-500 text-sm mt-1">Mass preview stats for up to 50 TikTok URLs.</p>
                     </div>
                     <button onclick="document.getElementById('batchModal').classList.add('hidden')"
@@ -317,8 +318,9 @@
 
                 <!-- Input Area -->
                 <div class="glass-card p-6 border-white/5">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Target URL
-                        Vector (One per line)</label>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Product
+                        URLs
+                        (One per line)</label>
                     <textarea id="batchUrls" rows="6" class="input-premium w-full font-mono text-xs leading-relaxed"
                         placeholder="https://shop.tiktok.com/pdp/123...\nhttps://v.tiktok.com/t/ZTxxx/..."></textarea>
 
@@ -329,7 +331,7 @@
                     </div>
                 </div>
 
-                <!-- Terminal Results -->
+                <!-- System Results -->
                 <div class="glass-card flex-1 overflow-hidden border border-white/5 flex flex-col bg-black/40">
                     <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
                         <div class="flex gap-1.5">
@@ -337,15 +339,84 @@
                             <div class="w-2.5 h-2.5 rounded-full bg-amber-500/40"></div>
                             <div class="w-2.5 h-2.5 rounded-full bg-emerald-500/40"></div>
                         </div>
-                        <span class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">System Output
-                            Buffer</span>
+                        <span class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Processing
+                            Results</span>
                     </div>
                     <div id="batchTerminal"
                         class="flex-1 overflow-y-auto p-6 font-mono text-[11px] space-y-1.5 text-slate-400 no-scrollbar">
                         <div class="flex gap-4">
                             <span class="text-slate-600 font-bold">></span>
-                            <span>Awaiting target coordinates...</span>
+                            <span>Awaiting URLs...</span>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Chat Interface -->
+        <button onclick="toggleAIChat()"
+            class="fixed bottom-24 right-8 w-14 h-14 bg-cyan-600 rounded-full shadow-2xl flex items-center justify-center text-white z-50 hover:scale-110 active:scale-95 transition-all group">
+            <i class="fas fa-robot text-xl group-hover:rotate-12 transition-transform"></i>
+            <span class="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-midnight"></span>
+        </button>
+
+        <div id="aiChatOverlay"
+            class="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] hidden flex flex-col md:flex-row justify-end p-0 md:p-6"
+            onclick="toggleAIChat()">
+            <div class="w-full max-w-lg glass border-l md:border border-white/10 flex flex-col h-full animate-in slide-in-from-right duration-300"
+                onclick="event.stopPropagation()">
+                <div
+                    class="p-6 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-cyan-900/10 to-transparent">
+                    <div class="flex items-center gap-4">
+                        <div
+                            class="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 border border-cyan-500/20">
+                            <i class="fas fa-robot text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-heading font-bold text-lg text-white">Vantage AI</h3>
+                            <div class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <p class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Expert
+                                    Analyst Online</p>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="toggleAIChat()"
+                        class="glass w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 hover:text-white transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div id="chatMessages" class="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+                    <div class="flex gap-4">
+                        <div
+                            class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
+                            <i class="fas fa-robot text-xs"></i>
+                        </div>
+                        <div
+                            class="glass p-4 rounded-2xl rounded-tl-none text-sm text-slate-300 leading-relaxed max-w-[85%]">
+                            Hello! I'm **Vantage AI**. I've indexed your product database and I'm ready to help you find
+                            your next winner.
+                            <br><br>
+                            Try asking:
+                            <ul class="mt-2 space-y-1 list-disc list-inside opacity-70">
+                                <li>"Find me products with >$10k spend and few videos"</li>
+                                <li>"Which brands are scaling the hardest right now?"</li>
+                                <li>"Analyze the best ROAS items in my list"</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 border-t border-white/5 bg-black/40">
+                    <div class="relative group">
+                        <input type="text" id="chatInput" placeholder="Ask Vantage anything..."
+                            class="w-full bg-black/60 border border-white/10 rounded-2xl py-4 pl-6 pr-14 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-slate-600"
+                            onkeyup="if(event.key === 'Enter') sendChatMessage()">
+                        <button onclick="sendChatMessage()"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-cyan-600 rounded-xl text-white flex items-center justify-center hover:bg-cyan-500 transition-all shadow-lg active:scale-95 shadow-cyan-500/10">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -483,17 +554,17 @@
                         <h3 class="font-bold text-white text-sm line-clamp-2 min-h-[2.5rem] mb-5 leading-relaxed opacity-90 group-hover:opacity-100 transition-opacity font-heading">${p.product_name}</h3>
                         
                         <div class="mt-auto grid grid-cols-3 gap-2 md:gap-3">
-                            <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
+                            <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02] relative group/stat">
                                 <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">7D Ad $</p>
                                 <p class="text-xs font-bold text-emerald-400 tracking-widest">$${((p.ad_spend || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                             </div>
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Videos</p>
-                                <p class="text-xs font-bold ${p.video_count > 100 ? 'text-rose-400' : 'text-cyan-400'} tracking-widest">${p.video_count || 0}</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Spend/Vid</p>
+                                <p class="text-xs font-bold ${p.ad_spend_per_video > 200 ? 'text-amber-400 animate-pulse' : 'text-cyan-400'} tracking-widest">$${Math.round(p.ad_spend_per_video || 0)}</p>
                             </div>
                             <div class="glass p-2 rounded-xl border-white/5 bg-white/[0.02]">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Commission</p>
-                                <p class="text-xs font-bold text-violet-400 tracking-widest">${Math.round((p.commission_rate || 0) * 100)}%</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-tighter">Videos</p>
+                                <p class="text-xs font-bold ${p.video_count > 100 ? 'text-rose-400' : 'text-slate-400'} tracking-widest">${p.video_count || 0}</p>
                             </div>
                         </div>
                     </div>
@@ -693,6 +764,82 @@
                     console.error('Purge error:', err);
                     showToast('API Error during purge', 'error');
                 }
+            }
+
+            // --- AI CHAT SYSTEM ---
+            function toggleAIChat() {
+                const overlay = document.getElementById('aiChatOverlay');
+                overlay.classList.toggle('hidden');
+                if (!overlay.classList.contains('hidden')) {
+                    document.getElementById('chatInput').focus();
+                }
+            }
+
+            async function sendChatMessage() {
+                const input = document.getElementById('chatInput');
+                const message = input.value.trim();
+                if (!message) return;
+
+                const container = document.getElementById('chatMessages');
+
+                // Add user message
+                const userDiv = document.createElement('div');
+                userDiv.className = 'flex justify-end';
+                userDiv.innerHTML = `
+                    <div class="bg-cyan-600/20 border border-cyan-500/20 p-4 rounded-2xl rounded-tr-none text-sm text-white max-w-[85%]">
+                        ${message}
+                    </div>
+                `;
+                container.appendChild(userDiv);
+
+                input.value = '';
+                container.scrollTop = container.scrollHeight;
+
+                // Typing indicator
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'aiTyping';
+                typingDiv.className = 'flex gap-4';
+                typingDiv.innerHTML = `
+                    <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
+                        <i class="fas fa-robot text-xs pulse"></i>
+                    </div>
+                    <div class="glass p-4 rounded-2xl rounded-tl-none text-sm text-slate-500 italic">
+                        Analyzing database...
+                    </div>
+                `;
+                container.appendChild(typingDiv);
+                container.scrollTop = container.scrollHeight;
+
+                try {
+                    const res = await fetch('/api/ai/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: message })
+                    });
+                    const data = await res.json();
+
+                    document.getElementById('aiTyping').remove();
+
+                    const aiDiv = document.createElement('div');
+                    aiDiv.className = 'flex gap-4 animate-in fade-in slide-in-from-left duration-300';
+                    aiDiv.innerHTML = `
+                        <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
+                            <i class="fas fa-robot text-xs"></i>
+                        </div>
+                        <div class="glass p-4 rounded-2xl rounded-tl-none text-sm text-slate-300 leading-relaxed max-w-[85%] prose prose-invert font-sans">
+                            ${(data.response || "I couldn't process that request.").replace(/\n/g, '<br>')}
+                        </div>
+                    `;
+                    container.appendChild(aiDiv);
+                } catch (e) {
+                    if (document.getElementById('aiTyping')) document.getElementById('aiTyping').remove();
+                    const errDiv = document.createElement('div');
+                    errDiv.className = 'text-center text-rose-400 text-xs py-2 uppercase font-bold';
+                    errDiv.textContent = 'Connection Error: Unable to reach Vantage AI';
+                    container.appendChild(errDiv);
+                }
+
+                container.scrollTop = container.scrollHeight;
             }
         </script>
 

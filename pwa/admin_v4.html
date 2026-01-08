@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard | Gem Hunter</title>
+    <title>Admin Console | Vantage</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
@@ -64,17 +64,17 @@
             <a href="/"
                 class="flex items-center gap-3 glass py-2 px-4 rounded-xl group hover:border-cyan-400/50 transition-all border-white/5">
                 <i class="fas fa-chevron-left text-slate-500 group-hover:text-cyan-400"></i>
-                <span class="font-heading font-medium text-sm text-slate-300 group-hover:text-white">Exit
-                    Terminal</span>
+                <span class="font-heading font-medium text-sm text-slate-300 group-hover:text-white">Back to
+                    Dashboard</span>
             </a>
             <div class="h-6 w-px bg-white/10 hidden md:block"></div>
-            <h1 class="font-heading font-bold text-xl text-white hidden md:block">Executive Command</h1>
+            <h1 class="font-heading font-bold text-xl text-white hidden md:block">Admin Console</h1>
         </div>
 
         <div class="flex items-center gap-3">
             <div id="statusIndicator" class="flex items-center gap-2 glass px-4 py-2 rounded-xl border-white/5">
                 <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-                <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Protocol Active</span>
+                <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">System Active</span>
             </div>
         </div>
     </nav>
@@ -91,14 +91,14 @@
                 </div>
             </div>
             <div class="glass-card p-8 group transition-all hover:border-violet-400/30">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Total Intel SKUs</p>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Total Database SKUs</p>
                 <div class="text-3xl font-heading font-bold text-cyan-400 flex items-center gap-3">
                     <span id="statProducts">--</span>
                     <i class="fas fa-database text-sm opacity-50"></i>
                 </div>
             </div>
             <div class="glass-card p-8 border-t-4 border-t-emerald-500/50">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Mainframe Uplink</p>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Platform Version</p>
                 <div class="text-3xl font-heading font-bold text-emerald-400 flex items-center gap-3">
                     V4.0.2
                     <div class="flex gap-1">
@@ -114,7 +114,7 @@
                 <div class="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
                     <h2 class="font-heading font-bold text-lg flex items-center gap-3">
                         <i class="fas fa-id-badge text-violet-400"></i>
-                        Authorized Operators
+                        Authorized Users
                     </h2>
                     <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Registry Sync:
                         Active</span>
@@ -145,11 +145,11 @@
                 <div class="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
                     <h2 class="font-heading font-bold text-lg flex items-center gap-3">
                         <i class="fas fa-terminal text-cyan-400"></i>
-                        System Activity Logs
+                        Activity Logs
                     </h2>
                     <button onclick="window.location.reload()"
-                        class="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Flush
-                        Buffer</button>
+                        class="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Refresh
+                        Logs</button>
                 </div>
                 <div class="overflow-x-auto max-h-[500px] no-scrollbar">
                     <table class="w-full admin-table border-collapse">
@@ -163,7 +163,7 @@
                         </thead>
                         <tbody id="logTableBody" class="font-mono text-[11px] text-slate-400 tabular-nums">
                             <tr>
-                                <td colspan="4" class="py-12 text-center text-slate-600">Established secure link.
+                                <td colspan="4" class="py-12 text-center text-slate-600">Connection active.
                                     Awaiting logs...</td>
                             </tr>
                         </tbody>
@@ -178,7 +178,7 @@
                 <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
                     <i class="fas fa-gem text-cyan-500 text-sm"></i>
                 </div>
-                Gem Hunter Controls
+                Database Controls
             </h3>
 
             <div class="flex flex-wrap gap-4 mb-8">
@@ -191,16 +191,38 @@
                 <button onclick="runCleanup()"
                     class="glass px-6 py-3 rounded-2xl border-amber-500/30 hover:border-amber-400 text-amber-400 flex items-center gap-3 transition-all">
                     <i class="fas fa-broom text-xs"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Vacuum DB</span>
+                    <span class="text-xs font-bold uppercase tracking-widest">Optimize Database</span>
                 </button>
             </div>
 
-            <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Danger Zone</h4>
+            <h3 class="font-heading font-bold text-xl mb-8 flex items-center gap-3 mt-12">
+                <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                    <i class="fas fa-robot text-violet-500 text-sm"></i>
+                </div>
+                Vantage AI Config
+            </h3>
+
+            <div class="space-y-6 max-w-2xl">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Anthropic
+                        API Key</label>
+                    <div class="flex gap-4">
+                        <input type="password" id="anthropicKeyInput" placeholder="sk-ant-..."
+                            class="glass-card flex-1 bg-black/20 border-white/5 px-4 py-3 text-sm font-mono text-cyan-400 focus:border-cyan-400/50 outline-none transition-all">
+                        <button onclick="saveAnthropicKey()"
+                            class="glass px-8 py-3 rounded-2xl border-cyan-500/30 hover:bg-cyan-500 hover:text-white text-cyan-400 text-xs font-bold uppercase tracking-widest transition-all">
+                            Save Key
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4 mt-12">Danger Zone</h4>
             <div class="flex flex-wrap gap-4">
                 <button onclick="nukeProducts()"
                     class="glass px-6 py-3 rounded-2xl border-rose-500/30 hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group">
                     <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Absolute Wipe (Nuke)</span>
+                    <span class="text-xs font-bold uppercase tracking-widest">Safety Reset (Clear DB)</span>
                 </button>
             </div>
         </div>
@@ -261,7 +283,34 @@
                         </tr>`).join('');
                     document.getElementById('logTableBody').innerHTML = rows || '<tr><td colspan="4" class="py-8 text-center text-slate-600">ZERO ACTIVITY DETECTED</td></tr>';
                 }
+
+                // Load existing keys (masked for safety)
+                const configRes = await fetch('/api/admin/config/ANTHROPIC_API_KEY');
+                if (configRes.ok) {
+                    const cData = await configRes.json();
+                    if (cData.value) {
+                        document.getElementById('anthropicKeyInput').value = "••••••••••••••••••••••••";
+                    }
+                }
             } catch (e) { console.error("Admin Load Error", e); }
+        }
+
+        async function saveAnthropicKey() {
+            const key = document.getElementById('anthropicKeyInput').value;
+            if (!key || key.includes('•')) return alert("Please enter a valid key.");
+
+            try {
+                const res = await fetch('/api/admin/config/ANTHROPIC_API_KEY', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: key })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("Anthropic API Key secured and saved!");
+                    document.getElementById('anthropicKeyInput').value = "••••••••••••••••••••••••";
+                } else alert("Error: " + data.error);
+            } catch (e) { alert("Fault: " + e); }
         }
 
         async function syncCopilot() {
