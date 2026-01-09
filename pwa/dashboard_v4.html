@@ -503,7 +503,9 @@
                     document.getElementById('btnPrev').disabled = page <= 1;
                     document.getElementById('btnNext').disabled = page >= totalPages;
                 } catch (e) {
-                    document.getElementById('productGrid').innerHTML = `<div class="col-span-full text-center text-rose-400 font-bold p-12 glass rounded-3xl">PROTOCOL FAILURE: UPLINK DISCONNECTED</div>`;
+                    let errorMsg = "UPLINK DISCONNECTED";
+                    if (e.message && e.message !== "Failed to fetch") errorMsg = e.message;
+                    document.getElementById('productGrid').innerHTML = `<div class="col-span-full text-center text-rose-400 font-bold p-12 glass rounded-3xl">PROTOCOL FAILURE: ${errorMsg}<br><span class="text-xs text-slate-500 mt-2 block">Ensure server is running and database is migrated.</span></div>`;
                 }
             }
 

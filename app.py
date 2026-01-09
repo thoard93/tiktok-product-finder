@@ -149,7 +149,7 @@ def ai_chat():
                 "content-type": "application/json"
             },
             json={
-                "model": "claude-3-5-sonnet-20241022",
+                "model": "claude-3-5-sonnet-20240620",
                 "max_tokens": 1024,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": message}]
@@ -175,17 +175,36 @@ def manual_fix_schema():
     try:
         with db.engine.connect() as conn:
             from sqlalchemy import text
-            try:
-                conn.execute(text("ALTER TABLE products ADD COLUMN ad_spend FLOAT DEFAULT 0"))
-                conn.execute(text("ALTER TABLE products ADD COLUMN ad_spend_total FLOAT DEFAULT 0"))
-                conn.execute(text("ALTER TABLE products ADD COLUMN scan_type TEXT DEFAULT 'copilot'"))
-                conn.execute(text("ALTER TABLE products ADD COLUMN gmv_growth FLOAT DEFAULT 0"))
-                conn.commit()
-                msg = "Added columns successfully (some might have failed if existed)"
-            except Exception as e:
-                msg = f"Partial execution: {e}"
-                
-        return jsonify({"success": True, "message": msg})
+            columns = [
+                ("ad_spend", "FLOAT DEFAULT 0"),
+                ("ad_spend_total", "FLOAT DEFAULT 0"),
+                ("scan_type", "VARCHAR(50) DEFAULT 'copilot'"),
+                ("gmv_growth", "FLOAT DEFAULT 0"),
+                ("product_status", "VARCHAR(50) DEFAULT 'active'"),
+                ("status_note", "VARCHAR(255)"),
+                ("prev_sales_7d", "INTEGER DEFAULT 0"),
+                ("prev_sales_30d", "INTEGER DEFAULT 0"),
+                ("sales_velocity", "FLOAT DEFAULT 0"),
+                ("is_ad_driven", "BOOLEAN DEFAULT 0"),
+                ("original_price", "FLOAT DEFAULT 0"),
+                ("cached_image_url", "TEXT"),
+                ("image_cached_at", "TIMESTAMP"),
+                ("last_shown_hot", "TIMESTAMP"),
+                ("has_free_shipping", "BOOLEAN DEFAULT 0"),
+                ("is_favorite", "BOOLEAN DEFAULT 0")
+            ]
+            
+            results = []
+            for col_name, col_def in columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE products ADD COLUMN {col_name} {col_def}"))
+                    results.append(f"Added {col_name}")
+                except Exception as e:
+                    results.append(f"Skipped {col_name} ({str(e)[:50]}...)")
+            
+            conn.commit()
+            
+        return jsonify({"success": True, "details": results})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
