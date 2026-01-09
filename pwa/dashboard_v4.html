@@ -425,6 +425,25 @@
             let curFilter = JSON.parse(sessionStorage.getItem('vantage_filter')) || { sort_by: 'gem_score' };
             let searchTimeout;
 
+            function formatKMB(num) {
+                if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
+                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                return num.toString();
+            }
+
+            function showToast(msg, type = 'info') {
+                const toast = document.createElement('div');
+                toast.className = `fixed bottom-24 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl font-bold text-sm z-[200] animate-in fade-in slide-in-from-bottom duration-300 shadow-2xl backdrop-blur-xl border ${type === 'error' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                    }`;
+                toast.textContent = msg;
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    toast.classList.add('fade-out');
+                    setTimeout(() => toast.remove(), 500);
+                }, 3000);
+            }
+
             async function loadDashboard() {
                 try {
                     const meRes = await fetch('/api/me');
