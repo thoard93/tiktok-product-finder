@@ -582,8 +582,7 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
             break
             
     if not best_match:
-        # Fallback to first result
-        best_match = res['videos'][0]
+        return False, "Copilot Search: No exact PID match found"
         
     # Extract Data from Best Match
     v = best_match
