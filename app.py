@@ -6629,11 +6629,19 @@ def copilot_sync():
 @app.route('/api/copilot/test')
 @login_required
 def copilot_test():
-    """Test TikTokCopilot connection"""
+    """Test TikTokCopilot connection with improved validation"""
     cookie = get_copilot_cookie()
     if not cookie:
-        return jsonify({'success': False, 'error': 'No Copilot cookie configured. Please set TIKTOK_COPILOT_COOKIE in Settings.'})
+        return jsonify({'success': False, 'error': 'No Copilot cookie configured. Please set TIKTOK_COPILOT_COOKIE in Settings or Render Environment.'})
     
+    # Basic format validation - cookies should be long and contain session tokens
+    if len(cookie) < 100:
+        return jsonify({'success': False, 'error': f'Cookie too short ({len(cookie)} chars). A valid TikTokCopilot cookie is usually 500+ characters. Did you paste a password instead?'})
+    
+    if '__session' not in cookie and '__clerk' not in cookie and 'eyJ' not in cookie:
+        return jsonify({'success': False, 'error': 'Invalid cookie format. Should contain session tokens (starts with __clerk or __session). Copy the full Cookie header from DevTools.'})
+    
+    # Try to fetch data
     result = fetch_copilot_trending(limit=5)
     if result and result.get('videos'):
         return jsonify({
@@ -6641,8 +6649,11 @@ def copilot_test():
             'message': f"Connected! Found {len(result['videos'])} videos.",
             'sample': result['videos'][0].get('productTitle', 'N/A') if result['videos'] else None
         })
+    elif result is None:
+        return jsonify({'success': False, 'error': 'API request failed. Cookie may be expired or TikTokCopilot is down. Please refresh your cookie.'})
     else:
-        return jsonify({'success': False, 'error': 'Failed to fetch data. Cookie may be expired.'})
+        return jsonify({'success': False, 'error': 'API returned empty data. Cookie may be expired. Please paste a fresh cookie from TikTokCopilot.'})
+
 
 
 @app.route('/api/admin/config/<key>', methods=['GET'])
