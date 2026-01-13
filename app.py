@@ -6483,9 +6483,17 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             video_count = int(v.get('productVideoCount') or 0)
             creator_count = int(v.get('productCreatorCount') or 0)
             
+            # Extract Shop Ads Commission (GMV Max Ads)
+            shop_ads_rate = float(v.get('tapShopAdsRate') or v.get('shopAdsRate') or v.get('shopAdsCommission') or 0) / 10000.0
+            
+            # Extract Rating
+            rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or v.get('reviewScore') or 0)
+            reviews = int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0)
+            
             # Extract Sales for Filtering
             sales_7d = int(v.get('periodUnits') or v.get('units') or 0)
-            total_sales = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or v.get('product_total_sales') or v.get('total_sales') or 0)
+            # DO NOT use periodUnits as fallback for total_sales - they are different metrics
+            total_sales = int(v.get('productTotalSales') or v.get('allTimeSales') or v.get('totalSales') or v.get('soldCount') or 0)
 
             # FILTER: Quality Control (Video Count Only)
             filter_reason = None
@@ -6550,7 +6558,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 if rating > 0: existing.product_rating = rating
                 if reviews > 0: existing.review_count = reviews
                 
-
+                # Shop Ads Commission (GMV Max Ads)
+                if shop_ads_rate > 0: existing.shop_ads_commission = shop_ads_rate
 
                 if video_count > 0: existing.video_count = video_count
                 if creator_count > 0: existing.influencer_count = creator_count
@@ -6570,13 +6579,16 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                     seller_name=v.get('sellerName', ''),
                     image_url=v.get('productImageUrl', ''),
                     gmv=float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0),
-                    sales_7d=int(v.get('periodUnits') or v.get('units') or 0),
-                    sales=int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or v.get('periodUnits') or v.get('units') or 0), # Use 7d sales as fallback for total sales
-                    product_rating=float(v.get('productRating') or v.get('rating') or v.get('avgRating') or 0),
-                    review_count=int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0),
+                    sales_7d=sales_7d,
+                    sales=total_sales if total_sales > 0 else 0,  # Don't fallback to 7D sales
+                    product_rating=rating,
+                    review_count=reviews,
                     video_count=video_count,
                     influencer_count=creator_count,
                     commission_rate=float(v.get('tapCommissionRate') or 0) / 10000.0,
+                    shop_ads_commission=shop_ads_rate,
+                    ad_spend=ad_spend_7d,
+                    ad_spend_total=ad_spend_total,
                     views_count=int(v.get('periodViews') or 0),
                     scan_type='copilot',
                     first_seen=datetime.utcnow(),
@@ -6960,6 +6972,10 @@ def ensure_schema_integrity():
                 if 'gmv_growth' not in columns:
                      print("[SCHEMA] Adding missing column: gmv_growth")
                      conn.execute(text("ALTER TABLE products ADD COLUMN gmv_growth FLOAT DEFAULT 0"))
+
+                if 'shop_ads_commission' not in columns:
+                     print("[SCHEMA] Adding missing column: shop_ads_commission")
+                     conn.execute(text("ALTER TABLE products ADD COLUMN shop_ads_commission FLOAT DEFAULT 0"))
 
                 conn.commit()
             print("[SCHEMA] Integrity Check Complete.")

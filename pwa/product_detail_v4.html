@@ -149,6 +149,8 @@
                                 <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Commission
                                 </p>
                                 <div class="text-2xl font-bold text-emerald-400 tracking-tighter" id="pComm">0%</div>
+                                <div class="text-sm font-medium text-amber-400 mt-1 hidden" id="pShopAds">+0% 🚀 GMV Max
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -355,6 +357,14 @@
 
             document.getElementById('pPrice').textContent = '$' + (data.price || 0);
             document.getElementById('pComm').textContent = Math.round((data.commission_rate || 0) * 100) + '%';
+
+            // Shop Ads Commission (GMV Max) display
+            const shopAdsComm = data.shop_ads_commission || 0;
+            if (shopAdsComm > 0) {
+                const shopAdsEl = document.getElementById('pShopAds');
+                shopAdsEl.textContent = '+' + Math.round(shopAdsComm * 100) + '% 🚀 GMV Max';
+                shopAdsEl.classList.remove('hidden');
+            }
 
             // Competition Logic
             const comp = data.influencer_count || 0;

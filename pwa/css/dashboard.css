@@ -425,6 +425,24 @@ body::before {
     color: var(--warning);
 }
 
+.badge-gmvmax {
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    color: white;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(247, 147, 30, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 0 4px rgba(247, 147, 30, 0);
+    }
+}
+
 .product-content {
     padding: 1rem;
 }

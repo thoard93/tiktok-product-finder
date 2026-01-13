@@ -141,6 +141,8 @@ function isNewProduct(firstSeen) {
 function createProductCard(product) {
     const iflCount = product.influencer_count || product.total_influencers || 0;
     const commissionRate = product.commission_rate || 0;
+    const shopAdsCommission = product.shop_ads_commission || 0;
+    const hasGmvMax = shopAdsCommission > 0;
     const gmv = product.gmv || 0;
     const earnings = product.potential_earnings || (gmv * commissionRate / 100);
     const productId = product.product_id || product.id;
@@ -149,6 +151,9 @@ function createProductCard(product) {
 
     // Determine badges
     let badges = '';
+    if (hasGmvMax) {
+        badges += '<span class="badge badge-gmvmax">🚀 GMV MAX</span>';
+    }
     if (isNew) {
         badges += '<span class="badge badge-new">NEW</span>';
     }
@@ -159,6 +164,12 @@ function createProductCard(product) {
         badges += '<span class="badge badge-untapped">UNTAPPED</span>';
     } else if (iflCount <= 50 && iflCount >= 3) {
         badges += '<span class="badge badge-gem">HIDDEN GEM</span>';
+    }
+
+    // Commission display - combine regular + shop ads if available
+    let commissionDisplay = commissionRate.toFixed(0) + '%';
+    if (hasGmvMax) {
+        commissionDisplay = commissionRate.toFixed(0) + '% + ' + shopAdsCommission.toFixed(0) + '%🚀';
     }
 
     return `
@@ -200,8 +211,8 @@ function createProductCard(product) {
                         <div class="metric-label">Potential</div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value">${commissionRate.toFixed(0)}%</div>
-                        <div class="metric-label">Commission</div>
+                        <div class="metric-value ${hasGmvMax ? 'highlight' : ''}">${commissionDisplay}</div>
+                        <div class="metric-label">${hasGmvMax ? 'Commission + Ads' : 'Commission'}</div>
                     </div>
                 </div>
                 <div class="product-footer">
