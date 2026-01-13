@@ -331,8 +331,9 @@
             if (data.is_ad_driven) document.getElementById('badgeAd').classList.remove('hidden');
             if (data.sales_7d > 200) document.getElementById('badgeHot').classList.remove('hidden');
 
-            // Stats
-            document.getElementById('statSales').textContent = (data.sales || 0).toLocaleString();
+            // Stats - Total Sales (use sales_7d as fallback if total not available)
+            const totalSales = data.sales || data.sales_7d || 0;
+            document.getElementById('statSales').textContent = totalSales.toLocaleString();
 
             // Total Ad Spend
             document.getElementById('statAdSpend').textContent = (data.ad_spend_total > 0) ? ('$' + Math.round(data.ad_spend_total).toLocaleString()) : 'N/A';

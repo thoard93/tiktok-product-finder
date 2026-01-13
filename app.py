@@ -6492,8 +6492,13 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             
             # Extract Sales for Filtering
             sales_7d = int(v.get('periodUnits') or v.get('units') or 0)
-            # DO NOT use periodUnits as fallback for total_sales - they are different metrics
-            total_sales = int(v.get('productTotalSales') or v.get('allTimeSales') or v.get('totalSales') or v.get('soldCount') or 0)
+            # Try multiple possible field names for total sales
+            total_sales = int(v.get('productTotalUnits') or v.get('productTotalSales') or v.get('productSalesTotal') or v.get('allTimeSales') or v.get('totalSales') or v.get('soldCount') or v.get('productUnits') or v.get('allTimeUnits') or 0)
+            
+            # DEBUG: Log sales fields for first few products
+            if saved_count < 3:
+                sales_keys = {k: v.get(k) for k in v.keys() if any(x in k.lower() for x in ['sale', 'unit', 'sold', 'total'])}
+                print(f"[SALES_DEBUG] Product {product_id}: 7D={sales_7d}, Total={total_sales}, Fields={sales_keys}")
 
             # FILTER: Quality Control (Video Count Only)
             filter_reason = None
