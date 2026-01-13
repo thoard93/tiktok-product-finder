@@ -231,6 +231,11 @@
                 class="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4 mt-12 border-t border-white/5 pt-8">
                 Danger Zone</h4>
             <div class="flex flex-wrap gap-4">
+                <button onclick="cleanupZeroStats()" id="btnCleanZero"
+                    class="bg-amber-950/20 border border-amber-500/20 px-6 py-3 rounded-xl hover:bg-amber-500 hover:text-white text-amber-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
+                    <i class="fas fa-trash-alt text-xs"></i>
+                    <span>Delete 0-Stat Products</span>
+                </button>
                 <button onclick="nukeProducts()"
                     class="bg-rose-950/20 border border-rose-500/20 px-6 py-3 rounded-xl hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
@@ -417,6 +422,31 @@
                 else alert('Protocol Error: ' + data.error);
             } catch (e) { alert('System Fault: ' + e); }
             finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function cleanupZeroStats() {
+            if (!confirm("Delete all products with 0 sales, 0 GMV, and 0 ad spend?\n\n(Favorites are protected)")) return;
+
+            const btn = document.getElementById('btnCleanZero');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/admin/cleanup-zero-stats', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Cleanup Complete: Deleted ${data.deleted} products with zero stats.`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('System Fault: ' + e);
+            } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
             }

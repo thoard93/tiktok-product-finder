@@ -787,6 +787,7 @@ class Product(db.Model):
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     
     commission_rate = db.Column(db.Float, default=0, index=True)
+    shop_ads_commission = db.Column(db.Float, default=0, index=True)
     price = db.Column(db.Float, default=0, index=True)
     original_price = db.Column(db.Float, default=0) # Added for Strikethrough Price
     product_url = db.Column(db.String(500))
@@ -858,6 +859,7 @@ class Product(db.Model):
             'sales_30d': self.sales_30d,
             'influencer_count': self.influencer_count,
             'commission_rate': self.commission_rate,
+            'shop_ads_commission': self.shop_ads_commission,
             'stock': self.live_count, # Hijacked field for Apify Stock
             'price': self.price,
             'image_url': self.cached_image_url or self.image_url,  # Prefer cached
@@ -1274,6 +1276,7 @@ def admin_migrate():
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS status_note VARCHAR(255)",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS has_free_shipping BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS last_shown_hot TIMESTAMP",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS shop_ads_commission FLOAT DEFAULT 0",
             ]
             
             for sql in migrations:
@@ -6687,6 +6690,45 @@ def debug_force_stale():
     """Trigger stale refresh manually"""
     executor.submit(scheduled_stale_refresh)
     return jsonify({'success': True, 'message': 'Triggered stale refresh job in background.'})
+
+@app.route('/api/admin/cleanup-zero-stats', methods=['POST'])
+@login_required
+@admin_required
+def cleanup_zero_stats():
+    """Delete all products with 0 stats (sales=0, gmv=0, no ad spend). Protects favorites."""
+    try:
+        # Find products with zero stats that are NOT favorites
+        zero_stat_products = Product.query.filter(
+            db.and_(
+                db.or_(Product.sales == 0, Product.sales == None),
+                db.or_(Product.gmv == 0, Product.gmv == None),
+                db.or_(Product.ad_spend == 0, Product.ad_spend == None),
+                db.or_(Product.is_favorite == False, Product.is_favorite == None)
+            )
+        ).all()
+        
+        count = len(zero_stat_products)
+        
+        if count == 0:
+            return jsonify({'success': True, 'message': 'No zero-stat products found to delete.', 'deleted': 0})
+        
+        # Delete them
+        for p in zero_stat_products:
+            db.session.delete(p)
+        
+        db.session.commit()
+        
+        log_activity(session.get('user_id'), 'cleanup_zero_stats', {'deleted': count})
+        
+        return jsonify({
+            'success': True,
+            'message': f'Deleted {count} products with zero stats.',
+            'deleted': count
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # --- Background Scheduler for Daily Refresh (Now using Copilot!) ---
 try:
