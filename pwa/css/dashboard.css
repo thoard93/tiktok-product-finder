@@ -913,4 +913,20 @@ body::before {
     .seller-name {
         font-size: 0.7rem;
     }
+
+    /* Mobile badge sizing */
+    .badge {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.6rem;
+    }
+
+    .badge-gmvmax {
+        font-size: 0.55rem;
+        padding: 0.15rem 0.35rem;
+    }
+
+    /* Combined commission display on mobile */
+    .metric-value.highlight {
+        font-size: 0.75rem;
+    }
 }

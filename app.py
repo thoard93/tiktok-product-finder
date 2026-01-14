@@ -472,7 +472,7 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
     # Generate or extract product URL
     p_url = res['product_url'] or p_data.get('product_url') or p_data.get('url')
     if not p_url or 'tiktok.com' not in p_url:
-        p_url = f"https://shop.tiktok.com/view/product/{raw_id}?region=US"
+        p_url = f"https://www.tiktok.com/shop/pdp/p/{raw_id}?source=ecommerce_store&region=US"
 
     if existing:
         # Update existing record
@@ -5188,7 +5188,7 @@ def start_hybrid_scan(product_id):
     
     try:
          # Construct direct URL
-         target_url = f"https://shop.tiktok.com/view/product/{product_id}?region=US&locale=en"
+         target_url = f"https://www.tiktok.com/shop/pdp/p/{product_id}?source=ecommerce_store&region=US"
          headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
          
          verify_res = requests.get(target_url, headers=headers, timeout=10)
@@ -6313,7 +6313,7 @@ def scan_partner_opportunity_live():
                                 'sales_7d': 0, 
                                 'commission_rate': comm_val, 
                                 'seller_name': p.get('shop_info', {}).get('shop_name', 'Classified'),
-                                'product_url': f"https://shop.tiktok.com/view/product/{pid}?region=US"
+                                'product_url': f"https://www.tiktok.com/shop/pdp/p/{pid}?source=ecommerce_store&region=US"
                             }
 
                             # Hydra-Enrichment
