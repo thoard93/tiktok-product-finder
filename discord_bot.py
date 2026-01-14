@@ -333,6 +333,10 @@ def create_product_embed(p, title_prefix=""):
     if commission > 0 and commission < 1:
         commission = commission * 100
     
+    # Format shop ads commission (handle 0.10 vs 10.0)
+    if shop_ads_commission > 0 and shop_ads_commission < 1:
+        shop_ads_commission = shop_ads_commission * 100
+    
     # Calculate Display Price (Handle Sale)
     price_display = f"${price:.2f}"
     if original_price > price:
@@ -434,12 +438,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No GMV Max products matching criteria today (10%+ shop ads commission, ≤40 videos). Try syncing more products from Copilot!")
+        await channel.send("📭 No GMV Max products matching criteria today (10%+ shop ads, <40 videos, 100+ 7D sales, $500+ ad spend). Try syncing more products from Copilot!")
         return
     
     # Send header message
     await channel.send(f"# 🚀 Daily GMV Max Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 10%+ Shop Ads Commission, ≤40 videos (low competition)\n"
+                       f"**Criteria:** 10%+ Shop Ads Commission, <40 videos (low competition)\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"──────────────────────────────")
     
@@ -633,11 +637,13 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with Shop Ads Commission >= 10%, low competition (<=40 videos)
-        # Sort by: Shop Ads Commission (highest first), then Ad Spend
+        # Query: Products with Shop Ads Commission >= 10%, high 7D sales, high ad spend, low competition (<40 videos)
+        # Sort by: Shop Ads Commission (highest first), then Ad Spend, then 7D Sales
         products = Product.query.filter(
             Product.video_count >= 5,  # Filter out placeholders
-            Product.video_count <= 40,  # Low competition filter
+            Product.video_count < 40,  # Low competition filter (<40 videos)
+            Product.sales_7d >= 100,  # High 7D sales
+            Product.ad_spend >= 500,  # High ad spend ($500+)
             Product.commission_rate > 0,  # Must have regular commission
             Product.shop_ads_commission >= 0.10,  # 10%+ shop ads commission (GMV Max)
             db.or_(
@@ -647,7 +653,8 @@ def get_hot_products():
         ).order_by(
             db.func.coalesce(Product.shop_ads_commission, 0).desc(),  # Priority 1: Shop Ads Commission
             db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 2: High Ad Spend
-            db.func.coalesce(Product.video_count, 0).asc()  # Priority 3: Lower videos = better opportunity
+            db.func.coalesce(Product.sales_7d, 0).desc(),  # Priority 3: High 7D Sales
+            db.func.coalesce(Product.video_count, 0).asc()  # Priority 4: Lower videos = better opportunity
         ).limit(MAX_DAILY_POSTS).all()
         
         # Convert to dicts BEFORE commit to avoid DetachedInstanceError
