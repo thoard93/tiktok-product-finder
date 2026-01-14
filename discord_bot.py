@@ -46,8 +46,10 @@ def extract_product_id(text):
     patterns = [
         r'shop/pdp/(\d+)',
         r'product/(\d+)',
+        r'view/product/(\d+)',
         r'product_id=(\d+)',
         r'/(\d{15,25})(?:[/?]|$)',  # Direct product ID (15-25 digits)
+        r'productId=(\d+)',
     ]
     
     for pattern in patterns:
@@ -62,28 +64,34 @@ def extract_product_id(text):
     return None
 
 def resolve_tiktok_share_link(url):
-    """Resolve TikTok share link to get Product ID via EchoTik Realtime API"""
-    print(f"Resolving share link via fallback: {url}")
-    # Removed Echotik API Resolution
+    """Resolve TikTok share link to get Product ID by following redirects"""
+    print(f"🔍 [Bot] Resolving redirect for: {url}")
     
-    # Fallback: Manual Redirect Follow (Standard HTTP)
     try:
-        print(f"Fallback: Resolving redirect manually for {url}")
-        # Use a real user agent to avoid bot blocking
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        res = requests.head(url, allow_redirects=True, headers=headers, timeout=10)
-        final_url = res.url
-        print(f"Resolved URL: {final_url}")
+        # Use a mobile user agent as TikTok often redirects differently for desktop vs mobile
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
         
-        # Extract ID from final URL
-        match = re.search(r'product/(\d+)', final_url)
-        if match: return match.group(1), 'US'
-        
-        match = re.search(r'view/product/(\d+)', final_url)
-        if match: return match.group(1), 'US'
+        # Use GET with stream=True to follow redirects but stop before downloading large content
+        with requests.get(url, allow_redirects=True, headers=headers, timeout=10, stream=True) as res:
+            final_url = res.url
+            print(f"✅ [Bot] Resolved URL: {final_url}")
+            
+            # Use extract_product_id on the final URL
+            pid = extract_product_id(final_url)
+            if pid:
+                return pid, 'US'
+            
+            # Final attempts with extra regex if extract_product_id missed something
+            for pattern in [r'/(\d{15,25})', r'prod_id=(\d+)', r'product_id=(\d+)']:
+                match = re.search(pattern, final_url)
+                if match: return match.group(1), 'US'
         
     except Exception as e:
-        print(f"Manual Resolution Error: {e}")
+        print(f"❌ [Bot] Manual Resolution Error: {e}")
 
     return None, 'US'
 
@@ -137,6 +145,10 @@ def save_product_to_db(product_data):
         p.commission_rate = product_data.get('commission_rate', 0)
         p.shop_ads_commission = product_data.get('shop_ads_commission', 0)
         p.price = product_data.get('price', 0)
+        p.gmv = product_data.get('gmv', 0)
+        p.ad_spend = product_data.get('ad_spend', 0)
+        p.ad_spend_total = product_data.get('ad_spend_total', 0)
+        p.gmv_growth = product_data.get('gmv_growth', 0)
         p.last_updated = datetime.now(timezone.utc)
         p.live_count = product_data.get('live_count', 0)
         p.is_enriched = True
@@ -160,6 +172,9 @@ def save_product_to_db(product_data):
             'commission_rate': p.commission_rate,
             'shop_ads_commission': p.shop_ads_commission,
             'price': p.price,
+            'gmv': p.gmv,
+            'ad_spend': p.ad_spend,
+            'gmv_growth': p.gmv_growth,
             'live_count': p.live_count,
             'has_free_shipping': p.has_free_shipping,
             'cached_image_url': p.cached_image_url
@@ -230,6 +245,10 @@ def get_product_from_api(product_id):
                 p.commission_rate = temp_p.get('commission_rate', 0)
                 p.shop_ads_commission = temp_p.get('shop_ads_commission', 0)
                 p.price = temp_p.get('price', 0)
+                p.gmv = temp_p.get('gmv', 0)
+                p.ad_spend = temp_p.get('ad_spend', 0)
+                p.ad_spend_total = temp_p.get('ad_spend_total', 0)
+                p.gmv_growth = temp_p.get('gmv_growth', 0)
                 p.last_updated = datetime.now(timezone.utc)
                 p.live_count = temp_p.get('live_count', 0)
                 
@@ -247,6 +266,9 @@ def get_product_from_api(product_id):
                     'commission_rate': p.commission_rate,
                     'shop_ads_commission': p.shop_ads_commission,
                     'price': p.price,
+                    'gmv': p.gmv,
+                    'ad_spend': p.ad_spend,
+                    'gmv_growth': p.gmv_growth,
                     'image_url': p.cached_image_url or p.image_url,
                     'live_count': p.live_count,
                     'from_api': True
