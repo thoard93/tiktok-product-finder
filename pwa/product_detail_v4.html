@@ -326,7 +326,7 @@
             document.getElementById('pTitle').textContent = data.product_name || 'System ID: ' + productId;
             document.getElementById('pSeller').textContent = data.seller_name || 'Unknown Entity';
             document.getElementById('navOperation').textContent = (data.product_name || 'Report').substring(0, 30) + '...';
-            document.getElementById('extLink').href = data.product_url || `https://shop.tiktok.com/search/product?q=${encodeURIComponent(data.product_name)}`;
+            document.getElementById('extLink').href = data.product_url || `https://shop.tiktok.com/view/product/${productId}?region=US&locale=en-US`;
 
             if (data.is_ad_driven) document.getElementById('badgeAd').classList.remove('hidden');
             if (data.sales_7d > 200) document.getElementById('badgeHot').classList.remove('hidden');

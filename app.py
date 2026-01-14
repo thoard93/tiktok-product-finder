@@ -6495,6 +6495,12 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             # Try multiple possible field names for total sales
             total_sales = int(v.get('productTotalUnits') or v.get('productTotalSales') or v.get('productSalesTotal') or v.get('allTimeSales') or v.get('totalSales') or v.get('soldCount') or v.get('productUnits') or v.get('allTimeUnits') or 0)
             
+            # Extract Product URL from Copilot API (try multiple field names)
+            raw_product_id = str(v.get('productId', '')).replace('shop_', '')
+            product_url = v.get('productLink') or v.get('productUrl') or v.get('shopLink') or v.get('shopUrl') or v.get('affiliateLink') or v.get('link')
+            if not product_url and raw_product_id:
+                product_url = f"https://shop.tiktok.com/view/product/{raw_product_id}?region=US&locale=en-US"
+            
             # DEBUG: Log sales fields for first few products
             if saved_count < 3:
                 sales_keys = {k: v.get(k) for k in v.keys() if any(x in k.lower() for x in ['sale', 'unit', 'sold', 'total'])}
@@ -6572,6 +6578,10 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 if comm_rate > 0: existing.commission_rate = comm_rate
                 views_val = int(v.get('periodViews') or 0)
                 if views_val > 0: existing.views_count = views_val
+                # Update product URL if available from API
+                if product_url and (not existing.product_url or 'search/product' in (existing.product_url or '')):
+                    existing.product_url = product_url
+                
                 existing.last_updated = datetime.utcnow()
                 existing.product_status = 'active' # Force visible on sync
                 existing.scan_type = 'copilot'
@@ -6583,6 +6593,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                     seller_id=str(v.get('sellerId', '')),
                     seller_name=v.get('sellerName', ''),
                     image_url=v.get('productImageUrl', ''),
+                    product_url=product_url,
                     gmv=float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0),
                     sales_7d=sales_7d,
                     sales=total_sales if total_sales > 0 else 0,  # Don't fallback to 7D sales

@@ -546,7 +546,7 @@
                     };
 
                     const imgUrl = `/api/image-proxy/${p.product_id}`;
-                    const ttLink = p.product_url || `https://shop.tiktok.com/search/product?q=${encodeURIComponent(p.product_name)}`;
+                    const ttLink = p.product_url || `https://shop.tiktok.com/view/product/${p.product_id}?region=US&locale=en-US`;
 
                     card.innerHTML = `
                     <div class="relative aspect-[4/3] overflow-hidden bg-slate-950">
