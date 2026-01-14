@@ -22,6 +22,7 @@ from app import app, db, Product, User, ApiKey
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
 HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
 PRODUCT_LOOKUP_CHANNEL_ID = 1461053839800139959
+BLACKLIST_CHANNEL_ID = 1440369747467174019
 
 # Hot Product Criteria - Free Shipping Deals
 MIN_SALES_7D = 50  # Lower threshold since we're filtering by free shipping
@@ -409,6 +410,16 @@ def create_product_embed(p, title_prefix=""):
     if image_url and str(image_url).startswith('http'):
         embed.set_thumbnail(url=image_url)
     
+    # BLACKLIST WARNING
+    from app import is_brand_blacklisted
+    seller_name = get_val('seller_name')
+    seller_id = get_val('seller_id')
+    
+    with app.app_context():
+        if is_brand_blacklisted(seller_name=seller_name, seller_id=seller_id):
+            embed.description = "⚠️ **WARNING: BLACKLISTED BRAND/SELLER**\nThis seller has been reported for removing commission rates or other scams."
+            embed.color = 0xFF0000 # Red for alert
+    
     embed.set_footer(text=f"Product ID: {product_id}")
     embed.timestamp = datetime.now(timezone.utc)
     
@@ -632,6 +643,116 @@ async def lookup_command(ctx, *, query: str = None):
     await ctx.reply(embed=embed, mention_author=False)
     await ctx.message.remove_reaction('🔍', bot.user)
     await ctx.message.add_reaction('✅')
+
+# =============================================================================
+# BLACKLIST COMMANDS
+# =============================================================================
+
+@bot.group(name='blacklist', invoke_without_command=True)
+async def blacklist_group(ctx):
+    """Blacklist management: !blacklist <add|remove|list|scan>"""
+    await ctx.reply("Usage: `!blacklist <add|remove|list|scan>`", mention_author=False)
+
+@blacklist_group.command(name='add')
+@commands.has_permissions(administrator=True)
+async def blacklist_add(ctx, brand_name: str, *, reason: str = "No reason provided"):
+    """Add a brand to the blacklist: !blacklist add \"Brand Name\" \"Reason\""""
+    from app import BlacklistedBrand
+    with app.app_context():
+        existing = BlacklistedBrand.query.filter(BlacklistedBrand.seller_name.ilike(brand_name)).first()
+        if existing:
+            await ctx.reply(f"⚠️ Brand `{brand_name}` is already on the blacklist.", mention_author=False)
+            return
+        
+        new_entry = BlacklistedBrand(seller_name=brand_name, reason=reason)
+        db.session.add(new_entry)
+        db.session.commit()
+    
+    await ctx.reply(f"✅ Added `{brand_name}` to the blacklist.", mention_author=False)
+
+@blacklist_group.command(name='remove')
+@commands.has_permissions(administrator=True)
+async def blacklist_remove(ctx, *, brand_name: str):
+    """Remove a brand from the blacklist: !blacklist remove Brand Name"""
+    from app import BlacklistedBrand
+    with app.app_context():
+        existing = BlacklistedBrand.query.filter(BlacklistedBrand.seller_name.ilike(brand_name)).first()
+        if not existing:
+            await ctx.reply(f"⚠️ Brand `{brand_name}` not found on the blacklist.", mention_author=False)
+            return
+        
+        db.session.delete(existing)
+        db.session.commit()
+    
+    await ctx.reply(f"✅ Removed `{brand_name}` from the blacklist.", mention_author=False)
+
+@blacklist_group.command(name='list')
+async def blacklist_list(ctx):
+    """List all blacklisted brands"""
+    from app import BlacklistedBrand
+    with app.app_context():
+        brands = BlacklistedBrand.query.all()
+        if not brands:
+            await ctx.reply("📭 The blacklist is currently empty.", mention_author=False)
+            return
+        
+        text = "**🚫 Blacklisted Brands/Sellers**\n"
+        for i, b in enumerate(brands, 1):
+            text += f"{i}. **{b.seller_name}** - {b.reason or 'No reason'} (Added: {b.added_at.strftime('%Y-%m-%d')})\n"
+            if len(text) > 1800:
+                await ctx.send(text)
+                text = ""
+        
+        if text:
+            await ctx.send(text)
+
+@blacklist_group.command(name='scan')
+@commands.has_permissions(administrator=True)
+async def blacklist_scan(ctx, limit: int = 200):
+    """Scan historical messages in the blacklist channel to auto-populate"""
+    if not BLACKLIST_CHANNEL_ID:
+        await ctx.reply("❌ BLACKLIST_CHANNEL_ID not configured.", mention_author=False)
+        return
+    
+    channel = bot.get_channel(BLACKLIST_CHANNEL_ID)
+    if not channel:
+        await ctx.reply(f"❌ Could not access channel {BLACKLIST_CHANNEL_ID}.", mention_author=False)
+        return
+    
+    status_msg = await ctx.reply(f"🔍 Scanning last {limit} messages in {channel.name}... ", mention_author=False)
+    
+    from app import BlacklistedBrand
+    found_brands = []
+    
+    async for message in channel.history(limit=limit):
+        if message.author.bot: continue
+        
+        # Look for brand names (often bolded or first line)
+        # We'll use a simple heuristic: if it's a short line or bolded text, it might be a brand
+        content = message.content.strip()
+        if not content: continue
+        
+        # Potential brand extraction logic
+        # 1. Check for bolded text **Brand Name**
+        bold_match = re.search(r'\*\*(.*?)\*\*', content)
+        if bold_match:
+            brand = bold_match.group(1).strip()
+        else:
+            # 2. First line if it's short
+            brand = content.split('\n')[0].strip()
+        
+        if brand and len(brand) < 50 and brand not in found_brands:
+            with app.app_context():
+                existing = BlacklistedBrand.query.filter(BlacklistedBrand.seller_name.ilike(brand)).first()
+                if not existing:
+                    new_entry = BlacklistedBrand(seller_name=brand, reason=f"Extracted from history: {content[:50]}...")
+                    db.session.add(new_entry)
+                    found_brands.append(brand)
+    
+    with app.app_context():
+        db.session.commit()
+        
+    await status_msg.edit(content=f"✅ Scan complete! Added **{len(found_brands)}** new brands to the blacklist.\nNew additions: {', '.join(found_brands) if found_brands else 'None'}")
 
 def get_hot_products():
     """Get Top Products - Sorted by Ad Spend (high first), then Video Count"""

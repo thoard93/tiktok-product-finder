@@ -921,6 +921,34 @@ class Product(db.Model):
             'gmv_growth': self.gmv_growth or 0,
         }
 
+class BlacklistedBrand(db.Model):
+    """TikTok Shop Brands/Sellers that are blacklisted (e.g. for removing commissions)"""
+    __tablename__ = 'blacklisted_brands'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    seller_name = db.Column(db.String(255), unique=True, index=True, nullable=False)
+    seller_id = db.Column(db.String(50), unique=True, index=True)
+    reason = db.Column(db.Text)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'seller_name': self.seller_name,
+            'seller_id': self.seller_id,
+            'reason': self.reason,
+            'added_at': self.added_at.isoformat() if self.added_at else None
+        }
+
+def is_brand_blacklisted(seller_name=None, seller_id=None):
+    """Check if a brand is blacklisted by name or ID"""
+    if seller_id:
+        return BlacklistedBrand.query.filter_by(seller_id=seller_id).first() is not None
+    if seller_name:
+        # Check for case-insensitive match
+        return BlacklistedBrand.query.filter(BlacklistedBrand.seller_name.ilike(seller_name)).first() is not None
+    return False
+
 # =============================================================================
 # DATABASE INITIALIZATION
 # =============================================================================
@@ -6677,26 +6705,29 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
 @login_required
 @admin_required
 def copilot_sync():
-    """Manual trigger to sync latest products from Copilot with multi-page support"""
+    """Manual trigger to sync latest products from Copilot with massive multi-page support"""
     user = get_current_user()
     data = request.json or {}
     pages = int(data.get('pages', 1))
     limit = int(data.get('limit', 50))
     timeframe = data.get('timeframe', '7d')
     
+    # Cap pages to prevent extreme load but allow high volume
+    if pages > 200: pages = 200 
+    
     products_synced = 0
     errors = []
     
     for page in range(0, pages): # Copilot API uses 0-based paging
         try:
-            logger.info(f"Manual Sync: Processing page {page + 1}/{pages}")
+            print(f"[Copilot Sync] Processing page {page + 1}/{pages}")
             saved, total = sync_copilot_products(timeframe=timeframe, limit=limit, page=page)
             products_synced += saved
             if total == 0: break # No more products
             if page < pages - 1:
                 time.sleep(2) # Polite delay
         except Exception as e:
-            logger.error(f"Error syncing page {page}: {e}")
+            print(f"Error syncing page {page}: {e}")
             errors.append(f"Page {page}: {str(e)}")
             
     log_activity(user.id, 'copilot_sync', {'pages': pages, 'synced': products_synced})
@@ -6704,6 +6735,7 @@ def copilot_sync():
         'status': 'success',
         'synced': products_synced,
         'pages_processed': pages,
+        'total_pages_requested': pages,
         'errors': errors
     })
 
@@ -6814,23 +6846,23 @@ try:
     import atexit
 
     def scheduled_copilot_refresh():
-        """Daily background sync of 1500+ products (30 pages)"""
+        """Daily background sync of 3000+ products (60 pages)"""
         with app.app_context():
-            print("[SCHEDULER] 🕰️ Starting High-Volume Daily Copilot Sync...")
+            print("[SCHEDULER] 🕰️ Starting Massive Daily Copilot Sync...")
             try:
                 total_saved = 0
-                for page in range(30): # 30 pages = 1500 products
+                for page in range(60): # 60 pages = 3000 products
                     saved, total = sync_copilot_products(timeframe='7d', limit=50, page=page)
                     total_saved += saved
                     if total == 0: break
                     time.sleep(3) # Polite delay
                 
-                print(f"[SCHEDULER] ✅ High-Volume Sync Complete: {total_saved} products updated.")
+                print(f"[SCHEDULER] ✅ Massive Sync Complete: {total_saved} products updated.")
                 try:
-                    send_telegram_alert(f"🕵️ **High-Volume Sync Complete!**\n✅ Updated {total_saved} products.")
+                    send_telegram_alert(f"🕵️ **Massive Sync Complete!**\n✅ Updated {total_saved} products.")
                 except: pass
             except Exception as e:
-                print(f"[SCHEDULER] ❌ High-Volume Sync Failed: {e}")
+                print(f"[SCHEDULER] ❌ Massive Sync Failed: {e}")
 
     def scheduled_stale_refresh():
         """Refresh 200 oldest products every cycle"""
