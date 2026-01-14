@@ -195,7 +195,19 @@
                 <button onclick="syncCopilot()" id="btnCopilot"
                     class="btn-premium px-6 py-3 shadow-lg shadow-primary/20">
                     <i class="fas fa-bolt mr-2"></i>
-                    Execute Sync
+                    Quick Sync (1K)
+                </button>
+
+                <button onclick="massSyncProducts(5000)" id="btnMassSync5K"
+                    class="bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-500/20">
+                    <i class="fas fa-rocket text-xs"></i>
+                    <span>Mass Sync (5K)</span>
+                </button>
+
+                <button onclick="massSyncProducts(10000)" id="btnMassSync10K"
+                    class="bg-violet-600 hover:bg-violet-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-violet-500/20">
+                    <i class="fas fa-meteor text-xs"></i>
+                    <span>MEGA Sync (10K)</span>
                 </button>
 
                 <button onclick="runCleanup()"
@@ -231,6 +243,11 @@
                 class="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4 mt-12 border-t border-white/5 pt-8">
                 Danger Zone</h4>
             <div class="flex flex-wrap gap-4">
+                <button onclick="cleanupZeroSales()" id="btnCleanZeroSales"
+                    class="bg-amber-950/20 border border-amber-500/20 px-6 py-3 rounded-xl hover:bg-amber-500 hover:text-white text-amber-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
+                    <i class="fas fa-trash-alt text-xs"></i>
+                    <span>Delete 0 7D Sales</span>
+                </button>
                 <button onclick="cleanupZeroStats()" id="btnCleanZero"
                     class="bg-amber-950/20 border border-amber-500/20 px-6 py-3 rounded-xl hover:bg-amber-500 hover:text-white text-amber-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-trash-alt text-xs"></i>
@@ -422,6 +439,59 @@
                 else alert('Protocol Error: ' + data.error);
             } catch (e) { alert('System Fault: ' + e); }
             finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function massSyncProducts(target) {
+            const btnId = target >= 10000 ? 'btnMassSync10K' : 'btnMassSync5K';
+            const btn = document.getElementById(btnId);
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">Syncing ' + (target / 1000) + 'K...</span>';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/copilot/mass-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: target, timeframe: '7d' })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`✅ Mass Sync Complete!\n\nSynced ${data.synced} products from ${data.pages_processed} pages.`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Sync Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function cleanupZeroSales() {
+            if (!confirm("🗑️ Delete all products with 0 7D Sales?\n\nThis will remove products that haven't sold in the last 7 days.")) return;
+
+            const btn = document.getElementById('btnCleanZeroSales');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/cleanup/zero-sales', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`✅ Cleanup Complete!\n\n${data.message}`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e);
+            } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
             }

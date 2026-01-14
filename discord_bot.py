@@ -705,13 +705,27 @@ async def lookup_command(ctx, *, query: str = None):
 # BLACKLIST COMMANDS
 # =============================================================================
 
+# Roles that can manage the blacklist (in addition to admins)
+BLACKLIST_ALLOWED_ROLES = ['Team', 'Brand Manager', 'Moderator', 'Mod', 'Staff', 'Admin']
+
+def can_manage_blacklist(ctx):
+    """Check if user can manage blacklist: admin OR has an allowed role"""
+    # Admins always have access
+    if ctx.author.guild_permissions.administrator:
+        return True
+    # Check if user has any of the allowed roles
+    user_role_names = [role.name for role in ctx.author.roles]
+    for allowed_role in BLACKLIST_ALLOWED_ROLES:
+        if any(allowed_role.lower() in role.lower() for role in user_role_names):
+            return True
+    return False
+
 @bot.group(name='blacklist', invoke_without_command=True)
 async def blacklist_group(ctx):
     """Blacklist management: !blacklist <add|remove|list|scan>"""
     await ctx.reply("Usage: `!blacklist <add|remove|list|scan>`", mention_author=False)
 
 @blacklist_group.command(name='add')
-@commands.has_permissions(administrator=True)
 async def blacklist_add(ctx, *, input_text: str = None):
     """Add a brand to the blacklist: !blacklist add Brand Name [| reason]"""
     if not input_text:
@@ -752,7 +766,6 @@ async def blacklist_reset(ctx):
     await ctx.reply(f"🧹 Blacklist cleared! Removed **{num_rows}** entries.", mention_author=False)
 
 @blacklist_group.command(name='remove')
-@commands.has_permissions(administrator=True)
 async def blacklist_remove(ctx, *, brand_name: str):
     """Remove a brand from the blacklist: !blacklist remove Brand Name"""
     from app import BlacklistedBrand

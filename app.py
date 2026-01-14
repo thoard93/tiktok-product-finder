@@ -6752,6 +6752,82 @@ def copilot_sync():
         'errors': errors
     })
 
+@app.route('/api/cleanup/zero-sales', methods=['POST'])
+@login_required
+@admin_required
+def cleanup_zero_sales():
+    """Remove products from database that have 0 7D sales"""
+    user = get_current_user()
+    try:
+        # Find products with 0 or NULL 7D sales
+        zero_sales_count = Product.query.filter(
+            db.or_(
+                Product.sales_7d == 0,
+                Product.sales_7d == None
+            )
+        ).count()
+        
+        # Delete them
+        deleted = Product.query.filter(
+            db.or_(
+                Product.sales_7d == 0,
+                Product.sales_7d == None
+            )
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        
+        log_activity(user.id, 'cleanup_zero_sales', {'deleted': deleted})
+        return jsonify({
+            'status': 'success',
+            'deleted': deleted,
+            'message': f'Removed {deleted} products with 0 7D sales'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/copilot/mass-sync', methods=['POST'])
+@login_required
+@admin_required
+def copilot_mass_sync():
+    """Synchronous mass sync - fetches up to 10,000 products across 200 pages"""
+    user = get_current_user()
+    data = request.json or {}
+    target_products = int(data.get('target', 5000))  # Default 5000 products
+    timeframe = data.get('timeframe', '7d')
+    
+    # Calculate pages needed (50 products per page)
+    pages_needed = min((target_products // 50) + 1, 200)
+    
+    products_synced = 0
+    pages_done = 0
+    
+    for page in range(0, pages_needed):
+        try:
+            print(f"[Mass Sync] Processing page {page + 1}/{pages_needed}")
+            saved, total = sync_copilot_products(timeframe=timeframe, limit=50, page=page)
+            products_synced += saved
+            pages_done += 1
+            
+            if total == 0:
+                print(f"[Mass Sync] No more products at page {page}")
+                break
+                
+            if page < pages_needed - 1:
+                time.sleep(1.5)  # Rate limiting
+        except Exception as e:
+            print(f"[Mass Sync] Error on page {page}: {e}")
+            continue
+    
+    log_activity(user.id, 'mass_sync', {'pages': pages_done, 'synced': products_synced})
+    return jsonify({
+        'status': 'success',
+        'synced': products_synced,
+        'pages_processed': pages_done,
+        'message': f'Synced {products_synced} products from {pages_done} pages'
+    })
+
 @app.route('/api/copilot/test')
 @login_required
 def copilot_test():
