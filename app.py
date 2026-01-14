@@ -6755,7 +6755,7 @@ def copilot_sync():
 @app.route('/api/cleanup/zero-sales', methods=['POST'])
 @login_required
 @admin_required
-def cleanup_zero_sales():
+def cleanup_zero_sales_v2():
     """Remove products from database that have 0 7D sales"""
     user = get_current_user()
     try:
