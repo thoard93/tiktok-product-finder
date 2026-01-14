@@ -26,7 +26,7 @@ PRODUCT_LOOKUP_CHANNEL_ID = int(os.environ.get('PRODUCT_LOOKUP_CHANNEL_ID', 0))
 # Hot Product Criteria - Free Shipping Deals
 MIN_SALES_7D = 50  # Lower threshold since we're filtering by free shipping
 MAX_VIDEO_COUNT = 30  # Low competition
-MAX_DAILY_POSTS = 5  # Top 5 daily
+MAX_DAILY_POSTS = 10  # Top 10 daily
 DAYS_BEFORE_REPEAT = 3  # Don't show same product for 3 days
 
 # Discord Config

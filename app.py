@@ -472,7 +472,7 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
     # Generate or extract product URL
     p_url = res['product_url'] or p_data.get('product_url') or p_data.get('url')
     if not p_url or 'tiktok.com' not in p_url:
-        p_url = f"https://www.tiktok.com/shop/pdp/p/{raw_id}?source=ecommerce_store&region=US"
+        p_url = f"https://shop.tiktok.com/view/product/{raw_id}?region=US&locale=en-US"
 
     if existing:
         # Update existing record
