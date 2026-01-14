@@ -581,22 +581,30 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     
     print(f"{i_log_prefix} 🕵️‍♂️ Searching Copilot for {raw_pid}...")
     
-    # Search via Copilot Trending with Keyword
-    # We use timeframe='30d' to cast a wide net
-    res = fetch_copilot_trending(timeframe='30d', limit=20, keywords=raw_pid)
+    # STAGE 1: Search by direct Product ID
+    res = fetch_copilot_trending(timeframe='30d', limit=5, product_id=raw_pid)
+    
+    # STAGE 2: Fallback to Keyword Search if no results
+    if not res or not res.get('videos'):
+        print(f"{i_log_prefix} ⚠️ Stage 1 (ID Search) failed for {raw_pid}, trying Stage 2 (Keyword fallback)...")
+        res = fetch_copilot_trending(timeframe='30d', limit=10, keywords=raw_pid)
     
     if not res or not res.get('videos'):
+        print(f"{i_log_prefix} ❌ Copilot Search Found Nothing for {raw_pid} after all stages. Full Response: {res}")
         return False, "Copilot Search Found Nothing"
         
     # Find exact match or best match
     best_match = None
-    for v in res['videos']:
+    videos = res.get('videos', [])
+    for v in videos:
         v_pid = str(v.get('productId', ''))
-        if raw_pid in v_pid:
+        # Try both exact and partial matches to be safe
+        if raw_pid == v_pid or raw_pid in v_pid:
             best_match = v
             break
             
     if not best_match:
+        print(f"{i_log_prefix} ❌ No exact PID match in results found for {raw_pid}. Results: {[v.get('productId') for v in videos]}")
         return False, "Copilot Search: No exact PID match found"
         
     # Extract Data from Best Match
@@ -6478,19 +6486,24 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         "limit": limit,
         "page": page,
         "region": region,
-        "page": page,
-        "region": region,
         "sAggMode": "net"
     }
     
-    # Add keyword search if provided
-    if kwargs.get('keywords'):
-        params['keywords'] = kwargs.get('keywords')
-        # If searching by keywords (like product ID), we should relax other filters
+    # Add keyword/ID search if provided
+    if kwargs.get('keywords') or kwargs.get('product_id'):
+        target = kwargs.get('product_id') or kwargs.get('keywords')
+        params['keywords'] = target
+        # If searching by ID, we should relax other filters
         params.pop('timeframe', None)
         params.pop('sortBy', None)
         params.pop('feedType', None)
-        params['searchType'] = 'product' 
+        params['searchType'] = 'product'
+        
+        # If it looks like a numeric ID, try to be more specific if Copilot supports it
+        if str(target).isdigit() and len(str(target)) > 15:
+             params['productId'] = str(target)
+             # Sometimes having both keywords and productId helps, sometimes it hurts. 
+             # We'll stick with both for now as a "wide net".
     
     try:
         res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)

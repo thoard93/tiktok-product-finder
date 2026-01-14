@@ -678,8 +678,9 @@ async def blacklist_group(ctx):
 @blacklist_group.command(name='add')
 @commands.has_permissions(administrator=True)
 async def blacklist_add(ctx, brand_name: str, *, reason: str = "No reason provided"):
-    """Add a brand to the blacklist: !blacklist add \"Brand Name\" \"Reason\""""
+    """Add a brand to the blacklist: !blacklist add \"Brand Name\" [reason]"""
     from app import BlacklistedBrand
+    brand_name = brand_name.strip()
     with app.app_context():
         existing = BlacklistedBrand.query.filter(BlacklistedBrand.seller_name.ilike(brand_name)).first()
         if existing:
@@ -692,11 +693,22 @@ async def blacklist_add(ctx, brand_name: str, *, reason: str = "No reason provid
     
     await ctx.reply(f"✅ Added `{brand_name}` to the blacklist.", mention_author=False)
 
+@blacklist_group.command(name='reset')
+@commands.has_permissions(administrator=True)
+async def blacklist_reset(ctx):
+    """Admin only: Totally clear the brand blacklist"""
+    from app import BlacklistedBrand
+    with app.app_context():
+        num_rows = BlacklistedBrand.query.delete()
+        db.session.commit()
+    await ctx.reply(f"🧹 Blacklist cleared! Removed **{num_rows}** entries.", mention_author=False)
+
 @blacklist_group.command(name='remove')
 @commands.has_permissions(administrator=True)
 async def blacklist_remove(ctx, *, brand_name: str):
     """Remove a brand from the blacklist: !blacklist remove Brand Name"""
     from app import BlacklistedBrand
+    brand_name = brand_name.strip().replace('"', '').replace("'", "")
     with app.app_context():
         existing = BlacklistedBrand.query.filter(BlacklistedBrand.seller_name.ilike(brand_name)).first()
         if not existing:
@@ -727,92 +739,6 @@ async def blacklist_list(ctx):
         
         if text:
             await ctx.send(text)
-
-@blacklist_group.command(name='scan')
-@commands.has_permissions(administrator=True)
-async def blacklist_scan(ctx, limit: int = 500):
-    """Scan historical messages in the blacklist channel to auto-populate"""
-    if not BLACKLIST_CHANNEL_ID:
-        await ctx.reply("❌ BLACKLIST_CHANNEL_ID not configured.", mention_author=False)
-        return
-    
-    channel = bot.get_channel(BLACKLIST_CHANNEL_ID)
-    if not channel:
-        # Try fetching if not in cache
-        try:
-            channel = await bot.fetch_channel(BLACKLIST_CHANNEL_ID)
-        except:
-            await ctx.reply(f"❌ Could not access channel {BLACKLIST_CHANNEL_ID}.", mention_author=False)
-            return
-    
-    status_msg = await ctx.reply(f"🔍 Scanning last {limit} messages in {channel.name}... (This may take a minute)", mention_author=False)
-    
-    from app import BlacklistedBrand
-    found_brands = []
-    processed_count = 0
-    
-    # 1. Pre-fetch existing brands to avoid redundant queries
-    with app.app_context():
-        existing_brands = {b.seller_name.lower() for b in BlacklistedBrand.query.all()}
-    
-    try:
-        async for message in channel.history(limit=limit):
-            processed_count += 1
-            if message.author.bot: continue
-            
-            # Update status for large scans
-            if processed_count % 50 == 0:
-                await status_msg.edit(content=f"🔍 Scanning... ({processed_count}/{limit} messages checked, found {len(found_brands)} brands)")
-            
-            # Heuristic extraction logic
-            content = message.content.strip() if message.content else ""
-            
-            # Check for text in embeds (sometimes images have captions in embeds)
-            if not content and message.embeds:
-                embed = message.embeds[0]
-                content = (embed.title or "") + "\n" + (embed.description or "")
-                content = content.strip()
-
-            if not content: continue
-            
-            # Extraction logic
-            brand = None
-            # A. Check for bolded text **Brand Name**
-            bold_match = re.search(r'\*\*(.*?)\*\*', content)
-            if bold_match:
-                brand = bold_match.group(1).strip()
-            else:
-                # B. First line (usually the brand name in reports)
-                brand = content.split('\n')[0].strip()
-                # Clean up punctuation
-                brand = re.sub(r'[:\-!]$', '', brand).strip()
-            
-            # Filter out obviously non-brand text
-            if brand and 2 < len(brand) < 60:
-                # Basic blacklist of common words to ignore as "brands"
-                ignore_list = ['reasons', 'scam', 'proof', 'attached', 'screenshot', 'info', 'update']
-                if any(word == brand.lower() for word in ignore_list):
-                    continue
-
-                if brand.lower() not in existing_brands and brand not in found_brands:
-                    found_brands.append(brand)
-        
-        # 2. Batch save found brands
-        if found_brands:
-            with app.app_context():
-                for b_name in found_brands:
-                    new_entry = BlacklistedBrand(
-                        seller_name=b_name, 
-                        reason=f"Auto-imported from historical scan of #{channel.name}"
-                    )
-                    db.session.add(new_entry)
-                db.session.commit()
-        
-        await status_msg.edit(content=f"✅ Scan complete! Checked {processed_count} messages.\nAdded **{len(found_brands)}** new brands to the blacklist.\n{('New additions: ' + ', '.join(found_brands[:15])) if found_brands else 'No new brands found.'}{'...' if len(found_brands) > 15 else ''}")
-
-    except Exception as e:
-        print(f"Error during blacklist scan: {e}")
-        await status_msg.edit(content=f"❌ Error during scan: {str(e)}")
 
 def get_hot_products():
     """Get Top Products - Sorted by Ad Spend (high first), then Video Count"""
