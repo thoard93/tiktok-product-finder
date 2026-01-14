@@ -466,6 +466,13 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
     price = res['price'] or parse_safe_float(p_data.get('price') or 0)
     v_count = res['video_count'] or parse_kmb_string(p_data.get('video_count') or 0)
     
+    # New Stats Persistence
+    shop_ads = safe_float(p_data.get('shop_ads_commission') or p_data.get('tapShopAdsRate') or 0)
+    if shop_ads > 1.0: shop_ads = shop_ads / 10000.0 # Normalize if raw rate
+    
+    ad_spend = safe_float(p_data.get('ad_spend') or p_data.get('periodAdSpend') or 0)
+    ad_spend_total = safe_float(p_data.get('ad_spend_total') or p_data.get('productTotalAdSpend') or 0)
+    
     img = parse_cover_url(res['image_url'] or p_data.get('image_url') or p_data.get('item_img'))
     name = res['product_name'] or p_data.get('product_name') or p_data.get('title') or ""
 
@@ -488,6 +495,11 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
         if inf_count > 0 or existing.influencer_count == 0: existing.influencer_count = inf_count
         if comm > 0 or existing.commission_rate == 0: existing.commission_rate = comm
         if v_count > 0 or existing.video_count == 0: existing.video_count = v_count
+        
+        # Update New Stats
+        if shop_ads > 0: existing.shop_ads_commission = shop_ads
+        if ad_spend > 0: existing.ad_spend = ad_spend
+        if ad_spend_total > 0: existing.ad_spend_total = ad_spend_total
         
         # Merge other stats if available
         existing.video_7d = parse_kmb_string(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or res.get('video_7d') or existing.video_7d or 0)
@@ -539,6 +551,9 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
             seller_name=final_seller,
             seller_id=res['seller_id'] or p_data.get('seller_id') or p_data.get('shop_id'),
             scan_type=scan_type,
+            shop_ads_commission=shop_ads,
+            ad_spend=ad_spend,
+            ad_spend_total=ad_spend_total,
             first_seen=datetime.utcnow()
         )
         db.session.add(product)
@@ -597,6 +612,24 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     
     gmv = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
     sales_period = int(v.get('periodUnits') or v.get('units') or 0)
+    
+    # Stats Extraction
+    v_count = int(v.get('productVideoCount') or 0)
+    inf_count = int(v.get('productCreatorCount') or 0)
+    shop_ads = float(v.get('tapShopAdsRate') or 0) / 10000.0
+    ad_spend = float(v.get('periodAdSpend') or 0)
+    ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or 0)
+    comm = float(v.get('tapCommissionRate') or 0) / 10000.0
+    
+    sv(p, 'sales_7d', sales_period if sales_period > 0 else gv(p, 'sales_7d'))
+    sv(p, 'gmv', gmv if gmv > 0 else gv(p, 'gmv'))
+    sv(p, 'video_count', v_count if v_count > 0 else gv(p, 'video_count'))
+    sv(p, 'influencer_count', inf_count if inf_count > 0 else gv(p, 'influencer_count'))
+    sv(p, 'shop_ads_commission', shop_ads if shop_ads > 0 else gv(p, 'shop_ads_commission'))
+    sv(p, 'ad_spend', ad_spend if ad_spend > 0 else gv(p, 'ad_spend'))
+    sv(p, 'ad_spend_total', ad_spend_total if ad_spend_total > 0 else gv(p, 'ad_spend_total'))
+    sv(p, 'commission_rate', comm if comm > 0 else gv(p, 'commission_rate'))
+    sv(p, 'last_updated', datetime.utcnow())
     
     # Ratings & Reviews (Try common keys)
     rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or 0)
@@ -6497,7 +6530,9 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             
             # Extract Product URL from Copilot API (try multiple field names)
             raw_product_id = str(v.get('productId', '')).replace('shop_', '')
-            product_url = v.get('productLink') or v.get('productUrl') or v.get('shopLink') or v.get('shopUrl') or v.get('affiliateLink') or v.get('link')
+            product_url = v.get('productLink') or v.get('productUrl') or v.get('shopLink') or v.get('shopUrl') or v.get('affiliateLink') or v.get('link') or v.get('shareUrl')
+            
+            # If no direct URL found, construct the most reliable direct product page URL
             if not product_url and raw_product_id:
                 product_url = f"https://shop.tiktok.com/view/product/{raw_product_id}?region=US&locale=en-US"
             
@@ -6623,38 +6658,36 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
 
 @app.route('/api/copilot/sync', methods=['POST'])
 @login_required
+@admin_required
 def copilot_sync():
-    """
-    Sync trending products from TikTokCopilot.
-    
-    POST body (optional):
-    {
-        "timeframe": "7d",  // 1d, 3d, 7d, 14d, 30d
-        "limit": 50,
-        "page": 0
-    }
-    """
+    """Manual trigger to sync latest products from Copilot with multi-page support"""
     user = get_current_user()
-    data = request.get_json() or {}
-    
+    data = request.json or {}
+    pages = int(data.get('pages', 1))
+    limit = int(data.get('limit', 50))
     timeframe = data.get('timeframe', '7d')
-    limit = min(int(data.get('limit', 50)), 100)  # Cap at 100
-    page = int(data.get('page', 0))
     
-    print(f"[Copilot Sync] Starting... Timeframe={timeframe}, Limit={limit}, Page={page}")
+    products_synced = 0
+    errors = []
     
-    saved_count, total = sync_copilot_products(timeframe=timeframe, limit=limit, page=page)
-    
-    if total == 0:
-        return jsonify({'success': False, 'error': 'Failed to fetch from Copilot. Check cookie.'}), 500
-    
-    log_activity(user.id, 'copilot_sync', {'timeframe': timeframe, 'saved': saved_count})
-    
+    for page in range(0, pages): # Copilot API uses 0-based paging
+        try:
+            logger.info(f"Manual Sync: Processing page {page + 1}/{pages}")
+            saved, total = sync_copilot_products(timeframe=timeframe, limit=limit, page=page)
+            products_synced += saved
+            if total == 0: break # No more products
+            if page < pages - 1:
+                time.sleep(2) # Polite delay
+        except Exception as e:
+            logger.error(f"Error syncing page {page}: {e}")
+            errors.append(f"Page {page}: {str(e)}")
+            
+    log_activity(user.id, 'copilot_sync', {'pages': pages, 'synced': products_synced})
     return jsonify({
-        'success': True,
-        'message': f'Synced {saved_count} products from Copilot!',
-        'saved': saved_count,
-        'total_in_response': total
+        'status': 'success',
+        'synced': products_synced,
+        'pages_processed': pages,
+        'errors': errors
     })
 
 @app.route('/api/copilot/test')
@@ -6764,63 +6797,49 @@ try:
     import atexit
 
     def scheduled_copilot_refresh():
-        """Daily background job to sync products from TikTokCopilot"""
+        """Daily background sync of 1500+ products (30 pages)"""
         with app.app_context():
-            print("[SCHEDULER] 🕰️ Starting Daily Copilot Sync...")
-            
+            print("[SCHEDULER] 🕰️ Starting High-Volume Daily Copilot Sync...")
             try:
-                # Sync multiple pages for comprehensive coverage
                 total_saved = 0
-                for page in range(10):  # Sync 10 pages = ~500 products
-                    saved, _ = sync_copilot_products(timeframe='7d', limit=50, page=page)
+                for page in range(30): # 30 pages = 1500 products
+                    saved, total = sync_copilot_products(timeframe='7d', limit=50, page=page)
                     total_saved += saved
-                    time.sleep(2)  # Rate limit protection
+                    if total == 0: break
+                    time.sleep(3) # Polite delay
                 
-                print(f"[SCHEDULER] ✅ Copilot Sync Complete: {total_saved} products updated.")
-                
-                # Send Telegram notification
+                print(f"[SCHEDULER] ✅ High-Volume Sync Complete: {total_saved} products updated.")
                 try:
-                    send_telegram_alert(f"🕵️ **Daily Copilot Sync Complete!**\n✅ Updated {total_saved} products from trending feed.")
+                    send_telegram_alert(f"🕵️ **High-Volume Sync Complete!**\n✅ Updated {total_saved} products.")
                 except: pass
-                
             except Exception as e:
-                print(f"[SCHEDULER] ❌ Copilot Sync Failed: {e}")
-                try:
-                    send_telegram_alert(f"⚠️ **Daily Sync Failed**\nError: `{str(e)[:200]}`")
-                except: pass
+                print(f"[SCHEDULER] ❌ High-Volume Sync Failed: {e}")
 
     def scheduled_stale_refresh():
-        """Auto-refresh stats for stale products (>24h since update)"""
+        """Refresh 200 oldest products every cycle"""
         with app.app_context():
-            print("[SCHEDULER] ♻️ Starting Stale Product Refresh...")
+            print("[SCHEDULER] ♻️ Starting Expanded Stale Refresh (200 products)...")
             try:
                 cutoff = datetime.utcnow() - timedelta(hours=24)
-                
-                # Priority: Oldest information first to ensure all products get refreshed
                 stale_products = Product.query.filter(
                     db.or_(Product.last_updated < cutoff, Product.last_updated == None),
-                    Product.sales_7d > 0,
+                    Product.sales_7d >= 0, # Include all products
                     Product.product_status == 'active'
-                ).order_by(Product.last_updated.asc()).limit(100).all()
+                ).order_by(Product.last_updated.asc()).limit(200).all()
                 
-                if not stale_products:
-                    print("[SCHEDULER] 😴 No stale high-priority products found.")
-                    return
-
-                print(f"[SCHEDULER] 🔄 Refreshing {len(stale_products)} stale products...")
+                if not stale_products: return
+                
                 refreshed = 0
                 for p in stale_products:
                     try:
-                        # Force refresh
-                        enrich_product_data(p, force=True, i_log_prefix="[StaleRefresh]")
+                        enrich_product_data(p, force=True)
                         refreshed += 1
-                        time.sleep(1) # Gentle rate limiting
+                        time.sleep(1)
                     except Exception as e:
-                        print(f"[SCHEDULER] Failed to refresh {p.product_id}: {e}")
+                        print(f"Refresh failed for {p.product_id}: {e}")
                 
                 db.session.commit()
                 print(f"[SCHEDULER] ✅ Stale Refresh Complete: {refreshed} products updated.")
-                
             except Exception as e:
                 print(f"[SCHEDULER] ❌ Stale Refresh Error: {e}")
 
@@ -6998,6 +7017,31 @@ def ensure_schema_integrity():
         except Exception as e:
             # Don't crash app on schema check failure (e.g. invalid permissions)
             print(f"[SCHEMA] Warning: Integrity check skipped: {e}")
+
+@app.route('/api/admin/cleanup-zero-sales-7d', methods=['POST'])
+@login_required
+@admin_required
+def cleanup_zero_sales():
+    """Delete products with 0 7d sales that are NOT favorites"""
+    try:
+        # Exclude favorites
+        fav_ids = [f.product_id for f in Favorite.query.all()]
+        
+        to_delete = Product.query.filter(
+            Product.sales_7d <= 0,
+            ~Product.product_id.in_(fav_ids)
+        ).all()
+        
+        count = len(to_delete)
+        for p in to_delete:
+            db.session.delete(p)
+            
+        db.session.commit()
+        log_activity(session.get('user_id'), 'cleanup_zero_sales', {'deleted': count})
+        return jsonify({'status': 'success', 'deleted': count, 'message': f'Successfully purged {count} low-performance products.'})
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # Run on module load (ensures it runs on Render gunicorn start)
 ensure_schema_integrity()
