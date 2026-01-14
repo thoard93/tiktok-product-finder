@@ -812,7 +812,7 @@ def get_hot_products():
         # Query: Products with Shop Ads Commission >= 10%, high 7D sales, high ad spend, low competition (<40 videos)
         # Sort by: Shop Ads Commission (highest first), then Ad Spend, then 7D Sales
         products = Product.query.filter(
-            Product.video_count >= 5,  # Filter out placeholders
+            Product.video_count >= 20,  # Filter out placeholders (min 20 videos)
             Product.video_count < 40,  # Low competition filter (<40 videos)
             Product.sales_7d >= 100,  # High 7D sales
             Product.ad_spend >= 500,  # High ad spend ($500+)

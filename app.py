@@ -675,6 +675,25 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     sv(p, 'last_updated', datetime.utcnow())
     sv(p, 'is_enriched', True)
     
+    # FINAL FILTER: Quality Control
+    # If 0 sales or low videos, hide/skip unless it's a favorite
+    filter_reason = None
+    if sales_period <= 0: filter_reason = f"Zero 7D Sales ({sales_period})"
+    elif v_count < 20: filter_reason = f"Low Videos ({v_count})"
+    
+    if filter_reason:
+        # Check if it's a Product object or dict
+        is_favorite = False
+        if hasattr(p, 'is_favorite'): is_favorite = p.is_favorite
+        elif isinstance(p, dict): is_favorite = p.get('is_favorite', False)
+        
+        if not is_favorite:
+            if hasattr(p, 'product_status'):
+                print(f"{i_log_prefix} [Enrich] Hiding {pid} ({filter_reason})")
+                p.product_status = 'unavailable'
+                p.status_note = filter_reason
+            return False, filter_reason
+
     return True, "Enriched via Copilot"
 
 
@@ -6599,9 +6618,10 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 sales_keys = {k: v.get(k) for k in v.keys() if any(x in k.lower() for x in ['sale', 'unit', 'sold', 'total'])}
                 print(f"[SALES_DEBUG] Product {product_id}: 7D={sales_7d}, Total={total_sales}, Fields={sales_keys}")
 
-            # FILTER: Quality Control (Video Count Only)
+            # FILTER: Quality Control
             filter_reason = None
-            if video_count < 5: filter_reason = f"Low Videos ({video_count})"
+            if video_count < 20: filter_reason = f"Low Videos ({video_count})"
+            if sales_7d <= 0: filter_reason = f"Zero 7D Sales ({sales_7d})"
 
             if filter_reason:
                 # Check if it exists to HIDE it (Active Cleanup)
