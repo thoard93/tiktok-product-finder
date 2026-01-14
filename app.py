@@ -4195,6 +4195,7 @@ def api_products():
         scan_type = request.args.get('scan_type')
         seller_id = request.args.get('seller_id')
         keyword = request.args.get('keyword') or request.args.get('search')
+        min_commission = request.args.get('min_commission', type=float)
         
         # Favorite alias
         is_favorite = (request.args.get('favorite', 'false').lower() == 'true' or 
@@ -4265,6 +4266,17 @@ def api_products():
         if max_vids is not None:
             query = query.filter(Product.video_count <= max_vids)
 
+        if min_commission is not None:
+            try:
+                # Expecting value in percentage form like 10, 15, 20
+                threshold = float(min_commission) / 100.0
+                query = query.filter(db.or_(
+                    Product.commission_rate >= threshold,
+                    Product.shop_ads_commission >= threshold
+                ))
+            except (ValueError, TypeError):
+                pass
+
         # 3. Apply Sorting
         if sort_by in ['sales_desc', 'sales_7d']:
             query = query.order_by(Product.sales_7d.desc().nullslast(), Product.sales.desc().nullslast())
@@ -4275,7 +4287,7 @@ def api_products():
         elif sort_by in ['inf_desc', 'influencer_count']:
             query = query.order_by(Product.influencer_count.desc().nullslast())
         elif sort_by in ['commission', 'commission_rate']:
-            query = query.order_by(Product.commission_rate.desc().nullslast())
+            query = query.order_by((db.func.coalesce(Product.commission_rate, 0) + db.func.coalesce(Product.shop_ads_commission, 0)).desc().nullslast())
         elif sort_by in ['newest', 'first_seen']:
             query = query.order_by(Product.first_seen.desc().nullslast(), Product.last_updated.desc().nullslast())
         elif sort_by in ['updated', 'last_updated']:
@@ -6446,6 +6458,11 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     # Add keyword search if provided
     if kwargs.get('keywords'):
         params['keywords'] = kwargs.get('keywords')
+        # If searching by keywords (like product ID), we should relax other filters
+        params.pop('timeframe', None)
+        params.pop('sortBy', None)
+        params.pop('feedType', None)
+        params['searchType'] = 'product' 
     
     try:
         res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)

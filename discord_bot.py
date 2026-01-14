@@ -21,7 +21,7 @@ from app import app, db, Product, User, ApiKey
 # Discord Config
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
 HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
-PRODUCT_LOOKUP_CHANNEL_ID = int(os.environ.get('PRODUCT_LOOKUP_CHANNEL_ID', 0))
+PRODUCT_LOOKUP_CHANNEL_ID = 1461053839800139959
 
 # Hot Product Criteria - Free Shipping Deals
 MIN_SALES_7D = 50  # Lower threshold since we're filtering by free shipping
@@ -134,6 +134,7 @@ def save_product_to_db(product_data):
         p.influencer_count = product_data.get('influencer_count', 0)
         p.video_count = product_data.get('video_count', 0)
         p.commission_rate = product_data.get('commission_rate', 0)
+        p.shop_ads_commission = product_data.get('shop_ads_commission', 0)
         p.price = product_data.get('price', 0)
         p.last_updated = datetime.now(timezone.utc)
         p.live_count = product_data.get('live_count', 0)
@@ -156,6 +157,7 @@ def save_product_to_db(product_data):
             'influencer_count': p.influencer_count,
             'video_count': p.video_count,
             'commission_rate': p.commission_rate,
+            'shop_ads_commission': p.shop_ads_commission,
             'price': p.price,
             'live_count': p.live_count,
             'has_free_shipping': p.has_free_shipping,
@@ -225,6 +227,7 @@ def get_product_from_api(product_id):
                 p.influencer_count = temp_p.get('influencer_count', 0)
                 p.video_count = temp_p.get('video_count', 0)
                 p.commission_rate = temp_p.get('commission_rate', 0)
+                p.shop_ads_commission = temp_p.get('shop_ads_commission', 0)
                 p.price = temp_p.get('price', 0)
                 p.last_updated = datetime.now(timezone.utc)
                 p.live_count = temp_p.get('live_count', 0)
@@ -241,6 +244,7 @@ def get_product_from_api(product_id):
                     'influencer_count': p.influencer_count,
                     'video_count': p.video_count,
                     'commission_rate': p.commission_rate,
+                    'shop_ads_commission': p.shop_ads_commission,
                     'price': p.price,
                     'image_url': p.cached_image_url or p.image_url,
                     'live_count': p.live_count,
