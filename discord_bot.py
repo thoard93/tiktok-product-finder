@@ -651,10 +651,10 @@ def get_hot_products():
                 Product.last_shown_hot < cutoff_date
             )
         ).order_by(
-            db.func.coalesce(Product.shop_ads_commission, 0).desc(),  # Priority 1: Shop Ads Commission
-            db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 2: High Ad Spend
-            db.func.coalesce(Product.sales_7d, 0).desc(),  # Priority 3: High 7D Sales
-            db.func.coalesce(Product.video_count, 0).asc()  # Priority 4: Lower videos = better opportunity
+            db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 1: High Ad Spend
+            db.func.coalesce(Product.sales_7d, 0).desc(),  # Priority 2: High 7D Sales
+            db.func.coalesce(Product.video_count, 0).asc(),  # Priority 3: Lower videos = better opportunity
+            db.func.coalesce(Product.shop_ads_commission, 0).desc()  # Priority 4: Shop Ads Commission
         ).limit(MAX_DAILY_POSTS).all()
         
         # Convert to dicts BEFORE commit to avoid DetachedInstanceError
