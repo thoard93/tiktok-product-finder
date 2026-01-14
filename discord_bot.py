@@ -64,7 +64,7 @@ def extract_product_id(text):
     return None
 
 def resolve_tiktok_share_link(url):
-    """Resolve TikTok share link to get Product ID by following redirects"""
+    """Resolve TikTok share link to get Product ID by following redirects and scraping page"""
     print(f"🔍 [Bot] Resolving redirect for: {url}")
     
     try:
@@ -75,25 +75,55 @@ def resolve_tiktok_share_link(url):
             'Accept-Language': 'en-US,en;q=0.5',
         }
         
-        # Use GET with stream=True to follow redirects but stop before downloading large content
-        with requests.get(url, allow_redirects=True, headers=headers, timeout=10, stream=True) as res:
-            final_url = res.url
-            print(f"✅ [Bot] Resolved URL: {final_url}")
-            
-            # Use extract_product_id on the final URL
-            pid = extract_product_id(final_url)
-            if pid:
+        # Follow redirects and get the page content
+        res = requests.get(url, allow_redirects=True, headers=headers, timeout=15)
+        final_url = res.url
+        print(f"✅ [Bot] Resolved URL: {final_url}")
+        
+        # Try to extract product ID from the final URL first
+        pid = extract_product_id(final_url)
+        if pid:
+            print(f"✅ [Bot] Found product ID in URL: {pid}")
+            return pid, 'US'
+        
+        # If URL doesn't have product ID, try to scrape it from page content
+        # TikTok video pages with products often have product links in the HTML
+        html_content = res.text
+        
+        # Look for product IDs in the HTML (common patterns in TikTok's JSON data)
+        product_patterns = [
+            r'"productId"\s*:\s*"(\d{15,25})"',
+            r'"product_id"\s*:\s*"(\d{15,25})"',
+            r'shop\.tiktok\.com/view/product/(\d{15,25})',
+            r'/product/(\d{15,25})',
+            r'"itemId"\s*:\s*"(\d{15,25})"',
+            r'data-product-id="(\d{15,25})"',
+        ]
+        
+        for pattern in product_patterns:
+            match = re.search(pattern, html_content)
+            if match:
+                pid = match.group(1)
+                print(f"✅ [Bot] Found product ID in page HTML: {pid}")
                 return pid, 'US'
-            
-            # Final attempts with extra regex if extract_product_id missed something
-            for pattern in [r'/(\d{15,25})', r'prod_id=(\d+)', r'product_id=(\d+)']:
-                match = re.search(pattern, final_url)
-                if match: return match.group(1), 'US'
+        
+        # Final fallback: look for any 17-20 digit number that might be a product ID
+        # Be more conservative here to avoid false positives
+        potential_ids = re.findall(r'(\d{17,20})', final_url + html_content[:5000])
+        if potential_ids:
+            # Return the first unique one that looks like a product ID
+            for pid in potential_ids:
+                if len(pid) >= 17:
+                    print(f"⚠️ [Bot] Using potential product ID from content: {pid}")
+                    return pid, 'US'
+        
+        print(f"❌ [Bot] Could not extract product ID from {final_url}")
         
     except Exception as e:
-        print(f"❌ [Bot] Manual Resolution Error: {e}")
+        print(f"❌ [Bot] Resolution Error: {e}")
 
     return None, 'US'
+
 
 def get_product_from_db(product_id):
     """Check if product exists in database first"""
@@ -523,27 +553,32 @@ async def on_message(message):
             # React to show we're processing
             await message.add_reaction('🔍')
             
-            # Try to resolve share links
+            # Try to resolve share links first
             url_pattern = r'https?://[^\s]+'
             urls = re.findall(url_pattern, content)
             
-            resolved_url = content
+            product_id = None
             region = 'US'
+            
+            # Check if any URL is a share link that needs resolving
             for url in urls:
-                if 'vm.tiktok.com' in url or '/t/' in url:
-                    resolved, reg = resolve_tiktok_share_link(url)
-                    if resolved:
-                        resolved_url = resolved
+                if 'vm.tiktok.com' in url or '/t/' in url or 'tiktok.com' in url:
+                    resolved_pid, reg = resolve_tiktok_share_link(url)
+                    if resolved_pid:
+                        product_id = resolved_pid
                         region = reg
+                        print(f"🎯 [Bot] Got product ID from link resolution: {product_id}")
                         break
             
-            # Extract product ID
-            product_id = extract_product_id(resolved_url)
+            # If no product ID from link resolution, try extracting from the raw message
+            if not product_id:
+                product_id = extract_product_id(content)
             
             if not product_id:
                 await message.add_reaction('❌')
-                await message.reply("❌ Could not find a valid TikTok product ID in your message.", mention_author=False)
+                await message.reply("❌ Could not find a valid TikTok product ID. This might be a regular video link without a tagged product.", mention_author=False)
                 return
+
             
             # Fetch product (database first, then API)
             product = get_product_data(product_id)
@@ -677,10 +712,22 @@ async def blacklist_group(ctx):
 
 @blacklist_group.command(name='add')
 @commands.has_permissions(administrator=True)
-async def blacklist_add(ctx, brand_name: str, *, reason: str = "No reason provided"):
-    """Add a brand to the blacklist: !blacklist add \"Brand Name\" [reason]"""
+async def blacklist_add(ctx, *, input_text: str = None):
+    """Add a brand to the blacklist: !blacklist add Brand Name [| reason]"""
+    if not input_text:
+        await ctx.reply("Usage: `!blacklist add Brand Name` or `!blacklist add Brand Name | reason`", mention_author=False)
+        return
+    
+    # Parse: "Brand Name | reason" or just "Brand Name"
+    if '|' in input_text:
+        parts = input_text.split('|', 1)
+        brand_name = parts[0].strip()
+        reason = parts[1].strip() if len(parts) > 1 else "No reason provided"
+    else:
+        brand_name = input_text.strip()
+        reason = "No reason provided"
+    
     from app import BlacklistedBrand
-    brand_name = brand_name.strip()
     with app.app_context():
         existing = BlacklistedBrand.query.filter(BlacklistedBrand.seller_name.ilike(brand_name)).first()
         if existing:
@@ -692,6 +739,7 @@ async def blacklist_add(ctx, brand_name: str, *, reason: str = "No reason provid
         db.session.commit()
     
     await ctx.reply(f"✅ Added `{brand_name}` to the blacklist.", mention_author=False)
+
 
 @blacklist_group.command(name='reset')
 @commands.has_permissions(administrator=True)
