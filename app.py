@@ -6796,12 +6796,12 @@ try:
             try:
                 cutoff = datetime.utcnow() - timedelta(hours=24)
                 
-                # Priority: Active winners (Sales > 0) to save API credits
+                # Priority: Oldest information first to ensure all products get refreshed
                 stale_products = Product.query.filter(
                     db.or_(Product.last_updated < cutoff, Product.last_updated == None),
                     Product.sales_7d > 0,
-                    Product.scan_type != 'removed'
-                ).order_by(Product.sales_7d.desc()).limit(50).all()
+                    Product.product_status == 'active'
+                ).order_by(Product.last_updated.asc()).limit(100).all()
                 
                 if not stale_products:
                     print("[SCHEDULER] 😴 No stale high-priority products found.")
