@@ -6808,41 +6808,108 @@ def reset_product_status():
 @login_required
 @admin_required
 def copilot_mass_sync():
-    """Synchronous mass sync - fetches up to 50,000 products across 1000 pages"""
+    """LUDICROUS SPEED mass sync - MAXIMUM parallelization"""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
     user = get_current_user()
+    user_id = user.id
     data = request.json or {}
-    target_products = int(data.get('target', 10000))  # Default 10000 products
+    target_products = int(data.get('target', 10000))
     timeframe = data.get('timeframe', '7d')
     
-    # Calculate pages needed (50 products per page) - up to 1000 pages max
-    pages_needed = min((target_products // 50) + 1, 1000)
+    # 100 products per page, up to 2000 pages max (200K theoretical max)
+    PRODUCTS_PER_PAGE = 100
+    pages_needed = min((target_products // PRODUCTS_PER_PAGE) + 1, 2000)
     
-    products_synced = 0
-    pages_done = 0
+    # Store sync status in database for live tracking
+    set_config_value('sync_status', 'running', 'Mass sync status')
+    set_config_value('sync_progress', '0', 'Sync progress (products synced)')
+    set_config_value('sync_target', str(target_products), 'Sync target')
     
-    for page in range(0, pages_needed):
-        try:
-            print(f"[Mass Sync] Processing page {page + 1}/{pages_needed}")
-            saved, total = sync_copilot_products(timeframe=timeframe, limit=50, page=page)
-            products_synced += saved
-            pages_done += 1
+    def run_sync_in_background():
+        """Background sync task - LUDICROUS SPEED"""
+        with app.app_context():
+            products_synced = 0
+            pages_done = 0
+            stop_flag = False
+            start_time = time.time()
             
-            if total == 0:
-                print(f"[Mass Sync] No more products at page {page}")
-                break
+            def fetch_page(page_num):
+                try:
+                    saved, total = sync_copilot_products(timeframe=timeframe, limit=PRODUCTS_PER_PAGE, page=page_num)
+                    return page_num, saved, total
+                except Exception as e:
+                    print(f"[LUDICROUS] Error on page {page_num}: {e}")
+                    return page_num, 0, -1
+            
+            # MAXIMUM PARALLELIZATION: 10 workers, no delays
+            BATCH_SIZE = 10
+            print(f"[LUDICROUS] 🚀🚀🚀 LUDICROUS SPEED ENGAGED: {pages_needed} pages, {BATCH_SIZE} parallel, {PRODUCTS_PER_PAGE}/page")
+            
+            for batch_start in range(0, pages_needed, BATCH_SIZE):
+                if stop_flag:
+                    break
+                    
+                batch_end = min(batch_start + BATCH_SIZE, pages_needed)
+                batch_pages = list(range(batch_start, batch_end))
                 
-            if page < pages_needed - 1:
-                time.sleep(0.8)  # Faster rate limiting
-        except Exception as e:
-            print(f"[Mass Sync] Error on page {page}: {e}")
-            continue
+                with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
+                    futures = {executor.submit(fetch_page, p): p for p in batch_pages}
+                    
+                    for future in as_completed(futures):
+                        page_num, saved, total = future.result()
+                        products_synced += saved
+                        pages_done += 1
+                        
+                        if total == 0:
+                            print(f"[LUDICROUS] API exhausted at page {page_num}")
+                            stop_flag = True
+                        
+                        # Update progress in DB every 5 pages
+                        if pages_done % 5 == 0:
+                            elapsed = time.time() - start_time
+                            rate = pages_done / elapsed if elapsed > 0 else 0
+                            set_config_value('sync_progress', str(products_synced))
+                            print(f"[LUDICROUS] ⚡ {pages_done}/{pages_needed} pages | {products_synced:,} products | {rate:.1f} pages/sec")
+                
+                # NO DELAY - MAXIMUM SPEED (comment out if rate limited)
+                # time.sleep(0.1)
+            
+            elapsed = time.time() - start_time
+            print(f"[LUDICROUS] ✅ COMPLETE: {products_synced:,} products from {pages_done} pages in {elapsed:.1f}s")
+            set_config_value('sync_status', 'complete')
+            set_config_value('sync_progress', str(products_synced))
+            
+            try:
+                log_activity(user_id, 'mass_sync', {'pages': pages_done, 'synced': products_synced, 'seconds': int(elapsed)})
+            except:
+                pass
     
-    log_activity(user.id, 'mass_sync', {'pages': pages_done, 'synced': products_synced})
+    # Start background thread and return immediately
+    sync_thread = threading.Thread(target=run_sync_in_background, daemon=True)
+    sync_thread.start()
+    
     return jsonify({
         'status': 'success',
-        'synced': products_synced,
-        'pages_processed': pages_done,
-        'message': f'Synced {products_synced} products from {pages_done} pages'
+        'synced': 0,
+        'pages_processed': 0,
+        'message': f'🚀 LUDICROUS SPEED SYNC STARTED! Fetching {target_products:,} products ({pages_needed} pages @ {PRODUCTS_PER_PAGE}/page)'
+    })
+
+# Endpoint to check sync progress
+@app.route('/api/copilot/sync-status')
+@login_required
+def copilot_sync_status():
+    """Check current sync progress"""
+    status = get_config_value('sync_status', 'idle')
+    progress = int(get_config_value('sync_progress', '0'))
+    target = int(get_config_value('sync_target', '0'))
+    return jsonify({
+        'status': status,
+        'progress': progress,
+        'target': target,
+        'percent': int((progress / target * 100) if target > 0 else 0)
     })
 
 @app.route('/api/copilot/test')

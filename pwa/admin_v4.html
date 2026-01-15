@@ -216,6 +216,12 @@
                     <span>ULTRA Sync (50K)</span>
                 </button>
 
+                <button onclick="nuclearSync()" id="btnNuclearSync"
+                    class="bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 hover:from-amber-400 hover:via-orange-400 hover:to-red-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-orange-500/30 animate-pulse">
+                    <i class="fas fa-radiation text-xs"></i>
+                    <span>☢️ NUCLEAR (100K+)</span>
+                </button>
+
                 <button onclick="runCleanup()"
                     class="bg-slate-950 border border-white/10 px-6 py-3 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-broom text-xs"></i>
@@ -480,6 +486,37 @@
             } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
+            }
+        }
+
+        async function nuclearSync() {
+            if (!confirm("☢️ NUCLEAR SYNC - 100,000+ PRODUCTS\n\n⚠️ This will:\n• Fetch up to 2000 pages of products\n• Take 10-15 minutes to complete\n• Use significant API resources\n\nAre you absolutely sure?")) return;
+
+            const btn = document.getElementById('btnNuclearSync');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">☢️ NUCLEAR IN PROGRESS...</span>';
+            btn.disabled = true;
+            btn.classList.remove('animate-pulse');
+
+            try {
+                const res = await fetch('/api/copilot/mass-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: 100000, timeframe: '7d' })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`☢️ NUCLEAR SYNC COMPLETE!\n\n🚀 Synced ${data.synced} products from ${data.pages_processed} pages.\n\nYour database is now MASSIVE!`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Nuclear Sync Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+                btn.classList.add('animate-pulse');
             }
         }
 
