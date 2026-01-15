@@ -465,7 +465,7 @@
             const btnId = target >= 10000 ? 'btnMassSync10K' : 'btnMassSync5K';
             const btn = document.getElementById(btnId);
             const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">Syncing ' + (target / 1000) + 'K...</span>';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">Starting...</span>';
             btn.disabled = true;
 
             try {
@@ -476,8 +476,7 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    alert(`✅ Mass Sync Complete!\n\nSynced ${data.synced} products from ${data.pages_processed} pages.`);
-                    window.location.reload();
+                    alert(`🚀 SYNC STARTED!\n\n${data.message}\n\n⏳ Running in background. Refresh the dashboard in a few minutes to see new products.`);
                 } else {
                     alert('❌ Sync Error: ' + (data.message || 'Unknown error'));
                 }
@@ -494,7 +493,7 @@
 
             const btn = document.getElementById('btnNuclearSync');
             const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">☢️ NUCLEAR IN PROGRESS...</span>';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">☢️ STARTING...</span>';
             btn.disabled = true;
             btn.classList.remove('animate-pulse');
 
@@ -506,8 +505,8 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    alert(`☢️ NUCLEAR SYNC COMPLETE!\n\n🚀 Synced ${data.synced} products from ${data.pages_processed} pages.\n\nYour database is now MASSIVE!`);
-                    window.location.reload();
+                    alert(`☢️ NUCLEAR SYNC STARTED!\n\n${data.message}\n\n⏳ This runs in the background and may take 5-10 minutes.\n\n📊 Check Render logs for progress, then refresh this page to see new products.`);
+                    // Don't reload - let them see the message
                 } else {
                     alert('❌ Nuclear Sync Error: ' + (data.message || 'Unknown error'));
                 }
