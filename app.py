@@ -6725,7 +6725,14 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             
             # ===== ENHANCED V2 FIELD EXTRACTION =====
             # Video Count: ALL TIME total (productVideoCount = 23.5K)
-            video_count = int(p.get('productVideoCount') or p.get('adVideoCount') or p.get('periodVideoCount') or 0)
+            raw_product_vc = p.get('productVideoCount')
+            raw_ad_vc = p.get('adVideoCount') 
+            raw_period_vc = p.get('periodVideoCount')
+            video_count = int(raw_product_vc or raw_ad_vc or raw_period_vc or 0)
+            
+            # DEBUG: Only log first 3 to avoid spam
+            if saved_count < 3:
+                print(f"[DEBUG V2] Video Count Sources: productVideoCount={raw_product_vc}, adVideoCount={raw_ad_vc}, periodVideoCount={raw_period_vc} => Using: {video_count}")
             
             # Creator Count: ALL TIME total (productCreatorCount)  
             creator_count = int(p.get('productCreatorCount') or p.get('periodCreatorCount') or 0)
