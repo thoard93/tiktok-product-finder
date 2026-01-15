@@ -7063,8 +7063,17 @@ def copilot_sync():
 @app.route('/api/brands', methods=['GET'])
 @login_required
 def api_list_brands():
-    """List all watched brands with their stats"""
-    brands = WatchedBrand.query.filter_by(is_active=True).order_by(WatchedBrand.total_sales_7d.desc()).all()
+    """List all watched brands with their stats
+    V2 FIX: Filters out brands with undefined/null names
+    """
+    # Filter out undefined/null brand names
+    invalid_names = ['undefined', 'null', 'unknown', '(undefined)', '', None]
+    brands = WatchedBrand.query.filter(
+        WatchedBrand.is_active == True,
+        ~WatchedBrand.name.in_(invalid_names),
+        WatchedBrand.name != None,
+        WatchedBrand.name != ''
+    ).order_by(WatchedBrand.total_sales_7d.desc()).all()
     return jsonify({
         'success': True,
         'brands': [b.to_dict() for b in brands],
