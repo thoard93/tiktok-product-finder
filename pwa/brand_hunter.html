@@ -287,7 +287,7 @@
                                     ${b.logo_url ? `<img src="${b.logo_url}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-store text-slate-600\\'></i>'">` : '<i class="fas fa-store text-slate-600"></i>'}
                                 </div>
                                 <div>
-                                    <h4 class="font-heading font-bold text-white text-lg">${b.name}</h4>
+                                    <h4 class="font-heading font-bold text-white text-lg">${b.name || 'Unknown Brand'}</h4>
                                     <p class="text-[10px] text-slate-500 uppercase tracking-wider">${b.product_count || 0} Products</p>
                                 </div>
                             </div>
