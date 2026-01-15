@@ -7291,7 +7291,7 @@ def api_nuke_brands():
 @login_required
 @admin_required
 def api_cleanup_full():
-    \"\"\"Deep Clean: Purge 'undefined' and 'null' brands and products\"\"\"
+    """Deep Clean: Purge 'undefined' and 'null' brands and products"""
     try:
         user = get_current_user()
         bad_names = ['undefined', '(undefined)', 'null', 'Unknown', '']
