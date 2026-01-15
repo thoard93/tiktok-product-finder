@@ -902,14 +902,9 @@ class Product(db.Model):
         db.Index('idx_firstseen_influencer', 'first_seen', 'influencer_count'),
     )
     
-    def to_dict(self, timeframe='all'):
-        """
-        Convert product to dictionary.
-        Args:
-            timeframe: '24h', '7d', or 'all' - controls which period stats to return
-        """
-        # Base stats that are always the same
-        base = {
+    def to_dict(self):
+        """Convert product to dictionary for API response."""
+        return {
             'product_id': self.product_id,
             'product_name': self.product_name,
             'seller_id': self.seller_id,
@@ -931,64 +926,26 @@ class Product(db.Model):
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None,
-            # All-time stats (always available)
+            # Stats - 7d for sales/ad_spend, all-time for video/creator counts
             'sales': self.sales,
-            'video_count': self.video_count,
-            'creator_count': self.creator_count or self.influencer_count or 0,
-            'gmv': self.gmv,
-            'ad_spend_total': self.ad_spend_total,
-            'gmv_growth': self.gmv_growth or 0,
-        }
-        
-        # Period-specific stats based on timeframe
-        if timeframe == '24h':
-            base.update({
-                'sales_period': self.sales_24h or 0,
-                'video_count_period': self.video_count_24h or 0,
-                'creator_count_period': self.creator_count_24h or 0,
-                'ad_spend_period': self.ad_spend_24h or 0,
-                'gmv_period': self.gmv_24h or 0,
-            })
-        elif timeframe == '7d':
-            base.update({
-                'sales_period': self.sales_7d or 0,
-                'video_count_period': self.video_7d or 0,
-                'creator_count_period': self.creator_count_7d or self.influencer_count or 0,
-                'ad_spend_period': self.ad_spend or 0,
-                'gmv_period': self.gmv_30d or 0,  # Use 30d as approximation
-            })
-        else:  # 'all' - default
-            base.update({
-                'sales_period': self.sales or self.sales_7d or 0,
-                'video_count_period': self.video_count or 0,
-                'creator_count_period': self.creator_count or self.influencer_count or 0,
-                'ad_spend_period': self.ad_spend_total or 0,
-                'gmv_period': self.gmv or 0,
-            })
-        
-        # Legacy compatibility fields
-        base.update({
             'sales_7d': self.sales_7d,
             'sales_30d': self.sales_30d,
+            'gmv': self.gmv,
             'gmv_30d': self.gmv_30d,
-            'influencer_count': self.influencer_count,
+            'gmv_growth': self.gmv_growth or 0,
+            'video_count': self.video_count,  # All-time
             'video_7d': self.video_7d,
             'video_30d': self.video_30d,
+            'influencer_count': self.influencer_count,  # All-time
             'live_count': self.live_count,
             'views_count': self.views_count,
-            'sales_velocity': self.sales_velocity or 0,
             'ad_spend': self.ad_spend,
+            'ad_spend_total': self.ad_spend_total,
+            'sales_velocity': self.sales_velocity or 0,
             'ad_spend_per_video': (self.ad_spend / self.video_count) if (self.video_count and self.video_count > 0) else 0,
             'roas': (self.gmv / self.ad_spend) if (self.ad_spend and self.ad_spend > 0) else 0,
             'est_profit': (self.gmv * self.commission_rate),
-            # 24h specific (for UI access)
-            'sales_24h': self.sales_24h or 0,
-            'video_count_24h': self.video_count_24h or 0,
-            'ad_spend_24h': self.ad_spend_24h or 0,
-            'gmv_24h': self.gmv_24h or 0,
-        })
-        
-        return base
+        }
 
 class BlacklistedBrand(db.Model):
     """TikTok Shop Brands/Sellers that are blacklisted (e.g. for removing commissions)"""
@@ -4372,9 +4329,6 @@ def api_products():
         keyword = request.args.get('keyword') or request.args.get('search')
         min_commission = request.args.get('min_commission', type=float)
         
-        # Timeframe for period-specific stats (24h, 7d, all)
-        timeframe = request.args.get('timeframe', 'all')
-        
         # Favorite alias
         is_favorite = (request.args.get('favorite', 'false').lower() == 'true' or 
                        request.args.get('favorites_only', 'false').lower() == 'true')
@@ -6828,6 +6782,10 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # V2 FIX: Lowered threshold from 100 to 10 to allow more products
             if video_count < 10:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Low Videos: {video_count})")
+                continue
+            # FILTER: Only sync products with Shop Ads Commission (GMV Max)
+            if shop_ads_rate <= 0:
+                print(f"[Copilot Sync V2] Skipping {product_id} (No Shop Ads Commission)")
                 continue
             
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
