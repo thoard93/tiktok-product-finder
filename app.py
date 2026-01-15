@@ -7574,7 +7574,7 @@ def copilot_mass_sync():
     user_id = user.id
     data = request.json or {}
     target_products = int(data.get('target', 10000))
-    timeframe = data.get('timeframe', '7d')
+    timeframe = data.get('timeframe', 'all')  # Default to 'all' for all-time video/creator counts
     
     # 100 products per page, up to 2000 pages max (200K theoretical max)
     PRODUCTS_PER_PAGE = 100
