@@ -4427,8 +4427,7 @@ def api_products():
             'page': page,
             'per_page': per_page,
             'total_pages': (total + per_page - 1) // per_page,
-            'timeframe': timeframe,  # Return the timeframe used
-            'products': [p.to_dict(timeframe=timeframe) for p in products]
+            'products': [p.to_dict() for p in products]
         })
 
     except Exception as e:

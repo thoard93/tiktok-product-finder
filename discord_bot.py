@@ -897,13 +897,12 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with Shop Ads Commission >= 10%, high 7D sales, high ad spend
-        # V2: Adjusted video_count filters for accurate data (was 20-40, now 100-5000)
+        # Query: Products with Shop Ads Commission >= 10%, high 7D sales, low competition
         products = Product.query.filter(
-            Product.video_count >= 100,  # V2: Min 100 videos (was 20)
-            Product.video_count < 5000,  # V2: Low competition filter (was <40, now <5000)
-            Product.sales_7d >= 100,  # High 7D sales
-            Product.ad_spend >= 500,  # High ad spend ($500+)
+            Product.video_count > 0,  # Has videos
+            Product.video_count <= 40,  # LOW COMPETITION: <= 40 videos (true gems)
+            Product.sales_7d >= 50,  # Decent 7D sales
+            Product.ad_spend >= 100,  # Has ad spend ($100+)
             Product.commission_rate > 0,  # Must have regular commission
             Product.shop_ads_commission >= 0.10,  # 10%+ shop ads commission (GMV Max)
             db.or_(
