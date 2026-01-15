@@ -1467,6 +1467,14 @@ def admin_migrate():
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS has_free_shipping BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS last_shown_hot TIMESTAMP",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS shop_ads_commission FLOAT DEFAULT 0",
+                # Timeframe Tabs Feature (Jan 2026)
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS sales_24h INTEGER DEFAULT 0",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS video_count_24h INTEGER DEFAULT 0",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS creator_count_24h INTEGER DEFAULT 0",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS ad_spend_24h FLOAT DEFAULT 0",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS gmv_24h FLOAT DEFAULT 0",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS creator_count INTEGER DEFAULT 0",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS creator_count_7d INTEGER DEFAULT 0",
             ]
             
             for sql in migrations:
