@@ -6828,53 +6828,66 @@ def copilot_mass_sync():
     set_config_value('sync_target', str(target_products), 'Sync target')
     
     def run_sync_in_background():
-        """Background sync task - LUDICROUS SPEED"""
+        """Background sync task - LUDICROUS SPEED with retry"""
         with app.app_context():
             products_synced = 0
             pages_done = 0
-            stop_flag = False
+            consecutive_empty = 0  # Track consecutive empty pages
+            error_count = 0
             start_time = time.time()
             
-            def fetch_page(page_num):
-                try:
-                    saved, total = sync_copilot_products(timeframe=timeframe, limit=PRODUCTS_PER_PAGE, page=page_num)
-                    return page_num, saved, total
-                except Exception as e:
-                    print(f"[LUDICROUS] Error on page {page_num}: {e}")
-                    return page_num, 0, -1
+            def fetch_page_with_retry(page_num, retries=3):
+                """Fetch page with retry on failure"""
+                for attempt in range(retries):
+                    try:
+                        saved, total = sync_copilot_products(timeframe=timeframe, limit=PRODUCTS_PER_PAGE, page=page_num)
+                        return page_num, saved, total, None
+                    except Exception as e:
+                        if attempt < retries - 1:
+                            time.sleep(0.5)  # Wait before retry
+                        else:
+                            return page_num, 0, -1, str(e)
+                return page_num, 0, -1, "Unknown error"
             
-            # MAXIMUM PARALLELIZATION: 10 workers, no delays
-            BATCH_SIZE = 10
+            # Slightly reduced parallelization for stability
+            BATCH_SIZE = 8
             print(f"[LUDICROUS] 🚀🚀🚀 LUDICROUS SPEED ENGAGED: {pages_needed} pages, {BATCH_SIZE} parallel, {PRODUCTS_PER_PAGE}/page")
             
             for batch_start in range(0, pages_needed, BATCH_SIZE):
-                if stop_flag:
+                # Stop only if we got 3+ consecutive empty pages (API truly exhausted)
+                if consecutive_empty >= 3:
+                    print(f"[LUDICROUS] 3 consecutive empty pages - API exhausted, stopping")
                     break
                     
                 batch_end = min(batch_start + BATCH_SIZE, pages_needed)
                 batch_pages = list(range(batch_start, batch_end))
                 
                 with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
-                    futures = {executor.submit(fetch_page, p): p for p in batch_pages}
+                    futures = {executor.submit(fetch_page_with_retry, p): p for p in batch_pages}
                     
                     for future in as_completed(futures):
-                        page_num, saved, total = future.result()
+                        page_num, saved, total, error = future.result()
                         products_synced += saved
                         pages_done += 1
                         
-                        if total == 0:
-                            print(f"[LUDICROUS] API exhausted at page {page_num}")
-                            stop_flag = True
+                        if error:
+                            error_count += 1
+                            print(f"[LUDICROUS] ⚠️ Error on page {page_num}: {error}")
+                        elif total == 0:
+                            consecutive_empty += 1
+                            print(f"[LUDICROUS] Empty page {page_num} ({consecutive_empty}/3 consecutive)")
+                        else:
+                            consecutive_empty = 0  # Reset on success
                         
                         # Update progress in DB every 5 pages
                         if pages_done % 5 == 0:
                             elapsed = time.time() - start_time
                             rate = pages_done / elapsed if elapsed > 0 else 0
                             set_config_value('sync_progress', str(products_synced))
-                            print(f"[LUDICROUS] ⚡ {pages_done}/{pages_needed} pages | {products_synced:,} products | {rate:.1f} pages/sec")
+                            print(f"[LUDICROUS] ⚡ {pages_done}/{pages_needed} pages | {products_synced:,} products | {rate:.1f} pages/sec | {error_count} errors")
                 
-                # NO DELAY - MAXIMUM SPEED (comment out if rate limited)
-                # time.sleep(0.1)
+                # Small delay to avoid rate limits
+                time.sleep(0.1)
             
             elapsed = time.time() - start_time
             print(f"[LUDICROUS] ✅ COMPLETE: {products_synced:,} products from {pages_done} pages in {elapsed:.1f}s")
