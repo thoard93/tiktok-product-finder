@@ -145,7 +145,86 @@ def get_product_from_db(product_id):
             }
         return None
 
-from app import enrich_product_data
+from app import enrich_product_data, fetch_copilot_products
+
+def get_product_from_v2_api(product_id):
+    """
+    V2 API: Search Copilot /api/trending/products for accurate product stats.
+    This provides much more accurate video_count, creator_count, and sales data.
+    """
+    try:
+        print(f"🚀 [V2] Searching Copilot Products API for {product_id}...")
+        raw_pid = str(product_id).replace('shop_', '')
+        
+        # Try multiple timeframes to find the product
+        for timeframe in ['7d', 'all']:
+            with app.app_context():
+                res = fetch_copilot_products(timeframe=timeframe, limit=50)
+            
+            if not res or not res.get('products'):
+                continue
+            
+            # Search for this specific product
+            for p in res.get('products', []):
+                if str(p.get('productId', '')) == raw_pid:
+                    print(f"✅ [V2] Found product {product_id} in {timeframe} data!")
+                    
+                    # Extract V2 accurate stats
+                    shop_pid = f"shop_{raw_pid}"
+                    video_count = int(p.get('periodVideoCount') or p.get('adVideoCount') or 0)
+                    creator_count = int(p.get('periodCreatorCount') or 0)
+                    total_ad_spend = float(p.get('totalAdCost') or 0)
+                    total_sales = int(p.get('unitsSold') or 0)
+                    sales_7d = int(p.get('periodUnits') or 0)
+                    gmv = float(p.get('periodRevenue') or 0)
+                    
+                    # Save to database
+                    with app.app_context():
+                        db_product = Product.query.get(shop_pid)
+                        if not db_product:
+                            db_product = Product(product_id=shop_pid)
+                            db_product.first_seen = datetime.now(timezone.utc)
+                            db.session.add(db_product)
+                        
+                        db_product.product_name = p.get('productTitle') or db_product.product_name
+                        db_product.seller_name = p.get('sellerName') or db_product.seller_name
+                        db_product.image_url = p.get('productCoverUrl') or db_product.image_url
+                        db_product.video_count = video_count
+                        db_product.influencer_count = creator_count
+                        db_product.ad_spend_total = total_ad_spend
+                        db_product.ad_spend = total_ad_spend * 0.15  # Estimate 7d as 15%
+                        db_product.sales = total_sales
+                        db_product.sales_7d = sales_7d
+                        db_product.gmv = gmv
+                        db_product.commission_rate = float(p.get('tapCommissionRate') or 0) / 10000.0
+                        db_product.shop_ads_commission = float(p.get('tapShopAdsRate') or 0) / 10000.0
+                        db_product.scan_type = 'bot_lookup_v2'
+                        db_product.last_updated = datetime.now(timezone.utc)
+                        db.session.commit()
+                        
+                        return {
+                            'product_id': db_product.product_id,
+                            'product_name': db_product.product_name,
+                            'seller_name': db_product.seller_name,
+                            'image_url': db_product.cached_image_url or db_product.image_url,
+                            'video_count': video_count,
+                            'influencer_count': creator_count,
+                            'sales': total_sales,
+                            'sales_7d': sales_7d,
+                            'gmv': gmv,
+                            'ad_spend': db_product.ad_spend,
+                            'ad_spend_total': total_ad_spend,
+                            'commission_rate': db_product.commission_rate,
+                            'shop_ads_commission': db_product.shop_ads_commission,
+                            'from_v2_api': True
+                        }
+        
+        print(f"⚠️ [V2] Product {product_id} not found in trending data")
+        return None
+        
+    except Exception as e:
+        print(f"❌ [V2] Error: {e}")
+        return None
 
 def save_product_to_db(product_data):
     """
@@ -312,7 +391,7 @@ def get_product_from_api(product_id):
         return None
 
 def get_product_data(product_id):
-    """Get product - check database first. If simple prefetch, upgrade it."""
+    """Get product - check database first. If not found, try V2 API then legacy."""
     
     with app.app_context():
         # Check DB
@@ -341,9 +420,14 @@ def get_product_data(product_id):
                 'live_count': db_product.live_count
             }
     
-    # Not found OR needs upgrade -> Call Scanner
-    # Not found OR needs upgrade -> Call Scanner
-    print(f"🔍 Product {product_id} needs scan/upgrade, calling Copilot...")
+    # Not found OR needs upgrade -> Try V2 API first (more accurate data)
+    print(f"🔍 Product {product_id} needs scan/upgrade, trying V2 API...")
+    v2_result = get_product_from_v2_api(product_id)
+    if v2_result:
+        return v2_result
+    
+    # V2 didn't find it -> Fallback to legacy Copilot search
+    print(f"⚠️ V2 API didn't find {product_id}, falling back to legacy...")
     return get_product_from_api(product_id)
 
 

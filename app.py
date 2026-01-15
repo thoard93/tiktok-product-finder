@@ -4327,11 +4327,11 @@ def api_products():
         
         if is_gems:
             # Opportunity Gems: High Sales, Low Competition
-            # Relaxed criteria to ensure results
+            # V2 FIX: Updated thresholds for accurate video counts
             query = query.filter(
-                Product.sales_7d >= 10,  # Was 20
-                Product.influencer_count <= 50, # Was 30
-                Product.video_count <= 20 # New cap to ensure "opportunity"
+                Product.sales_7d >= 10,  # Min sales
+                Product.influencer_count <= 100,  # Was 50, now allows more
+                Product.video_count <= 500  # V2 FIX: Was 20, now 500 for accurate counts
             )
             
         if is_high_ad:
@@ -4895,27 +4895,32 @@ def api_trending_products():
 @app.route('/api/stats', methods=['GET'])
 @login_required
 def api_get_stats():
-    """Get high-level statistics for the dashboard cards"""
+    """Get high-level statistics for the dashboard cards
+    V2 FIX: Updated thresholds for accurate video/influencer counts.
+    """
     try:
         total_products = Product.query.count()
         
-        # Ad Winners count (heuristic + scan type)
+        # V2 FIX: Ad Winners / High Performers count
+        # Products with significant ad spend OR high sales/low saturation
         ad_winners = Product.query.filter(
             db.or_(
+                Product.ad_spend > 500,  # High ad spend
                 db.and_(
                     Product.sales_7d > 50,
-                    Product.influencer_count < 5,
-                    Product.video_count < 5
+                    Product.video_count <= 500,  # V2: Was < 5, now <= 500
+                    Product.influencer_count <= 100  # V2: Was < 5, now <= 100
                 ),
-                Product.scan_type.in_(['apify_ad', 'daily_virals'])
+                Product.scan_type.in_(['apify_ad', 'daily_virals', 'copilot_v2'])
             )
         ).count()
         
-        # Hidden Gems count
+        # V2 FIX: Hidden Gems / Opportunity count
+        # Products with sales but relatively low competition
         hidden_gems = Product.query.filter(
-            Product.sales_7d >= 20,
-            Product.influencer_count <= 30,
-            Product.influencer_count >= 1,
+            Product.sales_7d >= 10,  # V2: Was 20, now 10
+            Product.influencer_count <= 100,  # V2: Was 30, now 100
+            Product.video_count <= 500,  # V2: Was implicit, now explicit
             Product.video_count >= 1
         ).count()
         
@@ -4930,6 +4935,7 @@ def api_get_stats():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 
 # Aliases for compatibility
@@ -6749,8 +6755,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             if sales_7d <= 0 and total_sales <= 0:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Zero Sales)")
                 continue
-            # Relax video filter since we now have accurate counts
-            if video_count < 100:  # Raised from 20 to 100 since counts are now accurate
+            # V2 FIX: Lowered threshold from 100 to 10 to allow more products
+            if video_count < 10:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Low Videos: {video_count})")
                 continue
             
@@ -6761,7 +6767,12 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             if existing:
                 # Update existing product with V2 Copilot data
                 existing.product_name = p.get('productTitle') or existing.product_name
-                existing.seller_name = p.get('sellerName') or existing.seller_name
+                # FIX: Ensure seller_name is never undefined/null
+                new_seller = p.get('sellerName') or ''
+                if new_seller and new_seller.lower() not in ['undefined', 'null', 'unknown', '']:
+                    existing.seller_name = new_seller
+                elif not existing.seller_name:
+                    existing.seller_name = 'Unknown Seller'
                 
                 # Image Update with Cache Invalidation
                 if image_url and image_url != existing.image_url:
@@ -6852,30 +6863,44 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
 @login_required
 def api_movers_shakers():
     """
-    Movers & Shakers Leaderboard: Products with highest 7D GMV growth.
+    Movers & Shakers Leaderboard: Products with highest growth indicators.
+    V2 FIX: Relaxed filters and added fallback for products without gmv_growth.
     """
     try:
         limit = request.args.get('limit', 20, type=int)
-        # Filter for quality: Min 50 sales, Min 20 videos, exists in last 30 days
-        query = Product.query.filter(
-            Product.sales_7d >= 50,
-            Product.video_count >= 10,
-            Product.gmv_growth > 0
-        ).order_by(Product.gmv_growth.desc()).limit(limit)
         
-        products = query.all()
+        # Primary: Products with actual GMV growth
+        products_with_growth = Product.query.filter(
+            Product.sales_7d >= 10,  # Lowered from 50
+            Product.video_count >= 5,  # Lowered from 10
+            Product.gmv_growth > 0
+        ).order_by(Product.gmv_growth.desc()).limit(limit).all()
+        
+        # Fallback: If not enough products with growth, add top revenue products
+        if len(products_with_growth) < limit:
+            remaining = limit - len(products_with_growth)
+            existing_ids = [p.product_id for p in products_with_growth]
+            fallback = Product.query.filter(
+                Product.sales_7d >= 10,
+                Product.gmv > 0,
+                ~Product.product_id.in_(existing_ids)
+            ).order_by(Product.gmv.desc()).limit(remaining).all()
+            products_with_growth.extend(fallback)
+        
         return jsonify({
             'success': True,
-            'products': [p.to_dict() for p in products]
+            'products': [p.to_dict() for p in products_with_growth]
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/analytics/creative-linker', methods=['GET'])
 @login_required
 def api_creative_linker():
     """
-    Fetch viral videos for a specific product, filtered by duration.
+    Fetch viral videos for a specific product.
+    V2 FIX: Uses topVideos field from /api/trending/products endpoint.
     """
     product_id = request.args.get('product_id')
     if not product_id:
@@ -6884,27 +6909,48 @@ def api_creative_linker():
     raw_pid = product_id.replace('shop_', '')
     
     try:
-        # Search Copilot for this product
+        # V2: Try to find this product in the trending products and get its topVideos
+        # First check database for cached topVideos (future enhancement)
+        # For now, search the V2 products endpoint
+        res = fetch_copilot_products(timeframe='7d', limit=50)
+        
+        if res and res.get('products'):
+            # Find this specific product in the results
+            for p in res.get('products', []):
+                if str(p.get('productId', '')) == raw_pid:
+                    # Found! Extract topVideos
+                    top_videos = p.get('topVideos', [])
+                    if top_videos:
+                        return jsonify({
+                            'success': True,
+                            'total_found': len(top_videos),
+                            'shorts_found': len(top_videos),
+                            'videos': top_videos,
+                            'source': 'copilot_v2'
+                        })
+        
+        # Fallback: Search with legacy endpoint
         res = fetch_copilot_trending(timeframe='30d', limit=20, product_id=raw_pid)
         if not res or not res.get('videos'):
-            # Fallback to keyword search
             res = fetch_copilot_trending(timeframe='30d', limit=20, keywords=raw_pid)
             
         if not res or not res.get('videos'):
             return jsonify({'success': False, 'error': 'No videos found for this product'}), 404
             
         videos = res.get('videos', [])
-        # Strict duration filter for "Bottom of Funnel" shorts
-        short_videos = [v for v in videos if (v.get('durationSeconds') or 0) <= 15]
+        # Filter for shorts if duration data available
+        short_videos = [v for v in videos if (v.get('durationSeconds') or 0) <= 15] or videos
         
         return jsonify({
             'success': True,
             'total_found': len(videos),
             'shorts_found': len(short_videos),
-            'videos': short_videos
+            'videos': short_videos,
+            'source': 'copilot_legacy'
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/analytics/top-videos', methods=['GET'])
 @login_required
