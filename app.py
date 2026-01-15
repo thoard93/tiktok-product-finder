@@ -6956,32 +6956,67 @@ def api_creative_linker():
 @login_required
 def api_top_videos():
     """
-    The ROI-Video Feed: Top earning recent videos <= 13s.
+    The ROI-Video Feed: Top earning recent videos <= 15s.
+    Uses /api/trending endpoint to fetch actual video data with duration.
     """
     try:
-        # Fetch global trending videos
+        # Fetch global trending videos from Copilot
         res = fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=100)
-        if not res or not res.get('videos'):
-            return jsonify({'success': False, 'error': 'Could not fetch trending videos'}), 500
-            
-        videos = res.get('videos', [])
-        # Filter for shorts (<= 15s) and significant revenue (> $500)
-        top_shorts = [
-            v for v in videos 
-            if (v.get('durationSeconds') or 0) <= 15 and (v.get('periodRevenue') or 0) > 500
-        ]
         
-        # Sort by ROI efficiency (Revenue per view or similar)
-        # For now, just sort by total period revenue
+        if not res:
+            print("[Top Videos] No response from Copilot")
+            return jsonify({'success': False, 'error': 'Could not fetch trending videos', 'videos': []}), 200
+        
+        # Debug: log what keys we got
+        print(f"[Top Videos] Response keys: {list(res.keys()) if isinstance(res, dict) else 'not a dict'}")
+        
+        # The /api/trending endpoint returns 'videos' array
+        videos = res.get('videos') or res.get('products') or []
+        
+        if not videos:
+            print("[Top Videos] No videos in response")
+            return jsonify({'success': True, 'count': 0, 'videos': [], 'message': 'No videos available'})
+        
+        # Map and filter videos for shorts (<= 15s) with significant revenue
+        top_shorts = []
+        for v in videos:
+            # Get duration - try multiple possible field names
+            duration = v.get('durationSeconds') or v.get('duration') or v.get('videoDuration') or 0
+            
+            # Get revenue - try multiple possible field names
+            revenue = v.get('periodRevenue') or v.get('revenue') or v.get('videoRevenue') or 0
+            
+            # Filter: shorts only (<= 15s) with decent revenue
+            if duration <= 15 and revenue > 100:
+                # Map to expected format for vantage_v2.html
+                top_shorts.append({
+                    'videoId': v.get('videoId') or v.get('id') or '',
+                    'videoUrl': v.get('videoUrl') or v.get('url') or f"https://www.tiktok.com/video/{v.get('videoId', '')}",
+                    'coverUrl': v.get('coverUrl') or v.get('thumbnailUrl') or v.get('cover') or '',
+                    'durationSeconds': duration,
+                    'periodRevenue': revenue,
+                    'periodViews': v.get('periodViews') or v.get('views') or v.get('viewCount') or 0,
+                    'creatorUsername': v.get('creatorUsername') or v.get('author') or v.get('username') or 'Unknown',
+                    'productTitle': v.get('productTitle') or v.get('productName') or v.get('title') or 'Product',
+                    'productId': v.get('productId') or '',
+                    'productImageUrl': v.get('productImageUrl') or v.get('productCoverUrl') or v.get('cover') or ''
+                })
+        
+        # Sort by revenue (highest first)
         top_shorts.sort(key=lambda x: x.get('periodRevenue') or 0, reverse=True)
+        
+        print(f"[Top Videos] Found {len(top_shorts)} shorts out of {len(videos)} total videos")
         
         return jsonify({
             'success': True,
             'count': len(top_shorts),
-            'videos': top_shorts[:30] # Limit to top 30
+            'total_fetched': len(videos),
+            'videos': top_shorts[:30]  # Limit to top 30
         })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"[Top Videos] Error: {e}")
+        return jsonify({'success': False, 'error': str(e), 'videos': []}), 200
+
 
 @app.route('/api/copilot/sync', methods=['POST'])
 @login_required

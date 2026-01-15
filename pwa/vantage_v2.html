@@ -247,19 +247,23 @@
                         <img src="/api/image-proxy/${p.product_id}" class="w-16 h-16 rounded-xl object-cover" onerror="this.src='/vantage_logo.png'">
                         <div class="flex-1 min-w-0">
                             <div class="px-2 py-1 rounded-lg growth-badge text-[9px] font-black text-white inline-block mb-1">
-                                +${p.gmv_growth}% GROWTH
+                                +${(p.gmv_growth || 0).toFixed(1)}% GROWTH
                             </div>
                             <h4 class="font-bold text-sm text-slate-200 truncate">${p.product_name}</h4>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mt-4">
+                    <div class="grid grid-cols-3 gap-2 mt-4">
                         <div class="bg-black/20 p-2 rounded-lg text-center">
                             <p class="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">7D Sales</p>
-                            <p class="text-xs font-bold text-white">${p.sales_7d.toLocaleString()}</p>
+                            <p class="text-xs font-bold text-white">${(p.sales_7d || 0).toLocaleString()}</p>
                         </div>
                         <div class="bg-black/20 p-2 rounded-lg text-center">
                             <p class="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Ad Spend</p>
                             <p class="text-xs font-bold text-emerald-400">$${(p.ad_spend || 0).toLocaleString()}</p>
+                        </div>
+                        <div class="bg-black/20 p-2 rounded-lg text-center">
+                            <p class="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Videos</p>
+                            <p class="text-xs font-bold text-cyan-400">${(p.video_count || 0).toLocaleString()}</p>
                         </div>
                     </div>
                 </div>
