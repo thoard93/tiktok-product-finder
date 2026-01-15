@@ -873,17 +873,6 @@ class Product(db.Model):
     ad_spend_total = db.Column(db.Float, default=0)  # Lifetime/Total Ad Spend
     gmv_growth = db.Column(db.Float, default=0)  # 7D GMV Growth Percentage
     
-    # Timeframe-specific stats (24h)
-    sales_24h = db.Column(db.Integer, default=0)
-    video_count_24h = db.Column(db.Integer, default=0)
-    creator_count_24h = db.Column(db.Integer, default=0)
-    ad_spend_24h = db.Column(db.Float, default=0)
-    gmv_24h = db.Column(db.Float, default=0)
-    
-    # Creator count (all-time and 7d)
-    creator_count = db.Column(db.Integer, default=0)  # All-time creator count
-    creator_count_7d = db.Column(db.Integer, default=0)  # 7-day creator count
-    
     # Composite indexes for common query patterns
     __table_args__ = (
         # For filtering by influencer range + sorting by sales
@@ -1424,14 +1413,6 @@ def admin_migrate():
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS has_free_shipping BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS last_shown_hot TIMESTAMP",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS shop_ads_commission FLOAT DEFAULT 0",
-                # Timeframe Tabs Feature (Jan 2026)
-                "ALTER TABLE products ADD COLUMN IF NOT EXISTS sales_24h INTEGER DEFAULT 0",
-                "ALTER TABLE products ADD COLUMN IF NOT EXISTS video_count_24h INTEGER DEFAULT 0",
-                "ALTER TABLE products ADD COLUMN IF NOT EXISTS creator_count_24h INTEGER DEFAULT 0",
-                "ALTER TABLE products ADD COLUMN IF NOT EXISTS ad_spend_24h FLOAT DEFAULT 0",
-                "ALTER TABLE products ADD COLUMN IF NOT EXISTS gmv_24h FLOAT DEFAULT 0",
-                "ALTER TABLE products ADD COLUMN IF NOT EXISTS creator_count INTEGER DEFAULT 0",
-                "ALTER TABLE products ADD COLUMN IF NOT EXISTS creator_count_7d INTEGER DEFAULT 0",
             ]
             
             for sql in migrations:
