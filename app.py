@@ -6842,7 +6842,10 @@ def api_discover_brands():
         ).filter(
             Product.seller_name != None,
             Product.seller_name != '',
-            Product.seller_name != 'Unknown'
+            Product.seller_name != 'Unknown',
+            Product.seller_name != 'undefined',
+            Product.seller_name != '(undefined)',
+            Product.seller_name != 'null'
         ).group_by(
             Product.seller_name
         ).having(
@@ -6901,7 +6904,7 @@ def api_scan_copilot_for_brands():
             
             for v in videos:
                 seller = v.get('sellerName', '').strip()
-                if not seller or seller == 'Unknown' or len(seller) < 2:
+                if not seller or seller.lower() in ['unknown', 'undefined', '(undefined)', 'null', 'None'] or len(seller) < 2:
                     continue
                 
                 gmv = float(v.get('periodGmv') or v.get('gmv') or 0)
@@ -6953,8 +6956,8 @@ def api_add_brand():
     data = request.json or {}
     name = data.get('name', '').strip()
     
-    if not name:
-        return jsonify({'success': False, 'error': 'Brand name is required'}), 400
+    if not name or name.lower() in ['unknown', 'undefined', '(undefined)', 'null', 'none', '']:
+        return jsonify({'success': False, 'error': f'Invalid brand name: "{name}"'}), 400
     
     # Check if already exists
     existing = WatchedBrand.query.filter(WatchedBrand.name.ilike(name)).first()
@@ -7176,6 +7179,44 @@ def api_nuke_brands():
         return jsonify({
             'success': True,
             'message': 'NUCLEAR RESET: Brand table dropped and recreated. All ghost data should be gone.'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/brands/cleanup-full', methods=['POST'])
+@login_required
+@admin_required
+def api_cleanup_full():
+    \"\"\"Deep Clean: Purge 'undefined' and 'null' brands and products\"\"\"
+    try:
+        user = get_current_user()
+        bad_names = ['undefined', '(undefined)', 'null', 'Unknown', '']
+        
+        # 1. Purge Brand Table
+        brands_deleted = WatchedBrand.query.filter(
+            db.or_(
+                WatchedBrand.name == None,
+                WatchedBrand.name.in_(bad_names)
+            )
+        ).delete(synchronize_session=False)
+        
+        # 2. Purge Product Table (Corrupted entries)
+        products_deleted = Product.query.filter(
+            db.or_(
+                Product.seller_name == None,
+                Product.seller_name.in_(bad_names)
+            )
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        log_activity(user.id, 'full_brand_cleanup', {'brands': brands_deleted, 'products': products_deleted})
+        
+        return jsonify({
+            'success': True,
+            'message': f'DEEP CLEAN COMPLETE! Purged {brands_deleted} ghost brands and {products_deleted} corrupted products.',
+            'brands_deleted': brands_deleted,
+            'products_deleted': products_deleted
         })
     except Exception as e:
         db.session.rollback()
