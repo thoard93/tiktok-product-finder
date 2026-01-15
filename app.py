@@ -6823,6 +6823,129 @@ def api_list_brands():
         'count': len(brands)
     })
 
+@app.route('/api/brands/discover', methods=['GET'])
+@login_required
+def api_discover_brands():
+    """Discover top brands from existing products, sorted by GMV"""
+    try:
+        # Get already tracked brand names for filtering
+        tracked_names = [b.name.lower() for b in WatchedBrand.query.all() if b.name]
+        
+        # Aggregate products by seller_name
+        from sqlalchemy import func
+        brand_stats = db.session.query(
+            Product.seller_name,
+            func.count(Product.product_id).label('product_count'),
+            func.sum(Product.gmv).label('total_gmv'),
+            func.sum(Product.sales_7d).label('total_sales_7d'),
+            func.avg(Product.commission_rate).label('avg_commission')
+        ).filter(
+            Product.seller_name != None,
+            Product.seller_name != '',
+            Product.seller_name != 'Unknown'
+        ).group_by(
+            Product.seller_name
+        ).having(
+            func.sum(Product.gmv) > 0  # Only brands with GMV
+        ).order_by(
+            func.sum(Product.gmv).desc()
+        ).limit(50).all()
+        
+        # Format results
+        discovered = []
+        for row in brand_stats:
+            # Skip if already tracked
+            if row.seller_name and row.seller_name.lower() in tracked_names:
+                continue
+                
+            discovered.append({
+                'name': row.seller_name,
+                'product_count': row.product_count or 0,
+                'total_gmv': float(row.total_gmv or 0),
+                'total_sales_7d': int(row.total_sales_7d or 0),
+                'avg_commission': float(row.avg_commission or 0),
+                'is_tracked': False
+            })
+        
+        return jsonify({
+            'success': True,
+            'discovered': discovered[:30],  # Top 30 untracked brands
+            'count': len(discovered)
+        })
+    except Exception as e:
+        print(f"[Brand Discover] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/brands/scan-copilot', methods=['POST'])
+@login_required
+def api_scan_copilot_for_brands():
+    """Live scan Copilot API for trending products and aggregate sellers to find big brands"""
+    try:
+        data = request.json or {}
+        pages_to_scan = min(int(data.get('pages', 10)), 20)  # Max 20 pages
+        
+        print(f"[Brand Scan] Starting Copilot scan for {pages_to_scan} pages...")
+        
+        # Aggregate sellers from trending products
+        seller_stats = {}
+        
+        for page in range(pages_to_scan):
+            result = fetch_copilot_trending(timeframe='7d', limit=100, page=page)
+            
+            if not result:
+                continue
+                
+            videos = result.get('videos', [])
+            if not videos:
+                continue
+            
+            for v in videos:
+                seller = v.get('sellerName', '').strip()
+                if not seller or seller == 'Unknown' or len(seller) < 2:
+                    continue
+                
+                gmv = float(v.get('periodGmv') or v.get('gmv') or 0)
+                sales = int(v.get('periodUnits') or v.get('units') or 0)
+                
+                if seller not in seller_stats:
+                    seller_stats[seller] = {
+                        'name': seller,
+                        'product_count': 0,
+                        'total_gmv': 0,
+                        'total_sales_7d': 0
+                    }
+                
+                seller_stats[seller]['product_count'] += 1
+                seller_stats[seller]['total_gmv'] += gmv
+                seller_stats[seller]['total_sales_7d'] += sales
+            
+            time.sleep(0.3)  # Avoid rate limits
+        
+        # Sort by GMV and filter out already tracked brands
+        tracked_names = [b.name.lower() for b in WatchedBrand.query.all() if b.name]
+        
+        discovered = []
+        for name, stats in seller_stats.items():
+            if name.lower() in tracked_names:
+                continue
+            if stats['total_gmv'] > 0:
+                discovered.append(stats)
+        
+        # Sort by GMV descending
+        discovered.sort(key=lambda x: x['total_gmv'], reverse=True)
+        
+        print(f"[Brand Scan] Found {len(discovered)} brands from {pages_to_scan} pages")
+        
+        return jsonify({
+            'success': True,
+            'discovered': discovered[:50],  # Top 50 brands
+            'count': len(discovered),
+            'pages_scanned': pages_to_scan
+        })
+    except Exception as e:
+        print(f"[Brand Scan] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/brands', methods=['POST'])
 @login_required
 def api_add_brand():

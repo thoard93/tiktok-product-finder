@@ -130,6 +130,41 @@
                 </div>
             </div>
 
+            <!-- Brand Discovery Section -->
+            <div class="mb-8 p-6 bg-slate-900 border border-white/5 rounded-2xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="font-heading font-bold text-white text-lg flex items-center gap-2">
+                            <i class="fas fa-radar text-primary"></i> Brand Discovery
+                        </h3>
+                        <p class="text-slate-500 text-xs mt-1">Scan trending products to find big brands with high GMV
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="discoverFromExisting()"
+                            class="glass px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-white/5 transition-all">
+                            <i class="fas fa-database mr-1"></i> From Database
+                        </button>
+                        <button onclick="scanCopilotForBrands()" class="btn-premium px-4 py-2 text-xs"
+                            id="btnScanCopilot">
+                            <i class="fas fa-satellite-dish mr-1"></i> Scan Copilot
+                        </button>
+                    </div>
+                </div>
+
+                <div id="discoveryResults" class="hidden">
+                    <div
+                        class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 max-h-64 overflow-y-auto no-scrollbar">
+                        <!-- Discovered brands will be inserted here -->
+                    </div>
+                </div>
+
+                <div id="discoveryEmpty" class="text-center py-6 text-slate-600 text-sm">
+                    <i class="fas fa-search text-2xl mb-2 block opacity-50"></i>
+                    Click "Scan Copilot" to discover trending brands
+                </div>
+            </div>
+
             <!-- Brand Grid -->
             <div id="brandGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 <div class="col-span-full text-center py-20 text-slate-500">
@@ -420,6 +455,102 @@
         document.getElementById('brandNameInput').addEventListener('keyup', (e) => {
             if (e.key === 'Enter') addBrand();
         });
+
+        // === BRAND DISCOVERY FUNCTIONS ===
+
+        async function scanCopilotForBrands() {
+            const btn = document.getElementById('btnScanCopilot');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Scanning...';
+            btn.disabled = true;
+
+            document.getElementById('discoveryEmpty').classList.add('hidden');
+            document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-2xl text-primary"></i><p class="text-slate-500 mt-2 text-sm">Scanning Copilot for trending brands...</p></div>';
+            document.getElementById('discoveryResults').classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/brands/scan-copilot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pages: 10 })
+                });
+                const data = await res.json();
+
+                if (data.success && data.discovered.length > 0) {
+                    renderDiscoveredBrands(data.discovered);
+                } else {
+                    document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8 text-slate-500">No new brands discovered</div>';
+                }
+            } catch (e) {
+                document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8 text-rose-400">Scan failed: ' + e.message + '</div>';
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function discoverFromExisting() {
+            document.getElementById('discoveryEmpty').classList.add('hidden');
+            document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-2xl text-primary"></i></div>';
+            document.getElementById('discoveryResults').classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/brands/discover');
+                const data = await res.json();
+
+                if (data.success && data.discovered.length > 0) {
+                    renderDiscoveredBrands(data.discovered);
+                } else {
+                    document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8 text-slate-500">No untracked brands found in your database</div>';
+                }
+            } catch (e) {
+                document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8 text-rose-400">Failed: ' + e.message + '</div>';
+            }
+        }
+
+        function renderDiscoveredBrands(discovered) {
+            const container = document.getElementById('discoveryResults');
+            container.classList.remove('hidden');
+            container.innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 max-h-64 overflow-y-auto no-scrollbar">
+                    ${discovered.map(b => `
+                        <div class="bg-slate-950 border border-white/5 rounded-xl p-3 hover:border-primary/50 transition-all cursor-pointer group" onclick="quickAddBrand('${b.name.replace(/'/g, "\\'")}')">
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="font-bold text-white text-xs truncate flex-1">${b.name}</h5>
+                                <i class="fas fa-plus-circle text-primary opacity-0 group-hover:opacity-100 transition-opacity ml-2"></i>
+                            </div>
+                            <div class="flex gap-2 text-[10px]">
+                                <span class="text-emerald-400 font-bold">$${formatKMB(b.total_gmv || 0)}</span>
+                                <span class="text-slate-500">${b.product_count || 0} products</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <p class="text-[10px] text-slate-600 mt-3 text-center">Click a brand to start tracking it</p>
+            `;
+        }
+
+        async function quickAddBrand(name) {
+            try {
+                const res = await fetch('/api/brands', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert(`✅ Now tracking "${name}"!\n\n${data.message}`);
+                    loadBrands();
+                    // Refresh discovery list
+                    discoverFromExisting();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
 
         // Load on page ready
         document.addEventListener('DOMContentLoaded', loadBrands);
