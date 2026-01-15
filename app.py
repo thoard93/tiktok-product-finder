@@ -7052,26 +7052,63 @@ def api_refresh_all_brands():
         'message': f'Refreshed stats for {len(brands)} brands'
     })
 
+@app.route('/api/brands/init', methods=['POST'])
+@login_required
+@admin_required
+def api_init_brands():
+    """Initialize/recreate the watched_brands table"""
+    try:
+        # Create all missing tables
+        db.create_all()
+        
+        # Check if table exists and has data
+        count = WatchedBrand.query.count()
+        
+        # Clear any brands with null names
+        deleted = WatchedBrand.query.filter(
+            db.or_(
+                WatchedBrand.name == None,
+                WatchedBrand.name == ''
+            )
+        ).delete(synchronize_session=False)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Brand Hunter initialized! Table has {count} brands. Cleaned {deleted} invalid entries.'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/brands/debug', methods=['GET'])
 @login_required
 def api_debug_brands():
     """Debug: Show raw brand data to diagnose issues"""
-    all_brands = WatchedBrand.query.all()
-    return jsonify({
-        'success': True,
-        'count': len(all_brands),
-        'brands': [
-            {
-                'id': b.id,
-                'name': b.name,
-                'name_type': str(type(b.name)),
-                'name_repr': repr(b.name),
-                'product_count': b.product_count,
-                'is_active': b.is_active
-            }
-            for b in all_brands[:20]  # Limit to 20 for debugging
-        ]
-    })
+    try:
+        all_brands = WatchedBrand.query.all()
+        return jsonify({
+            'success': True,
+            'table_exists': True,
+            'count': len(all_brands),
+            'brands': [
+                {
+                    'id': b.id,
+                    'name': b.name,
+                    'name_type': str(type(b.name)),
+                    'name_repr': repr(b.name),
+                    'product_count': b.product_count,
+                    'is_active': b.is_active
+                }
+                for b in all_brands[:20]  # Limit to 20 for debugging
+            ]
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'table_exists': False,
+            'error': str(e)
+        })
 
 @app.route('/api/brands/cleanup', methods=['POST'])
 @login_required

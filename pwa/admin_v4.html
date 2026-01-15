@@ -260,6 +260,11 @@
                     <i class="fas fa-eye text-xs"></i>
                     <span>Restore Hidden Products</span>
                 </button>
+                <button onclick="initBrandHunter()" id="btnInitBrands"
+                    class="bg-cyan-950/20 border border-cyan-500/20 px-6 py-3 rounded-xl hover:bg-cyan-500 hover:text-white text-cyan-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
+                    <i class="fas fa-database text-xs"></i>
+                    <span>Init Brand Hunter</span>
+                </button>
                 <button onclick="resetBrandHunter()" id="btnResetBrands"
                     class="bg-violet-950/20 border border-violet-500/20 px-6 py-3 rounded-xl hover:bg-violet-500 hover:text-white text-violet-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-bullseye text-xs"></i>
@@ -562,6 +567,28 @@
                 const data = await res.json();
                 if (data.success) {
                     alert(`✅ Brand Hunter Reset!\n\n${data.message}`);
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function initBrandHunter() {
+            const btn = document.getElementById('btnInitBrands');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initializing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/brands/init', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ ${data.message}`);
                 } else {
                     alert('❌ Error: ' + (data.error || 'Unknown error'));
                 }
