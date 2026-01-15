@@ -4059,6 +4059,16 @@ def scanner_page():
 def settings_page():
     return send_from_directory('pwa', 'settings.html')
 
+@app.route('/brand-hunter')
+@login_required
+def brand_hunter_page():
+    return send_from_directory('pwa', 'brand_hunter.html')
+
+@app.route('/vantage-v2')
+@login_required
+def vantage_v2_page():
+    return send_from_directory('pwa', 'vantage_v2.html')
+
 
 
 @app.route('/api/debug/check-product/<path:product_id>')
@@ -6769,6 +6779,99 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
     
     db.session.commit()
     return saved_count, len(videos)
+
+# =============================================================================
+# VANTAGE V2 ANALYTICS 🚀
+# =============================================================================
+
+@app.route('/api/analytics/movers-shakers', methods=['GET'])
+@login_required
+def api_movers_shakers():
+    """
+    Movers & Shakers Leaderboard: Products with highest 7D GMV growth.
+    """
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        # Filter for quality: Min 50 sales, Min 20 videos, exists in last 30 days
+        query = Product.query.filter(
+            Product.sales_7d >= 50,
+            Product.video_count >= 10,
+            Product.gmv_growth > 0
+        ).order_by(Product.gmv_growth.desc()).limit(limit)
+        
+        products = query.all()
+        return jsonify({
+            'success': True,
+            'products': [p.to_dict() for p in products]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/analytics/creative-linker', methods=['GET'])
+@login_required
+def api_creative_linker():
+    """
+    Fetch viral videos for a specific product, filtered by duration.
+    """
+    product_id = request.args.get('product_id')
+    if not product_id:
+        return jsonify({'success': False, 'error': 'Product ID required'}), 400
+    
+    raw_pid = product_id.replace('shop_', '')
+    
+    try:
+        # Search Copilot for this product
+        res = fetch_copilot_trending(timeframe='30d', limit=20, product_id=raw_pid)
+        if not res or not res.get('videos'):
+            # Fallback to keyword search
+            res = fetch_copilot_trending(timeframe='30d', limit=20, keywords=raw_pid)
+            
+        if not res or not res.get('videos'):
+            return jsonify({'success': False, 'error': 'No videos found for this product'}), 404
+            
+        videos = res.get('videos', [])
+        # Strict duration filter for "Bottom of Funnel" shorts
+        short_videos = [v for v in videos if (v.get('durationSeconds') or 0) <= 15]
+        
+        return jsonify({
+            'success': True,
+            'total_found': len(videos),
+            'shorts_found': len(short_videos),
+            'videos': short_videos
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/analytics/top-videos', methods=['GET'])
+@login_required
+def api_top_videos():
+    """
+    The ROI-Video Feed: Top earning recent videos <= 13s.
+    """
+    try:
+        # Fetch global trending videos
+        res = fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=100)
+        if not res or not res.get('videos'):
+            return jsonify({'success': False, 'error': 'Could not fetch trending videos'}), 500
+            
+        videos = res.get('videos', [])
+        # Filter for shorts (<= 15s) and significant revenue (> $500)
+        top_shorts = [
+            v for v in videos 
+            if (v.get('durationSeconds') or 0) <= 15 and (v.get('periodRevenue') or 0) > 500
+        ]
+        
+        # Sort by ROI efficiency (Revenue per view or similar)
+        # For now, just sort by total period revenue
+        top_shorts.sort(key=lambda x: x.get('periodRevenue') or 0, reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'count': len(top_shorts),
+            'videos': top_shorts[:30] # Limit to top 30
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/copilot/sync', methods=['POST'])
 @login_required

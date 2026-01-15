@@ -32,10 +32,14 @@ def test_search(product_id):
         data = res.json()
         videos = data.get('videos', [])
         print(f"Found {len(videos)} results")
+        if videos:
+            print("--- FIRST RESULT FULL DATA ---")
+            print(json.dumps(videos[0], indent=2))
+            print("--- END FIRST RESULT ---")
         for v in videos:
             print(f" - {v.get('productId')}: {v.get('productTitle')}")
     else:
-        print(f"Error: {res.text}")
+        print(f"Error {res.status_code}: {res.text}")
 
 if __name__ == "__main__":
     # Test with a known trending product ID if possible, or the one from the user's link
