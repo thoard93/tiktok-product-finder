@@ -1149,11 +1149,6 @@ def cookies_page():
     """Show Cookie Policy"""
     return send_from_directory(app.static_folder, 'cookies.html')
 
-@app.route('/brand-hunter')
-@login_required
-def brand_hunter_page():
-    """Show Brand Hunter page"""
-    return send_from_directory(app.static_folder, 'brand_hunter.html')
 
 @app.route('/auth/discord')
 def discord_login():
