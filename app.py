@@ -6837,17 +6837,18 @@ def copilot_mass_sync():
             start_time = time.time()
             
             def fetch_page_with_retry(page_num, retries=3):
-                """Fetch page with retry on failure"""
-                for attempt in range(retries):
-                    try:
-                        saved, total = sync_copilot_products(timeframe=timeframe, limit=PRODUCTS_PER_PAGE, page=page_num)
-                        return page_num, saved, total, None
-                    except Exception as e:
-                        if attempt < retries - 1:
-                            time.sleep(0.5)  # Wait before retry
-                        else:
-                            return page_num, 0, -1, str(e)
-                return page_num, 0, -1, "Unknown error"
+                """Fetch page with retry on failure - MUST have app context"""
+                with app.app_context():  # CRITICAL: Each thread needs its own context
+                    for attempt in range(retries):
+                        try:
+                            saved, total = sync_copilot_products(timeframe=timeframe, limit=PRODUCTS_PER_PAGE, page=page_num)
+                            return page_num, saved, total, None
+                        except Exception as e:
+                            if attempt < retries - 1:
+                                time.sleep(0.5)  # Wait before retry
+                            else:
+                                return page_num, 0, -1, str(e)
+                    return page_num, 0, -1, "Unknown error"
             
             # Slightly reduced parallelization for stability
             BATCH_SIZE = 8
