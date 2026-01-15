@@ -6714,17 +6714,17 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 product_id = f"shop_{product_id}"
             
             # ===== ENHANCED V2 FIELD EXTRACTION =====
-            # Video Count: Use periodVideoCount (17.8K accurate) over old productVideoCount
-            video_count = int(p.get('periodVideoCount') or p.get('productVideoCount') or p.get('adVideoCount') or 0)
+            # Video Count: ALL TIME total (productVideoCount = 23.5K)
+            video_count = int(p.get('productVideoCount') or p.get('adVideoCount') or p.get('periodVideoCount') or 0)
             
-            # Creator Count: Use periodCreatorCount (accurate)
-            creator_count = int(p.get('periodCreatorCount') or p.get('productCreatorCount') or 0)
+            # Creator Count: ALL TIME total (productCreatorCount)  
+            creator_count = int(p.get('productCreatorCount') or p.get('periodCreatorCount') or 0)
             
-            # Ad Spend: Use totalAdCost (accurate total) and calculate period spend
+            # Ad Spend: 7-DAY period spend (not all-time total)
+            ad_spend_7d = float(p.get('periodAdSpend') or p.get('totalAdCost', 0) * 0.15 or 0)  # Estimate 7d as 15% of total if not available
             ad_spend_total = float(p.get('totalAdCost') or p.get('productTotalAdSpend') or 0)
-            ad_spend_7d = float(p.get('periodAdSpend') or 0)  # May not exist in V2
             
-            # Sales: Use unitsSold (total) and periodUnits (7d)
+            # Sales: 7-DAY period (periodUnits)
             total_sales = int(p.get('unitsSold') or p.get('productTotalUnits') or 0)
             sales_7d = int(p.get('periodUnits') or 0)
             
