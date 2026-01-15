@@ -6704,6 +6704,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
         return 0, 0
     
     saved_count = 0
+    processed_ids = set()  # Track IDs within this batch to prevent duplicates
     
     for p in products:
         # DEBUG: Inspect raw product data for keys (first 3 only)
@@ -6717,6 +6718,11 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # Normalize to our shop_ prefix
             if not product_id.startswith('shop_'):
                 product_id = f"shop_{product_id}"
+            
+            # Skip if already processed in this batch (prevents duplicate insert attempts)
+            if product_id in processed_ids:
+                continue
+            processed_ids.add(product_id)
             
             # ===== ENHANCED V2 FIELD EXTRACTION =====
             # Video Count: ALL TIME total (productVideoCount = 23.5K)
@@ -6858,6 +6864,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             
         except Exception as e:
             print(f"[Copilot Sync V2] Error saving product: {e}")
+            db.session.rollback()  # Prevent cascading transaction errors
             continue
     
     db.session.commit()
