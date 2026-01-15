@@ -953,6 +953,65 @@ class BlacklistedBrand(db.Model):
             'added_at': self.added_at.isoformat() if self.added_at else None
         }
 
+class WatchedBrand(db.Model):
+    """Brands being tracked in Brand Hunter"""
+    __tablename__ = 'watched_brands'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, index=True, nullable=False)
+    logo_url = db.Column(db.String(500))
+    product_count = db.Column(db.Integer, default=0)
+    total_sales_7d = db.Column(db.Integer, default=0)
+    total_revenue = db.Column(db.Float, default=0)
+    avg_commission = db.Column(db.Float, default=0)
+    top_product_id = db.Column(db.String(100))
+    top_product_name = db.Column(db.String(500))
+    is_active = db.Column(db.Boolean, default=True)
+    last_synced = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'logo_url': self.logo_url,
+            'product_count': self.product_count or 0,
+            'total_sales_7d': self.total_sales_7d or 0,
+            'total_revenue': self.total_revenue or 0,
+            'avg_commission': self.avg_commission or 0,
+            'top_product_id': self.top_product_id,
+            'top_product_name': self.top_product_name,
+            'is_active': self.is_active,
+            'last_synced': self.last_synced.isoformat() if self.last_synced else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+    
+    def refresh_stats(self):
+        """Recalculate stats from products matching this brand"""
+        from sqlalchemy import func
+        products = Product.query.filter(
+            Product.seller_name.ilike(f'%{self.name}%')
+        ).all()
+        
+        if products:
+            self.product_count = len(products)
+            self.total_sales_7d = sum(p.sales_7d or 0 for p in products)
+            self.total_revenue = sum(p.gmv or 0 for p in products)
+            commissions = [p.commission_rate for p in products if p.commission_rate]
+            self.avg_commission = sum(commissions) / len(commissions) if commissions else 0
+            
+            # Find top product by 7D sales
+            top = max(products, key=lambda p: p.sales_7d or 0)
+            self.top_product_id = top.product_id
+            self.top_product_name = top.product_name
+            
+            # Get logo from first product image
+            if products[0].image_url:
+                self.logo_url = products[0].cached_image_url or products[0].image_url
+        
+        self.last_synced = datetime.utcnow()
+        db.session.commit()
+
 def is_brand_blacklisted(seller_name=None, seller_id=None):
     """Check if a brand is blacklisted by name or ID"""
     if seller_id:
@@ -1089,6 +1148,12 @@ def privacy_page():
 def cookies_page():
     """Show Cookie Policy"""
     return send_from_directory(app.static_folder, 'cookies.html')
+
+@app.route('/brand-hunter')
+@login_required
+def brand_hunter_page():
+    """Show Brand Hunter page"""
+    return send_from_directory(app.static_folder, 'brand_hunter.html')
 
 @app.route('/auth/discord')
 def discord_login():
@@ -6743,6 +6808,127 @@ def copilot_sync():
         'errors': errors
     })
 
+# =============================================================================
+# BRAND HUNTER API ENDPOINTS
+# =============================================================================
+
+@app.route('/api/brands', methods=['GET'])
+@login_required
+def api_list_brands():
+    """List all watched brands with their stats"""
+    brands = WatchedBrand.query.filter_by(is_active=True).order_by(WatchedBrand.total_sales_7d.desc()).all()
+    return jsonify({
+        'success': True,
+        'brands': [b.to_dict() for b in brands],
+        'count': len(brands)
+    })
+
+@app.route('/api/brands', methods=['POST'])
+@login_required
+def api_add_brand():
+    """Add a new brand to watch"""
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    
+    if not name:
+        return jsonify({'success': False, 'error': 'Brand name is required'}), 400
+    
+    # Check if already exists
+    existing = WatchedBrand.query.filter(WatchedBrand.name.ilike(name)).first()
+    if existing:
+        return jsonify({'success': False, 'error': f'Brand "{name}" is already being tracked'}), 400
+    
+    # Create new brand
+    brand = WatchedBrand(name=name)
+    db.session.add(brand)
+    db.session.commit()
+    
+    # Immediately calculate stats from existing products
+    brand.refresh_stats()
+    
+    user = get_current_user()
+    log_activity(user.id, 'add_brand', {'brand': name})
+    
+    return jsonify({
+        'success': True,
+        'brand': brand.to_dict(),
+        'message': f'Now tracking "{name}" with {brand.product_count} existing products'
+    })
+
+@app.route('/api/brands/<int:brand_id>', methods=['DELETE'])
+@login_required
+def api_delete_brand(brand_id):
+    """Stop tracking a brand"""
+    brand = WatchedBrand.query.get(brand_id)
+    if not brand:
+        return jsonify({'success': False, 'error': 'Brand not found'}), 404
+    
+    name = brand.name
+    db.session.delete(brand)
+    db.session.commit()
+    
+    user = get_current_user()
+    log_activity(user.id, 'delete_brand', {'brand': name})
+    
+    return jsonify({'success': True, 'message': f'Stopped tracking "{name}"'})
+
+@app.route('/api/brands/<int:brand_id>/sync', methods=['POST'])
+@login_required
+def api_sync_brand(brand_id):
+    """Sync products for a specific brand by searching Copilot"""
+    brand = WatchedBrand.query.get(brand_id)
+    if not brand:
+        return jsonify({'success': False, 'error': 'Brand not found'}), 404
+    
+    # Refresh stats from existing products in DB
+    brand.refresh_stats()
+    
+    user = get_current_user()
+    log_activity(user.id, 'sync_brand', {'brand': brand.name, 'products': brand.product_count})
+    
+    return jsonify({
+        'success': True,
+        'brand': brand.to_dict(),
+        'message': f'Refreshed stats for "{brand.name}": {brand.product_count} products, {brand.total_sales_7d:,} 7D sales'
+    })
+
+@app.route('/api/brands/<int:brand_id>/products', methods=['GET'])
+@login_required
+def api_brand_products(brand_id):
+    """Get all products for a specific brand"""
+    brand = WatchedBrand.query.get(brand_id)
+    if not brand:
+        return jsonify({'success': False, 'error': 'Brand not found'}), 404
+    
+    # Find products matching brand name in seller_name
+    products = Product.query.filter(
+        Product.seller_name.ilike(f'%{brand.name}%')
+    ).order_by(Product.sales_7d.desc()).limit(100).all()
+    
+    return jsonify({
+        'success': True,
+        'brand': brand.to_dict(),
+        'products': [p.to_dict() for p in products],
+        'count': len(products)
+    })
+
+@app.route('/api/brands/refresh-all', methods=['POST'])
+@login_required
+def api_refresh_all_brands():
+    """Refresh stats for all watched brands"""
+    brands = WatchedBrand.query.filter_by(is_active=True).all()
+    
+    for brand in brands:
+        brand.refresh_stats()
+    
+    user = get_current_user()
+    log_activity(user.id, 'refresh_all_brands', {'count': len(brands)})
+    
+    return jsonify({
+        'success': True,
+        'message': f'Refreshed stats for {len(brands)} brands'
+    })
+
 @app.route('/api/cleanup/zero-sales', methods=['POST'])
 @login_required
 @admin_required
@@ -6849,9 +7035,8 @@ def copilot_mass_sync():
                             else:
                                 return page_num, 0, -1, str(e)
                     return page_num, 0, -1, "Unknown error"
-            
-            # Slightly reduced parallelization for stability
-            BATCH_SIZE = 8
+            # Reduced parallelization to avoid rate limits
+            BATCH_SIZE = 5
             print(f"[LUDICROUS] 🚀🚀🚀 LUDICROUS SPEED ENGAGED: {pages_needed} pages, {BATCH_SIZE} parallel, {PRODUCTS_PER_PAGE}/page")
             
             for batch_start in range(0, pages_needed, BATCH_SIZE):
@@ -6886,9 +7071,8 @@ def copilot_mass_sync():
                             rate = pages_done / elapsed if elapsed > 0 else 0
                             set_config_value('sync_progress', str(products_synced))
                             print(f"[LUDICROUS] ⚡ {pages_done}/{pages_needed} pages | {products_synced:,} products | {rate:.1f} pages/sec | {error_count} errors")
-                
-                # Small delay to avoid rate limits
-                time.sleep(0.1)
+                # Delay between batches to avoid rate limits
+                time.sleep(0.5)
             
             elapsed = time.time() - start_time
             print(f"[LUDICROUS] ✅ COMPLETE: {products_synced:,} products from {pages_done} pages in {elapsed:.1f}s")
