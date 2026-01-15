@@ -6523,6 +6523,65 @@ def get_copilot_cookie():
     """Get TikTokCopilot session cookie from DB or Env"""
     return get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
 
+def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0, region='US'):
+    """
+    Fetch products from the ENHANCED TikTokCopilot /api/trending/products endpoint.
+    This endpoint provides significantly more accurate stats than the legacy /api/trending.
+    
+    Args:
+        timeframe: 1d, 7d, all (All Time)
+        sort_by: ad_spend, revenue, views
+        limit: products per page (max ~50)
+        page: page number for pagination
+        region: US, etc
+    
+    Returns:
+        dict with products data or None on error
+    
+    Key fields in response:
+        - periodVideoCount: Accurate video count (17.8K vs old 20)
+        - periodCreatorCount: Accurate creator count
+        - totalAdCost: Total ad spend
+        - unitsSold: Total units sold
+        - topVideos: Array of top 5 performing videos
+        - dailyStats: Day-by-day revenue/views/video count
+    """
+    cookie_str = get_copilot_cookie()
+    if not cookie_str:
+        print("[Copilot Products] ❌ No cookie configured!")
+        return None
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cookie": cookie_str,
+        "Referer": "https://www.tiktokcopilot.com/products",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin"
+    }
+    
+    params = {
+        "timeframe": timeframe,
+        "sortBy": sort_by,
+        "limit": limit,
+        "page": page,
+        "region": region
+    }
+    
+    try:
+        # Use the NEW /api/trending/products endpoint
+        res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
+        if res.status_code == 200:
+            return res.json()
+        else:
+            print(f"[Copilot Products] API Error: {res.status_code}")
+            return None
+    except Exception as e:
+        print(f"[Copilot Products] Exception: {e}")
+        return None
+
 def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US', **kwargs):
     """
     Fetch trending products from TikTokCopilot API.
@@ -6607,25 +6666,40 @@ def calculate_winner_score(ad_spend, video_count, creator_count):
 
 def sync_copilot_products(timeframe='7d', limit=50, page=0):
     """
-    Core sync function - fetches from Copilot and saves to DB.
+    Core sync function - fetches from the ENHANCED Copilot /api/trending/products endpoint.
     Returns (saved_count, total_in_response) tuple.
+    
+    V2: Uses the new /api/trending/products endpoint with significantly more accurate stats:
+        - periodVideoCount (17.8K vs old 20)
+        - periodCreatorCount
+        - totalAdCost
+        - unitsSold
+        - topVideos array
     """
-    result = fetch_copilot_trending(timeframe=timeframe, limit=limit, page=page)
+    # Use the NEW enhanced endpoint
+    result = fetch_copilot_products(timeframe=timeframe, limit=limit, page=page)
     
     if not result:
-        return 0, 0
+        # Fallback to legacy endpoint if new one fails
+        print("[Copilot Sync] V2 endpoint failed, trying legacy...")
+        result = fetch_copilot_trending(timeframe=timeframe, limit=limit, page=page)
+        if not result:
+            return 0, 0
+        products = result.get('videos', [])
+    else:
+        products = result.get('products', [])
     
-    videos = result.get('videos', [])
-    if not videos:
+    if not products:
         return 0, 0
     
     saved_count = 0
     
-    for v in videos:
-        # DEBUG: Inspect raw product data for keys
-        if saved_count < 3: print(f"[DEBUG] Raw Product Data: {json.dumps(v, default=str)}")
+    for p in products:
+        # DEBUG: Inspect raw product data for keys (first 3 only)
+        if saved_count < 3:
+            print(f"[DEBUG V2] Raw Product Keys: {list(p.keys())}")
         try:
-            product_id = str(v.get('productId', ''))
+            product_id = str(p.get('productId', ''))
             if not product_id:
                 continue
             
@@ -6633,134 +6707,128 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             if not product_id.startswith('shop_'):
                 product_id = f"shop_{product_id}"
             
-            # Calculate stats
-            # Extract Ad Spend (7D and Total)
-            ad_spend_7d = float(v.get('periodAdSpend') or 0)
-            # Try multiple possible field names for total ad spend
-            ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or v.get('adSpend') or v.get('productAdSpend') or v.get('allTimeAdSpend') or 0)
+            # ===== ENHANCED V2 FIELD EXTRACTION =====
+            # Video Count: Use periodVideoCount (17.8K accurate) over old productVideoCount
+            video_count = int(p.get('periodVideoCount') or p.get('productVideoCount') or p.get('adVideoCount') or 0)
             
-            # DEBUG: Log ALL data for products with ad spend to find the persistent total spend field
-            if ad_spend_7d > 0:
-                print(f"[SPEND_DEBUG] Product {product_id} has 7D Spend {ad_spend_7d}. Full keys: {list(v.keys())}")
-                # Log keys containing typical spend terms
-                interesting = {k: v.get(k) for k in v.keys() if any(x in k.lower() for x in ['ad', 'spend', 'revenue', 'gmv', 'total'])}
-                print(f"[SPEND_DEBUG] Interesting fields: {interesting}")
+            # Creator Count: Use periodCreatorCount (accurate)
+            creator_count = int(p.get('periodCreatorCount') or p.get('productCreatorCount') or 0)
             
-            video_count = int(v.get('productVideoCount') or 0)
-            creator_count = int(v.get('productCreatorCount') or 0)
+            # Ad Spend: Use totalAdCost (accurate total) and calculate period spend
+            ad_spend_total = float(p.get('totalAdCost') or p.get('productTotalAdSpend') or 0)
+            ad_spend_7d = float(p.get('periodAdSpend') or 0)  # May not exist in V2
             
-            # Extract Shop Ads Commission (GMV Max Ads)
-            shop_ads_rate = float(v.get('tapShopAdsRate') or v.get('shopAdsRate') or v.get('shopAdsCommission') or 0) / 10000.0
+            # Sales: Use unitsSold (total) and periodUnits (7d)
+            total_sales = int(p.get('unitsSold') or p.get('productTotalUnits') or 0)
+            sales_7d = int(p.get('periodUnits') or 0)
             
-            # Extract Rating
-            rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or v.get('reviewScore') or 0)
-            reviews = int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0)
+            # Revenue
+            period_revenue = float(p.get('periodRevenue') or 0)
+            total_revenue = float(p.get('estTotalEarnings') or 0)
             
-            # Extract Sales for Filtering
-            sales_7d = int(v.get('periodUnits') or v.get('units') or 0)
-            # Try multiple possible field names for total sales
-            total_sales = int(v.get('productTotalUnits') or v.get('productTotalSales') or v.get('productSalesTotal') or v.get('allTimeSales') or v.get('totalSales') or v.get('soldCount') or v.get('productUnits') or v.get('allTimeUnits') or 0)
+            # Views
+            period_views = int(p.get('periodViews') or 0)
             
-            # Extract Product URL from Copilot API (try multiple field names)
-            raw_product_id = str(v.get('productId', '')).replace('shop_', '')
-            product_url = v.get('productLink') or v.get('productUrl') or v.get('shopLink') or v.get('shopUrl') or v.get('affiliateLink') or v.get('link') or v.get('shareUrl')
+            # Commission Rates (divide by 10000 to get decimal)
+            commission_rate = float(p.get('tapCommissionRate') or p.get('ocCommissionRate') or 0) / 10000.0
+            shop_ads_rate = float(p.get('tapShopAdsRate') or p.get('ocShopAdsRate') or 0) / 10000.0
             
-            # If no direct URL found, construct the most reliable direct product page URL
+            # Growth (V2 may have different field names)
+            growth_pct = float(p.get('viewsGrowthPct') or p.get('revenueGrowthPct') or p.get('growthPercentage') or 0)
+            
+            # Product URL
+            raw_product_id = str(p.get('productId', '')).replace('shop_', '')
+            product_url = p.get('productPageUrl') or p.get('productLink') or p.get('productUrl')
             if not product_url and raw_product_id:
                 product_url = f"https://shop.tiktok.com/view/product/{raw_product_id}?region=US&locale=en-US"
             
-            # DEBUG: Log sales fields for first few products
-            if saved_count < 3:
-                sales_keys = {k: v.get(k) for k in v.keys() if any(x in k.lower() for x in ['sale', 'unit', 'sold', 'total'])}
-                print(f"[SALES_DEBUG] Product {product_id}: 7D={sales_7d}, Total={total_sales}, Fields={sales_keys}")
-
+            # Image URL
+            image_url = p.get('productCoverUrl') or p.get('productImageUrl') or ''
+            
             # FILTER: Quality Control - Skip low-quality products
-            if sales_7d <= 0:
-                print(f"[Copilot Sync] Skipping {product_id} (Zero 7D Sales)")
+            if sales_7d <= 0 and total_sales <= 0:
+                print(f"[Copilot Sync V2] Skipping {product_id} (Zero Sales)")
                 continue
-            if video_count < 20:
-                print(f"[Copilot Sync] Skipping {product_id} (Low Videos: {video_count})")
+            # Relax video filter since we now have accurate counts
+            if video_count < 100:  # Raised from 20 to 100 since counts are now accurate
+                print(f"[Copilot Sync V2] Skipping {product_id} (Low Videos: {video_count})")
                 continue
             
-            winner_score = calculate_winner_score(ad_spend_7d, video_count, creator_count)
+            winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
             
             # Save or Update Product
             existing = Product.query.get(product_id)
             if existing:
-                # Update existing product with Copilot data
-                existing.product_name = v.get('productTitle') or existing.product_name
-                existing.seller_name = v.get('sellerName') or existing.seller_name
+                # Update existing product with V2 Copilot data
+                existing.product_name = p.get('productTitle') or existing.product_name
+                existing.seller_name = p.get('sellerName') or existing.seller_name
                 
                 # Image Update with Cache Invalidation
-                new_img = v.get('productImageUrl')
-                if new_img and new_img != existing.image_url:
-                    existing.image_url = new_img
-                    existing.cached_image_url = None # Force re-download of new image
-                elif not existing.image_url and new_img:
-                     existing.image_url = new_img
+                if image_url and image_url != existing.image_url:
+                    existing.image_url = image_url
+                    existing.cached_image_url = None  # Force re-download
+                elif not existing.image_url and image_url:
+                    existing.image_url = image_url
                 
-                gmv_val = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
-                if gmv_val > 0: existing.gmv = gmv_val
+                if period_revenue > 0:
+                    existing.gmv = period_revenue
+                if growth_pct != 0:
+                    existing.gmv_growth = growth_pct
                 
-                # Extract GMV Growth
-                growth_val = float(v.get('growthPercentage') or v.get('periodGrowth') or v.get('gmvGrowth') or 0)
-                if growth_val != 0: existing.gmv_growth = growth_val
+                # Update Ad Spend (prefer total from V2)
+                if ad_spend_total > 0:
+                    existing.ad_spend_total = ad_spend_total
+                if ad_spend_7d > 0:
+                    existing.ad_spend = ad_spend_7d
+                elif ad_spend_total > 0:
+                    # Estimate 7d spend as ~15% of total if not provided
+                    existing.ad_spend = ad_spend_total * 0.15
                 
-                # Update Ad Spend (7D and Total)
-                if ad_spend_7d > 0: existing.ad_spend = ad_spend_7d
-                if ad_spend_total > 0: existing.ad_spend_total = ad_spend_total
-                
-                if sales_7d > 0: 
+                if sales_7d > 0:
                     existing.sales_7d = sales_7d
-                    # Fallback Total Sales
-                    if existing.sales < sales_7d: existing.sales = sales_7d
+                if total_sales > 0:
+                    existing.sales = total_sales
                 
-                if total_sales > 0: existing.sales = total_sales
-
-                # Ratings (Enhanced Extraction)
-                rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or v.get('reviewScore') or v.get('score') or 0)
-                reviews = int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0)
-                if rating > 0: existing.product_rating = rating
-                if reviews > 0: existing.review_count = reviews
+                # V2 accurate video/creator counts
+                if video_count > 0:
+                    existing.video_count = video_count
+                if creator_count > 0:
+                    existing.influencer_count = creator_count
                 
-                # Shop Ads Commission (GMV Max Ads)
-                if shop_ads_rate > 0: existing.shop_ads_commission = shop_ads_rate
-
-                if video_count > 0: existing.video_count = video_count
-                if creator_count > 0: existing.influencer_count = creator_count
-                comm_rate = float(v.get('tapCommissionRate') or 0) / 10000.0
-                if comm_rate > 0: existing.commission_rate = comm_rate
-                views_val = int(v.get('periodViews') or 0)
-                if views_val > 0: existing.views_count = views_val
-                # Update product URL if available from API
+                if commission_rate > 0:
+                    existing.commission_rate = commission_rate
+                if shop_ads_rate > 0:
+                    existing.shop_ads_commission = shop_ads_rate
+                if period_views > 0:
+                    existing.views_count = period_views
+                
                 if product_url and (not existing.product_url or 'search/product' in (existing.product_url or '')):
                     existing.product_url = product_url
                 
                 existing.last_updated = datetime.utcnow()
-                existing.product_status = 'active' # Force visible on sync
-                existing.scan_type = 'copilot'
+                existing.product_status = 'active'
+                existing.scan_type = 'copilot_v2'
             else:
-                # Create new product
+                # Create new product with V2 data
                 new_product = Product(
                     product_id=product_id,
-                    product_name=v.get('productTitle', ''),
-                    seller_id=str(v.get('sellerId', '')),
-                    seller_name=v.get('sellerName', ''),
-                    image_url=v.get('productImageUrl', ''),
+                    product_name=p.get('productTitle', ''),
+                    seller_id=str(p.get('sellerId', '')),
+                    seller_name=p.get('sellerName', ''),
+                    image_url=image_url,
                     product_url=product_url,
-                    gmv=float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0),
+                    gmv=period_revenue,
+                    gmv_growth=growth_pct,
                     sales_7d=sales_7d,
-                    sales=total_sales if total_sales > 0 else 0,  # Don't fallback to 7D sales
-                    product_rating=rating,
-                    review_count=reviews,
+                    sales=total_sales,
                     video_count=video_count,
                     influencer_count=creator_count,
-                    commission_rate=float(v.get('tapCommissionRate') or 0) / 10000.0,
+                    commission_rate=commission_rate,
                     shop_ads_commission=shop_ads_rate,
-                    ad_spend=ad_spend_7d,
+                    ad_spend=ad_spend_7d if ad_spend_7d > 0 else ad_spend_total * 0.15,
                     ad_spend_total=ad_spend_total,
-                    views_count=int(v.get('periodViews') or 0),
-                    scan_type='copilot',
+                    views_count=period_views,
+                    scan_type='copilot_v2',
                     first_seen=datetime.utcnow(),
                     product_status='active'
                 )
@@ -6769,11 +6837,12 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             saved_count += 1
             
         except Exception as e:
-            print(f"[Copilot Sync] Error saving product: {e}")
+            print(f"[Copilot Sync V2] Error saving product: {e}")
             continue
     
     db.session.commit()
-    return saved_count, len(videos)
+    print(f"[Copilot Sync V2] Saved {saved_count}/{len(products)} products from {timeframe} timeframe")
+    return saved_count, len(products)
 
 # =============================================================================
 # VANTAGE V2 ANALYTICS 🚀

@@ -802,18 +802,22 @@ async def blacklist_list(ctx):
             await ctx.send(text)
 
 def get_hot_products():
-    """Get Top Products - Sorted by Ad Spend (high first), then Video Count"""
+    """Get Top Products - Sorted by Ad Spend (high first), then Video Count
+    
+    V2 Update: Filters adjusted for accurate video counts from /api/trending/products.
+    Old counts were ~20-40, new accurate counts are 100-17,000+.
+    """
     from datetime import timedelta
     
     with app.app_context():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with Shop Ads Commission >= 10%, high 7D sales, high ad spend, low competition (<40 videos)
-        # Sort by: Shop Ads Commission (highest first), then Ad Spend, then 7D Sales
+        # Query: Products with Shop Ads Commission >= 10%, high 7D sales, high ad spend
+        # V2: Adjusted video_count filters for accurate data (was 20-40, now 100-5000)
         products = Product.query.filter(
-            Product.video_count >= 20,  # Filter out placeholders (min 20 videos)
-            Product.video_count < 40,  # Low competition filter (<40 videos)
+            Product.video_count >= 100,  # V2: Min 100 videos (was 20)
+            Product.video_count < 5000,  # V2: Low competition filter (was <40, now <5000)
             Product.sales_7d >= 100,  # High 7D sales
             Product.ad_spend >= 500,  # High ad spend ($500+)
             Product.commission_rate > 0,  # Must have regular commission
