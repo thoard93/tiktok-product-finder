@@ -6724,18 +6724,18 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             processed_ids.add(product_id)
             
             # ===== ENHANCED V2 FIELD EXTRACTION =====
-            # Video Count: ALL TIME total (productVideoCount = 23.5K)
-            raw_product_vc = p.get('productVideoCount')
-            raw_ad_vc = p.get('adVideoCount') 
+            # Video Count: With timeframe='all', periodVideoCount IS the all-time total (17862)
+            # adVideoCount is just ad-specific videos (9867), NOT all-time
             raw_period_vc = p.get('periodVideoCount')
-            video_count = int(raw_product_vc or raw_ad_vc or raw_period_vc or 0)
+            raw_ad_vc = p.get('adVideoCount') 
+            video_count = int(raw_period_vc or raw_ad_vc or 0)
             
             # DEBUG: Only log first 3 to avoid spam
             if saved_count < 3:
-                print(f"[DEBUG V2] Video Count Sources: productVideoCount={raw_product_vc}, adVideoCount={raw_ad_vc}, periodVideoCount={raw_period_vc} => Using: {video_count}")
+                print(f"[DEBUG V2] Video Count: periodVideoCount={raw_period_vc}, adVideoCount={raw_ad_vc} => Using: {video_count}")
             
-            # Creator Count: ALL TIME total (productCreatorCount)  
-            creator_count = int(p.get('productCreatorCount') or p.get('periodCreatorCount') or 0)
+            # Creator Count: periodCreatorCount is all-time when timeframe=all
+            creator_count = int(p.get('periodCreatorCount') or 0)
             
             # Ad Spend: 7-DAY period spend (not all-time total)
             ad_spend_7d = float(p.get('periodAdSpend') or p.get('totalAdCost', 0) * 0.15 or 0)  # Estimate 7d as 15% of total if not available
