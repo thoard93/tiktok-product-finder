@@ -285,6 +285,11 @@
                     <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
                     <span>System Reset</span>
                 </button>
+                <button onclick="nukeBrandHunter()"
+                    class="bg-rose-950/20 border border-rose-500/20 px-6 py-3 rounded-xl hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
+                    <i class="fas fa-bomb text-xs group-hover:animate-bounce"></i>
+                    <span>Nuke Brand Hunter</span>
+                </button>
             </div>
         </div>
     </main>
@@ -589,6 +594,32 @@
                 const data = await res.json();
                 if (data.success) {
                     alert(`✅ ${data.message}`);
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function nukeBrandHunter() {
+            if (!confirm("☢️ NUCLEAR BRAND RESET?\\n\\nThis will DROP the entire Watched Brands table and recreate it.\\n\\nONLY use this if brands won't clear or are stuck on 'undefined'.")) return;
+            if (!confirm("⚠️ FINAL WARNING: This cannot be undone.")) return;
+
+            const btn = event.currentTarget;
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> NUKING...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/brands/nuke', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`☢️ ${data.message}`);
+                    window.location.reload();
                 } else {
                     alert('❌ Error: ' + (data.error || 'Unknown error'));
                 }

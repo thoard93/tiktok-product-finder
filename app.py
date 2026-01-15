@@ -7084,30 +7084,35 @@ def api_init_brands():
 @app.route('/api/brands/debug', methods=['GET'])
 @login_required
 def api_debug_brands():
-    """Debug: Show raw brand data to diagnose issues"""
+    """Debug: Show raw brand data and schema info"""
     try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        
         all_brands = WatchedBrand.query.all()
         return jsonify({
             'success': True,
-            'table_exists': True,
+            'tables_in_db': tables,
+            'watched_brands_exists': 'watched_brands' in tables,
             'count': len(all_brands),
             'brands': [
                 {
                     'id': b.id,
                     'name': b.name,
-                    'name_type': str(type(b.name)),
                     'name_repr': repr(b.name),
+                    'is_active': b.is_active,
                     'product_count': b.product_count,
-                    'is_active': b.is_active
+                    'created_at': str(b.created_at)
                 }
-                for b in all_brands[:20]  # Limit to 20 for debugging
+                for b in all_brands
             ]
         })
     except Exception as e:
         return jsonify({
             'success': False,
-            'table_exists': False,
-            'error': str(e)
+            'error': str(e),
+            'traceback': traceback.format_exc()
         })
 
 @app.route('/api/brands/cleanup', methods=['POST'])
@@ -7150,6 +7155,27 @@ def api_clear_all_brands():
             'success': True,
             'deleted': deleted,
             'message': f'Cleared all {deleted} brands. Brand Hunter reset.'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/brands/nuke', methods=['POST'])
+@login_required
+@admin_required
+def api_nuke_brands():
+    """Hard reset: Drop and recreate the watched_brands table"""
+    try:
+        from sqlalchemy import text
+        db.session.execute(text("DROP TABLE IF EXISTS watched_brands CASCADE"))
+        db.session.commit()
+        
+        # Recreate tables
+        db.create_all()
+        
+        return jsonify({
+            'success': True,
+            'message': 'NUCLEAR RESET: Brand table dropped and recreated. All ghost data should be gone.'
         })
     except Exception as e:
         db.session.rollback()
