@@ -152,6 +152,25 @@
             </div>
         </header>
 
+        <!-- Timeframe Toggle -->
+        <div class="px-6 md:px-8 pt-6 flex items-center gap-4">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Timeframe:</span>
+            <div class="flex gap-1 bg-slate-900 p-1 rounded-xl border border-white/5">
+                <button onclick="setTimeframe('24h', this)"
+                    class="timeframe-btn px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                    24H
+                </button>
+                <button onclick="setTimeframe('7d', this)"
+                    class="timeframe-btn active-timeframe px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-primary text-white shadow-md">
+                    7D
+                </button>
+                <button onclick="setTimeframe('all', this)"
+                    class="timeframe-btn px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                    All Time
+                </button>
+            </div>
+        </div>
+
         <div class="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar pb-32">
 
             <!-- Section 1: Movers & Shakers -->
@@ -215,9 +234,28 @@
     </div>
 
     <script>
+        let curTimeframe = sessionStorage.getItem('vantage_timeframe') || '7d';  // 24h, 7d, or all
+
+        // Timeframe tab switching (24h / 7d / All Time)
+        function setTimeframe(tf, btn) {
+            curTimeframe = tf;
+            sessionStorage.setItem('vantage_timeframe', tf);
+
+            // Update UI active states
+            document.querySelectorAll('.timeframe-btn').forEach(b => {
+                b.classList.remove('active-timeframe', 'bg-primary', 'text-white', 'shadow-md');
+                b.classList.add('text-slate-400');
+            });
+            btn.classList.remove('text-slate-400');
+            btn.classList.add('active-timeframe', 'bg-primary', 'text-white', 'shadow-md');
+
+            // Reload data with new timeframe
+            fetchMovers();
+        }
+
         async function fetchMovers() {
             try {
-                const res = await fetch('/api/analytics/movers-shakers?limit=8');
+                const res = await fetch(`/api/analytics/movers-shakers?limit=8&timeframe=${curTimeframe}`);
                 const data = await res.json();
                 if (data.success) {
                     renderMovers(data.products);

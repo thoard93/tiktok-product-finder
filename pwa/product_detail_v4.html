@@ -514,16 +514,16 @@
                 if (data.success && data.videos.length > 0) {
                     grid.innerHTML = data.videos.map(v => `
                         <div class="glass rounded-2xl overflow-hidden border border-white/5 flex flex-col bg-slate-950/50">
-                            <div class="relative aspect-video group">
-                                <img src="${v.coverUrl}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity">
+                        <div class="relative aspect-video group">
+                                <img src="${v.coverUrl || ''}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" onerror="this.src='/vantage_logo.png'">
                                 <div class="absolute inset-0 flex items-center justify-center">
-                                    <a href="${v.videoUrl}" target="_blank" class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white text-xl shadow-2xl transition-transform hover:scale-110">
+                                    <a href="${v.videoUrl || '#'}" target="_blank" class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white text-xl shadow-2xl transition-transform hover:scale-110">
                                         <i class="fas fa-play ml-1"></i>
                                     </a>
                                 </div>
                                 <div class="absolute top-3 left-3">
                                     <span class="px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md text-[9px] font-bold text-white border border-white/10">
-                                        ${v.durationSeconds}s
+                                        ${(v.durationSeconds || v.duration || '--')}s
                                     </span>
                                 </div>
                             </div>

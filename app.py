@@ -873,6 +873,17 @@ class Product(db.Model):
     ad_spend_total = db.Column(db.Float, default=0)  # Lifetime/Total Ad Spend
     gmv_growth = db.Column(db.Float, default=0)  # 7D GMV Growth Percentage
     
+    # Timeframe-specific stats (24h)
+    sales_24h = db.Column(db.Integer, default=0)
+    video_count_24h = db.Column(db.Integer, default=0)
+    creator_count_24h = db.Column(db.Integer, default=0)
+    ad_spend_24h = db.Column(db.Float, default=0)
+    gmv_24h = db.Column(db.Float, default=0)
+    
+    # Creator count (all-time and 7d)
+    creator_count = db.Column(db.Integer, default=0)  # All-time creator count
+    creator_count_7d = db.Column(db.Integer, default=0)  # 7-day creator count
+    
     # Composite indexes for common query patterns
     __table_args__ = (
         # For filtering by influencer range + sorting by sales
@@ -891,48 +902,93 @@ class Product(db.Model):
         db.Index('idx_firstseen_influencer', 'first_seen', 'influencer_count'),
     )
     
-    def to_dict(self):
-        return {
+    def to_dict(self, timeframe='all'):
+        """
+        Convert product to dictionary.
+        Args:
+            timeframe: '24h', '7d', or 'all' - controls which period stats to return
+        """
+        # Base stats that are always the same
+        base = {
             'product_id': self.product_id,
             'product_name': self.product_name,
             'seller_id': self.seller_id,
             'seller_name': self.seller_name,
             'is_ad_driven': (self.scan_type in ['apify_ad', 'daily_virals']) or (self.sales_7d > 50 and self.influencer_count < 5 and self.video_count < 5),
-            'gmv': self.gmv,
-            'gmv_30d': self.gmv_30d,
-            'sales': self.sales,
-            'sales_7d': self.sales_7d,
-            'sales_30d': self.sales_30d,
-            'influencer_count': self.influencer_count,
             'commission_rate': self.commission_rate,
             'shop_ads_commission': self.shop_ads_commission,
-            'stock': self.live_count, # Hijacked field for Apify Stock
+            'stock': self.live_count,
             'price': self.price,
-            'image_url': self.cached_image_url or self.image_url,  # Prefer cached
+            'image_url': self.cached_image_url or self.image_url,
             'cached_image_url': self.cached_image_url,
             'product_url': self.product_url,
-            'video_count': self.video_count,
-            'video_7d': self.video_7d,
-            'video_30d': self.video_30d,
-            'live_count': self.live_count,
-            'views_count': self.views_count,
             'product_rating': self.product_rating,
             'review_count': self.review_count,
             'has_free_shipping': self.has_free_shipping or False,
             'is_favorite': self.is_favorite,
             'product_status': self.product_status or 'active',
             'status_note': self.status_note,
-            'sales_velocity': self.sales_velocity or 0,
             'scan_type': self.scan_type,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None,
-            'ad_spend': self.ad_spend,  # 7D Ad Spend
-            'ad_spend_total': self.ad_spend_total,  # Total Ad Spend
+            # All-time stats (always available)
+            'sales': self.sales,
+            'video_count': self.video_count,
+            'creator_count': self.creator_count or self.influencer_count or 0,
+            'gmv': self.gmv,
+            'ad_spend_total': self.ad_spend_total,
+            'gmv_growth': self.gmv_growth or 0,
+        }
+        
+        # Period-specific stats based on timeframe
+        if timeframe == '24h':
+            base.update({
+                'sales_period': self.sales_24h or 0,
+                'video_count_period': self.video_count_24h or 0,
+                'creator_count_period': self.creator_count_24h or 0,
+                'ad_spend_period': self.ad_spend_24h or 0,
+                'gmv_period': self.gmv_24h or 0,
+            })
+        elif timeframe == '7d':
+            base.update({
+                'sales_period': self.sales_7d or 0,
+                'video_count_period': self.video_7d or 0,
+                'creator_count_period': self.creator_count_7d or self.influencer_count or 0,
+                'ad_spend_period': self.ad_spend or 0,
+                'gmv_period': self.gmv_30d or 0,  # Use 30d as approximation
+            })
+        else:  # 'all' - default
+            base.update({
+                'sales_period': self.sales or self.sales_7d or 0,
+                'video_count_period': self.video_count or 0,
+                'creator_count_period': self.creator_count or self.influencer_count or 0,
+                'ad_spend_period': self.ad_spend_total or 0,
+                'gmv_period': self.gmv or 0,
+            })
+        
+        # Legacy compatibility fields
+        base.update({
+            'sales_7d': self.sales_7d,
+            'sales_30d': self.sales_30d,
+            'gmv_30d': self.gmv_30d,
+            'influencer_count': self.influencer_count,
+            'video_7d': self.video_7d,
+            'video_30d': self.video_30d,
+            'live_count': self.live_count,
+            'views_count': self.views_count,
+            'sales_velocity': self.sales_velocity or 0,
+            'ad_spend': self.ad_spend,
             'ad_spend_per_video': (self.ad_spend / self.video_count) if (self.video_count and self.video_count > 0) else 0,
             'roas': (self.gmv / self.ad_spend) if (self.ad_spend and self.ad_spend > 0) else 0,
             'est_profit': (self.gmv * self.commission_rate),
-            'gmv_growth': self.gmv_growth or 0,
-        }
+            # 24h specific (for UI access)
+            'sales_24h': self.sales_24h or 0,
+            'video_count_24h': self.video_count_24h or 0,
+            'ad_spend_24h': self.ad_spend_24h or 0,
+            'gmv_24h': self.gmv_24h or 0,
+        })
+        
+        return base
 
 class BlacklistedBrand(db.Model):
     """TikTok Shop Brands/Sellers that are blacklisted (e.g. for removing commissions)"""
@@ -4308,6 +4364,9 @@ def api_products():
         keyword = request.args.get('keyword') or request.args.get('search')
         min_commission = request.args.get('min_commission', type=float)
         
+        # Timeframe for period-specific stats (24h, 7d, all)
+        timeframe = request.args.get('timeframe', 'all')
+        
         # Favorite alias
         is_favorite = (request.args.get('favorite', 'false').lower() == 'true' or 
                        request.args.get('favorites_only', 'false').lower() == 'true')
@@ -4327,11 +4386,11 @@ def api_products():
         
         if is_gems:
             # Opportunity Gems: High Sales, Low Competition
-            # V2 FIX: Updated thresholds for accurate video counts
+            # Products with < 40 total videos are true opportunities
             query = query.filter(
                 Product.sales_7d >= 10,  # Min sales
-                Product.influencer_count <= 100,  # Was 50, now allows more
-                Product.video_count <= 500  # V2 FIX: Was 20, now 500 for accurate counts
+                Product.influencer_count <= 50,  # Low saturation
+                Product.video_count <= 40  # TRUE GEMS: Under 40 total videos
             )
             
         if is_high_ad:
@@ -4425,7 +4484,8 @@ def api_products():
             'page': page,
             'per_page': per_page,
             'total_pages': (total + per_page - 1) // per_page,
-            'products': [p.to_dict() for p in products]
+            'timeframe': timeframe,  # Return the timeframe used
+            'products': [p.to_dict(timeframe=timeframe) for p in products]
         })
 
     except Exception as e:
@@ -6670,19 +6730,21 @@ def calculate_winner_score(ad_spend, video_count, creator_count):
     except:
         return 0
 
-def sync_copilot_products(timeframe='7d', limit=50, page=0):
+def sync_copilot_products(timeframe='all', limit=50, page=0):
     """
     Core sync function - fetches from the ENHANCED Copilot /api/trending/products endpoint.
     Returns (saved_count, total_in_response) tuple.
     
-    V2: Uses the new /api/trending/products endpoint with significantly more accurate stats:
-        - periodVideoCount (17.8K vs old 20)
-        - periodCreatorCount
-        - totalAdCost
-        - unitsSold
-        - topVideos array
+    V2: Uses timeframe='all' by default to get ALL-TIME video/creator counts (23.5K vs 778).
+    The 7d sales and ad_spend are still extracted from period fields.
+    
+    Uses the new /api/trending/products endpoint with significantly more accurate stats:
+        - productVideoCount (ALL-TIME: 23.5K)
+        - productCreatorCount (ALL-TIME)
+        - periodUnits (7-day sales)
+        - periodAdSpend (7-day ad spend)
     """
-    # Use the NEW enhanced endpoint
+    # Use the NEW enhanced endpoint with 'all' timeframe for accurate totals
     result = fetch_copilot_products(timeframe=timeframe, limit=limit, page=page)
     
     if not result:
@@ -7066,13 +7128,13 @@ def api_list_brands():
     """List all watched brands with their stats
     V2 FIX: Filters out brands with undefined/null names
     """
-    # Filter out undefined/null brand names
-    invalid_names = ['undefined', 'null', 'unknown', '(undefined)', '', None]
+    # Filter out undefined/null brand names (case-insensitive)
+    # Using func.lower() for case-insensitive matching
     brands = WatchedBrand.query.filter(
         WatchedBrand.is_active == True,
-        ~WatchedBrand.name.in_(invalid_names),
         WatchedBrand.name != None,
-        WatchedBrand.name != ''
+        WatchedBrand.name != '',
+        ~db.func.lower(WatchedBrand.name).in_(['undefined', 'null', 'unknown', '(undefined)', 'none', ''])
     ).order_by(WatchedBrand.total_sales_7d.desc()).all()
     return jsonify({
         'success': True,

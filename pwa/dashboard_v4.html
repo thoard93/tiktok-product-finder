@@ -197,6 +197,22 @@
 
             <!-- Filters & Controls -->
             <div class="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center mb-8">
+                <!-- Timeframe Toggle -->
+                <div class="flex gap-1 bg-slate-900 p-1 rounded-xl border border-white/5">
+                    <button onclick="setTimeframe('24h', this)"
+                        class="timeframe-btn px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        24H
+                    </button>
+                    <button onclick="setTimeframe('7d', this)"
+                        class="timeframe-btn active-timeframe px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-primary text-white shadow-md">
+                        7D
+                    </button>
+                    <button onclick="setTimeframe('all', this)"
+                        class="timeframe-btn px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        All Time
+                    </button>
+                </div>
+
                 <!-- Filter Tabs -->
                 <div class="flex flex-wrap gap-2 w-full xl:w-auto">
                     <button onclick="applyFilter('all', this)"
@@ -237,19 +253,7 @@
                             class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
                     </div>
 
-                    <div class="relative w-full sm:w-64 group">
-                        <i
-                            class="fas fa-percent absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-focus-within:text-primary"></i>
-                        <select onchange="updateCommissionFilter(this.value)"
-                            class="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 appearance-none cursor-pointer transition-all hover:border-white/20 font-medium">
-                            <option value="0">All Commissions</option>
-                            <option value="10">10%+ Commission</option>
-                            <option value="15">15%+ Commission</option>
-                            <option value="20">20%+ Commission</option>
-                        </select>
-                        <i
-                            class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
-                    </div>
+                    <!-- Commission filter removed per user request -->
 
                     <div class="relative w-full sm:w-64 group">
                         <i
@@ -446,6 +450,24 @@
             let curPage = parseInt(sessionStorage.getItem('vantage_page')) || 1;
             let curFilter = JSON.parse(sessionStorage.getItem('vantage_filter')) || { sort_by: 'gem_score' };
             let searchTimeout;
+            let curTimeframe = sessionStorage.getItem('vantage_timeframe') || '7d';  // 24h, 7d, or all
+
+            // Timeframe tab switching (24h / 7d / All Time)
+            function setTimeframe(tf, btn) {
+                curTimeframe = tf;
+                sessionStorage.setItem('vantage_timeframe', tf);
+
+                // Update UI active states
+                document.querySelectorAll('.timeframe-btn').forEach(b => {
+                    b.classList.remove('active-timeframe', 'bg-primary', 'text-white', 'shadow-md');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.remove('text-slate-400');
+                btn.classList.add('active-timeframe', 'bg-primary', 'text-white', 'shadow-md');
+
+                curPage = 1;
+                loadProducts(1);  // Reload with new timeframe
+            }
 
             function formatKMB(num) {
                 if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
@@ -522,7 +544,7 @@
                 sessionStorage.setItem('vantage_page', curPage);
                 sessionStorage.setItem('vantage_filter', JSON.stringify(curFilter));
 
-                const params = new URLSearchParams({ page: page, limit: 24, ...curFilter });
+                const params = new URLSearchParams({ page: page, limit: 24, timeframe: curTimeframe, ...curFilter });
                 if (curFilter.search) params.set('search', curFilter.search);
 
                 // Loading state
