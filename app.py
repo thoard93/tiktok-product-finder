@@ -675,24 +675,10 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     sv(p, 'last_updated', datetime.utcnow())
     sv(p, 'is_enriched', True)
     
-    # FINAL FILTER: Quality Control
-    # If 0 sales or low videos, hide/skip unless it's a favorite
-    filter_reason = None
-    if sales_period <= 0: filter_reason = f"Zero 7D Sales ({sales_period})"
-    elif v_count < 20: filter_reason = f"Low Videos ({v_count})"
-    
-    if filter_reason:
-        # Check if it's a Product object or dict
-        is_favorite = False
-        if hasattr(p, 'is_favorite'): is_favorite = p.is_favorite
-        elif isinstance(p, dict): is_favorite = p.get('is_favorite', False)
-        
-        if not is_favorite:
-            if hasattr(p, 'product_status'):
-                print(f"{i_log_prefix} [Enrich] Hiding {pid} ({filter_reason})")
-                p.product_status = 'unavailable'
-                p.status_note = filter_reason
-            return False, filter_reason
+    # FINAL FILTER: Only reject products with no recent sales
+    # Video count filter is only for Hot Product Tracker, not individual enrichment
+    if sales_period <= 0:
+        return False, f"Zero 7D Sales ({sales_period})"
 
     return True, "Enriched via Copilot"
 
@@ -6618,28 +6604,13 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 sales_keys = {k: v.get(k) for k in v.keys() if any(x in k.lower() for x in ['sale', 'unit', 'sold', 'total'])}
                 print(f"[SALES_DEBUG] Product {product_id}: 7D={sales_7d}, Total={total_sales}, Fields={sales_keys}")
 
-            # FILTER: Quality Control
-            filter_reason = None
-            if video_count < 20: filter_reason = f"Low Videos ({video_count})"
-            if sales_7d <= 0: filter_reason = f"Zero 7D Sales ({sales_7d})"
-
-            if filter_reason:
-                # Check if it exists to HIDE it (Active Cleanup)
-                # EXCEPTION: If it is a FAVORITE, Keep it!
-                existing_check = Product.query.get(product_id)
-                if existing_check and existing_check.is_favorite:
-                     pass # Keep favorites even if they drop criteria
-                elif existing_check:
-                    print(f"[Copilot Sync] Hiding {product_id} ({filter_reason})")
-                    existing_check.product_status = 'unavailable'
-                    existing_check.status_note = filter_reason
-                    existing_check.last_updated = datetime.utcnow()
-                    saved_count += 1 
-                else:
-                    print(f"[Copilot Sync] Skipping {product_id} ({filter_reason})")
-                
-                if not (existing_check and existing_check.is_favorite):
-                    continue
+            # FILTER: Quality Control - Skip low-quality products
+            if sales_7d <= 0:
+                print(f"[Copilot Sync] Skipping {product_id} (Zero 7D Sales)")
+                continue
+            if video_count < 20:
+                print(f"[Copilot Sync] Skipping {product_id} (Low Videos: {video_count})")
+                continue
             
             winner_score = calculate_winner_score(ad_spend_7d, video_count, creator_count)
             
@@ -6807,18 +6778,44 @@ def cleanup_zero_sales_v2():
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/admin/reset-product-status', methods=['POST'])
+@login_required
+@admin_required
+def reset_product_status():
+    """Reset product_status to 'active' for all products that meet quality criteria"""
+    user = get_current_user()
+    try:
+        # Reset status for products with valid data (20+ videos, sales > 0)
+        updated = Product.query.filter(
+            Product.product_status == 'unavailable',
+            Product.video_count >= 20,
+            Product.sales_7d > 0
+        ).update({'product_status': 'active', 'status_note': None}, synchronize_session=False)
+        
+        db.session.commit()
+        
+        log_activity(user.id, 'reset_product_status', {'updated': updated})
+        return jsonify({
+            'status': 'success',
+            'updated': updated,
+            'message': f'Restored {updated} products to active status'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @app.route('/api/copilot/mass-sync', methods=['POST'])
 @login_required
 @admin_required
 def copilot_mass_sync():
-    """Synchronous mass sync - fetches up to 10,000 products across 200 pages"""
+    """Synchronous mass sync - fetches up to 50,000 products across 1000 pages"""
     user = get_current_user()
     data = request.json or {}
-    target_products = int(data.get('target', 5000))  # Default 5000 products
+    target_products = int(data.get('target', 10000))  # Default 10000 products
     timeframe = data.get('timeframe', '7d')
     
-    # Calculate pages needed (50 products per page)
-    pages_needed = min((target_products // 50) + 1, 200)
+    # Calculate pages needed (50 products per page) - up to 1000 pages max
+    pages_needed = min((target_products // 50) + 1, 1000)
     
     products_synced = 0
     pages_done = 0
@@ -6835,7 +6832,7 @@ def copilot_mass_sync():
                 break
                 
             if page < pages_needed - 1:
-                time.sleep(1.5)  # Rate limiting
+                time.sleep(0.8)  # Faster rate limiting
         except Exception as e:
             print(f"[Mass Sync] Error on page {page}: {e}")
             continue

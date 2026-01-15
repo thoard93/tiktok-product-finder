@@ -198,16 +198,22 @@
                     Quick Sync (1K)
                 </button>
 
-                <button onclick="massSyncProducts(5000)" id="btnMassSync5K"
+                <button onclick="massSyncProducts(10000)" id="btnMassSync5K"
                     class="bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-500/20">
                     <i class="fas fa-rocket text-xs"></i>
-                    <span>Mass Sync (5K)</span>
+                    <span>Mass Sync (10K)</span>
                 </button>
 
-                <button onclick="massSyncProducts(10000)" id="btnMassSync10K"
+                <button onclick="massSyncProducts(25000)" id="btnMassSync10K"
                     class="bg-violet-600 hover:bg-violet-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-violet-500/20">
                     <i class="fas fa-meteor text-xs"></i>
-                    <span>MEGA Sync (10K)</span>
+                    <span>MEGA Sync (25K)</span>
+                </button>
+
+                <button onclick="massSyncProducts(50000)" id="btnMassSync50K"
+                    class="bg-rose-600 hover:bg-rose-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-rose-500/20">
+                    <i class="fas fa-fire text-xs"></i>
+                    <span>ULTRA Sync (50K)</span>
                 </button>
 
                 <button onclick="runCleanup()"
@@ -243,6 +249,11 @@
                 class="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4 mt-12 border-t border-white/5 pt-8">
                 Danger Zone</h4>
             <div class="flex flex-wrap gap-4">
+                <button onclick="restoreHiddenProducts()" id="btnRestoreHidden"
+                    class="bg-emerald-950/20 border border-emerald-500/20 px-6 py-3 rounded-xl hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
+                    <i class="fas fa-eye text-xs"></i>
+                    <span>Restore Hidden Products</span>
+                </button>
                 <button onclick="cleanupZeroSales()" id="btnCleanZeroSales"
                     class="bg-amber-950/20 border border-amber-500/20 px-6 py-3 rounded-xl hover:bg-amber-500 hover:text-white text-amber-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-trash-alt text-xs"></i>
@@ -466,6 +477,31 @@
                 }
             } catch (e) {
                 alert('System Fault: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function restoreHiddenProducts() {
+            if (!confirm("👁️ Restore all hidden products?\n\nThis will make valid products (20+ videos, sales > 0) visible again.")) return;
+
+            const btn = document.getElementById('btnRestoreHidden');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restoring...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/admin/reset-product-status', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`✅ Restore Complete!\n\n${data.message}`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e);
             } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
