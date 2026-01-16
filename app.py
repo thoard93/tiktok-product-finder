@@ -845,6 +845,7 @@ class Product(db.Model):
     
     # Video/Live stats from EchoTik
     video_count = db.Column(db.Integer, default=0)
+    video_count_alltime = db.Column(db.Integer, default=0)  # All-time video count for saturation analysis
     video_7d = db.Column(db.Integer, default=0)
     video_30d = db.Column(db.Integer, default=0)
     live_count = db.Column(db.Integer, default=0)
@@ -922,7 +923,8 @@ class Product(db.Model):
             'gmv': self.gmv,
             'gmv_30d': self.gmv_30d,
             'gmv_growth': self.gmv_growth or 0,
-            'video_count': self.video_count,  # All-time
+            'video_count': self.video_count,  # 7D videos (momentum)
+            'video_count_alltime': self.video_count_alltime or self.video_count,  # All-time for saturation
             'video_7d': self.video_7d,
             'video_30d': self.video_30d,
             'influencer_count': self.influencer_count,  # All-time
@@ -1413,6 +1415,7 @@ def admin_migrate():
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS has_free_shipping BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS last_shown_hot TIMESTAMP",
                 "ALTER TABLE products ADD COLUMN IF NOT EXISTS shop_ads_commission FLOAT DEFAULT 0",
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS video_count_alltime INTEGER DEFAULT 0",
             ]
             
             for sql in migrations:
@@ -7077,6 +7080,60 @@ def copilot_sync():
         'total_pages_requested': pages,
         'errors': errors
     })
+
+@app.route('/api/copilot/enrich-videos', methods=['POST'])
+@login_required
+@admin_required
+def copilot_enrich_videos():
+    """Enrich products with all-time video counts from Copilot API.
+    
+    This runs separately from the main sync to get all-time video counts
+    while keeping 7D sales/ad_spend for momentum tracking.
+    """
+    user = get_current_user()
+    data = request.json or {}
+    limit = int(data.get('limit', 500))
+    
+    try:
+        # Fetch products from Copilot API with timeframe='all' for video counts
+        print(f"[Video Enrich] Fetching products with timeframe=all for all-time video counts...")
+        
+        products_data = fetch_copilot_products(timeframe='all', limit=100, page=0)
+        if not products_data or 'data' not in products_data:
+            return jsonify({'status': 'error', 'message': 'Failed to fetch products from Copilot'})
+        
+        products_list = products_data.get('data', {}).get('products', [])
+        
+        enriched_count = 0
+        for p in products_list[:limit]:
+            product_id = str(p.get('productId', '')).strip()
+            if not product_id:
+                continue
+                
+            # Get all-time video count from the API response
+            alltime_video_count = int(p.get('periodVideoCount') or p.get('adVideoCount') or 0)
+            
+            # Update the product in our database
+            existing = Product.query.get(product_id)
+            if existing:
+                existing.video_count_alltime = alltime_video_count
+                enriched_count += 1
+        
+        db.session.commit()
+        
+        log_activity(user.id, 'enrich_videos', {'enriched': enriched_count})
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Enriched {enriched_count} products with all-time video counts',
+            'enriched': enriched_count,
+            'total_fetched': len(products_list)
+        })
+        
+    except Exception as e:
+        print(f"[Video Enrich] Error: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)})
 
 # =============================================================================
 # BRAND HUNTER API ENDPOINTS

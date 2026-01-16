@@ -227,6 +227,12 @@
                     <i class="fas fa-broom text-xs"></i>
                     <span>Optimize Database</span>
                 </button>
+
+                <button onclick="enrichVideos()" id="btnEnrichVideos"
+                    class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-cyan-500/20">
+                    <i class="fas fa-video text-xs"></i>
+                    <span>📊 Enrich Videos (All-Time)</span>
+                </button>
             </div>
 
             <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
@@ -396,7 +402,7 @@
                     const res = await fetch('/api/copilot/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ timeframe: 'all', limit: 50, page })
+                        body: JSON.stringify({ timeframe: '7d', limit: 50, page })
                     });
                     const data = await res.json();
                     if (data.success) totalSaved += data.saved;
@@ -492,7 +498,7 @@
                 const res = await fetch('/api/copilot/mass-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: target, timeframe: 'all' })
+                    body: JSON.stringify({ target: target, timeframe: '7d' })
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
@@ -521,7 +527,7 @@
                 const res = await fetch('/api/copilot/mass-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: 100000, timeframe: 'all' })
+                    body: JSON.stringify({ target: 100000, timeframe: '7d' })
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
@@ -536,6 +542,34 @@
                 btn.innerHTML = original;
                 btn.disabled = false;
                 btn.classList.add('animate-pulse');
+            }
+        }
+
+        async function enrichVideos() {
+            if (!confirm("📊 ENRICH VIDEO COUNTS\\n\\nThis will fetch ALL-TIME video counts for products in the database.\\n\\nThis runs alongside your 7D sales data to give you full saturation metrics.\\n\\nProceed?")) return;
+
+            const btn = document.getElementById('btnEnrichVideos');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">ENRICHING...</span>';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/copilot/enrich-videos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit: 1000 })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`📊 Video Enrichment Complete!\\n\\n${data.message}\\n\\n✅ ${data.enriched} products updated with all-time video counts.`);
+                } else {
+                    alert('❌ Enrichment Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
             }
         }
 
