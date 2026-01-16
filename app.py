@@ -6965,6 +6965,7 @@ def api_creative_linker():
     """
     Fetch viral videos for a specific product.
     V2 FIX: Uses topVideos field from /api/trending/products endpoint.
+    Paginates through multiple pages to find the specific product.
     """
     product_id = request.args.get('product_id')
     if not product_id:
@@ -6973,46 +6974,50 @@ def api_creative_linker():
     raw_pid = product_id.replace('shop_', '')
     
     try:
-        # V2: Try to find this product in the trending products and get its topVideos
-        # First check database for cached topVideos (future enhancement)
-        # For now, search the V2 products endpoint
-        res = fetch_copilot_products(timeframe='7d', limit=50)
-        
-        if res and res.get('products'):
+        # Search through multiple pages to find this specific product's topVideos
+        for page in range(10):  # Check up to 10 pages (500 products)
+            res = fetch_copilot_products(timeframe='7d', limit=50, page=page)
+            
+            if not res or not res.get('products'):
+                break
+            
             # Find this specific product in the results
             for p in res.get('products', []):
                 if str(p.get('productId', '')) == raw_pid:
                     # Found! Extract topVideos
                     top_videos = p.get('topVideos', [])
                     if top_videos:
+                        # Filter for shorts (<=15 seconds) if duration data available
+                        shorts = [v for v in top_videos if (v.get('durationSeconds') or 0) <= 15]
+                        videos_to_return = shorts if shorts else top_videos
+                        
                         return jsonify({
                             'success': True,
                             'total_found': len(top_videos),
-                            'shorts_found': len(top_videos),
-                            'videos': top_videos,
-                            'source': 'copilot_v2'
+                            'shorts_found': len(shorts),
+                            'videos': videos_to_return,
+                            'source': 'copilot_v2',
+                            'product_found': True
                         })
+                    else:
+                        # Product found but no topVideos
+                        return jsonify({
+                            'success': False,
+                            'error': 'Product found but no video data available from API',
+                            'product_found': True,
+                            'videos': []
+                        }), 404
         
-        # Fallback: Search with legacy endpoint
-        res = fetch_copilot_trending(timeframe='30d', limit=20, product_id=raw_pid)
-        if not res or not res.get('videos'):
-            res = fetch_copilot_trending(timeframe='30d', limit=20, keywords=raw_pid)
-            
-        if not res or not res.get('videos'):
-            return jsonify({'success': False, 'error': 'No videos found for this product'}), 404
-            
-        videos = res.get('videos', [])
-        # Filter for shorts if duration data available
-        short_videos = [v for v in videos if (v.get('durationSeconds') or 0) <= 15] or videos
-        
+        # Product not found in trending data - return honest error
         return jsonify({
-            'success': True,
-            'total_found': len(videos),
-            'shorts_found': len(short_videos),
-            'videos': short_videos,
-            'source': 'copilot_legacy'
-        })
+            'success': False,
+            'error': 'This product is not in the current trending dataset. Try syncing it first.',
+            'product_found': False,
+            'videos': []
+        }), 404
+        
     except Exception as e:
+        print(f"[Creative Linker] Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
