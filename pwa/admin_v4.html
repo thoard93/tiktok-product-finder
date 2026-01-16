@@ -768,7 +768,7 @@
             try {
                 const res = await fetch('/api/admin/migrate', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'success') {
+                if (data.success) {
                     alert(`✅ Migrations Complete!\\n\\n${(data.results || []).join('\\n')}`);
                 } else {
                     alert('❌ Migration Error: ' + (data.error || 'Unknown error'));
