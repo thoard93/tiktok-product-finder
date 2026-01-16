@@ -7095,22 +7095,19 @@ def copilot_enrich_videos():
     limit = int(data.get('limit', 500))
     
     try:
-        # Fetch products from Copilot API with timeframe='all' for video counts
-        print(f"[Video Enrich] Fetching products with timeframe=all for all-time video counts...")
+        # Fetch products from V2 Copilot API (/api/trending/products) with timeframe='all'
+        # This is the SAME endpoint as the main sync, just with 'all' timeframe for all-time video counts
+        print(f"[Video Enrich] Fetching from V2 API with timeframe=all for all-time video counts...")
         
-        products_data = fetch_copilot_trending(timeframe='all', limit=100, page=0)
+        products_data = fetch_copilot_products(timeframe='all', limit=100, page=0)
         if not products_data:
-            return jsonify({'status': 'error', 'message': 'Failed to fetch products from Copilot - check cookie'})
+            return jsonify({'status': 'error', 'message': 'Failed to fetch products from Copilot V2 API - check cookie'})
         
-        # The API returns videos or products depending on endpoint
-        products_list = products_data.get('products', []) if isinstance(products_data, dict) else []
-        if not products_list:
-            products_list = products_data.get('videos', [])  # API sometimes uses 'videos' key
-        if not products_list and 'data' in products_data:
-            products_list = products_data.get('data', {}).get('products', [])
+        # V2 API returns products directly in 'products' key
+        products_list = products_data.get('products', [])
         
         if not products_list:
-            return jsonify({'status': 'error', 'message': f'No products in API response. Keys: {list(products_data.keys())}'})
+            return jsonify({'status': 'error', 'message': f'No products in V2 API response. Keys: {list(products_data.keys())}'})
         
         enriched_count = 0
         for p in products_list[:limit]:
