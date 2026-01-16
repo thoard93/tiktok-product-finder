@@ -958,6 +958,201 @@ async def force_hot_products(ctx):
     await ctx.reply("🔥 Posting hot products now...", mention_author=False)
     await daily_hot_products()
 
+# =============================================================================
+# BRAND HUNTER COMMANDS
+# =============================================================================
+
+def get_brand_products(brand_name, limit=10):
+    """Get top products for a brand with opportunity criteria (21-50 videos)."""
+    with app.app_context():
+        # Search by seller_name (brand name)
+        products = Product.query.filter(
+            Product.seller_name.ilike(f'%{brand_name}%'),
+            db.func.coalesce(Product.video_count_alltime, Product.video_count) >= 21,  # Min 21 videos
+            db.func.coalesce(Product.video_count_alltime, Product.video_count) <= 50,  # Max 50 videos (opportunity zone)
+            Product.sales_7d > 0,  # Active sales
+            Product.ad_spend > 0,  # Has ad spend
+        ).order_by(
+            Product.ad_spend.desc(),  # Priority 1: High Ad Spend
+            Product.sales_7d.desc(),  # Priority 2: High 7D Sales
+            db.func.coalesce(Product.video_count_alltime, Product.video_count).asc(),  # Priority 3: Lower videos
+        ).limit(limit).all()
+        
+        # Convert to dicts to avoid DetachedInstanceError
+        product_dicts = []
+        for p in products:
+            video_count = p.video_count_alltime or p.video_count or 0
+            product_dicts.append({
+                'product_id': p.product_id,
+                'product_name': p.product_name,
+                'seller_name': p.seller_name,
+                'sales_7d': p.sales_7d,
+                'video_count': video_count,
+                'influencer_count': p.influencer_count,
+                'ad_spend': p.ad_spend,
+                'commission_rate': p.commission_rate,
+                'shop_ads_commission': p.shop_ads_commission,
+                'price': p.price,
+                'image_url': p.cached_image_url or p.image_url,
+            })
+        
+        return product_dicts
+
+def get_popular_brands(limit=20):
+    """Get top brands by product count and ad spend."""
+    with app.app_context():
+        # Get brands with most products and highest total ad spend
+        from sqlalchemy import func
+        brands = db.session.query(
+            Product.seller_name,
+            func.count(Product.product_id).label('product_count'),
+            func.sum(Product.ad_spend).label('total_ad_spend'),
+            func.avg(Product.sales_7d).label('avg_sales')
+        ).filter(
+            Product.seller_name != None,
+            Product.seller_name != '',
+            Product.seller_name != 'Unknown',
+            Product.seller_name != 'Unknown Seller',
+            Product.ad_spend > 0,
+        ).group_by(
+            Product.seller_name
+        ).order_by(
+            func.sum(Product.ad_spend).desc()
+        ).limit(limit).all()
+        
+        return brands
+
+@bot.command(name='brand')
+async def brand_command(ctx, *, args: str = None):
+    """Brand Hunter command: !brand list OR !brand <brandname>"""
+    if not args:
+        await ctx.reply("**Usage:**\n`!brand list` - Show popular brands\n`!brand <name>` - Search brand products\n\nOr use `!brandname` directly (e.g., `!qvc`, `!shark`)", mention_author=False)
+        return
+    
+    args_lower = args.lower().strip()
+    
+    if args_lower == 'list':
+        # Show popular brands
+        await ctx.message.add_reaction('🔍')
+        brands = get_popular_brands(15)
+        
+        if not brands:
+            await ctx.reply("📭 No brands found in database.", mention_author=False)
+            return
+        
+        embed = Embed(
+            title="🎯 Popular Brands",
+            description="Top brands by ad spend. Use `!brandname` to see their products.",
+            color=0x2563eb
+        )
+        
+        brand_list = []
+        for i, (name, count, spend, avg_sales) in enumerate(brands, 1):
+            spend_display = f"${float(spend or 0):,.0f}"
+            brand_list.append(f"**{i}.** {name} ({count} products, {spend_display} spend)")
+        
+        embed.add_field(name="Top Brands", value="\n".join(brand_list[:10]), inline=False)
+        if len(brand_list) > 10:
+            embed.add_field(name="More Brands", value="\n".join(brand_list[10:]), inline=False)
+        
+        embed.set_footer(text="Tip: Type !shark or !qvc to see products")
+        await ctx.reply(embed=embed, mention_author=False)
+        await ctx.message.remove_reaction('🔍', bot.user)
+        await ctx.message.add_reaction('✅')
+    else:
+        # Search for brand products
+        await search_brand(ctx, args)
+
+async def search_brand(ctx, brand_name: str):
+    """Search for products by brand name."""
+    await ctx.message.add_reaction('🔍')
+    
+    products = get_brand_products(brand_name, limit=10)
+    
+    if not products:
+        await ctx.reply(f"📭 No products found for **{brand_name}** with 21-50 videos.\n\nTry a different brand or check spelling.", mention_author=False)
+        await ctx.message.remove_reaction('🔍', bot.user)
+        await ctx.message.add_reaction('❌')
+        return
+    
+    # Send header
+    await ctx.reply(f"# 🎯 Brand Hunter: {brand_name.upper()}\n"
+                    f"**Found {len(products)} opportunity products** (21-50 videos)\n"
+                    f"──────────────────────────────", mention_author=False)
+    
+    # Send each product as embed
+    for i, p in enumerate(products, 1):
+        try:
+            embed = create_product_embed(p, title_prefix=f"#{i} ")
+            await ctx.send(embed=embed)
+            await asyncio.sleep(0.5)  # Rate limiting
+        except Exception as e:
+            print(f"❌ Error sending brand product #{i}: {e}")
+    
+    await ctx.message.remove_reaction('🔍', bot.user)
+    await ctx.message.add_reaction('✅')
+
+@bot.command(name='help')
+async def help_command(ctx):
+    """Show available commands"""
+    embed = Embed(
+        title="🤖 Brand Hunter Bot - Commands",
+        description="Your TikTok Shop product intelligence assistant.",
+        color=0x2563eb
+    )
+    
+    embed.add_field(
+        name="🎯 Brand Hunter",
+        value="**`!brandname`** - Get top products for any brand\n"
+              "Examples: `!qvc`, `!shark`, `!ninja`, `!conair`\n\n"
+              "**`!brand list`** - Show popular brands\n"
+              "**`!brand <name>`** - Search brand products",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🔍 Product Lookup",
+        value="**`!lookup <url or ID>`** - Lookup any TikTok product\n"
+              "Or just paste a TikTok Shop link in #product-lookup",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🚫 Blacklist",
+        value="**`!blacklist add <brand>`** - Report a scam brand\n"
+              "**`!blacklist list`** - View blacklisted brands",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="📊 Criteria",
+        value="• **Opportunity Zone:** 21-50 total videos\n"
+              "• Sorted by: Ad Spend → 7D Sales → Lowest Videos\n"
+              "• Only products with active ad spend",
+        inline=False
+    )
+    
+    embed.set_footer(text="🔥 Hot products posted daily at 12 PM EST")
+    await ctx.reply(embed=embed, mention_author=False)
+
+# Catch-all for brand shortcuts like !qvc, !shark
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        # Check if it's in the right channel or any channel
+        # Treat unknown commands as brand searches
+        command_name = ctx.message.content.split()[0][1:]  # Remove the ! prefix
+        
+        # Only trigger if it looks like a brand name (alphanumeric, 2+ chars)
+        if len(command_name) >= 2 and command_name.isalnum():
+            await search_brand(ctx, command_name)
+        else:
+            # Silently ignore very short or weird commands
+            pass
+    else:
+        # Re-raise other errors
+        raise error
+
 if __name__ == '__main__':
     if not DISCORD_BOT_TOKEN:
         print("❌ DISCORD_BOT_TOKEN not set!")
