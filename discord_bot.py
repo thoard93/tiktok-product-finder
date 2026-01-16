@@ -38,7 +38,7 @@ DAYS_BEFORE_REPEAT = 3  # Don't show same product for 3 days
 # Discord Bot Setup
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)  # Disable default help
 
 def extract_product_id(text):
     """Extract TikTok product ID from URL or text"""
@@ -1139,19 +1139,22 @@ async def help_command(ctx):
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        # Check if it's in the right channel or any channel
         # Treat unknown commands as brand searches
-        command_name = ctx.message.content.split()[0][1:]  # Remove the ! prefix
-        
-        # Only trigger if it looks like a brand name (alphanumeric, 2+ chars)
-        if len(command_name) >= 2 and command_name.isalnum():
-            await search_brand(ctx, command_name)
-        else:
-            # Silently ignore very short or weird commands
-            pass
+        # Get everything after the ! as potential brand name
+        content = ctx.message.content.strip()
+        if content.startswith('!'):
+            brand_search = content[1:].strip()  # Remove the ! prefix
+            
+            # Only trigger if it's at least 2 chars
+            if len(brand_search) >= 2:
+                print(f"[Brand Hunt] Searching for: {brand_search}")
+                await search_brand(ctx, brand_search)
+            else:
+                # Silently ignore very short commands
+                pass
     else:
-        # Re-raise other errors
-        raise error
+        # Log other errors
+        print(f"[Bot Error] {type(error).__name__}: {error}")
 
 if __name__ == '__main__':
     if not DISCORD_BOT_TOKEN:
