@@ -4410,6 +4410,8 @@ def api_products():
             query = query.order_by(Product.last_updated.desc().nullslast())
         elif sort_by == 'video_count':
             query = query.order_by(Product.video_count.desc().nullslast())
+        elif sort_by == 'video_count_alltime':
+            query = query.order_by(Product.video_count_alltime.desc().nullslast())
         elif sort_by in ['vids_asc', 'video_asc']:
             query = query.order_by(Product.video_count.asc().nullsfirst())
         elif sort_by in ['gem_score', 'efficiency']:
@@ -7089,56 +7091,61 @@ def copilot_enrich_videos():
     
     This runs separately from the main sync to get all-time video counts
     while keeping 7D sales/ad_spend for momentum tracking.
+    Paginates through multiple pages to enrich as many products as possible.
     """
     user = get_current_user()
     data = request.json or {}
-    limit = int(data.get('limit', 500))
+    target_pages = int(data.get('pages', 20))  # Default: 20 pages = ~1000 products
     
     try:
-        # Fetch products from V2 Copilot API (/api/trending/products) with timeframe='all'
-        # This is the SAME endpoint as the main sync, just with 'all' timeframe for all-time video counts
-        print(f"[Video Enrich] Fetching from V2 API with timeframe=all for all-time video counts...")
-        
-        products_data = fetch_copilot_products(timeframe='all', limit=100, page=0)
-        if not products_data:
-            return jsonify({'status': 'error', 'message': 'Failed to fetch products from Copilot V2 API - check cookie'})
-        
-        # V2 API returns products directly in 'products' key
-        products_list = products_data.get('products', [])
-        
-        if not products_list:
-            return jsonify({'status': 'error', 'message': f'No products in V2 API response. Keys: {list(products_data.keys())}'})
+        print(f"[Video Enrich] Starting enrichment with timeframe=all across {target_pages} pages...")
         
         enriched_count = 0
-        for p in products_list[:limit]:
-            product_id = str(p.get('productId', '')).strip()
-            if not product_id:
-                continue
+        total_fetched = 0
+        
+        for page in range(target_pages):
+            products_data = fetch_copilot_products(timeframe='all', limit=50, page=page)
+            if not products_data:
+                print(f"[Video Enrich] Page {page}: Failed to fetch, stopping")
+                break
             
-            # Normalize to our shop_ prefix (same as main sync)
-            if not product_id.startswith('shop_'):
-                product_id = f"shop_{product_id}"
+            products_list = products_data.get('products', [])
+            if not products_list:
+                print(f"[Video Enrich] Page {page}: No products, stopping")
+                break
+            
+            total_fetched += len(products_list)
+            
+            for p in products_list:
+                product_id = str(p.get('productId', '')).strip()
+                if not product_id:
+                    continue
                 
-            # Get all-time video count from the API response
-            alltime_video_count = int(p.get('periodVideoCount') or p.get('adVideoCount') or 0)
+                # Normalize to our shop_ prefix (same as main sync)
+                if not product_id.startswith('shop_'):
+                    product_id = f"shop_{product_id}"
+                    
+                # Get all-time video count from the API response
+                alltime_video_count = int(p.get('periodVideoCount') or p.get('adVideoCount') or 0)
+                
+                # Update the product in our database
+                existing = Product.query.get(product_id)
+                if existing:
+                    existing.video_count_alltime = alltime_video_count
+                    enriched_count += 1
             
-            # Update the product in our database
-            existing = Product.query.get(product_id)
-            if existing:
-                existing.video_count_alltime = alltime_video_count
-                enriched_count += 1
-                if enriched_count <= 3:
-                    print(f"[Video Enrich] {product_id}: video_count_alltime = {alltime_video_count}")
+            # Commit after each page to save progress
+            db.session.commit()
+            print(f"[Video Enrich] Page {page}: fetched {len(products_list)}, enriched so far: {enriched_count}")
         
-        db.session.commit()
-        
-        log_activity(user.id, 'enrich_videos', {'enriched': enriched_count})
+        log_activity(user.id, 'enrich_videos', {'enriched': enriched_count, 'pages': target_pages})
         
         return jsonify({
             'status': 'success',
-            'message': f'Enriched {enriched_count} products with all-time video counts',
+            'message': f'Enriched {enriched_count} products with all-time video counts across {target_pages} pages',
             'enriched': enriched_count,
-            'total_fetched': len(products_list)
+            'total_fetched': total_fetched,
+            'pages_processed': target_pages
         })
         
     except Exception as e:

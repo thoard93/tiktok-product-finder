@@ -227,7 +227,7 @@
                             <option value="gem_score">Sort: Opportunity Score</option>
                             <option value="efficiency">Sort: Efficiency ($/Vid)</option>
                             <option value="sales_7d">Sort: 7D Volume</option>
-                            <option value="video_count">Sort: Highest Videos</option>
+                            <option value="video_count_alltime">Sort: Highest Videos (All-Time)</option>
                             <option value="vids_asc">Sort: Least Videos</option>
                             <option value="first_seen">Sort: Newest First</option>
                             <option value="updated">Sort: Recently Scanned</option>
@@ -595,7 +595,7 @@
                             </div>
                             <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
                                 <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Videos</p>
-                                <p class="text-xs font-bold ${p.video_count > 100 ? 'text-slate-400' : 'text-white'} tracking-wide">${p.video_count || 0}</p>
+                                <p class="text-xs font-bold ${(p.video_count_alltime || p.video_count) > 100 ? 'text-slate-400' : 'text-white'} tracking-wide">${formatKMB(p.video_count_alltime || p.video_count || 0)}</p>
                             </div>
                         </div>
                     </div>
