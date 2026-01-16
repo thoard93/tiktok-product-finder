@@ -286,6 +286,11 @@
                     <i class="fas fa-trash-alt text-xs"></i>
                     <span>Delete 0-Stat Products</span>
                 </button>
+                <button onclick="deleteLowVideos()" id="btnDeleteLowVideos"
+                    class="bg-orange-950/20 border border-orange-500/20 px-6 py-3 rounded-xl hover:bg-orange-500 hover:text-white text-orange-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
+                    <i class="fas fa-video-slash text-xs"></i>
+                    <span>Delete &lt;20 Videos</span>
+                </button>
                 <button onclick="nukeProducts()"
                     class="bg-rose-950/20 border border-rose-500/20 px-6 py-3 rounded-xl hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
@@ -741,6 +746,31 @@
                     window.location.reload();
                 } else {
                     alert('❌ Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('System Fault: ' + e);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function deleteLowVideos() {
+            if (!confirm("🗑️ Delete products with <20 total videos?\n\nThis will remove placeholder products with few videos.\n\n(Favorites are NOT protected)")) return;
+
+            const btn = document.getElementById('btnDeleteLowVideos');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/admin/delete-low-videos', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Cleanup Complete!\n\n${data.message}`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Unknown error'));
                 }
             } catch (e) {
                 alert('System Fault: ' + e);

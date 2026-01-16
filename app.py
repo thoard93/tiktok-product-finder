@@ -1462,6 +1462,35 @@ def admin_migrate():
             'results': results
         }), 500
 
+@app.route('/api/admin/delete-low-videos', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_low_videos():
+    """Delete products with less than 20 total videos (placeholder data)."""
+    try:
+        # Use video_count_alltime if available, otherwise fall back to video_count
+        # Delete products where BOTH all-time and regular video_count are below 20
+        count = Product.query.filter(
+            db.or_(
+                db.and_(Product.video_count_alltime != None, Product.video_count_alltime < 20),
+                db.and_(Product.video_count_alltime == None, Product.video_count < 20)
+            )
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        
+        user = get_current_user()
+        log_activity(user.id, 'delete_low_videos', {'deleted': count})
+        
+        return jsonify({
+            'success': True,
+            'message': f'Deleted {count} products with <20 total videos',
+            'deleted': count
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/admin/create-indexes')
 @login_required
 @admin_required
@@ -6777,8 +6806,8 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             if sales_7d <= 0 and total_sales <= 0:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Zero Sales)")
                 continue
-            # V2 FIX: Lowered threshold from 100 to 10 to allow more products
-            if video_count < 10:
+            # V2 FIX: Require 20+ videos to filter out placeholder products
+            if video_count < 20:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Low Videos: {video_count})")
                 continue
             # FILTER: Only sync products with Shop Ads Commission (GMV Max)
