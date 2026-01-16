@@ -7102,8 +7102,10 @@ def copilot_enrich_videos():
         if not products_data:
             return jsonify({'status': 'error', 'message': 'Failed to fetch products from Copilot - check cookie'})
         
-        # The API returns products directly or nested in data.products
+        # The API returns videos or products depending on endpoint
         products_list = products_data.get('products', []) if isinstance(products_data, dict) else []
+        if not products_list:
+            products_list = products_data.get('videos', [])  # API sometimes uses 'videos' key
         if not products_list and 'data' in products_data:
             products_list = products_data.get('data', {}).get('products', [])
         
