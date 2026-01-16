@@ -1393,7 +1393,7 @@ def admin_config():
     
     return jsonify({'success': True, 'message': f"Updated {data['key']}"})
 
-@app.route('/api/admin/migrate')
+@app.route('/api/admin/migrate', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def admin_migrate():
