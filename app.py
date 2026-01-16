@@ -7049,7 +7049,7 @@ def copilot_sync():
     data = request.json or {}
     pages = int(data.get('pages', 1))
     limit = int(data.get('limit', 50))
-    timeframe = data.get('timeframe', '7d')
+    timeframe = data.get('timeframe', 'all')  # Default to 'all' for all-time video/creator counts
     
     # Cap pages to prevent extreme load but allow high volume
     if pages > 200: pages = 200 
