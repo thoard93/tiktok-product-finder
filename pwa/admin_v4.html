@@ -396,7 +396,7 @@
                     const res = await fetch('/api/copilot/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ timeframe: '7d', limit: 50, page })
+                        body: JSON.stringify({ timeframe: 'all', limit: 50, page })
                     });
                     const data = await res.json();
                     if (data.success) totalSaved += data.saved;
@@ -492,7 +492,7 @@
                 const res = await fetch('/api/copilot/mass-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: target, timeframe: '7d' })
+                    body: JSON.stringify({ target: target, timeframe: 'all' })
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
@@ -521,7 +521,7 @@
                 const res = await fetch('/api/copilot/mass-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: 100000, timeframe: '7d' })
+                    body: JSON.stringify({ target: 100000, timeframe: 'all' })
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
