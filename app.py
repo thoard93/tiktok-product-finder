@@ -4362,10 +4362,11 @@ def api_products():
         if is_gems:
             # Opportunity Gems: High Sales, Low Competition
             # Products with < 40 total videos are true opportunities
+            video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
             query = query.filter(
                 Product.sales_7d >= 10,  # Min sales
                 Product.influencer_count <= 50,  # Low saturation
-                Product.video_count <= 40  # TRUE GEMS: Under 40 total videos
+                video_count_field <= 40  # TRUE GEMS: Under 40 total videos (all-time)
             )
             
         if is_high_ad:
@@ -4445,8 +4446,9 @@ def api_products():
             # Use all-time video count for "least videos" with fallback to regular video_count
             query = query.order_by(db.func.coalesce(Product.video_count_alltime, Product.video_count).asc().nullsfirst())
         elif sort_by in ['gem_score', 'efficiency']:
-            # Efficiency Score: High Sales + Low Videos
-            score = (func.coalesce(Product.sales_7d, 0) / (func.coalesce(Product.video_count, 0) + 1))
+            # Efficiency Score: High Sales + Low Videos (using all-time count)
+            video_count_field = func.coalesce(Product.video_count_alltime, Product.video_count, 0)
+            score = (func.coalesce(Product.sales_7d, 0) / (video_count_field + 1))
             query = query.order_by(score.desc().nullslast())
         else:
             query = query.order_by(Product.first_seen.desc().nullslast())
