@@ -7098,11 +7098,17 @@ def copilot_enrich_videos():
         # Fetch products from Copilot API with timeframe='all' for video counts
         print(f"[Video Enrich] Fetching products with timeframe=all for all-time video counts...")
         
-        products_data = fetch_copilot_products(timeframe='all', limit=100, page=0)
-        if not products_data or 'data' not in products_data:
-            return jsonify({'status': 'error', 'message': 'Failed to fetch products from Copilot'})
+        products_data = fetch_copilot_trending(timeframe='all', limit=100, page=0)
+        if not products_data:
+            return jsonify({'status': 'error', 'message': 'Failed to fetch products from Copilot - check cookie'})
         
-        products_list = products_data.get('data', {}).get('products', [])
+        # The API returns products directly or nested in data.products
+        products_list = products_data.get('products', []) if isinstance(products_data, dict) else []
+        if not products_list and 'data' in products_data:
+            products_list = products_data.get('data', {}).get('products', [])
+        
+        if not products_list:
+            return jsonify({'status': 'error', 'message': f'No products in API response. Keys: {list(products_data.keys())}'})
         
         enriched_count = 0
         for p in products_list[:limit]:
@@ -7118,6 +7124,8 @@ def copilot_enrich_videos():
             if existing:
                 existing.video_count_alltime = alltime_video_count
                 enriched_count += 1
+                if enriched_count <= 3:
+                    print(f"[Video Enrich] {product_id}: video_count_alltime = {alltime_video_count}")
         
         db.session.commit()
         
