@@ -7114,6 +7114,10 @@ def copilot_enrich_videos():
             product_id = str(p.get('productId', '')).strip()
             if not product_id:
                 continue
+            
+            # Normalize to our shop_ prefix (same as main sync)
+            if not product_id.startswith('shop_'):
+                product_id = f"shop_{product_id}"
                 
             # Get all-time video count from the API response
             alltime_video_count = int(p.get('periodVideoCount') or p.get('adVideoCount') or 0)
