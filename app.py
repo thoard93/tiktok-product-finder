@@ -6818,6 +6818,10 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             if shop_ads_rate <= 0:
                 print(f"[Copilot Sync V2] Skipping {product_id} (No Shop Ads Commission)")
                 continue
+            # FILTER: Require active ad spend (products being promoted)
+            if ad_spend_7d <= 0:
+                print(f"[Copilot Sync V2] Skipping {product_id} (Zero 7D Ad Spend)")
+                continue
             
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
             
