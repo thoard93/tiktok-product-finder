@@ -4442,7 +4442,8 @@ def api_products():
         elif sort_by == 'video_count_alltime':
             query = query.order_by(Product.video_count_alltime.desc().nullslast())
         elif sort_by in ['vids_asc', 'video_asc']:
-            query = query.order_by(Product.video_count.asc().nullsfirst())
+            # Use all-time video count for "least videos" with fallback to regular video_count
+            query = query.order_by(db.func.coalesce(Product.video_count_alltime, Product.video_count).asc().nullsfirst())
         elif sort_by in ['gem_score', 'efficiency']:
             # Efficiency Score: High Sales + Low Videos
             score = (func.coalesce(Product.sales_7d, 0) / (func.coalesce(Product.video_count, 0) + 1))
@@ -6772,8 +6773,11 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             creator_count = int(p.get('periodCreatorCount') or 0)
             
             # Ad Spend: 7-DAY period spend (not all-time total)
-            ad_spend_7d = float(p.get('periodAdSpend') or p.get('totalAdCost', 0) * 0.15 or 0)  # Estimate 7d as 15% of total if not available
-            ad_spend_total = float(p.get('totalAdCost') or p.get('productTotalAdSpend') or 0)
+            # FIX: Handle None values properly to avoid NoneType * float error
+            period_ad_spend = p.get('periodAdSpend')
+            total_ad_cost = p.get('totalAdCost') or p.get('productTotalAdSpend') or 0
+            ad_spend_7d = float(period_ad_spend if period_ad_spend is not None else (float(total_ad_cost or 0) * 0.15))
+            ad_spend_total = float(total_ad_cost or 0)
             
             # Sales: 7-DAY period (periodUnits)
             total_sales = int(p.get('unitsSold') or p.get('productTotalUnits') or 0)
