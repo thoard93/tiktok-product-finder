@@ -963,20 +963,22 @@ async def force_hot_products(ctx):
 # =============================================================================
 
 def get_brand_products(brand_name, limit=10):
-    """Get top products for a brand with opportunity criteria (21-50 videos)."""
+    """Get top products for a brand with opportunity criteria (21-100 videos)."""
     with app.app_context():
         # Search by seller_name (brand name)
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+        
         products = Product.query.filter(
             Product.seller_name.ilike(f'%{brand_name}%'),
-            db.func.coalesce(Product.video_count_alltime, Product.video_count) >= 21,  # Min 21 videos
-            db.func.coalesce(Product.video_count_alltime, Product.video_count) <= 50,  # Max 50 videos (opportunity zone)
-            Product.sales_7d > 0,  # Active sales
-            Product.ad_spend > 0,  # Has ad spend
+            video_count_field >= 21,  # Min 21 videos
+            video_count_field <= 100,  # Max 100 videos (opportunity zone)
         ).order_by(
-            Product.ad_spend.desc(),  # Priority 1: High Ad Spend
-            Product.sales_7d.desc(),  # Priority 2: High 7D Sales
-            db.func.coalesce(Product.video_count_alltime, Product.video_count).asc(),  # Priority 3: Lower videos
+            Product.ad_spend.desc().nullslast(),  # Priority 1: High Ad Spend
+            Product.sales_7d.desc().nullslast(),  # Priority 2: High 7D Sales
+            video_count_field.asc(),  # Priority 3: Lower videos
         ).limit(limit).all()
+        
+        print(f"[Brand Hunt] Found {len(products)} products for '{brand_name}'")
         
         # Convert to dicts to avoid DetachedInstanceError
         product_dicts = []
@@ -1070,7 +1072,7 @@ async def search_brand(ctx, brand_name: str):
     products = get_brand_products(brand_name, limit=10)
     
     if not products:
-        await ctx.reply(f"📭 No products found for **{brand_name}** with 21-50 videos.\n\nTry a different brand or check spelling.", mention_author=False)
+        await ctx.reply(f"📭 No products found for **{brand_name}** with 21-100 videos.\n\nTry a different brand or check spelling.", mention_author=False)
         await ctx.message.remove_reaction('🔍', bot.user)
         await ctx.message.add_reaction('❌')
         return
@@ -1126,7 +1128,7 @@ async def help_command(ctx):
     
     embed.add_field(
         name="📊 Criteria",
-        value="• **Opportunity Zone:** 21-50 total videos\n"
+        value="• **Opportunity Zone:** 21-100 total videos\n"
               "• Sorted by: Ad Spend → 7D Sales → Lowest Videos\n"
               "• Only products with active ad spend",
         inline=False
