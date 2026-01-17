@@ -149,7 +149,7 @@ def ai_chat():
                 "content-type": "application/json"
             },
             json={
-                "model": "claude-3-5-sonnet-20241022",
+                "model": "claude-3-haiku-20240307",
                 "max_tokens": 1024,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": message}]
