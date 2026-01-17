@@ -4393,25 +4393,22 @@ def api_products():
 
         if is_caked:
             # Caked Finds: High-Potential "Early Phase" Winners
-            # Criteria based on analysis of top affiliate picks:
-            # - Revenue 30D: $50k - $200k (Proven but not saturated)
-            # - Creators: 10 - 50 (Crowded enough to validate)
-            # - Commission: >= 15% (Typical for these picks)
-            # - Age: 30 - 75 Days (Emerging tier)
-            # - Ad Spend: > $0 (Seller is investing)
+            # Relaxed criteria that works with existing data:
+            # - Ad Spend: $500 - $50k (invested but not huge)
+            # - Creators: 10 - 50 (validated but not saturated)
+            # - Commission: >= 15%
+            # - Videos: 20 - 100 (sweet spot range)
             
-            age_30_days = datetime.utcnow() - timedelta(days=30)
-            age_75_days = datetime.utcnow() - timedelta(days=75)
+            video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
             
             query = query.filter(
-                Product.gmv_30d >= 50000,
-                Product.gmv_30d <= 200000,
+                Product.ad_spend >= 500,
+                Product.ad_spend <= 50000,
                 Product.influencer_count >= 10,
                 Product.influencer_count <= 50,
-                db.or_(Product.commission_rate >= 0.15, Product.shop_ads_commission >= 0.15),
-                Product.first_seen <= age_30_days,
-                Product.first_seen >= age_75_days,
-                Product.ad_spend > 0
+                video_count_field >= 20,
+                video_count_field <= 100,
+                db.or_(Product.commission_rate >= 0.15, Product.shop_ads_commission >= 0.15)
             )
 
         if seller_id:
