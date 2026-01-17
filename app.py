@@ -494,7 +494,15 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
         if s30d > 0 or existing.sales_30d == 0: existing.sales_30d = s30d
         if inf_count > 0 or existing.influencer_count == 0: existing.influencer_count = inf_count
         if comm > 0 or existing.commission_rate == 0: existing.commission_rate = comm
-        if v_count > 0 or existing.video_count == 0: existing.video_count = v_count
+        
+        # VIDEO COUNT LOGIC: Never downgrade all-time count
+        if v_count > 0:
+            # If timeframe is 'all' (usually > 100), update all-time
+            if v_count > (existing.video_count_alltime or 0):
+                existing.video_count_alltime = v_count
+            
+            # Use as current momentum if it's a recent sync
+            existing.video_count = v_count
         
         # Update New Stats
         if shop_ads > 0: existing.shop_ads_commission = shop_ads
@@ -542,6 +550,7 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
             influencer_count=inf_count,
             commission_rate=comm,
             video_count=v_count,
+            video_count_alltime=v_count, # Initially total = normal
             video_7d=int(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or 0),
             video_30d=int(p_data.get('total_video_30d_cnt') or p_data.get('totalVideo30dCnt') or 0),
             live_count=res['live_count'] or int(p_data.get('total_live_cnt') or p_data.get('totalLiveCnt') or 0),
@@ -4352,6 +4361,9 @@ def api_products():
         # High Ad Spend alias
         is_high_ad = request.args.get('high_ad_spend', 'false').lower() == 'true'
 
+        # Caked Finds alias
+        is_caked = request.args.get('caked_only', 'false').lower() == 'true'
+
         # 2. Build Query
         # Base filter: Exclude unavailable products
         query = Product.query.filter(or_(Product.product_status == None, Product.product_status != 'unavailable'))
@@ -4377,6 +4389,29 @@ def api_products():
                     Product.ad_spend > 500,
                     Product.scan_type == 'copilot'
                 )
+            )
+
+        if is_caked:
+            # Caked Finds: High-Potential "Early Phase" Winners
+            # Criteria based on analysis of top affiliate picks:
+            # - Revenue 30D: $50k - $200k (Proven but not saturated)
+            # - Creators: 10 - 50 (Crowded enough to validate)
+            # - Commission: >= 15% (Typical for these picks)
+            # - Age: 30 - 75 Days (Emerging tier)
+            # - Ad Spend: > $0 (Seller is investing)
+            
+            age_30_days = datetime.utcnow() - timedelta(days=30)
+            age_75_days = datetime.utcnow() - timedelta(days=75)
+            
+            query = query.filter(
+                Product.gmv_30d >= 50000,
+                Product.gmv_30d <= 200000,
+                Product.influencer_count >= 10,
+                Product.influencer_count <= 50,
+                db.or_(Product.commission_rate >= 0.15, Product.shop_ads_commission >= 0.15),
+                Product.first_seen <= age_30_days,
+                Product.first_seen >= age_75_days,
+                Product.ad_spend > 0
             )
 
         if seller_id:
@@ -6865,9 +6900,30 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 if total_sales > 0:
                     existing.sales = total_sales
                 
+                # Update 30D stats if available (often period fields in 'all' mode)
+                if timeframe == 'all':
+                    if sales_7d > 0: existing.sales_30d = sales_7d
+                    if period_revenue > 0: existing.gmv_30d = period_revenue
+                
                 # V2 accurate video/creator counts
                 if video_count > 0:
-                    existing.video_count = video_count
+                    # If this is an 'all' timeframe sync, periodVideoCount IS the all-time total
+                    if timeframe == 'all':
+                        existing.video_count_alltime = video_count
+                        # For momentum (video_count), use newVideoCount (7-day growth)
+                        new_vc = int(p.get('newVideoCount') or 0)
+                        if new_vc > 0:
+                            existing.video_count = new_vc
+                        else:
+                            # Fallback: estimate 7D momentum if not provided in 'all' response
+                            existing.video_count = max(1, int(video_count * 0.05))
+                    else:
+                        # If this is a '7d' sync (standard), use periodVideoCount for momentum
+                        existing.video_count = video_count
+                        # And update all-time if it's higher or empty
+                        if video_count > (existing.video_count_alltime or 0):
+                            existing.video_count_alltime = video_count
+                         
                 if creator_count > 0:
                     existing.influencer_count = creator_count
                 
@@ -6896,8 +6952,11 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                     gmv=period_revenue,
                     gmv_growth=growth_pct,
                     sales_7d=sales_7d,
+                    sales_30d=sales_7d if timeframe == 'all' else 0,
                     sales=total_sales,
+                    gmv_30d=period_revenue if timeframe == 'all' else 0,
                     video_count=video_count,
+                    video_count_alltime=video_count if timeframe == 'all' else 0,
                     influencer_count=creator_count,
                     commission_rate=commission_rate,
                     shop_ads_commission=shop_ads_rate,

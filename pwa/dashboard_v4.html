@@ -211,6 +211,10 @@
                         class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
                         <i class="fas fa-gem mr-1.5 text-emerald-500"></i> Opportunity Gems
                     </button>
+                    <button onclick="applyFilter('caked', this)"
+                        class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
+                        <i class="fas fa-cake-candles mr-1.5 text-rose-400"></i> Caked Picks
+                    </button>
                     <button onclick="applyFilter('favorites', this)"
                         class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
                         <i class="fas fa-star mr-1.5 text-amber-500"></i> Watchlist
@@ -566,6 +570,7 @@
                             ${p.gmv > 10000 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-emerald-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">💰 High Volume</span>' : ''}
                             ${p.is_favorite ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">⭐ Watchlist</span>' : ''}
                             ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary/90 text-white shadow-lg backdrop-blur-md border border-white/10">💎 Opportunity</span>' : ''}
+                            ${(p.gmv_30d >= 50000 && p.gmv_30d <= 200000 && p.influencer_count <= 50) ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-rose-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">🍰 Caked Pick</span>' : ''}
                         </div>
                         
                         <div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
@@ -612,6 +617,7 @@
                 const savedSort = curFilter.sort_by || 'sales_7d';
 
                 if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
+                else if (type === 'caked') curFilter = { caked_only: 'true' };
                 else if (type === 'high_spend') curFilter = { high_ad_spend: 'true' };
                 else if (type === 'favorites') curFilter = { favorites_only: 'true' };
                 else if (type === 'all') curFilter = { min_videos: 0 };
