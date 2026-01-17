@@ -7045,15 +7045,14 @@ def api_creative_linker():
                     # Found! Extract topVideos
                     top_videos = p.get('topVideos', [])
                     if top_videos:
-                        # Filter for shorts (<=15 seconds) if duration data available
-                        shorts = [v for v in top_videos if (v.get('durationSeconds') or 0) <= 15]
-                        videos_to_return = shorts if shorts else top_videos
+                        # Return all top videos (duration filter removed - data often missing)
+                        # Sort by revenue if available
+                        top_videos_sorted = sorted(top_videos, key=lambda x: x.get('revenue') or x.get('periodRevenue') or 0, reverse=True)
                         
                         return jsonify({
                             'success': True,
                             'total_found': len(top_videos),
-                            'shorts_found': len(shorts),
-                            'videos': videos_to_return,
+                            'videos': top_videos_sorted,
                             'source': 'copilot_v2',
                             'product_found': True
                         })
@@ -7113,8 +7112,10 @@ def api_top_videos():
             # Get revenue - try multiple possible field names
             revenue = v.get('periodRevenue') or v.get('revenue') or v.get('videoRevenue') or 0
             
-            # Filter: shorts only (<= 15s) with decent revenue
-            if duration <= 15 and revenue > 100:
+            # Filter: Include videos with decent revenue
+            # Note: Duration data is often missing (returns 0), so we include those too
+            # Only exclude if we KNOW it's over 60s
+            if revenue > 100 and (duration == 0 or duration <= 60):
                 # Map to expected format for vantage_v2.html
                 top_shorts.append({
                     'videoId': v.get('videoId') or v.get('id') or '',
@@ -7132,7 +7133,7 @@ def api_top_videos():
         # Sort by revenue (highest first)
         top_shorts.sort(key=lambda x: x.get('periodRevenue') or 0, reverse=True)
         
-        print(f"[Top Videos] Found {len(top_shorts)} shorts out of {len(videos)} total videos")
+        print(f"[Top Videos] Found {len(top_shorts)} high-revenue videos out of {len(videos)} total")
         
         return jsonify({
             'success': True,
