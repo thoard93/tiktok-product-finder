@@ -663,6 +663,7 @@ def get_top_brand_opportunities(limit=10):
                 'product_id': p.product_id,
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
+                'sales': p.sales,  # Total sales
                 'sales_7d': p.sales_7d,
                 'video_count': video_count,  # All-time video count
                 'influencer_count': p.influencer_count,
@@ -996,11 +997,11 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with 50-100 videos, high ad spend, high 7D sales
+        # Query: Products with 40-100 all-time videos, high ad spend, high 7D sales
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
-            video_count_field >= 50,  # Min 50 videos
-            video_count_field <= 100,  # Max 100 videos (opportunity zone)
+            video_count_field >= 40,  # Min 40 all-time videos
+            video_count_field <= 100,  # Max 100 all-time videos (opportunity zone)
             Product.sales_7d >= 50,  # High 7D sales
             Product.ad_spend >= 500,  # High ad spend ($500+)
             Product.commission_rate > 0,  # Must have regular commission
@@ -1017,15 +1018,16 @@ def get_hot_products():
         # Convert to dicts BEFORE commit to avoid DetachedInstanceError
         product_dicts = []
         for p in products:
+            video_count = p.video_count_alltime or p.video_count or 0  # All-time video count
             p_dict = {
                 'product_id': p.product_id,
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
-                'sales': p.sales,
+                'sales': p.sales,  # Total sales
                 'sales_7d': p.sales_7d,
                 'sales_30d': p.sales_30d,
                 'influencer_count': p.influencer_count,
-                'video_count': p.video_count,
+                'video_count': video_count,  # All-time video count!
                 'commission_rate': p.commission_rate,
                 'shop_ads_commission': p.shop_ads_commission,  # GMV Max Ads commission
                 'price': p.price,
@@ -1096,6 +1098,7 @@ def get_brand_products(brand_name, limit=5):
                 'product_id': p.product_id,
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
+                'sales': p.sales,  # Total sales
                 'sales_7d': p.sales_7d,
                 'video_count': video_count,  # All-time video count
                 'influencer_count': p.influencer_count,
