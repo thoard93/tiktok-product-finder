@@ -537,6 +537,11 @@ def create_product_embed(p, title_prefix=""):
     embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
     embed.add_field(name="👥 Creators", value=f"{influencer_count:,}", inline=True)
     
+    # Brand field
+    seller_name = get_val('seller_name')
+    if seller_name and seller_name not in ['Unknown', 'Unknown Seller', '']:
+        embed.add_field(name="🏷️ Brand", value=f"{seller_name}", inline=True)
+    
     # Opportunity field with GMV Max indicator
     if has_gmv_max:
         embed.add_field(name="🎯 Opportunity", value=f"**{opportunity}** | 🚀 GMV Max Ads", inline=False)
