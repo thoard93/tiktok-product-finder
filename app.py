@@ -3119,6 +3119,62 @@ def get_brands():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/brand-products/<seller_name>')
+@login_required
+def get_brand_products_by_name(seller_name):
+    """Get products for a specific brand by seller_name"""
+    try:
+        # URL decode the seller name
+        from urllib.parse import unquote
+        decoded_name = unquote(seller_name)
+        
+        products = Product.query.filter(
+            Product.seller_name.ilike(f'%{decoded_name}%')
+        ).order_by(Product.sales_7d.desc()).limit(100).all()
+        
+        return jsonify({
+            'success': True,
+            'count': len(products),
+            'products': [{
+                'product_id': p.product_id,
+                'product_name': p.product_name,
+                'seller_name': p.seller_name,
+                'sales_7d': p.sales_7d or 0,
+                'gmv': p.gmv or 0,
+                'commission_rate': p.commission_rate or 0,
+                'video_count': p.video_count or 0,
+                'ad_spend': p.ad_spend or 0,
+                'image_url': p.cached_image_url or p.image_url
+            } for p in products]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/brand-sync/<seller_name>', methods=['POST'])
+@login_required
+def sync_brand_by_name(seller_name):
+    """Sync/refresh products for a brand (placeholder - stats are computed on-the-fly)"""
+    try:
+        from urllib.parse import unquote
+        decoded_name = unquote(seller_name)
+        
+        # Count products for this brand
+        count = Product.query.filter(
+            Product.seller_name.ilike(f'%{decoded_name}%')
+        ).count()
+        
+        if count == 0:
+            return jsonify({'success': False, 'error': 'Brand not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'message': f'Found {count} products for "{decoded_name}". Stats are computed live from database.',
+            'product_count': count
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/cleanup', methods=['POST', 'GET'])
 def cleanup_products():
     """

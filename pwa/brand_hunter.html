@@ -319,10 +319,10 @@
                         ` : ''}
                         
                         <div class="flex gap-2">
-                            <button onclick="viewBrandProducts(${b.id})" class="flex-1 glass py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-white/5 hover:border-primary/50 transition-all">
+                            <button onclick="viewBrandProducts('${encodeURIComponent(b.name)}')" class="flex-1 glass py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-white/5 hover:border-primary/50 transition-all">
                                 <i class="fas fa-box mr-1"></i> View Products
                             </button>
-                            <button onclick="syncBrand(${b.id})" class="flex-1 btn-premium py-2.5 text-xs">
+                            <button onclick="syncBrand('${encodeURIComponent(b.name)}')" class="flex-1 btn-premium py-2.5 text-xs">
                                 <i class="fas fa-sync-alt mr-1"></i> Sync
                             </button>
                         </div>
@@ -384,9 +384,9 @@
             }
         }
 
-        async function syncBrand(id) {
+        async function syncBrand(brandName) {
             try {
-                const res = await fetch(`/api/brands/${id}/sync`, { method: 'POST' });
+                const res = await fetch(`/api/brand-sync/${brandName}`, { method: 'POST' });
                 const data = await res.json();
 
                 if (data.success) {
@@ -414,17 +414,15 @@
             }
         }
 
-        async function viewBrandProducts(id) {
-            const brand = brands.find(b => b.id === id);
-            if (!brand) return;
-
-            document.getElementById('modalBrandName').textContent = brand.name + ' Products';
+        async function viewBrandProducts(brandName) {
+            const decodedName = decodeURIComponent(brandName);
+            document.getElementById('modalBrandName').textContent = decodedName + ' Products';
             document.getElementById('modalProductCount').textContent = 'Loading products...';
             document.getElementById('brandProductsGrid').innerHTML = '<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-2xl text-slate-500"></i></div>';
             document.getElementById('productsModal').classList.remove('hidden');
 
             try {
-                const res = await fetch(`/api/brands/${id}/products`);
+                const res = await fetch(`/api/brand-products/${brandName}`);
                 const data = await res.json();
 
                 if (data.success) {
