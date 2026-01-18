@@ -3100,7 +3100,7 @@ def get_brands():
             Product.seller_name != 'Unknown Seller',
             ~Product.seller_name.ilike('unknown%'),
             ~Product.seller_name.ilike('classified%')
-        ).group_by(Product.seller_id, Product.seller_name).order_by(db.desc('product_count')).all()
+        ).group_by(Product.seller_id, Product.seller_name).order_by(db.desc('total_revenue')).all()
         
         return jsonify({
             'success': True,

@@ -168,6 +168,16 @@
                     Click "Scan Copilot" to discover trending brands
                 </div>
             </div>
+            <!-- Brand Search Bar -->
+            <div class="mb-6 flex gap-4 items-center">
+                <div class="relative flex-1 max-w-md">
+                    <input type="text" id="brandSearchInput" placeholder="Search brands..."
+                        class="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 pl-10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary/50"
+                        oninput="filterBrands()">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                </div>
+                <span class="text-xs text-slate-500" id="brandCount">-- brands</span>
+            </div>
 
             <!-- Brand Grid -->
             <div id="brandGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -241,7 +251,8 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    brands = data.brands || [];
+                    // Sort brands by revenue (highest first)
+                    brands = (data.brands || []).sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
                     renderBrands();
                     updateStats();
                 }
@@ -265,20 +276,36 @@
             document.getElementById('statRevenue').textContent = '$' + formatKMB(totalRevenue);
         }
 
-        function renderBrands() {
+        let filteredBrands = [];
+
+        function filterBrands() {
+            const query = document.getElementById('brandSearchInput').value.toLowerCase().trim();
+            if (query === '') {
+                filteredBrands = brands;
+            } else {
+                filteredBrands = brands.filter(b => (b.name || '').toLowerCase().includes(query));
+            }
+            renderBrands(filteredBrands);
+        }
+
+        function renderBrands(list = null) {
+            const displayBrands = list || brands;
             const grid = document.getElementById('brandGrid');
 
-            if (brands.length === 0) {
+            // Update brand count
+            document.getElementById('brandCount').textContent = displayBrands.length + ' brands';
+
+            if (displayBrands.length === 0) {
                 grid.innerHTML = `
                     <div class="col-span-full text-center py-20 border border-dashed border-white/10 rounded-2xl">
                         <i class="fas fa-bullseye text-4xl text-slate-700 mb-4"></i>
-                        <p class="text-slate-500 font-bold uppercase tracking-widest mb-2">No Brands Tracked Yet</p>
-                        <p class="text-slate-600 text-sm">Click "Add Brand" to start tracking a brand's products.</p>
+                        <p class="text-slate-500 font-bold uppercase tracking-widest mb-2">No Brands Found</p>
+                        <p class="text-slate-600 text-sm">Try a different search or add brands to track.</p>
                     </div>`;
                 return;
             }
 
-            grid.innerHTML = brands.map(b => `
+            grid.innerHTML = displayBrands.map(b => `
                 <div class="brand-card bg-slate-900 border border-white/5 rounded-2xl overflow-hidden">
                     <div class="p-5">
                         <div class="flex items-start justify-between mb-4">
@@ -439,9 +466,11 @@
                                 <img src="/api/image-proxy/${p.product_id}" class="w-16 h-16 rounded-lg object-cover bg-slate-800" onerror="this.src='/vantage_logo.png'">
                                 <div class="flex-1 min-w-0">
                                     <h5 class="font-bold text-white text-sm truncate">${p.product_name}</h5>
-                                    <div class="flex gap-3 mt-2 text-xs">
+                                    <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
                                         <span class="text-slate-400">7D: <span class="text-white font-bold">${(p.sales_7d || 0).toLocaleString()}</span></span>
-                                        <span class="text-slate-400">$<span class="text-emerald-400 font-bold">${formatKMB(p.gmv || 0)}</span></span>
+                                        <span class="text-slate-400">Ad$: <span class="text-emerald-400 font-bold">$${formatKMB(p.ad_spend || 0)}</span></span>
+                                        <span class="text-slate-400">Videos: <span class="text-primary font-bold">${(p.video_count || 0).toLocaleString()}</span></span>
+                                        <span class="text-slate-400">GMV: <span class="text-amber-400 font-bold">$${formatKMB(p.gmv || 0)}</span></span>
                                     </div>
                                 </div>
                             </div>
