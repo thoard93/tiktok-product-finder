@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>TikTok Shop Finder</title>
-    
+
     <!-- PWA Meta Tags -->
     <meta name="application-name" content="TS Finder">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,17 +15,17 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0a0a0f">
     <meta name="msapplication-TileColor" content="#fe2c55">
-    
+
     <!-- PWA Links -->
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-96.png">
-    
+
     <!-- Splash screens for iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
+
     <style>
         :root {
             --bg-primary: #0a0a0f;
@@ -41,15 +43,16 @@
             --safe-top: env(safe-area-inset-top);
             --safe-bottom: env(safe-area-inset-bottom);
         }
-        
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
-        
-        html, body {
+
+        html,
+        body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
@@ -57,13 +60,13 @@
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
         }
-        
+
         /* iOS Safe Areas */
         body {
             padding-top: var(--safe-top);
             padding-bottom: calc(70px + var(--safe-bottom));
         }
-        
+
         /* Pull to Refresh Indicator */
         .pull-indicator {
             position: fixed;
@@ -81,11 +84,11 @@
             align-items: center;
             gap: 0.5rem;
         }
-        
+
         .pull-indicator.visible {
             transform: translateX(-50%) translateY(10px);
         }
-        
+
         .pull-indicator .spinner {
             width: 18px;
             height: 18px;
@@ -94,11 +97,13 @@
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
-        
+
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
-        
+
         /* Header - Mobile Optimized */
         .header {
             background: var(--bg-secondary);
@@ -108,20 +113,20 @@
             z-index: 100;
             border-bottom: 1px solid var(--border);
         }
-        
+
         .header-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
         }
-        
+
         .logo {
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
-        
+
         .logo-icon {
             width: 32px;
             height: 32px;
@@ -133,14 +138,16 @@
             font-weight: 700;
             font-size: 0.9rem;
         }
-        
+
         .logo-text {
             font-size: 1.1rem;
             font-weight: 600;
         }
-        
-        .logo-text span { color: var(--accent); }
-        
+
+        .logo-text span {
+            color: var(--accent);
+        }
+
         .scan-btn {
             background: var(--accent);
             border: none;
@@ -153,38 +160,46 @@
             align-items: center;
             gap: 0.4rem;
         }
-        
+
         /* Stats Row */
         .stats-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 0.5rem;
         }
-        
+
         .stat-box {
             background: var(--bg-card);
             border-radius: 10px;
             padding: 0.6rem;
             text-align: center;
         }
-        
+
         .stat-value {
             font-size: 1.1rem;
             font-weight: 700;
             font-variant-numeric: tabular-nums;
         }
-        
-        .stat-value.accent { color: var(--accent); }
-        .stat-value.cyan { color: var(--tiktok-cyan); }
-        .stat-value.success { color: var(--success); }
-        
+
+        .stat-value.accent {
+            color: var(--accent);
+        }
+
+        .stat-value.cyan {
+            color: var(--tiktok-cyan);
+        }
+
+        .stat-value.success {
+            color: var(--success);
+        }
+
         .stat-label {
             font-size: 0.65rem;
             color: var(--text-secondary);
             text-transform: uppercase;
             margin-top: 2px;
         }
-        
+
         /* Search Bar */
         .search-container {
             padding: 0.75rem 1rem;
@@ -193,12 +208,12 @@
             top: 110px;
             z-index: 90;
         }
-        
+
         .search-bar {
             display: flex;
             gap: 0.5rem;
         }
-        
+
         .search-input {
             flex: 1;
             background: var(--bg-card);
@@ -209,11 +224,11 @@
             font-size: 1rem;
             outline: none;
         }
-        
+
         .search-input:focus {
             border-color: var(--accent);
         }
-        
+
         .filter-btn {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -223,12 +238,12 @@
             font-size: 1.2rem;
             position: relative;
         }
-        
+
         .filter-btn.active {
             border-color: var(--accent);
             color: var(--accent);
         }
-        
+
         .filter-badge {
             position: absolute;
             top: -5px;
@@ -239,7 +254,7 @@
             padding: 2px 6px;
             border-radius: 10px;
         }
-        
+
         /* Quick Filter Pills */
         .filter-pills {
             display: flex;
@@ -249,11 +264,11 @@
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
         }
-        
+
         .filter-pills::-webkit-scrollbar {
             display: none;
         }
-        
+
         .pill {
             flex-shrink: 0;
             background: var(--bg-card);
@@ -266,19 +281,19 @@
             align-items: center;
             gap: 0.4rem;
         }
-        
+
         .pill.active {
             background: var(--accent);
             border-color: var(--accent);
         }
-        
+
         .pill .count {
-            background: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.15);
             padding: 0.1rem 0.4rem;
             border-radius: 8px;
             font-size: 0.75rem;
         }
-        
+
         /* Product Grid - Mobile Cards */
         .product-list {
             padding: 0 1rem 1rem;
@@ -286,7 +301,7 @@
             flex-direction: column;
             gap: 0.75rem;
         }
-        
+
         .product-card {
             background: var(--bg-card);
             border-radius: 16px;
@@ -298,11 +313,11 @@
             position: relative;
             transition: transform 0.2s, box-shadow 0.2s;
         }
-        
+
         .product-card:active {
             transform: scale(0.98);
         }
-        
+
         .product-image {
             width: 100px;
             height: 100px;
@@ -312,13 +327,13 @@
             overflow: hidden;
             position: relative;
         }
-        
+
         .product-image img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-        
+
         .product-image-placeholder {
             width: 100%;
             height: 100%;
@@ -327,13 +342,27 @@
             justify-content: center;
             font-size: 2rem;
         }
-        
-        .gradient-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .gradient-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .gradient-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-        .gradient-4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-        .gradient-5 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
-        
+
+        .gradient-1 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .gradient-2 {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .gradient-3 {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .gradient-4 {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+
+        .gradient-5 {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
         .product-badges {
             position: absolute;
             top: 4px;
@@ -342,7 +371,7 @@
             flex-wrap: wrap;
             gap: 3px;
         }
-        
+
         .badge {
             padding: 2px 6px;
             border-radius: 4px;
@@ -350,19 +379,34 @@
             font-weight: 600;
             text-transform: uppercase;
         }
-        
-        .badge-new { background: #00b894; color: white; }
-        .badge-gem { background: var(--tiktok-cyan); color: black; }
-        .badge-untapped { background: var(--success); color: white; }
-        .badge-hot { background: var(--accent); color: white; }
-        
+
+        .badge-new {
+            background: #00b894;
+            color: white;
+        }
+
+        .badge-gem {
+            background: var(--tiktok-cyan);
+            color: black;
+        }
+
+        .badge-untapped {
+            background: var(--success);
+            color: white;
+        }
+
+        .badge-hot {
+            background: var(--accent);
+            color: white;
+        }
+
         .product-info {
             flex: 1;
             min-width: 0;
             display: flex;
             flex-direction: column;
         }
-        
+
         .product-name {
             font-size: 0.9rem;
             font-weight: 500;
@@ -373,34 +417,34 @@
             overflow: hidden;
             margin-bottom: 0.5rem;
         }
-        
+
         .product-stats {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 0.4rem;
             flex: 1;
         }
-        
+
         .product-stat {
             display: flex;
             flex-direction: column;
         }
-        
+
         .product-stat-value {
             font-size: 0.95rem;
             font-weight: 600;
             font-variant-numeric: tabular-nums;
         }
-        
+
         .product-stat-value.highlight {
             color: var(--success);
         }
-        
+
         .product-stat-label {
             font-size: 0.65rem;
             color: var(--text-secondary);
         }
-        
+
         .product-footer {
             display: flex;
             justify-content: space-between;
@@ -408,18 +452,26 @@
             margin-top: auto;
             padding-top: 0.5rem;
         }
-        
+
         .influencer-tag {
             font-size: 0.75rem;
             padding: 0.25rem 0.5rem;
             border-radius: 6px;
             background: var(--bg-secondary);
         }
-        
-        .influencer-tag.low { color: var(--success); }
-        .influencer-tag.medium { color: var(--tiktok-cyan); }
-        .influencer-tag.high { color: var(--warning); }
-        
+
+        .influencer-tag.low {
+            color: var(--success);
+        }
+
+        .influencer-tag.medium {
+            color: var(--tiktok-cyan);
+        }
+
+        .influencer-tag.high {
+            color: var(--warning);
+        }
+
         .seller-name {
             font-size: 0.7rem;
             color: var(--text-secondary);
@@ -428,13 +480,13 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        
+
         /* Favorite Button */
         .favorite-btn {
             position: absolute;
             top: 0.5rem;
             right: 0.5rem;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             border: none;
             border-radius: 50%;
             width: 36px;
@@ -445,11 +497,11 @@
             justify-content: center;
             z-index: 10;
         }
-        
+
         .favorite-btn.favorited {
             background: rgba(255, 107, 107, 0.3);
         }
-        
+
         /* Bottom Navigation */
         .bottom-nav {
             position: fixed;
@@ -464,7 +516,7 @@
             padding-bottom: calc(0.5rem + var(--safe-bottom));
             z-index: 200;
         }
-        
+
         .nav-item {
             display: flex;
             flex-direction: column;
@@ -476,31 +528,31 @@
             font-size: 0.7rem;
             transition: color 0.2s;
         }
-        
+
         .nav-item.active {
             color: var(--accent);
         }
-        
+
         .nav-icon {
             font-size: 1.4rem;
         }
-        
+
         /* Filter Modal */
         .modal-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.7);
             z-index: 300;
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.3s, visibility 0.3s;
         }
-        
+
         .modal-overlay.open {
             opacity: 1;
             visibility: visible;
         }
-        
+
         .filter-modal {
             position: fixed;
             bottom: 0;
@@ -516,23 +568,23 @@
             max-height: 80vh;
             overflow-y: auto;
         }
-        
+
         .modal-overlay.open .filter-modal {
             transform: translateY(0);
         }
-        
+
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 1.5rem;
         }
-        
+
         .modal-title {
             font-size: 1.2rem;
             font-weight: 600;
         }
-        
+
         .modal-close {
             background: var(--bg-card);
             border: none;
@@ -542,24 +594,24 @@
             font-size: 1.2rem;
             color: var(--text-secondary);
         }
-        
+
         .filter-section {
             margin-bottom: 1.5rem;
         }
-        
+
         .filter-label {
             font-size: 0.8rem;
             color: var(--text-secondary);
             margin-bottom: 0.5rem;
             text-transform: uppercase;
         }
-        
+
         .filter-options {
             display: flex;
             flex-wrap: wrap;
             gap: 0.5rem;
         }
-        
+
         .filter-option {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -568,12 +620,12 @@
             font-size: 0.9rem;
             color: var(--text-primary);
         }
-        
+
         .filter-option.selected {
             background: var(--accent);
             border-color: var(--accent);
         }
-        
+
         .apply-filters-btn {
             width: 100%;
             background: var(--accent);
@@ -585,7 +637,7 @@
             font-weight: 600;
             margin-top: 1rem;
         }
-        
+
         /* Loading State */
         .loading {
             display: flex;
@@ -595,7 +647,7 @@
             padding: 3rem;
             color: var(--text-secondary);
         }
-        
+
         .loading .spinner {
             width: 40px;
             height: 40px;
@@ -604,19 +656,19 @@
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
-        
+
         /* Empty State */
         .empty-state {
             text-align: center;
             padding: 3rem 1rem;
             color: var(--text-secondary);
         }
-        
+
         .empty-state h3 {
             color: var(--text-primary);
             margin-bottom: 0.5rem;
         }
-        
+
         /* Install Banner for iOS */
         .install-banner {
             position: fixed;
@@ -630,23 +682,30 @@
             z-index: 150;
             display: none;
         }
-        
+
         .install-banner.visible {
             display: block;
             animation: slideUp 0.3s ease-out;
         }
-        
+
         @keyframes slideUp {
-            from { transform: translateY(100px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+            from {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
-        
+
         .install-content {
             display: flex;
             gap: 1rem;
             align-items: center;
         }
-        
+
         .install-icon {
             width: 48px;
             height: 48px;
@@ -657,17 +716,17 @@
             justify-content: center;
             font-size: 1.2rem;
         }
-        
+
         .install-text h4 {
             font-size: 0.95rem;
             margin-bottom: 0.25rem;
         }
-        
+
         .install-text p {
             font-size: 0.8rem;
             color: var(--text-secondary);
         }
-        
+
         .install-close {
             position: absolute;
             top: 0.5rem;
@@ -677,7 +736,7 @@
             color: var(--text-secondary);
             font-size: 1.2rem;
         }
-        
+
         /* Infinite scroll loading */
         .load-more {
             text-align: center;
@@ -686,13 +745,14 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Pull to Refresh -->
     <div class="pull-indicator" id="pullIndicator">
         <div class="spinner"></div>
         <span>Refreshing...</span>
     </div>
-    
+
     <!-- Header -->
     <header class="header">
         <div class="header-top">
@@ -723,7 +783,7 @@
             </div>
         </div>
     </header>
-    
+
     <!-- Search -->
     <div class="search-container">
         <div class="search-bar">
@@ -734,7 +794,7 @@
             </button>
         </div>
     </div>
-    
+
     <!-- Filter Pills -->
     <div class="filter-pills">
         <button class="pill active" data-filter="all" onclick="quickFilter('all', this)">
@@ -753,7 +813,7 @@
             ❤️ Favorites <span class="count" id="favCount">0</span>
         </button>
     </div>
-    
+
     <!-- Product List -->
     <div class="product-list" id="productList">
         <div class="loading">
@@ -761,11 +821,11 @@
             <p style="margin-top: 1rem;">Loading products...</p>
         </div>
     </div>
-    
+
     <div class="load-more" id="loadMore" style="display:none;">
         <div class="spinner" style="width:24px;height:24px;border-width:2px;margin:0 auto;"></div>
     </div>
-    
+
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
         <a href="/" class="nav-item active">
@@ -785,7 +845,7 @@
             <span>Filters</span>
         </a>
     </nav>
-    
+
     <!-- Filter Modal -->
     <div class="modal-overlay" id="filterModal" onclick="closeFilterModal(event)">
         <div class="filter-modal" onclick="event.stopPropagation()">
@@ -793,18 +853,18 @@
                 <span class="modal-title">Filters</span>
                 <button class="modal-close" onclick="closeFilterModal()">✕</button>
             </div>
-            
+
             <div class="filter-section">
                 <div class="filter-label">Sort By</div>
                 <div class="filter-options" id="sortOptions">
-                    <button class="filter-option selected" data-sort="gmv">💰 GMV</button>
-                    <button class="filter-option" data-sort="commission_rate">📊 Commission</button>
-                    <button class="filter-option" data-sort="potential_earnings">🎯 Potential</button>
-                    <button class="filter-option" data-sort="sales">📦 Units Sold</button>
-                    <button class="filter-option" data-sort="influencer_count">👥 Influencers</button>
+                    <button class="filter-option selected" data-sort="sales_7d">📊 7D Volume</button>
+                    <button class="filter-option" data-sort="ad_spend_7d">💰 7D Ad Spend</button>
+                    <button class="filter-option" data-sort="gem_score">💎 Gem Score</button>
+                    <button class="filter-option" data-sort="video_count_alltime">📺 Videos</button>
+                    <button class="filter-option" data-sort="first_seen">✨ Newest First</button>
                 </div>
             </div>
-            
+
             <div class="filter-section">
                 <div class="filter-label">Min Commission</div>
                 <div class="filter-options" id="commissionOptions">
@@ -815,7 +875,7 @@
                     <button class="filter-option" data-commission="25">25%+</button>
                 </div>
             </div>
-            
+
             <div class="filter-section">
                 <div class="filter-label">Competition</div>
                 <div class="filter-options" id="competitionOptions">
@@ -825,11 +885,11 @@
                     <button class="filter-option" data-competition="high">High (30+)</button>
                 </div>
             </div>
-            
+
             <button class="apply-filters-btn" onclick="applyModalFilters()">Apply Filters</button>
         </div>
     </div>
-    
+
     <!-- iOS Install Banner -->
     <div class="install-banner" id="installBanner">
         <button class="install-close" onclick="dismissInstallBanner()">✕</button>
@@ -852,27 +912,27 @@
         let isLoading = false;
         let hasMore = true;
         let allProducts = [];
-        
+
         // ==================== FAVORITES ====================
         const FAVORITES_KEY = 'tiktokshop_favorites';
-        
+
         function getFavorites() {
             try {
                 return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
             } catch { return []; }
         }
-        
+
         function saveFavorites(favorites) {
             localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
             updateFavCount();
         }
-        
+
         function toggleFavorite(productId, btn, event) {
             event.stopPropagation();
             event.preventDefault();
             const favorites = getFavorites();
             const index = favorites.indexOf(productId);
-            
+
             if (index > -1) {
                 favorites.splice(index, 1);
                 btn.classList.remove('favorited');
@@ -884,18 +944,18 @@
                 // Haptic feedback
                 if (navigator.vibrate) navigator.vibrate(50);
             }
-            
+
             saveFavorites(favorites);
         }
-        
+
         function isFavorited(productId) {
             return getFavorites().includes(productId);
         }
-        
+
         function updateFavCount() {
             document.getElementById('favCount').textContent = getFavorites().length;
         }
-        
+
         // ==================== FORMATTING ====================
         function formatCurrency(value) {
             if (!value || value === 0) return '$0';
@@ -903,19 +963,19 @@
             if (value >= 1000) return '$' + (value / 1000).toFixed(1) + 'K';
             return '$' + value.toFixed(0);
         }
-        
+
         function formatNumber(value) {
             if (!value || value === 0) return '0';
             if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
             if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
             return value.toString();
         }
-        
+
         function getGradientClass(id) {
             const num = parseInt(String(id).slice(-1)) || 0;
             return `gradient-${(num % 5) + 1}`;
         }
-        
+
         function getProductIcon(name) {
             const n = (name || '').toLowerCase();
             if (n.includes('hair') || n.includes('wig')) return '💇';
@@ -932,20 +992,20 @@
             if (n.includes('camera') || n.includes('gimbal')) return '📷';
             return '📦';
         }
-        
+
         function getCompetitionClass(count) {
             if (count <= 3) return 'low';
             if (count <= 30) return 'medium';
             return 'high';
         }
-        
+
         function isNewProduct(firstSeen) {
             if (!firstSeen) return false;
             const seen = new Date(firstSeen);
             const hoursDiff = (Date.now() - seen) / (1000 * 60 * 60);
             return hoursDiff < 24;
         }
-        
+
         // ==================== PRODUCT CARD ====================
         function createProductCard(p) {
             const iflCount = p.influencer_count || p.total_influencers || 0;
@@ -956,12 +1016,12 @@
             const favorited = isFavorited(productId);
             const isNew = isNewProduct(p.first_seen);
             const imageUrl = p.cached_image_url || null;
-            
+
             let badges = '';
             if (isNew) badges += '<span class="badge badge-new">NEW</span>';
             if (iflCount <= 3 && gmv > 100) badges += '<span class="badge badge-untapped">UNTAPPED</span>';
             else if (iflCount <= 50 && iflCount >= 3) badges += '<span class="badge badge-gem">GEM</span>';
-            
+
             return `
                 <div class="product-card" onclick="window.location.href='/product?id=${productId}'">
                     <button class="favorite-btn ${favorited ? 'favorited' : ''}" 
@@ -969,10 +1029,10 @@
                         ${favorited ? '❤️' : '🤍'}
                     </button>
                     <div class="product-image">
-                        ${imageUrl ? 
-                            `<img src="${imageUrl}" alt="" onerror="this.parentElement.innerHTML='<div class=\\'product-image-placeholder ${getGradientClass(productId)}\\'>${getProductIcon(p.product_name)}</div>'">` :
-                            `<div class="product-image-placeholder ${getGradientClass(productId)}">${getProductIcon(p.product_name)}</div>`
-                        }
+                        ${imageUrl ?
+                    `<img src="${imageUrl}" alt="" onerror="this.parentElement.innerHTML='<div class=\\'product-image-placeholder ${getGradientClass(productId)}\\'>${getProductIcon(p.product_name)}</div>'">` :
+                    `<div class="product-image-placeholder ${getGradientClass(productId)}">${getProductIcon(p.product_name)}</div>`
+                }
                         <div class="product-badges">${badges}</div>
                     </div>
                     <div class="product-info">
@@ -1003,15 +1063,15 @@
                 </div>
             `;
         }
-        
+
         // ==================== LOAD PRODUCTS ====================
         async function loadProducts(reset = false) {
             if (isLoading) return;
             isLoading = true;
-            
+
             const list = document.getElementById('productList');
             const loadMore = document.getElementById('loadMore');
-            
+
             if (reset) {
                 currentPage = 1;
                 hasMore = true;
@@ -1019,7 +1079,7 @@
             } else {
                 loadMore.style.display = 'block';
             }
-            
+
             try {
                 const params = new URLSearchParams({
                     page: currentPage,
@@ -1027,10 +1087,10 @@
                     sort_by: currentSort,
                     sort_order: 'desc'
                 });
-                
+
                 if (currentCommission) params.append('min_commission', currentCommission);
                 if (currentCompetition) params.append('competition', currentCompetition);
-                
+
                 // Apply filters server-side instead of client-side
                 if (currentFilter === 'gems') {
                     params.append('min_influencers', 3);
@@ -1046,27 +1106,27 @@
                         params.append('product_ids', favs.join(','));
                     }
                 }
-                
+
                 const response = await fetch(`/api/products?${params}`);
                 const data = await response.json();
-                
+
                 if (data.success && data.products) {
                     let products = data.products;
-                    
+
                     // Only apply favorites filter client-side (API might not support product_ids)
                     if (currentFilter === 'favorites') {
                         const favs = getFavorites();
                         products = products.filter(p => favs.includes(p.product_id));
                     }
-                    
+
                     if (reset) {
-                        list.innerHTML = products.length > 0 ? 
+                        list.innerHTML = products.length > 0 ?
                             products.map(createProductCard).join('') :
                             '<div class="empty-state"><h3>No products found</h3><p>Try adjusting your filters</p></div>';
                     } else {
                         list.insertAdjacentHTML('beforeend', products.map(createProductCard).join(''));
                     }
-                    
+
                     hasMore = data.pagination && currentPage < data.pagination.total_pages;
                     currentPage++;
                 }
@@ -1076,26 +1136,26 @@
                     list.innerHTML = '<div class="empty-state"><h3>Error loading</h3><p>Pull down to refresh</p></div>';
                 }
             }
-            
+
             loadMore.style.display = 'none';
             isLoading = false;
         }
-        
+
         // ==================== LOAD STATS ====================
         async function loadStats() {
             try {
                 const response = await fetch('/api/stats');
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // Stats are nested inside data.stats
                     const stats = data.stats || data;
-                    
+
                     document.getElementById('totalProducts').textContent = stats.total_products || 0;
                     document.getElementById('hiddenGems').textContent = stats.hidden_gems || 0;
                     document.getElementById('untapped').textContent = stats.untapped || 0;
                     document.getElementById('avgCommission').textContent = (stats.avg_commission || 0).toFixed(1) + '%';
-                    
+
                     document.getElementById('allCount').textContent = stats.total_products || 0;
                     document.getElementById('gemsCount').textContent = stats.hidden_gems || 0;
                     document.getElementById('untappedCount').textContent = stats.untapped || 0;
@@ -1105,7 +1165,7 @@
                 console.error('Stats error:', e);
             }
         }
-        
+
         // ==================== FILTERS ====================
         function quickFilter(filter, btn) {
             currentFilter = filter;
@@ -1114,17 +1174,17 @@
             else document.querySelector(`[data-filter="${filter}"]`)?.classList.add('active');
             loadProducts(true);
         }
-        
+
         function openFilterModal() {
             document.getElementById('filterModal').classList.add('open');
         }
-        
+
         function closeFilterModal(e) {
             if (!e || e.target === e.currentTarget) {
                 document.getElementById('filterModal').classList.remove('open');
             }
         }
-        
+
         // Filter option selection
         document.querySelectorAll('#sortOptions .filter-option').forEach(btn => {
             btn.onclick = () => {
@@ -1132,31 +1192,31 @@
                 btn.classList.add('selected');
             };
         });
-        
+
         document.querySelectorAll('#commissionOptions .filter-option').forEach(btn => {
             btn.onclick = () => {
                 document.querySelectorAll('#commissionOptions .filter-option').forEach(b => b.classList.remove('selected'));
                 btn.classList.add('selected');
             };
         });
-        
+
         document.querySelectorAll('#competitionOptions .filter-option').forEach(btn => {
             btn.onclick = () => {
                 document.querySelectorAll('#competitionOptions .filter-option').forEach(b => b.classList.remove('selected'));
                 btn.classList.add('selected');
             };
         });
-        
+
         function applyModalFilters() {
             currentSort = document.querySelector('#sortOptions .selected')?.dataset.sort || 'gmv';
             currentCommission = document.querySelector('#commissionOptions .selected')?.dataset.commission || '';
             currentCompetition = document.querySelector('#competitionOptions .selected')?.dataset.competition || '';
-            
+
             // Update badge
             let filterCount = 0;
             if (currentCommission) filterCount++;
             if (currentCompetition) filterCount++;
-            
+
             const badge = document.getElementById('filterBadge');
             if (filterCount > 0) {
                 badge.textContent = filterCount;
@@ -1166,11 +1226,11 @@
                 badge.style.display = 'none';
                 document.getElementById('filterBtn').classList.remove('active');
             }
-            
+
             closeFilterModal();
             loadProducts(true);
         }
-        
+
         // ==================== SEARCH ====================
         let searchTimeout;
         document.getElementById('searchInput').addEventListener('input', (e) => {
@@ -1184,30 +1244,30 @@
                 });
             }, 300);
         });
-        
+
         // ==================== INFINITE SCROLL ====================
         window.addEventListener('scroll', () => {
             if (isLoading || !hasMore) return;
-            
+
             const scrollY = window.scrollY;
             const visible = document.documentElement.clientHeight;
             const pageHeight = document.documentElement.scrollHeight;
-            
+
             if (scrollY + visible >= pageHeight - 500) {
                 loadProducts(false);
             }
         });
-        
+
         // ==================== PULL TO REFRESH ====================
         let touchStartY = 0;
         let isPulling = false;
-        
+
         document.addEventListener('touchstart', (e) => {
             if (window.scrollY === 0) {
                 touchStartY = e.touches[0].clientY;
             }
         });
-        
+
         document.addEventListener('touchmove', (e) => {
             if (window.scrollY === 0 && touchStartY > 0) {
                 const diff = e.touches[0].clientY - touchStartY;
@@ -1217,7 +1277,7 @@
                 }
             }
         });
-        
+
         document.addEventListener('touchend', async () => {
             if (isPulling) {
                 isPulling = false;
@@ -1227,13 +1287,13 @@
             }
             touchStartY = 0;
         });
-        
+
         // ==================== SCAN ====================
         async function runScan() {
             const btn = document.querySelector('.scan-btn');
             btn.innerHTML = '⏳ Scanning...';
             btn.disabled = true;
-            
+
             try {
                 const response = await fetch('/api/scan');
                 const data = await response.json();
@@ -1243,36 +1303,36 @@
             } catch (e) {
                 alert('Scan failed. Try again.');
             }
-            
+
             btn.innerHTML = '🔄 Scan';
             btn.disabled = false;
         }
-        
+
         // ==================== PWA / iOS INSTALL ====================
         function checkIOSInstall() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             const isStandalone = window.navigator.standalone;
             const dismissed = localStorage.getItem('install_dismissed');
-            
+
             if (isIOS && !isStandalone && !dismissed) {
                 setTimeout(() => {
                     document.getElementById('installBanner').classList.add('visible');
                 }, 3000);
             }
         }
-        
+
         function dismissInstallBanner() {
             document.getElementById('installBanner').classList.remove('visible');
             localStorage.setItem('install_dismissed', 'true');
         }
-        
+
         // Register Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/service-worker.js')
                 .then(() => console.log('SW registered'))
                 .catch(err => console.log('SW failed:', err));
         }
-        
+
         // ==================== INIT ====================
         document.addEventListener('DOMContentLoaded', () => {
             loadProducts(true);
@@ -1282,4 +1342,5 @@
         });
     </script>
 </body>
+
 </html>

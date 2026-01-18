@@ -4558,6 +4558,8 @@ def api_products():
         # 3. Apply Sorting
         if sort_by in ['sales_desc', 'sales_7d']:
             query = query.order_by(Product.sales_7d.desc().nullslast(), Product.sales.desc().nullslast())
+        elif sort_by in ['ad_spend_7d', 'ad_spend']:
+            query = query.order_by(Product.ad_spend.desc().nullslast())
         elif sort_by == 'sales_asc':
             query = query.order_by(Product.sales_7d.asc().nullsfirst())
         elif sort_by == 'inf_asc':
