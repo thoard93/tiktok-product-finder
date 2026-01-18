@@ -897,14 +897,14 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with Shop Ads Commission >= 10%, high 7D sales, low competition
+        # Query: Products with 50-100 videos, high ad spend, high 7D sales
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
-            Product.video_count > 0,  # Has videos
-            Product.video_count <= 40,  # LOW COMPETITION: <= 40 videos (true gems)
-            Product.sales_7d >= 50,  # Decent 7D sales
-            Product.ad_spend >= 100,  # Has ad spend ($100+)
+            video_count_field >= 50,  # Min 50 videos
+            video_count_field <= 100,  # Max 100 videos (opportunity zone)
+            Product.sales_7d >= 50,  # High 7D sales
+            Product.ad_spend >= 500,  # High ad spend ($500+)
             Product.commission_rate > 0,  # Must have regular commission
-            Product.shop_ads_commission >= 0.10,  # 10%+ shop ads commission (GMV Max)
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date
@@ -912,8 +912,7 @@ def get_hot_products():
         ).order_by(
             db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 1: High Ad Spend
             db.func.coalesce(Product.sales_7d, 0).desc(),  # Priority 2: High 7D Sales
-            db.func.coalesce(Product.video_count, 0).asc(),  # Priority 3: Lower videos = better opportunity
-            db.func.coalesce(Product.shop_ads_commission, 0).desc()  # Priority 4: Shop Ads Commission
+            video_count_field.asc()  # Priority 3: Lower videos = better opportunity
         ).limit(MAX_DAILY_POSTS).all()
         
         # Convert to dicts BEFORE commit to avoid DetachedInstanceError
@@ -1141,6 +1140,12 @@ async def help_command(ctx):
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
+        # Only respond to brand searches in brand-hunter channel
+        channel_name = ctx.channel.name.lower() if hasattr(ctx.channel, 'name') else ''
+        if 'brand' not in channel_name and 'hunter' not in channel_name:
+            # Silently ignore commands in non-brand-hunter channels
+            return
+        
         # Treat unknown commands as brand searches
         # Get everything after the ! as potential brand name
         content = ctx.message.content.strip()

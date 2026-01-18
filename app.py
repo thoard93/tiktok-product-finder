@@ -4372,13 +4372,13 @@ def api_products():
             query = query.filter(Product.is_favorite == True)
         
         if is_gems:
-            # Opportunity Gems: High Sales, Low Competition
-            # Products with < 40 total videos are true opportunities
+            # Opportunity Gems: High Sales, High Ad Spend, 50-100 total videos
             video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
             query = query.filter(
-                Product.sales_7d >= 10,  # Min sales
-                Product.influencer_count <= 50,  # Low saturation
-                video_count_field <= 40  # TRUE GEMS: Under 40 total videos (all-time)
+                Product.sales_7d >= 50,  # High 7D sales
+                Product.ad_spend >= 500,  # High ad spend ($500+)
+                video_count_field >= 50,  # Min 50 videos
+                video_count_field <= 100  # Max 100 videos
             )
             
         if is_high_ad:
