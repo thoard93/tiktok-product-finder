@@ -305,22 +305,37 @@
                 return;
             }
 
-            grid.innerHTML = displayBrands.map(b => `
-                <div class="brand-card bg-slate-900 border border-white/5 rounded-2xl overflow-hidden">
+            grid.innerHTML = displayBrands.map((b, idx) => {
+                // Dynamic gradient colors based on position/performance
+                const gradients = [
+                    'from-violet-500 to-fuchsia-500',
+                    'from-cyan-500 to-blue-500',
+                    'from-emerald-500 to-teal-500',
+                    'from-amber-500 to-orange-500',
+                    'from-rose-500 to-pink-500',
+                    'from-indigo-500 to-purple-500',
+                    'from-lime-500 to-green-500',
+                    'from-red-500 to-rose-500'
+                ];
+                const gradient = gradients[idx % gradients.length];
+                const initial = (b.name || 'B').charAt(0).toUpperCase();
+                const isTop = idx < 3;
+                const safeName = (b.name || '').replace(/'/g, "\\'");
+
+                return `
+                <div class="brand-card bg-slate-900 border ${isTop ? 'border-primary/30' : 'border-white/5'} rounded-2xl overflow-hidden ${isTop ? 'ring-1 ring-primary/20' : ''}">
+                    ${isTop ? '<div class="h-1 bg-gradient-to-r ' + gradient + '"></div>' : ''}
                     <div class="p-5">
                         <div class="flex items-start justify-between mb-4">
                             <div class="flex items-center gap-3">
-                                <div class="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center overflow-hidden border border-white/5">
-                                    ${b.logo_url ? `<img src="${b.logo_url}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-store text-slate-600\\'></i>'">` : '<i class="fas fa-store text-slate-600"></i>'}
+                                <div class="w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center overflow-hidden shadow-lg">
+                                    <span class="text-white font-bold text-xl drop-shadow-md">${initial}</span>
                                 </div>
                                 <div>
                                     <h4 class="font-heading font-bold text-white text-lg">${b.name || 'Unknown Brand'}</h4>
                                     <p class="text-[10px] text-slate-500 uppercase tracking-wider">${b.product_count || 0} Products</p>
                                 </div>
                             </div>
-                            <button onclick="deleteBrand(${b.id}, '${b.name}')" class="text-slate-600 hover:text-rose-400 transition-colors text-sm">
-                                <i class="fas fa-trash"></i>
-                            </button>
                         </div>
                         
                         <div class="grid grid-cols-3 gap-2 mb-4">
@@ -338,13 +353,6 @@
                             </div>
                         </div>
                         
-                        ${b.top_product_name ? `
-                        <div class="mb-4 p-3 bg-slate-950/50 rounded-xl border border-white/5">
-                            <p class="text-[9px] font-bold text-slate-500 uppercase mb-1">🏆 Top Product</p>
-                            <p class="text-xs text-white truncate">${b.top_product_name}</p>
-                        </div>
-                        ` : ''}
-                        
                         <div class="flex gap-2">
                             <button onclick="viewBrandProducts('${encodeURIComponent(b.name)}')" class="flex-1 glass py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-white/5 hover:border-primary/50 transition-all">
                                 <i class="fas fa-box mr-1"></i> View Products
@@ -354,14 +362,8 @@
                             </button>
                         </div>
                     </div>
-                    
-                    <div class="px-5 py-2 border-t border-white/5 bg-slate-950/50">
-                        <p class="text-[10px] text-slate-600">
-                            Last synced: ${b.last_synced ? new Date(b.last_synced).toLocaleString() : 'Never'}
-                        </p>
-                    </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
 
         function showAddBrandModal() {
