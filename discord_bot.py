@@ -962,19 +962,19 @@ async def force_hot_products(ctx):
 # =============================================================================
 
 def get_brand_products(brand_name, limit=10):
-    """Get top products for a brand with opportunity criteria (21-100 videos)."""
+    """Get top products for a brand with opportunity criteria (40-120 videos)."""
     with app.app_context():
         # Search by seller_name (brand name)
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         
         products = Product.query.filter(
             Product.seller_name.ilike(f'%{brand_name}%'),
-            video_count_field >= 21,  # Min 21 videos
-            video_count_field <= 100,  # Max 100 videos (opportunity zone)
+            video_count_field >= 40,  # Min 40 videos
+            video_count_field <= 120,  # Max 120 videos (opportunity zone)
         ).order_by(
-            Product.ad_spend.desc().nullslast(),  # Priority 1: High Ad Spend
-            Product.sales_7d.desc().nullslast(),  # Priority 2: High 7D Sales
-            video_count_field.asc(),  # Priority 3: Lower videos
+            video_count_field.asc(),  # Priority 1: Lower videos = better opportunity
+            Product.ad_spend.desc().nullslast(),  # Priority 2: High Ad Spend
+            Product.sales_7d.desc().nullslast(),  # Priority 3: High 7D Sales
         ).limit(limit).all()
         
         print(f"[Brand Hunt] Found {len(products)} products for '{brand_name}'")
@@ -1071,14 +1071,14 @@ async def search_brand(ctx, brand_name: str):
     products = get_brand_products(brand_name, limit=10)
     
     if not products:
-        await ctx.reply(f"📭 No products found for **{brand_name}** with 21-100 videos.\n\nTry a different brand or check spelling.", mention_author=False)
+        await ctx.reply(f"📭 No products found for **{brand_name}** with 40-120 videos.\n\nTry a different brand or check spelling.", mention_author=False)
         await ctx.message.remove_reaction('🔍', bot.user)
         await ctx.message.add_reaction('❌')
         return
     
     # Send header
     await ctx.reply(f"# 🎯 Brand Hunter: {brand_name.upper()}\n"
-                    f"**Found {len(products)} opportunity products** (21-50 videos)\n"
+                    f"**Found {len(products)} opportunity products** (40-120 videos)\n"
                     f"──────────────────────────────", mention_author=False)
     
     # Send each product as embed

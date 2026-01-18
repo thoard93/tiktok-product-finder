@@ -221,14 +221,14 @@
                             </div>
                         </div>
 
-                        <!-- 6. Rating -->
+                        <!-- 6. All-Time Videos (Saturation) -->
                         <div
                             class="bg-slate-900 border border-white/5 rounded-2xl p-5 group hover:border-cyan-500/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Rating
-                                (Reviews)</p>
-                            <p class="text-2xl font-bold text-cyan-400 font-heading" id="statRating">--</p>
+                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">All-Time
+                                Videos</p>
+                            <p class="text-2xl font-bold text-cyan-400 font-heading" id="statAllVideos">0</p>
                             <div class="mt-2 h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div class="h-full bg-cyan-500" style="width: 90%"></div>
+                                <div class="h-full bg-cyan-500" style="width: 50%"></div>
                             </div>
                         </div>
                     </div>
@@ -365,13 +365,6 @@
             // Total Ad Spend
             document.getElementById('statAdSpend').textContent = (data.ad_spend_total > 0) ? ('$' + Math.round(data.ad_spend_total).toLocaleString()) : 'N/A';
 
-            // Rating
-            if (data.product_rating > 0) {
-                document.getElementById('statRating').textContent = `${data.product_rating}★ (${data.review_count || 0})`;
-            } else {
-                document.getElementById('statRating').textContent = 'N/A';
-            }
-
             // Age
             if (data.first_seen) {
                 const date = new Date(data.first_seen);
@@ -382,6 +375,7 @@
             document.getElementById('statRev').textContent = '$' + (data.gmv_30d || (data.sales_7d || 0) * (data.price || 20)).toLocaleString();
             document.getElementById('statInfluencers').textContent = data.influencer_count || 0;
             document.getElementById('statVideos').textContent = data.video_count || 0;
+            document.getElementById('statAllVideos').textContent = (data.video_count_alltime || data.video_count || 0).toLocaleString();
 
             document.getElementById('pPrice').textContent = '$' + (data.price || 0);
             document.getElementById('pComm').textContent = Math.round((data.commission_rate || 0) * 100) + '%';
