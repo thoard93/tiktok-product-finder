@@ -3084,17 +3084,36 @@ def get_favorites():
 
 @app.route('/api/brands', methods=['GET'])
 def get_brands():
-    """Get list of unique brands/sellers"""
+    """Get list of unique brands/sellers (filtered to exclude Unknown)"""
     try:
         brands = db.session.query(
             Product.seller_id,
             Product.seller_name,
-            db.func.count(Product.product_id).label('product_count')
+            db.func.count(Product.product_id).label('product_count'),
+            db.func.sum(Product.sales_7d).label('total_sales_7d'),
+            db.func.sum(Product.gmv).label('total_revenue'),
+            db.func.avg(Product.commission_rate).label('avg_commission')
+        ).filter(
+            Product.seller_name != None,
+            Product.seller_name != '',
+            Product.seller_name != 'Unknown',
+            Product.seller_name != 'Unknown Seller',
+            ~Product.seller_name.ilike('unknown%'),
+            ~Product.seller_name.ilike('classified%')
         ).group_by(Product.seller_id, Product.seller_name).order_by(db.desc('product_count')).all()
         
         return jsonify({
             'success': True,
-            'brands': [{'seller_id': b.seller_id, 'seller_name': b.seller_name, 'product_count': b.product_count} for b in brands]
+            'brands': [{
+                'id': i,
+                'seller_id': b.seller_id, 
+                'name': b.seller_name,  # Use 'name' for frontend compatibility
+                'seller_name': b.seller_name,
+                'product_count': b.product_count,
+                'total_sales_7d': b.total_sales_7d or 0,
+                'total_revenue': b.total_revenue or 0,
+                'avg_commission': b.avg_commission or 0
+            } for i, b in enumerate(brands)]
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
