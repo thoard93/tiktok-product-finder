@@ -641,14 +641,13 @@ def get_top_brand_opportunities(limit=10):
         brand_names = [b[0] for b in top_brands]
         
         # Get opportunity products from these brands (40-120 videos, sorted by low videos)
-        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
-        
+        # Use video_count directly (same as website) - not video_count_alltime
         products = Product.query.filter(
             Product.seller_name.in_(brand_names),
-            video_count_field >= 40,
-            video_count_field <= 120
+            Product.video_count >= 40,
+            Product.video_count <= 120
         ).order_by(
-            video_count_field.asc(),  # Priority: Lower videos = better opportunity
+            Product.video_count.asc(),  # Priority: Lower videos = better opportunity
             Product.sales_7d.desc().nullslast()
         ).limit(limit).all()
         
@@ -657,13 +656,12 @@ def get_top_brand_opportunities(limit=10):
         # Convert to dicts
         product_dicts = []
         for p in products:
-            video_count = p.video_count_alltime or p.video_count or 0
             product_dicts.append({
                 'product_id': p.product_id,
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
                 'sales_7d': p.sales_7d,
-                'video_count': video_count,
+                'video_count': p.video_count or 0,
                 'influencer_count': p.influencer_count,
                 'ad_spend': p.ad_spend,
                 'commission_rate': p.commission_rate,
@@ -1071,14 +1069,13 @@ def get_brand_products(brand_name, limit=10):
     """Get top products for a brand with opportunity criteria (40-120 videos)."""
     with app.app_context():
         # Search by seller_name (brand name)
-        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
-        
+        # Use video_count directly (same as website display) - not video_count_alltime
         products = Product.query.filter(
             Product.seller_name.ilike(f'%{brand_name}%'),
-            video_count_field >= 40,  # Min 40 videos
-            video_count_field <= 120,  # Max 120 videos (opportunity zone)
+            Product.video_count >= 40,  # Min 40 videos
+            Product.video_count <= 120,  # Max 120 videos (opportunity zone)
         ).order_by(
-            video_count_field.asc(),  # Priority 1: Lower videos = better opportunity
+            Product.video_count.asc(),  # Priority 1: Lower videos = better opportunity
             Product.ad_spend.desc().nullslast(),  # Priority 2: High Ad Spend
             Product.sales_7d.desc().nullslast(),  # Priority 3: High 7D Sales
         ).limit(limit).all()
