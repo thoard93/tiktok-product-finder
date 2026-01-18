@@ -492,17 +492,25 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
         if sales > 0 or existing.sales == 0: existing.sales = sales
         if s7d > 0 or existing.sales_7d == 0: existing.sales_7d = s7d
         if s30d > 0 or existing.sales_30d == 0: existing.sales_30d = s30d
-        if inf_count > 0 or existing.influencer_count == 0: existing.influencer_count = inf_count
+        
+        # INFLUENCER COUNT: Only update if not already set (preserve all-time)
+        # The influencer_count field should represent all-time creators
+        if inf_count > 0 and (not existing.influencer_count or existing.influencer_count == 0):
+            existing.influencer_count = inf_count
+        
         if comm > 0 or existing.commission_rate == 0: existing.commission_rate = comm
         
-        # VIDEO COUNT LOGIC: Never downgrade all-time count
+        # VIDEO COUNT LOGIC: Never downgrade or overwrite all-time counts
+        # video_count and video_count_alltime represent all-time video saturation
+        # During regular sync, we only update video_7d (period videos)
         if v_count > 0:
-            # If timeframe is 'all' (usually > 100), update all-time
+            # Update all-time ONLY if new count is higher (never downgrade)
             if v_count > (existing.video_count_alltime or 0):
                 existing.video_count_alltime = v_count
-            
-            # Use as current momentum if it's a recent sync
-            existing.video_count = v_count
+                # Also update video_count to match all-time
+                existing.video_count = v_count
+            # Note: We no longer overwrite video_count with period data during sync
+            # The video_7d field should be used for period video counts instead
         
         # Update New Stats
         if shop_ads > 0: existing.shop_ads_commission = shop_ads
@@ -640,8 +648,24 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     
     sv(p, 'sales_7d', sales_period if sales_period > 0 else gv(p, 'sales_7d'))
     sv(p, 'gmv', gmv if gmv > 0 else gv(p, 'gmv'))
-    sv(p, 'video_count', v_count if v_count > 0 else gv(p, 'video_count'))
-    sv(p, 'influencer_count', inf_count if inf_count > 0 else gv(p, 'influencer_count'))
+    
+    # VIDEO COUNT & INFLUENCER COUNT: Update all-time fields, never downgrade
+    # video_count and influencer_count represent all-time saturation metrics
+    current_video_count = int(gv(p, 'video_count') or 0)
+    current_video_count_alltime = int(gv(p, 'video_count_alltime') or 0)
+    current_inf_count = int(gv(p, 'influencer_count') or 0)
+    
+    # Only update video counts if new value is higher (never downgrade)
+    if v_count > 0:
+        if v_count > current_video_count_alltime:
+            sv(p, 'video_count_alltime', v_count)
+        if v_count > current_video_count:
+            sv(p, 'video_count', v_count)
+    
+    # Only update influencer count if new value is higher (never downgrade)
+    if inf_count > 0 and inf_count > current_inf_count:
+        sv(p, 'influencer_count', inf_count)
+    
     sv(p, 'shop_ads_commission', shop_ads if shop_ads > 0 else gv(p, 'shop_ads_commission'))
     sv(p, 'ad_spend', ad_spend if ad_spend > 0 else gv(p, 'ad_spend'))
     sv(p, 'ad_spend_total', ad_spend_total if ad_spend_total > 0 else gv(p, 'ad_spend_total'))
@@ -667,8 +691,7 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     total_sales = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or 0)
     if total_sales > 0: sv(p, 'sales', total_sales)
 
-    sv(p, 'video_count', int(v.get('productVideoCount') or gv(p, 'video_count', 0)))
-    sv(p, 'influencer_count', int(v.get('productCreatorCount') or gv(p, 'influencer_count', 0)))
+    # NOTE: video_count and influencer_count already handled above with all-time logic
     
     # Extract Ad Spend
     ad_spend_7d = float(v.get('periodAdSpend') or 0)

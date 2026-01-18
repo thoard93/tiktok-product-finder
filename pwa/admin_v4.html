@@ -231,7 +231,7 @@
                 <button onclick="enrichVideos()" id="btnEnrichVideos"
                     class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-cyan-500/20">
                     <i class="fas fa-video text-xs"></i>
-                    <span>📊 Enrich Videos (All-Time)</span>
+                    <span>📊 Enrich All-Time Stats</span>
                 </button>
             </div>
 
@@ -556,7 +556,7 @@
         }
 
         async function enrichVideos() {
-            if (!confirm("📊 ENRICH VIDEO COUNTS\\n\\nThis will fetch ALL-TIME video counts for products in the database.\\n\\nThis runs alongside your 7D sales data to give you full saturation metrics.\\n\\nProceed?")) return;
+            if (!confirm("📊 ENRICH ALL-TIME STATS\\n\\nThis will fetch ALL-TIME video counts AND creator counts for products in the database.\\n\\nThese values will be preserved during regular syncs.\\n\\nProceed?")) return;
 
             const btn = document.getElementById('btnEnrichVideos');
             const original = btn.innerHTML;
@@ -571,7 +571,7 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    alert(`📊 Video Enrichment Complete!\\n\\n${data.message}\\n\\n✅ ${data.enriched} products updated with all-time video counts.`);
+                    alert(`📊 All-Time Stats Enrichment Complete!\\n\\n${data.message}\\n\\n✅ ${data.enriched} products updated with all-time video+creator counts.`);
                 } else {
                     alert('❌ Enrichment Error: ' + (data.message || 'Unknown error'));
                 }
