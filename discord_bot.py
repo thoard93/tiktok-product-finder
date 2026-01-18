@@ -1069,9 +1069,39 @@ async def force_hot_products(ctx):
 @bot.command(name='brandhunter')
 @commands.has_permissions(administrator=True)
 async def force_brand_hunter(ctx):
-    """Admin command to force post brand hunter products"""
-    await ctx.reply("🎯 Posting brand hunter opportunities now...", mention_author=False)
-    await daily_brand_hunter()
+    """Admin command to force post brand hunter products to current channel"""
+    await ctx.reply("🎯 Fetching brand hunter opportunities...", mention_author=False)
+    
+    try:
+        products = get_top_brand_opportunities(limit=10)
+        print(f"[!brandhunter] Retrieved {len(products) if products else 0} products")
+        
+        if not products:
+            await ctx.send("📭 No brand opportunity products found (40-300 all-time videos from top brands).")
+            return
+        
+        # Send header message
+        await ctx.send(f"# 🎯 Brand Opportunities\n"
+                       f"**Criteria:** Top 50 Revenue Brands, 40-300 all-time videos\n"
+                       f"**Found:** {len(products)} products from proven brands\n"
+                       f"──────────────────────────────")
+        
+        # Send each product as an embed
+        for i, p in enumerate(products, 1):
+            try:
+                embed = create_product_embed(p, title_prefix=f"#{i} ")
+                await ctx.send(embed=embed)
+                await asyncio.sleep(1)  # Rate limiting
+            except Exception as e:
+                print(f"❌ Error sending brand product #{i}: {e}")
+                await ctx.send(f"⚠️ Error displaying product #{i}")
+        
+        await ctx.send("✅ Brand hunter complete!")
+    except Exception as e:
+        print(f"❌ Error in force_brand_hunter: {e}")
+        import traceback
+        traceback.print_exc()
+        await ctx.send(f"❌ Error: {str(e)[:500]}")
 
 # =============================================================================
 # BRAND HUNTER COMMANDS
