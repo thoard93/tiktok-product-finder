@@ -645,6 +645,7 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     ad_spend = float(v.get('periodAdSpend') or 0)
     ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or 0)
     comm = float(v.get('tapCommissionRate') or 0) / 10000.0
+    price = float(v.get('avgUnitPrice') or v.get('minPrice') or v.get('productPrice') or 0)
     
     sv(p, 'sales_7d', sales_period if sales_period > 0 else gv(p, 'sales_7d'))
     sv(p, 'gmv', gmv if gmv > 0 else gv(p, 'gmv'))
@@ -670,6 +671,7 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     sv(p, 'ad_spend', ad_spend if ad_spend > 0 else gv(p, 'ad_spend'))
     sv(p, 'ad_spend_total', ad_spend_total if ad_spend_total > 0 else gv(p, 'ad_spend_total'))
     sv(p, 'commission_rate', comm if comm > 0 else gv(p, 'commission_rate'))
+    if price > 0: sv(p, 'price', price)
     sv(p, 'last_updated', datetime.utcnow())
     
     # Ratings & Reviews (Try common keys)
@@ -4493,21 +4495,20 @@ def api_products():
 
         if is_caked:
             # Caked Finds: High-Potential "Early Phase" Winners
-            # Relaxed criteria that works with existing data:
-            # - Ad Spend: $500 - $50k (invested but not huge)
-            # - Creators: 10 - 50 (validated but not saturated)
-            # - Commission: >= 15%
-            # - Videos: 20 - 100 (sweet spot range)
+            # Refined via Research (caked/new.txt):
+            # - Commission: >= 15% (Preferred range)
+            # - Price: $30 - $250 (Primary sweet spot is $50-150, but we allow high-ticket)
+            # - Ad Spend: >= $1,000 (Removed upper cap as winners scale high)
+            # - Saturation: 5 - 80 creators (Catching from early validation)
+            # - Videos: 10 - 200 videos all-time (Momentum sweet spot)
             
             video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
             
             query = query.filter(
-                Product.ad_spend >= 500,
-                Product.ad_spend <= 50000,
-                Product.influencer_count >= 10,
-                Product.influencer_count <= 50,
-                video_count_field >= 20,
-                video_count_field <= 100,
+                Product.ad_spend >= 1000,
+                Product.price.between(30, 250),
+                Product.influencer_count.between(5, 80),
+                video_count_field.between(10, 200),
                 db.or_(Product.commission_rate >= 0.15, Product.shop_ads_commission >= 0.15)
             )
 
@@ -6890,6 +6891,9 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # Growth (V2 may have different field names)
             growth_pct = float(p.get('viewsGrowthPct') or p.get('revenueGrowthPct') or p.get('growthPercentage') or 0)
             
+            # Price: avgUnitPrice or minPrice
+            price = float(p.get('avgUnitPrice') or p.get('minPrice') or p.get('productPrice') or 0)
+            
             # Product URL
             raw_product_id = str(p.get('productId', '')).replace('shop_', '')
             product_url = p.get('productPageUrl') or p.get('productLink') or p.get('productUrl')
@@ -6898,18 +6902,18 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             
             # Image URL
             image_url = p.get('productCoverUrl') or p.get('productImageUrl') or ''
-            
+
             # FILTER: Quality Control - Skip low-quality products
             if sales_7d <= 0 and total_sales <= 0:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Zero Sales)")
                 continue
-            # V2 FIX: Require 20+ videos to filter out placeholder products
-            if video_count < 20:
+            # V2 FIX: Require 10+ videos to match refined Caked Finds criteria
+            if video_count < 10:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Low Videos: {video_count})")
                 continue
-            # FILTER: Only sync products with Shop Ads Commission (GMV Max)
-            if shop_ads_rate <= 0:
-                print(f"[Copilot Sync V2] Skipping {product_id} (No Shop Ads Commission)")
+            # FILTER: Allow products with either Shop Ads Commission OR High Ad Spend
+            if shop_ads_rate <= 0 and commission_rate < 0.10 and ad_spend_7d < 500:
+                print(f"[Copilot Sync V2] Skipping {product_id} (No Commission/Spend Incentive)")
                 continue
             # FILTER: Require active ad spend (products being promoted)
             if ad_spend_7d <= 0:
@@ -6941,6 +6945,8 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                     existing.gmv = period_revenue
                 if growth_pct != 0:
                     existing.gmv_growth = growth_pct
+                if price > 0:
+                    existing.price = price
                 
                 # Update Ad Spend (prefer total from V2)
                 if ad_spend_total > 0:
@@ -7008,6 +7014,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                     gmv=period_revenue,
                     gmv_growth=growth_pct,
                     sales_7d=sales_7d,
+                    price=price,
                     sales_30d=sales_7d if timeframe == 'all' else 0,
                     sales=total_sales,
                     gmv_30d=period_revenue if timeframe == 'all' else 0,
