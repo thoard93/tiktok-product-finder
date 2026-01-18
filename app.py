@@ -5040,50 +5040,7 @@ def api_trending_products():
     })
 
 
-@app.route('/api/stats', methods=['GET'])
-@login_required
-def api_get_stats():
-    """Get high-level statistics for the dashboard cards
-    V2 FIX: Updated thresholds for accurate video/influencer counts.
-    """
-    try:
-        total_products = Product.query.count()
-        
-        # V2 FIX: Ad Winners / High Performers count
-        # Products with significant ad spend OR high sales/low saturation
-        ad_winners = Product.query.filter(
-            db.or_(
-                Product.ad_spend > 500,  # High ad spend
-                db.and_(
-                    Product.sales_7d > 50,
-                    Product.video_count <= 500,  # V2: Was < 5, now <= 500
-                    Product.influencer_count <= 100  # V2: Was < 5, now <= 100
-                ),
-                Product.scan_type.in_(['apify_ad', 'daily_virals', 'copilot_v2'])
-            )
-        ).count()
-        
-        # V2 FIX: Hidden Gems / Opportunity count
-        # Products with sales but relatively low competition
-        hidden_gems = Product.query.filter(
-            Product.sales_7d >= 10,  # V2: Was 20, now 10
-            Product.influencer_count <= 100,  # V2: Was 30, now 100
-            Product.video_count <= 500,  # V2: Was implicit, now explicit
-            Product.video_count >= 1
-        ).count()
-        
-        return jsonify({
-            'success': True,
-            'stats': {
-                'total_products': total_products,
-                'ad_winners': ad_winners,
-                'hidden_gems': hidden_gems,
-                'status': 'Active'
-            }
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
+# REMOVED: Duplicate /api/stats endpoint was here - the correct one is at line ~3391
 
 
 # Aliases for compatibility

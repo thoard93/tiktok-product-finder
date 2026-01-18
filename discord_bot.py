@@ -21,6 +21,7 @@ from app import app, db, Product, User, ApiKey
 # Discord Config
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
 HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
+BRAND_HUNTER_CHANNEL_ID = int(os.environ.get('BRAND_HUNTER_CHANNEL_ID', 0))  # For daily brand hunter posts
 PRODUCT_LOOKUP_CHANNEL_ID = 1461053839800139959
 BLACKLIST_CHANNEL_ID = 1440369747467174019
 
@@ -566,11 +567,16 @@ def create_product_embed(p, title_prefix=""):
 async def on_ready():
     print(f'🤖 Bot logged in as {bot.user}')
     print(f'   Hot Products Channel: {HOT_PRODUCTS_CHANNEL_ID}')
+    print(f'   Brand Hunter Channel: {BRAND_HUNTER_CHANNEL_ID}')
     print(f'   Product Lookup Channel: {PRODUCT_LOOKUP_CHANNEL_ID}')
     
     # Start the daily hot products task
     if not daily_hot_products.is_running():
         daily_hot_products.start()
+    
+    # Start the daily brand hunter task
+    if BRAND_HUNTER_CHANNEL_ID and not daily_brand_hunter.is_running():
+        daily_brand_hunter.start()
 
 @tasks.loop(time=time(hour=17, minute=0))  # 12:00 PM EST = 17:00 UTC
 async def daily_hot_products():
@@ -613,6 +619,98 @@ async def daily_hot_products():
                 pass
     
     print(f"   Finished hot products loop.")
+
+
+def get_top_brand_opportunities(limit=10):
+    """Get top opportunity products from top revenue brands (40-120 videos)."""
+    with app.app_context():
+        from sqlalchemy import func
+        
+        # Get top brands by revenue
+        top_brands = db.session.query(
+            Product.seller_name,
+            func.sum(Product.gmv).label('total_revenue')
+        ).filter(
+            Product.seller_name != None,
+            Product.seller_name != '',
+            Product.seller_name != 'Unknown',
+            ~Product.seller_name.ilike('unknown%'),
+            ~Product.seller_name.ilike('classified%')
+        ).group_by(Product.seller_name).order_by(func.sum(Product.gmv).desc()).limit(20).all()
+        
+        brand_names = [b[0] for b in top_brands]
+        
+        # Get opportunity products from these brands (40-120 videos, sorted by low videos)
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+        
+        products = Product.query.filter(
+            Product.seller_name.in_(brand_names),
+            video_count_field >= 40,
+            video_count_field <= 120
+        ).order_by(
+            video_count_field.asc(),  # Priority: Lower videos = better opportunity
+            Product.sales_7d.desc().nullslast()
+        ).limit(limit).all()
+        
+        print(f"[Brand Hunter Daily] Found {len(products)} opportunity products from top {len(brand_names)} brands")
+        
+        # Convert to dicts
+        product_dicts = []
+        for p in products:
+            video_count = p.video_count_alltime or p.video_count or 0
+            product_dicts.append({
+                'product_id': p.product_id,
+                'product_name': p.product_name,
+                'seller_name': p.seller_name,
+                'sales_7d': p.sales_7d,
+                'video_count': video_count,
+                'influencer_count': p.influencer_count,
+                'ad_spend': p.ad_spend,
+                'commission_rate': p.commission_rate,
+                'shop_ads_commission': p.shop_ads_commission,
+                'price': p.price,
+                'image_url': p.cached_image_url or p.image_url,
+            })
+        
+        return product_dicts
+
+
+@tasks.loop(time=time(hour=17, minute=5))  # 12:05 PM EST = 17:05 UTC (5 min after hot products)
+async def daily_brand_hunter():
+    """Post daily brand hunter opportunities at noon EST"""
+    if not BRAND_HUNTER_CHANNEL_ID:
+        print("No brand hunter channel configured")
+        return
+    
+    channel = bot.get_channel(BRAND_HUNTER_CHANNEL_ID)
+    if not channel:
+        print(f"Could not find brand hunter channel {BRAND_HUNTER_CHANNEL_ID}")
+        return
+    
+    print(f"🎯 Posting daily brand hunter at {datetime.now(timezone.utc).isoformat()}")
+    
+    products = get_top_brand_opportunities(limit=10)
+    
+    if not products:
+        await channel.send("📭 No brand opportunity products found today (40-120 videos from top brands). Check back tomorrow!")
+        return
+    
+    # Send header message
+    await channel.send(f"# 🎯 Daily Brand Opportunities - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
+                       f"**Criteria:** Top Revenue Brands, 40-120 videos (low competition)\n"
+                       f"**Today's Picks:** {len(products)} products from proven brands\n"
+                       f"──────────────────────────────")
+    
+    # Send each product as an embed
+    for i, p in enumerate(products, 1):
+        try:
+            embed = create_product_embed(p, title_prefix=f"#{i} ")
+            await channel.send(embed=embed)
+            await asyncio.sleep(1)  # Rate limiting
+        except Exception as e:
+            print(f"❌ Error sending brand product #{i}: {e}")
+    
+    print(f"   Finished brand hunter loop.")
 
 @bot.event
 async def on_message(message):
@@ -956,6 +1054,14 @@ async def force_hot_products(ctx):
     """Admin command to force post hot products"""
     await ctx.reply("🔥 Posting hot products now...", mention_author=False)
     await daily_hot_products()
+
+
+@bot.command(name='brandhunter')
+@commands.has_permissions(administrator=True)
+async def force_brand_hunter(ctx):
+    """Admin command to force post brand hunter products"""
+    await ctx.reply("🎯 Posting brand hunter opportunities now...", mention_author=False)
+    await daily_brand_hunter()
 
 # =============================================================================
 # BRAND HUNTER COMMANDS
