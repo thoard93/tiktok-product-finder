@@ -595,12 +595,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No GMV Max products matching criteria today (40-100 all-time videos, 50+ 7D sales, $500+ ad spend). Try syncing more products from Copilot!")
+        await channel.send("📭 No GMV Max products matching criteria today (40-100 all-time videos, 50+ 7D sales, $100+ ad spend). Try syncing more products from Copilot!")
         return
     
     # Send header message
     await channel.send(f"# 🚀 Daily GMV Max Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 40-100 all-time videos, $500+ ad spend, 50+ 7D sales\n"
+                       f"**Criteria:** 40-100 all-time videos, $100+ ad spend, 50+ 7D sales\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"──────────────────────────────")
     
@@ -692,28 +692,34 @@ async def daily_brand_hunter():
     
     print(f"🎯 Posting daily brand hunter at {datetime.now(timezone.utc).isoformat()}")
     
-    products = get_top_brand_opportunities(limit=10)
-    
-    if not products:
-        await channel.send("📭 No brand opportunity products found today (40-300 all-time videos from top brands). Check back tomorrow!")
-        return
-    
-    # Send header message
-    await channel.send(f"# 🎯 Daily Brand Opportunities - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** Top 50 Revenue Brands, 40-300 all-time videos (sorted by lowest)\n"
-                       f"**Today's Picks:** {len(products)} products from proven brands\n"
-                       f"──────────────────────────────")
-    
-    # Send each product as an embed
-    for i, p in enumerate(products, 1):
-        try:
-            embed = create_product_embed(p, title_prefix=f"#{i} ")
-            await channel.send(embed=embed)
-            await asyncio.sleep(1)  # Rate limiting
-        except Exception as e:
-            print(f"❌ Error sending brand product #{i}: {e}")
-    
-    print(f"   Finished brand hunter loop.")
+    try:
+        products = get_top_brand_opportunities(limit=10)
+        
+        if not products:
+            await channel.send("📭 No brand opportunity products found today (40-300 all-time videos from top brands). Check back tomorrow!")
+            return
+        
+        # Send header message
+        await channel.send(f"# 🎯 Daily Brand Opportunities - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
+                           f"**Criteria:** Top 50 Revenue Brands, 40-300 all-time videos (sorted by lowest)\n"
+                           f"**Today's Picks:** {len(products)} products from proven brands\n"
+                           f"──────────────────────────────")
+        
+        # Send each product as an embed
+        for i, p in enumerate(products, 1):
+            try:
+                embed = create_product_embed(p, title_prefix=f"#{i} ")
+                await channel.send(embed=embed)
+                await asyncio.sleep(1)  # Rate limiting
+            except Exception as e:
+                print(f"❌ Error sending brand product #{i}: {e}")
+        
+        print(f"   Finished brand hunter loop.")
+    except Exception as e:
+        print(f"❌ Error in daily_brand_hunter: {e}")
+        import traceback
+        traceback.print_exc()
+        await channel.send(f"❌ Error fetching brand opportunities: {str(e)[:200]}")
 
 @bot.event
 async def on_message(message):
@@ -998,13 +1004,13 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with 40-100 all-time videos, high ad spend, high 7D sales
+        # Query: Products with 40-100 all-time videos, ad spend, 7D sales
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
             video_count_field >= 40,  # Min 40 all-time videos
             video_count_field <= 100,  # Max 100 all-time videos (opportunity zone)
-            Product.sales_7d >= 50,  # High 7D sales
-            Product.ad_spend >= 500,  # High ad spend ($500+)
+            Product.sales_7d >= 50,  # 7D sales
+            Product.ad_spend >= 100,  # Ad spend ($100+)
             Product.commission_rate > 0,  # Must have regular commission
             db.or_(
                 Product.last_shown_hot == None,
