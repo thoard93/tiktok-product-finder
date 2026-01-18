@@ -3348,11 +3348,13 @@ def api_stats():
             )
         ).count()
         
-        # 3. Hidden Gems (Sales > 100, Inf < 10, Video < 10)
+        # 3. Opportunity Gems (New Criteria: 50-100 videos, $500+ ad spend, 50+ 7D sales)
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         hidden_gems = Product.query.filter(
-            Product.sales_7d > 100,
-            Product.influencer_count < 10,
-            Product.video_count < 10
+            Product.sales_7d >= 50,
+            Product.ad_spend >= 500,
+            video_count_field >= 50,
+            video_count_field <= 100
         ).count()
         
         # 4. EchoTik Status (Mock or cached check)
