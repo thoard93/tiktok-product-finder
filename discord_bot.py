@@ -640,28 +640,31 @@ def get_top_brand_opportunities(limit=10):
         
         brand_names = [b[0] for b in top_brands]
         
-        # Get opportunity products from these brands (40-120 videos, sorted by low videos)
-        # Use video_count directly (same as website) - not video_count_alltime
+        # Get opportunity products from these brands (40-120 all-time videos)
+        # Use video_count_alltime for saturation metric
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+        
         products = Product.query.filter(
             Product.seller_name.in_(brand_names),
-            Product.video_count >= 40,
-            Product.video_count <= 120
+            video_count_field >= 40,
+            video_count_field <= 120
         ).order_by(
-            Product.video_count.asc(),  # Priority: Lower videos = better opportunity
+            video_count_field.asc(),  # Priority: Lower videos = better opportunity
             Product.sales_7d.desc().nullslast()
         ).limit(limit).all()
         
         print(f"[Brand Hunter Daily] Found {len(products)} opportunity products from top {len(brand_names)} brands")
         
-        # Convert to dicts
+        # Convert to dicts - use video_count_alltime
         product_dicts = []
         for p in products:
+            video_count = p.video_count_alltime or p.video_count or 0
             product_dicts.append({
                 'product_id': p.product_id,
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
                 'sales_7d': p.sales_7d,
-                'video_count': p.video_count or 0,
+                'video_count': video_count,  # All-time video count
                 'influencer_count': p.influencer_count,
                 'ad_spend': p.ad_spend,
                 'commission_rate': p.commission_rate,
@@ -1065,17 +1068,19 @@ async def force_brand_hunter(ctx):
 # BRAND HUNTER COMMANDS
 # =============================================================================
 
-def get_brand_products(brand_name, limit=10):
-    """Get top products for a brand with opportunity criteria (40-120 videos)."""
+def get_brand_products(brand_name, limit=5):
+    """Get top products for a brand with opportunity criteria (40-120 all-time videos)."""
     with app.app_context():
         # Search by seller_name (brand name)
-        # Use video_count directly (same as website display) - not video_count_alltime
+        # Use video_count_alltime (all-time saturation metric) with fallback to video_count
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+        
         products = Product.query.filter(
             Product.seller_name.ilike(f'%{brand_name}%'),
-            Product.video_count >= 40,  # Min 40 videos
-            Product.video_count <= 120,  # Max 120 videos (opportunity zone)
+            video_count_field >= 40,  # Min 40 all-time videos
+            video_count_field <= 120,  # Max 120 all-time videos (opportunity zone)
         ).order_by(
-            Product.video_count.asc(),  # Priority 1: Lower videos = better opportunity
+            video_count_field.asc(),  # Priority 1: Lower videos = better opportunity
             Product.ad_spend.desc().nullslast(),  # Priority 2: High Ad Spend
             Product.sales_7d.desc().nullslast(),  # Priority 3: High 7D Sales
         ).limit(limit).all()
@@ -1083,6 +1088,7 @@ def get_brand_products(brand_name, limit=10):
         print(f"[Brand Hunt] Found {len(products)} products for '{brand_name}'")
         
         # Convert to dicts to avoid DetachedInstanceError
+        # Use video_count_alltime for display (same as filter)
         product_dicts = []
         for p in products:
             video_count = p.video_count_alltime or p.video_count or 0
@@ -1091,7 +1097,7 @@ def get_brand_products(brand_name, limit=10):
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
                 'sales_7d': p.sales_7d,
-                'video_count': video_count,
+                'video_count': video_count,  # All-time video count
                 'influencer_count': p.influencer_count,
                 'ad_spend': p.ad_spend,
                 'commission_rate': p.commission_rate,
@@ -1171,7 +1177,7 @@ async def search_brand(ctx, brand_name: str):
     """Search for products by brand name."""
     await ctx.message.add_reaction('🔍')
     
-    products = get_brand_products(brand_name, limit=10)
+    products = get_brand_products(brand_name, limit=5)
     
     if not products:
         await ctx.reply(f"📭 No products found for **{brand_name}** with 40-120 videos.\n\nTry a different brand or check spelling.", mention_author=False)

@@ -3142,7 +3142,7 @@ def get_brand_products_by_name(seller_name):
                 'sales_7d': p.sales_7d or 0,
                 'gmv': p.gmv or 0,
                 'commission_rate': p.commission_rate or 0,
-                'video_count': p.video_count or 0,
+                'video_count': p.video_count_alltime or p.video_count or 0,  # All-time videos
                 'ad_spend': p.ad_spend or 0,
                 'image_url': p.cached_image_url or p.image_url
             } for p in products]
