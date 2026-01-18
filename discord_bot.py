@@ -595,12 +595,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No GMV Max products matching criteria today (10%+ shop ads, <40 videos, 100+ 7D sales, $500+ ad spend). Try syncing more products from Copilot!")
+        await channel.send("📭 No GMV Max products matching criteria today (40-100 all-time videos, 50+ 7D sales, $500+ ad spend). Try syncing more products from Copilot!")
         return
     
     # Send header message
     await channel.send(f"# 🚀 Daily GMV Max Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 10%+ Shop Ads Commission, <40 videos (low competition)\n"
+                       f"**Criteria:** 40-100 all-time videos, $500+ ad spend, 50+ 7D sales\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"──────────────────────────────")
     
@@ -622,7 +622,7 @@ async def daily_hot_products():
 
 
 def get_top_brand_opportunities(limit=10):
-    """Get top opportunity products from top revenue brands (40-120 videos)."""
+    """Get top opportunity products from top revenue brands (40-500 all-time videos)."""
     with app.app_context():
         from sqlalchemy import func
         
@@ -636,18 +636,19 @@ def get_top_brand_opportunities(limit=10):
             Product.seller_name != 'Unknown',
             ~Product.seller_name.ilike('unknown%'),
             ~Product.seller_name.ilike('classified%')
-        ).group_by(Product.seller_name).order_by(func.sum(Product.gmv).desc()).limit(20).all()
+        ).group_by(Product.seller_name).order_by(func.sum(Product.gmv).desc()).limit(50).all()
         
         brand_names = [b[0] for b in top_brands]
+        print(f"[Brand Hunter Daily] Top {len(brand_names)} brands: {brand_names[:5]}...")
         
-        # Get opportunity products from these brands (40-120 all-time videos)
+        # Get opportunity products from these brands (40-500 all-time videos for broader selection)
         # Use video_count_alltime for saturation metric
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         
         products = Product.query.filter(
             Product.seller_name.in_(brand_names),
             video_count_field >= 40,
-            video_count_field <= 120
+            video_count_field <= 300  # Max 300 all-time videos
         ).order_by(
             video_count_field.asc(),  # Priority: Lower videos = better opportunity
             Product.sales_7d.desc().nullslast()
@@ -694,12 +695,12 @@ async def daily_brand_hunter():
     products = get_top_brand_opportunities(limit=10)
     
     if not products:
-        await channel.send("📭 No brand opportunity products found today (40-120 videos from top brands). Check back tomorrow!")
+        await channel.send("📭 No brand opportunity products found today (40-300 all-time videos from top brands). Check back tomorrow!")
         return
     
     # Send header message
     await channel.send(f"# 🎯 Daily Brand Opportunities - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** Top Revenue Brands, 40-120 videos (low competition)\n"
+                       f"**Criteria:** Top 50 Revenue Brands, 40-300 all-time videos (sorted by lowest)\n"
                        f"**Today's Picks:** {len(products)} products from proven brands\n"
                        f"──────────────────────────────")
     
