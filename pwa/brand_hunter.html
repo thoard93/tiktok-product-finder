@@ -217,10 +217,26 @@
     <div id="productsModal" class="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] hidden flex flex-col p-6"
         onclick="if(event.target===this) this.classList.add('hidden')">
         <div class="max-w-6xl w-full mx-auto flex flex-col h-full">
-            <div class="flex items-center justify-between mb-6">
-                <div>
+            <div class="flex items-center gap-4">
+                <div class="text-right">
                     <h3 class="font-heading font-bold text-2xl text-white" id="modalBrandName">Brand Products</h3>
                     <p class="text-slate-500 text-sm" id="modalProductCount">Loading...</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="relative group">
+                    <i
+                        class="fas fa-sort-amount-down absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-hover:text-primary"></i>
+                    <select onchange="sortBrandProducts(this.value)"
+                        class="bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 appearance-none cursor-pointer transition-all hover:border-white/20 font-medium min-w-[180px]">
+                        <option value="sales_7d">Sort: 7D Volume</option>
+                        <option value="ad_spend">Sort: Ad Spend</option>
+                        <option value="video_count">Sort: Videos</option>
+                        <option value="price_desc">Sort: Highest Price</option>
+                        <option value="price_asc">Sort: Lowest Price</option>
+                    </select>
+                    <i
+                        class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
                 </div>
                 <button onclick="document.getElementById('productsModal').classList.add('hidden')"
                     class="glass p-3 rounded-xl text-slate-400 hover:text-white">
@@ -237,6 +253,7 @@
 
     <script>
         let brands = [];
+        let currentBrandProducts = [];
 
         function formatKMB(num) {
             if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
@@ -462,26 +479,46 @@
                         return;
                     }
 
-                    document.getElementById('brandProductsGrid').innerHTML = data.products.map(p => `
-                        <div class="bg-slate-900 border border-white/5 rounded-xl p-4 cursor-pointer hover:border-primary/50 transition-all" onclick="window.location.href='/product/${p.product_id}'">
-                            <div class="flex gap-3">
-                                <img src="/api/image-proxy/${p.product_id}" class="w-16 h-16 rounded-lg object-cover bg-slate-800" onerror="this.src='/vantage_logo.png'">
-                                <div class="flex-1 min-w-0">
-                                    <h5 class="font-bold text-white text-sm truncate">${p.product_name}</h5>
-                                    <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
-                                        <span class="text-slate-400">7D: <span class="text-white font-bold">${(p.sales_7d || 0).toLocaleString()}</span></span>
-                                        <span class="text-slate-400">Ad$: <span class="text-emerald-400 font-bold">$${formatKMB(p.ad_spend || 0)}</span></span>
-                                        <span class="text-slate-400">Videos: <span class="text-primary font-bold">${(p.video_count || 0).toLocaleString()}</span></span>
-                                        <span class="text-slate-400">GMV: <span class="text-amber-400 font-bold">$${formatKMB(p.gmv || 0)}</span></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('');
+                    currentBrandProducts = data.products || [];
+                    sortBrandProducts('sales_7d'); // Initial sort
                 }
             } catch (e) {
                 document.getElementById('brandProductsGrid').innerHTML = '<div class="col-span-full text-center py-12 text-rose-400">Failed to load products</div>';
             }
+        }
+
+        function sortBrandProducts(val) {
+            if (!currentBrandProducts || currentBrandProducts.length === 0) return;
+
+            const sorted = [...currentBrandProducts].sort((a, b) => {
+                if (val === 'sales_7d') return (b.sales_7d || 0) - (a.sales_7d || 0);
+                if (val === 'ad_spend') return (b.ad_spend || 0) - (a.ad_spend || 0);
+                if (val === 'video_count') return (b.video_count || 0) - (a.video_count || 0);
+                if (val === 'price_desc') return (b.price || 0) - (a.price || 0);
+                if (val === 'price_asc') return (a.price || 0) - (b.price || 0);
+                return 0;
+            });
+
+            renderProductGrid(sorted);
+        }
+
+        function renderProductGrid(products) {
+            document.getElementById('brandProductsGrid').innerHTML = products.map(p => `
+                <div class="bg-slate-900 border border-white/5 rounded-xl p-4 cursor-pointer hover:border-primary/50 transition-all" onclick="window.location.href='/product/${p.product_id}'">
+                    <div class="flex gap-3">
+                        <img src="/api/image-proxy/${p.product_id}" class="w-16 h-16 rounded-lg object-cover bg-slate-800" onerror="this.src='/vantage_logo.png'">
+                        <div class="flex-1 min-w-0">
+                            <h5 class="font-bold text-white text-sm truncate">${p.product_name}</h5>
+                            <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
+                                <span class="text-slate-400">7D: <span class="text-white font-bold">${(p.sales_7d || 0).toLocaleString()}</span></span>
+                                <span class="text-slate-400">Ad$: <span class="text-emerald-400 font-bold">$${formatKMB(p.ad_spend || 0)}</span></span>
+                                <span class="text-slate-400">Videos: <span class="text-primary font-bold">${(p.video_count || 0).toLocaleString()}</span></span>
+                                <span class="text-slate-400">Price: <span class="text-amber-400 font-bold">$${(p.price || 0).toFixed(2)}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
         }
 
         // Handle Enter key in brand input

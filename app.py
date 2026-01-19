@@ -4585,6 +4585,10 @@ def api_products():
             video_count_field = func.coalesce(Product.video_count_alltime, Product.video_count, 0)
             score = (func.coalesce(Product.sales_7d, 0) / (video_count_field + 1))
             query = query.order_by(score.desc().nullslast())
+        elif sort_by == 'price_desc':
+            query = query.order_by(Product.price.desc().nullslast())
+        elif sort_by == 'price_asc':
+            query = query.order_by(Product.price.asc().nullsfirst())
         else:
             query = query.order_by(Product.first_seen.desc().nullslast())
 
