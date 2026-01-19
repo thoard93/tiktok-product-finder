@@ -589,7 +589,7 @@
                         </div>
                         <h3 class="font-bold text-slate-200 text-sm line-clamp-2 min-h-[2.5rem] mb-4 leading-snug group-hover:text-white transition-colors font-heading">${p.product_name}</h3>
                         
-                        <div class="mt-auto grid grid-cols-3 gap-2">
+                        <div class="mt-auto grid grid-cols-4 gap-2">
                             <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
                                 <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">7D Sales</p>
                                 <p class="text-xs font-bold text-white tracking-wide">${((p.sales_7d || 0)).toLocaleString()}</p>
@@ -601,6 +601,10 @@
                             <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
                                 <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Videos</p>
                                 <p class="text-xs font-bold ${(p.video_count_alltime || p.video_count) > 100 ? 'text-slate-400' : 'text-white'} tracking-wide">${formatKMB(p.video_count_alltime || p.video_count || 0)}</p>
+                            </div>
+                            <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Price</p>
+                                <p class="text-xs font-bold text-amber-400 tracking-wide">$${(p.price || 0).toFixed(2)}</p>
                             </div>
                         </div>
                     </div>

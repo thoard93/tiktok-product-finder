@@ -525,6 +525,7 @@ def create_product_embed(p, title_prefix=""):
     
     embed.add_field(name="📉 7 Day Sales", value=f"{sales_7d:,}", inline=True)
     embed.add_field(name="💸 Ad Spend", value=f"${float(get_val('ad_spend', 0)):,.2f}", inline=True)
+    embed.add_field(name="🏷️ Price", value=f"${price:,.2f}", inline=True)
     
     # Commission display - show both regular and shop ads commission
     if shop_ads_commission > 0:
