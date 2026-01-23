@@ -859,6 +859,8 @@
                 <div class="filter-options" id="sortOptions">
                     <button class="filter-option selected" data-sort="sales_7d">📊 7D Volume</button>
                     <button class="filter-option" data-sort="ad_spend_7d">💰 7D Ad Spend</button>
+                    <button class="filter-option" data-sort="hook_rate">🎣 Hook Rate</button>
+                    <button class="filter-option" data-sort="likes">❤️ Engagement</button>
                     <button class="filter-option" data-sort="gem_score">💎 Gem Score</button>
                     <button class="filter-option" data-sort="video_count_alltime">📺 Videos</button>
                     <button class="filter-option" data-sort="price_desc">💰 Highest Price</button>
@@ -1024,6 +1026,10 @@
             if (iflCount <= 3 && gmv > 100) badges += '<span class="badge badge-untapped">UNTAPPED</span>';
             else if (iflCount <= 50 && iflCount >= 3) badges += '<span class="badge badge-gem">GEM</span>';
 
+            if (p.hook_rate && p.hook_rate >= 30) {
+                badges += '<span class="badge" style="background: #0ea5e9; color: white;">HIGH HOOK</span>';
+            }
+
             return `
                 <div class="product-card" onclick="window.location.href='/product?id=${productId}'">
                     <button class="favorite-btn ${favorited ? 'favorited' : ''}" 
@@ -1041,24 +1047,20 @@
                         <div class="product-name">${p.product_name || 'Unknown Product'}</div>
                         <div class="product-stats">
                             <div class="product-stat">
+                                <div class="product-stat-value">${p.hook_rate ? p.hook_rate.toFixed(1) + '%' : '--'}</div>
+                                <div class="product-stat-label">Hook</div>
+                            </div>
+                            <div class="product-stat">
+                                <div class="product-stat-value">${formatNumber(p.likes || 0)}</div>
+                                <div class="product-stat-label">Likes</div>
+                            </div>
+                            <div class="product-stat">
                                 <div class="product-stat-value">${formatCurrency(gmv)}</div>
                                 <div class="product-stat-label">GMV</div>
                             </div>
                             <div class="product-stat">
-                                <div class="product-stat-value">${formatNumber(p.sales || 0)}</div>
-                                <div class="product-stat-label">Sold</div>
-                            </div>
-                            <div class="product-stat">
-                                <div class="product-stat-value highlight">${formatCurrency(earnings)}</div>
-                                <div class="product-stat-label">Potential</div>
-                            </div>
-                            <div class="product-stat">
                                 <div class="product-stat-value" style="color: #fbbf24;">$${(p.price || 0).toFixed(2)}</div>
                                 <div class="product-stat-label">Price</div>
-                            </div>
-                            <div class="product-stat">
-                                <div class="product-stat-value">${commissionRate.toFixed(0)}%</div>
-                                <div class="product-stat-label">Comm.</div>
                             </div>
                         </div>
                         <div class="product-footer">

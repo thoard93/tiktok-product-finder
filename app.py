@@ -473,6 +473,13 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
     ad_spend = safe_float(p_data.get('ad_spend') or p_data.get('periodAdSpend') or 0)
     ad_spend_total = safe_float(p_data.get('ad_spend_total') or p_data.get('productTotalAdSpend') or 0)
     
+    # NEW: Enhanced metrics
+    hook_rate = safe_float(p_data.get('hook_rate') or p_data.get('hookRatePct') or 0)
+    likes = int(p_data.get('likes') or p_data.get('likeCount') or 0)
+    shares = int(p_data.get('shares') or p_data.get('shareCount') or 0)
+    comments = int(p_data.get('comments') or p_data.get('commentCount') or 0)
+    collections = int(p_data.get('collections') or p_data.get('collectCount') or 0)
+    
     img = parse_cover_url(res['image_url'] or p_data.get('image_url') or p_data.get('item_img'))
     name = res['product_name'] or p_data.get('product_name') or p_data.get('title') or ""
 
@@ -516,6 +523,13 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
         if shop_ads > 0: existing.shop_ads_commission = shop_ads
         if ad_spend > 0: existing.ad_spend = ad_spend
         if ad_spend_total > 0: existing.ad_spend_total = ad_spend_total
+        
+        # New Creative Metrics
+        if hook_rate > 0: existing.hook_rate = hook_rate
+        if likes > 0: existing.likes = likes
+        if shares > 0: existing.shares = shares
+        if comments > 0: existing.comments = comments
+        if collections > 0: existing.collections = collections
         
         # Merge other stats if available
         existing.video_7d = parse_kmb_string(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or res.get('video_7d') or existing.video_7d or 0)
@@ -571,6 +585,11 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
             shop_ads_commission=shop_ads,
             ad_spend=ad_spend,
             ad_spend_total=ad_spend_total,
+            hook_rate=hook_rate,
+            likes=likes,
+            shares=shares,
+            comments=comments,
+            collections=collections,
             first_seen=datetime.utcnow()
         )
         db.session.add(product)
@@ -908,6 +927,13 @@ class Product(db.Model):
     ad_spend_total = db.Column(db.Float, default=0)  # Lifetime/Total Ad Spend
     gmv_growth = db.Column(db.Float, default=0)  # 7D GMV Growth Percentage
     
+    # NEW: Enhanced Video/Creative Metrics from Copilot
+    hook_rate = db.Column(db.Float, default=0) # Hook Rate %
+    likes = db.Column(db.Integer, default=0)   # Total Likes (Top Video)
+    shares = db.Column(db.Integer, default=0)  # Total Shares (Top Video)
+    comments = db.Column(db.Integer, default=0) # Total Comments (Top Video)
+    collections = db.Column(db.Integer, default=0) # Total Collections (Top Video)
+    
     # Composite indexes for common query patterns
     __table_args__ = (
         # For filtering by influencer range + sorting by sales
@@ -957,6 +983,11 @@ class Product(db.Model):
             'gmv': self.gmv,
             'gmv_30d': self.gmv_30d,
             'gmv_growth': self.gmv_growth or 0,
+            'hook_rate': self.hook_rate or 0,
+            'likes': self.likes or 0,
+            'shares': self.shares or 0,
+            'comments': self.comments or 0,
+            'collections': self.collections or 0,
             'video_count': self.video_count,  # 7D videos (momentum)
             'video_count_alltime': self.video_count_alltime or self.video_count,  # All-time for saturation
             'video_7d': self.video_7d,
@@ -4579,6 +4610,10 @@ def api_products():
             query = query.order_by(Product.price.desc().nullslast())
         elif sort_by == 'price_asc':
             query = query.order_by(Product.price.asc().nullsfirst())
+        elif sort_by in ['hook_rate', 'hook']:
+            query = query.order_by(Product.hook_rate.desc().nullslast())
+        elif sort_by in ['likes', 'engagement']:
+            query = query.order_by(Product.likes.desc().nullslast())
         else:
             query = query.order_by(Product.first_seen.desc().nullslast())
 
@@ -5363,6 +5398,11 @@ def init_database():
             ('ad_spend_total', 'FLOAT DEFAULT 0'),
             ('gmv_growth', 'FLOAT DEFAULT 0'),
             ('scan_type', 'VARCHAR(50) DEFAULT \'brand_hunter\''),
+            ('hook_rate', 'FLOAT DEFAULT 0'),
+            ('likes', 'INTEGER DEFAULT 0'),
+            ('shares', 'INTEGER DEFAULT 0'),
+            ('comments', 'INTEGER DEFAULT 0'),
+            ('collections', 'INTEGER DEFAULT 0'),
         ]
         
         added = []
@@ -6852,47 +6892,58 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 continue
             processed_ids.add(product_id)
             
-            # ===== ENHANCED V2 FIELD EXTRACTION =====
-            # Video Count: With timeframe='all', periodVideoCount IS the all-time total (17862)
-            # adVideoCount is just ad-specific videos (9867), NOT all-time
-            raw_period_vc = p.get('periodVideoCount')
-            raw_ad_vc = p.get('adVideoCount') 
-            video_count = int(raw_period_vc or raw_ad_vc or 0)
+            # ===== ENHANCED V2 FIELD EXTRACTION (Updated for 2026 API) =====
+            # Note: API now returns Video-centric data in 'videos' list
+            
+            # Video Count: productVideoCount is all-time total
+            # FALLBACK: periodVideoCount
+            video_count = int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount') or 0)
             
             # DEBUG: Only log first 3 to avoid spam
             if saved_count < 3:
-                print(f"[DEBUG V2] Video Count: periodVideoCount={raw_period_vc}, adVideoCount={raw_ad_vc} => Using: {video_count}")
+                print(f"[DEBUG V2] Product: {p.get('productTitle', 'N/A')}")
+                print(f"[DEBUG V2] Video Count: productVideoCount={p.get('productVideoCount')}, periodVideoCount={p.get('periodVideoCount')} => Using: {video_count}")
             
-            # Creator Count: periodCreatorCount is all-time when timeframe=all
-            creator_count = int(p.get('periodCreatorCount') or 0)
+            # Creator Count: productCreatorCount is all-time
+            creator_count = int(p.get('productCreatorCount') or p.get('periodCreatorCount') or 0)
             
-            # Ad Spend: 7-DAY period spend (not all-time total)
-            # FIX: Handle None values properly to avoid NoneType * float error
-            period_ad_spend = p.get('periodAdSpend')
-            total_ad_cost = p.get('totalAdCost') or p.get('productTotalAdSpend') or 0
-            ad_spend_7d = float(period_ad_spend if period_ad_spend is not None else (float(total_ad_cost or 0) * 0.15))
-            ad_spend_total = float(total_ad_cost or 0)
+            # Ad Spend: 7-DAY period spend (periodAdSpend)
+            ad_spend_7d = float(p.get('periodAdSpend') or 0)
+            total_ad_cost = float(p.get('totalAdCost') or p.get('productTotalAdSpend') or 0)
+            if ad_spend_7d <= 0 and total_ad_cost > 0:
+                ad_spend_7d = total_ad_cost * 0.15 # Heuristic fallback
+            
+            ad_spend_total = total_ad_cost or ad_spend_7d
             
             # Sales: 7-DAY period (periodUnits)
-            total_sales = int(p.get('unitsSold') or p.get('productTotalUnits') or 0)
             sales_7d = int(p.get('periodUnits') or 0)
+            total_sales = int(p.get('unitsSold') or p.get('productTotalUnits') or p.get('computedTotalUnits') or 0)
             
             # Revenue
             period_revenue = float(p.get('periodRevenue') or 0)
-            total_revenue = float(p.get('estTotalEarnings') or 0)
+            total_revenue = float(p.get('totalRevenue') or p.get('estTotalEarnings') or 0)
             
             # Views
             period_views = int(p.get('periodViews') or 0)
+            total_views = int(p.get('totalViews') or 0)
             
             # Commission Rates (divide by 10000 to get decimal)
+            # API returns 2000 for 20%
             commission_rate = float(p.get('tapCommissionRate') or p.get('ocCommissionRate') or 0) / 10000.0
             shop_ads_rate = float(p.get('tapShopAdsRate') or p.get('ocShopAdsRate') or 0) / 10000.0
             
-            # Growth (V2 may have different field names)
-            growth_pct = float(p.get('viewsGrowthPct') or p.get('revenueGrowthPct') or p.get('growthPercentage') or 0)
+            # NEW: Hook Rate and Engagement
+            hook_rate = float(p.get('hookRatePct') or 0)
+            likes = int(p.get('likeCount') or 0)
+            shares = int(p.get('shareCount') or 0)
+            comments = int(p.get('commentCount') or 0)
+            collections = int(p.get('collectCount') or 0)
             
-            # Price: avgUnitPrice or minPrice
-            price = float(p.get('avgUnitPrice') or p.get('minPrice') or p.get('productPrice') or 0)
+            # Growth (V2 may have different field names)
+            growth_pct = float(p.get('revenueGrowthPct') or p.get('viewsGrowthPct') or p.get('productRevenueGrowthPct') or 0)
+            
+            # Price: productPrice or avgUnitPrice
+            price = float(p.get('productPrice') or p.get('avgUnitPrice') or p.get('minPrice') or 0)
             
             # Product URL
             raw_product_id = str(p.get('productId', '')).replace('shop_', '')
@@ -6901,23 +6952,26 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 product_url = f"https://shop.tiktok.com/view/product/{raw_product_id}?region=US&locale=en-US"
             
             # Image URL
-            image_url = p.get('productCoverUrl') or p.get('productImageUrl') or ''
+            image_url = p.get('productCoverUrl') or p.get('productImageUrl') or p.get('coverUrl') or ''
+            
+            # Seller info
+            seller_name = p.get('sellerName') or ''
+            seller_id = p.get('sellerId') or ''
 
             # FILTER: Quality Control - Skip low-quality products
-            if sales_7d <= 0 and total_sales <= 0:
+            # V2: Relax sales filter slightly if ad spend is high
+            if sales_7d <= 0 and total_sales <= 0 and ad_spend_7d < 100:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Zero Sales)")
                 continue
-            # V2 FIX: Require 10+ videos to match refined Caked Finds criteria
-            if video_count < 10:
+            
+            # V2 FIX: Require 5+ videos for new discoveries (relaxed from 10)
+            if video_count < 5:
                 print(f"[Copilot Sync V2] Skipping {product_id} (Low Videos: {video_count})")
                 continue
-            # FILTER: Allow products with either Shop Ads Commission OR High Ad Spend
-            if shop_ads_rate <= 0 and commission_rate < 0.10 and ad_spend_7d < 500:
-                print(f"[Copilot Sync V2] Skipping {product_id} (No Commission/Spend Incentive)")
-                continue
-            # FILTER: Require active ad spend (products being promoted)
-            if ad_spend_7d <= 0:
-                print(f"[Copilot Sync V2] Skipping {product_id} (Zero 7D Ad Spend)")
+                
+            # FILTER: Active ad spend or high commission
+            if ad_spend_7d <= 0 and commission_rate < 0.15:
+                print(f"[Copilot Sync V2] Skipping {product_id} (Zero Ad Spend & Low Commission)")
                 continue
             
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
@@ -6927,12 +6981,15 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             if existing:
                 # Update existing product with V2 Copilot data
                 existing.product_name = p.get('productTitle') or existing.product_name
+                
                 # FIX: Ensure seller_name is never undefined/null
-                new_seller = p.get('sellerName') or ''
-                if new_seller and new_seller.lower() not in ['undefined', 'null', 'unknown', '']:
-                    existing.seller_name = new_seller
+                if seller_name and seller_name.lower() not in ['undefined', 'null', 'unknown', '']:
+                    existing.seller_name = seller_name
                 elif not existing.seller_name:
                     existing.seller_name = 'Unknown Seller'
+                
+                if seller_id:
+                    existing.seller_id = seller_id
                 
                 # Image Update with Cache Invalidation
                 if image_url and image_url != existing.image_url:
@@ -6940,6 +6997,24 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                     existing.cached_image_url = None  # Force re-download
                 elif not existing.image_url and image_url:
                     existing.image_url = image_url
+                
+                # Stats Update
+                existing.sales_7d = sales_7d
+                if total_sales > 0: existing.sales = total_sales
+                
+                existing.video_count = video_count # 7D/momentum
+                existing.video_count_alltime = video_count # Sync current to all-time
+                existing.influencer_count = creator_count
+                
+                existing.ad_spend = ad_spend_7d
+                existing.ad_spend_total = ad_spend_total
+                
+                # New Metrics Persistence
+                existing.hook_rate = hook_rate
+                existing.likes = likes
+                existing.shares = shares
+                existing.comments = comments
+                existing.collections = collections
                 
                 if period_revenue > 0:
                     existing.gmv = period_revenue
@@ -7025,6 +7100,11 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                     shop_ads_commission=shop_ads_rate,
                     ad_spend=ad_spend_7d if ad_spend_7d > 0 else ad_spend_total * 0.15,
                     ad_spend_total=ad_spend_total,
+                    hook_rate=hook_rate,
+                    likes=likes,
+                    shares=shares,
+                    comments=comments,
+                    collections=collections,
                     views_count=period_views,
                     scan_type='copilot_v2',
                     first_seen=datetime.utcnow(),

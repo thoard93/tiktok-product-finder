@@ -157,6 +157,9 @@ function createProductCard(product) {
     if (isNew) {
         badges += '<span class="badge badge-new">NEW</span>';
     }
+    if (product.hook_rate >= 30) {
+        badges += '<span class="badge badge-hot" style="background: linear-gradient(135deg, #ff0055, #ff5500); color: white;">🪝 HIGH HOOK</span>';
+    }
     if (commissionRate >= 20) {
         badges += '<span class="badge badge-commission">' + commissionRate.toFixed(0) + '%</span>';
     }
@@ -171,6 +174,9 @@ function createProductCard(product) {
     if (hasGmvMax) {
         commissionDisplay = commissionRate.toFixed(0) + '% + ' + shopAdsCommission.toFixed(0) + '%🚀';
     }
+
+    const hookRate = product.hook_rate ? product.hook_rate.toFixed(1) + '%' : '0%';
+    const likes = formatNumber(product.likes || 0);
 
     return `
         <div class="product-card" onclick="window.location.href='/product?id=${productId}'">
@@ -196,31 +202,30 @@ function createProductCard(product) {
                 <div class="product-badges">${badges}</div>
             </div>
             <div class="product-content">
-                <div class="product-name">${product.product_name || 'Unknown Product'}</div>
+                <div class="product-name" title="${product.product_name || ''}">${product.product_name || 'Unknown Product'}</div>
                 <div class="product-metrics">
                     <div class="metric">
                         <div class="metric-value">${formatCurrency(gmv)}</div>
                         <div class="metric-label">GMV</div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value">${formatNumber(product.sales || 0)}</div>
-                        <div class="metric-label">Units Sold</div>
+                        <div class="metric-value highlight" style="color: #00ffcc;">${hookRate}</div>
+                        <div class="metric-label">Hook Rate</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${likes}</div>
+                        <div class="metric-label">Likes</div>
                     </div>
                     <div class="metric">
                         <div class="metric-value highlight">${formatCurrency(earnings)}</div>
                         <div class="metric-label">Potential</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-value ${hasGmvMax ? 'highlight' : ''}">${commissionDisplay}</div>
-                        <div class="metric-label">${hasGmvMax ? 'Commission + Ads' : 'Commission'}</div>
                     </div>
                 </div>
                 <div class="product-footer">
                     <div class="influencer-count ${getCompetitionClass(iflCount)}">
                         👥 ${iflCount} influencers
                     </div>
-                    <button class="btn-analyze" onclick="openAIModal(event, '${product.product_name}', ${gmv}, ${iflCount})">✨ Analyze</button>
-                    <!-- <div class="seller-name">${product.seller_name || 'TikTok Shop'}</div> -->
+                    <button class="btn-analyze" onclick="openAIModal(event, '${product.product_name.replace(/'/g, "\\'")}', ${gmv}, ${iflCount})">✨ Analyze</button>
                 </div>
             </div>
         </div>
