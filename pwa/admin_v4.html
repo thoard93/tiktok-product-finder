@@ -388,15 +388,42 @@
             } catch (e) { console.error("Admin Load Error", e); }
         }
 
+        async function saveAnthropicKey() {
+            const key = document.getElementById('anthropicKeyInput').value;
+            if (!key || key.includes('•')) return alert("Please enter a valid key.");
+
+            try {
+                const res = await fetch('/api/admin/config/ANTHROPIC_API_KEY', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: key })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("Anthropic API Key secured and saved!");
+                    document.getElementById('anthropicKeyInput').value = "••••••••••••••••••••••••";
+                } else alert("Error: " + data.error);
+            } catch (e) { alert("Fault: " + e); }
+        }
+
         let isStopRequested = false;
 
         async function stopSync(btn) {
             isStopRequested = true;
-            btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Stopping...';
             try {
                 await fetch('/api/copilot/stop-sync', { method: 'POST' });
-            } catch (e) { console.error("Stop signal error:", e); }
+                alert("🛑 Stop signal sent! Background syncs will terminate shortly.");
+            } catch (e) {
+                console.error("Stop signal error:", e);
+                alert("Error sending stop signal: " + e.message);
+            } finally {
+                // Reset button after a short delay
+                setTimeout(() => {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-stop"></i> Stop Current Sync';
+                }, 1500);
+            }
         }
 
         async function syncCopilot() {
