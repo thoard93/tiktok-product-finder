@@ -7998,9 +7998,33 @@ def copilot_test():
     else:
         return jsonify({'success': False, 'error': 'API returned empty data. Cookie may be expired. Please paste a fresh cookie from TikTokCopilot.'})
 
+@app.route('/api/copilot/debug-fields')
+@login_required
+@admin_required
+def copilot_debug_fields():
+    """Debug: Dump raw API response to see current field names"""
+    # Try the main products endpoint first
+    result_products = fetch_copilot_products(timeframe='7d', limit=3, page=0)
+    result_trending = fetch_copilot_trending(limit=3)
+    
+    response = {
+        'products_endpoint': {
+            'raw_keys': list(result_products.keys()) if result_products else None,
+            'sample_product_keys': list(result_products.get('products', [{}])[0].keys()) if result_products and result_products.get('products') else None,
+            'sample_product': result_products.get('products', [{}])[0] if result_products and result_products.get('products') else None
+        } if result_products else {'error': 'Products endpoint returned None'},
+        'trending_endpoint': {
+            'raw_keys': list(result_trending.keys()) if result_trending else None,
+            'sample_video_keys': list(result_trending.get('videos', [{}])[0].keys()) if result_trending and result_trending.get('videos') else None,
+            'sample_video': result_trending.get('videos', [{}])[0] if result_trending and result_trending.get('videos') else None
+        } if result_trending else {'error': 'Trending endpoint returned None'}
+    }
+    
+    return jsonify(response)
 
 
 @app.route('/api/admin/config/<key>', methods=['GET'])
+
 @login_required
 @admin_required
 def admin_get_config(key):
