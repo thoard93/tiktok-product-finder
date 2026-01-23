@@ -405,6 +405,18 @@ def safe_float(val, default=0.0):
     except:
         return default
 
+def safe_int(val, default=0):
+    if val is None: return default
+    if isinstance(val, (int, float)): return int(val)
+    s = str(val).strip().replace(',', '')
+    if s.upper() == 'N/A' or not s: return default
+    # Remove non-numeric except minus sign
+    s = re.sub(r'[^\d\-]', '', s)
+    try:
+        return int(s)
+    except:
+        return default
+
 def parse_cover_url(url):
     """Clean up cover URL which may be a JSON array string or list or dict."""
     if not url: return ""
@@ -6704,10 +6716,23 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
     try:
         # Use the NEW /api/trending/products endpoint
         res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
+        
         if res.status_code == 200:
-            return res.json()
+            content = res.text.strip()
+            if not content:
+                print(f"[Copilot Products] ⚠️ Received EMPTY response from V2 ({timeframe})")
+                return None
+            try:
+                return res.json()
+            except Exception as e:
+                print(f"[Copilot Products] ❌ JSON Decode Error on V2: {e}")
+                print(f"[DEBUG] Raw Response Content (First 200 chars): {content[:200]}")
+                return None
         else:
             print(f"[Copilot Products] API Error: {res.status_code}")
+            # Log body for 4xx/5xx errors
+            if res.text:
+                print(f"[DEBUG] Error Body: {res.text[:200]}")
             return None
     except Exception as e:
         print(f"[Copilot Products] Exception: {e}")
@@ -6773,9 +6798,20 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     try:
         res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
         if res.status_code == 200:
-            return res.json()
+            content = res.text.strip()
+            if not content:
+                print(f"[Copilot Legacy] ⚠️ Received EMPTY response")
+                return None
+            try:
+                return res.json()
+            except Exception as e:
+                print(f"[Copilot Legacy] ❌ JSON Decode Error: {e}")
+                print(f"[DEBUG] Raw Response Content (First 200 chars): {content[:200]}")
+                return None
         else:
-            print(f"[Copilot] API Error: {res.status_code}")
+            print(f"[Copilot Legacy] API Error: {res.status_code}")
+            if res.text:
+                print(f"[DEBUG] Error Body: {res.text[:200]}")
             return None
     except Exception as e:
         print(f"[Copilot] Exception: {e}")
@@ -6830,6 +6866,12 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
     
     global SYNC_STOP_REQUESTED
     
+    # Load persistent stop flag from DB to synchronize with global variable
+    db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
+    if db_stop_flag == 'true':
+        SYNC_STOP_REQUESTED = True
+        print("🛑 [Copilot Sync] Stop signal loaded from DB!")
+    
     for p in products:
         if SYNC_STOP_REQUESTED:
             print("🛑 [Copilot Sync] Granular stop triggered!")
@@ -6857,7 +6899,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             
             # Video Count: productVideoCount is all-time total
             # FALLBACK: periodVideoCount
-            video_count = int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount') or 0)
+            video_count = safe_int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount'))
             
             # DEBUG: Only log first 3 to avoid spam
             if saved_count < 3:
@@ -6865,38 +6907,43 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 print(f"[DEBUG V2] Video Count: productVideoCount={p.get('productVideoCount')}, periodVideoCount={p.get('periodVideoCount')} => Using: {video_count}")
             
             # Creator Count: productCreatorCount is all-time
-            creator_count = int(p.get('productCreatorCount') or p.get('periodCreatorCount') or 0)
+            creator_count = safe_int(p.get('productCreatorCount') or p.get('periodCreatorCount'))
             
             # Ad Spend: 7-DAY period spend (periodAdSpend)
-            ad_spend_7d = float(p.get('periodAdSpend') or 0)
-            total_ad_cost = float(p.get('totalAdCost') or p.get('productTotalAdSpend') or 0)
+            ad_spend_7d = safe_float(p.get('periodAdSpend'))
+            total_ad_cost = safe_float(p.get('totalAdCost') or p.get('productTotalAdSpend'))
             if ad_spend_7d <= 0 and total_ad_cost > 0:
                 ad_spend_7d = total_ad_cost * 0.15 # Heuristic fallback
             
             ad_spend_total = total_ad_cost or ad_spend_7d
             
             # Sales: 7-DAY period (periodUnits)
-            sales_7d = int(p.get('periodUnits') or 0)
-            total_sales = int(p.get('unitsSold') or p.get('productTotalUnits') or p.get('computedTotalUnits') or 0)
+            sales_7d = safe_int(p.get('periodUnits') or p.get('unitsSold7d'))
+            
+            # Total Sales Fallback (check nested trend if needed)
+            total_sales = safe_int(p.get('unitsSold') or p.get('productTotalUnits') or p.get('computedTotalUnits'))
+            if total_sales <= 0 and p.get('viewAndRevenueTrend'):
+                trend_data = p.get('viewAndRevenueTrend', {})
+                total_sales = safe_int(trend_data.get('computedTotalUnits') or trend_data.get('totalUnits'))
             
             # Revenue
-            period_revenue = float(p.get('periodRevenue') or 0)
-            total_revenue = float(p.get('totalRevenue') or p.get('estTotalEarnings') or 0)
+            period_revenue = safe_float(p.get('periodRevenue') or p.get('revenue7d'))
+            total_revenue = safe_float(p.get('totalRevenue') or p.get('estTotalEarnings') or p.get('productTotalRevenue'))
             
             # Views
-            period_views = int(p.get('periodViews') or 0)
-            total_views = int(p.get('totalViews') or 0)
+            period_views = safe_int(p.get('periodViews'))
+            total_views = safe_int(p.get('totalViews'))
             
             # Commission Rates (divide by 10000 to get decimal)
-            # API returns 2000 for 20%
-            commission_rate = float(p.get('tapCommissionRate') or p.get('ocCommissionRate') or 0) / 10000.0
-            shop_ads_rate = float(p.get('tapShopAdsRate') or p.get('ocShopAdsRate') or 0) / 10000.0
+            commission_rate = safe_float(p.get('tapCommissionRate') or p.get('ocCommissionRate')) / 10000.0
+            shop_ads_rate = safe_float(p.get('tapShopAdsRate') or p.get('ocShopAdsRate')) / 10000.0
             
             # Growth (V2 may have different field names)
-            growth_pct = float(p.get('revenueGrowthPct') or p.get('viewsGrowthPct') or p.get('productRevenueGrowthPct') or 0)
+            # Try specific growth fields first, then fallback to general
+            growth_pct = safe_float(p.get('revenueGrowthPct') or p.get('productRevenueGrowthPct') or p.get('viewsGrowthPct'))
             
             # Price: productPrice or avgUnitPrice
-            price = float(p.get('productPrice') or p.get('avgUnitPrice') or p.get('minPrice') or 0)
+            price = safe_float(p.get('productPrice') or p.get('avgUnitPrice') or p.get('minPrice'))
             
             # Product URL
             raw_product_id = str(p.get('productId', '')).replace('shop_', '')
@@ -6914,17 +6961,17 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # FILTER: Quality Control - Skip low-quality products
             # V2: Relax sales filter slightly if ad spend is high
             if sales_7d <= 0 and total_sales <= 0 and ad_spend_7d < 100:
-                print(f"[Copilot Sync V2] Skipping {product_id} (Zero Sales)")
+                # Diagnostics: why are we skipping?
+                if saved_count < 5:
+                    print(f"[Copilot Sync V2] Skipping {product_id} - Debug Stats: sales_7d={sales_7d}, total_sales={total_sales}, ad_spend_7d={ad_spend_7d}")
                 continue
             
             # V2 FIX: Require 5+ videos for new discoveries (relaxed from 10)
             if video_count < 5:
-                print(f"[Copilot Sync V2] Skipping {product_id} (Low Videos: {video_count})")
                 continue
                 
             # FILTER: Active ad spend or high commission
             if ad_spend_7d <= 0 and commission_rate < 0.15:
-                print(f"[Copilot Sync V2] Skipping {product_id} (Zero Ad Spend & Low Commission)")
                 continue
             
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
@@ -7243,8 +7290,10 @@ SYNC_STOP_REQUESTED = False
 def copilot_stop_sync():
     global SYNC_STOP_REQUESTED
     SYNC_STOP_REQUESTED = True
-    print("🛑 [Copilot Sync] Stop signal received!")
-    return jsonify({'success': True, 'message': 'Stop signal sent'})
+    # Persist to DB so background threads can see it
+    set_config_value('SYNC_STOP_REQUESTED', 'true', 'Persistent stop flag for sync processes')
+    print("🛑 [Copilot Sync] Stop signal received and persisted to DB!")
+    return jsonify({'success': True, 'message': 'Stop signal sent and persisted'})
 
 @app.route('/api/copilot/reset-sync', methods=['POST'])
 @login_required
@@ -7252,6 +7301,9 @@ def copilot_stop_sync():
 def copilot_reset_sync():
     global SYNC_STOP_REQUESTED
     SYNC_STOP_REQUESTED = False
+    # Clear persistent flag in DB
+    set_config_value('SYNC_STOP_REQUESTED', 'false', 'Persistent stop flag for sync processes')
+    print("✅ [Copilot Sync] Stop flag reset in memory and DB.")
     return jsonify({'success': True, 'message': 'Sync state reset'})
 
 @app.route('/api/copilot/sync', methods=['POST'])
@@ -7908,13 +7960,23 @@ def copilot_mass_sync():
                             else:
                                 return page_num, 0, -1, str(e)
                     return page_num, 0, -1, "Unknown error"
+            # Use 50 products per page (V2 limit might be 50)
+            PRODUCTS_PER_PAGE = 50 
+            pages_needed = min((target_products // PRODUCTS_PER_PAGE) + 1, 2000)
+            
             # Reduced parallelization to avoid rate limits
-            BATCH_SIZE = 5
-            MAX_CONSECUTIVE_EMPTY = 10  # More persistent through rate limits
+            BATCH_SIZE = 3 # Reduced from 5 to be safer
+            MAX_CONSECUTIVE_EMPTY = 15  # More persistent through rate limits
             print(f"[LUDICROUS] 🚀🚀🚀 LUDICROUS SPEED ENGAGED: {pages_needed} pages, {BATCH_SIZE} parallel, {PRODUCTS_PER_PAGE}/page")
             
             for batch_start in range(0, pages_needed, BATCH_SIZE):
                 global SYNC_STOP_REQUESTED
+                # Check persistent DB flag to synchronize with stop signal
+                db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
+                if db_stop_flag == 'true':
+                    SYNC_STOP_REQUESTED = True
+                    print("[LUDICROUS] 🛑 Stop signal loaded from DB!")
+                    
                 if SYNC_STOP_REQUESTED:
                     print("[LUDICROUS] 🛑 Stop requested, terminating background sync")
                     break
