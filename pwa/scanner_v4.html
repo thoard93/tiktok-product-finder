@@ -152,10 +152,16 @@
                             <p class="text-slate-400 text-xs">Synchronize latest market data vectors including ad spend,
                                 revenue, and engagement metrics.</p>
                         </div>
-                        <button onclick="runCopilotSync(this)" id="btnSync"
-                            class="btn-premium px-8 py-3 shadow-lg shadow-primary/20">
-                            <i class="fas fa-sync-alt mr-2"></i> Execute Sync
-                        </button>
+                        <div class="flex gap-3">
+                            <button onclick="stopCopilotSync(this)" id="btnStop" disabled
+                                class="bg-rose-600/20 text-rose-500 border border-rose-500/20 px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-rose-600 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all">
+                                <i class="fas fa-stop mr-2"></i> Stop Scan
+                            </button>
+                            <button onclick="runCopilotSync(this)" id="btnSync"
+                                class="btn-premium px-8 py-3 shadow-lg shadow-primary/20">
+                                <i class="fas fa-sync-alt mr-2"></i> Execute Sync
+                            </button>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 relative z-10">
@@ -245,52 +251,90 @@
             c.scrollTop = c.scrollHeight;
         }
 
+        let isStopRequested = false;
+
+        async function stopCopilotSync(btn) {
+            isStopRequested = true;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Stopping...';
+            log('🛑 STOP REQUESTED. Signaling backend...', 'warn');
+
+            try {
+                await fetch('/api/copilot/stop-sync', { method: 'POST' });
+            } catch (e) {
+                console.error("Stop signal error:", e);
+            }
+        }
+
         async function runCopilotSync(btn) {
             const timeframe = document.getElementById('sync-timeframe').value;
             const limit = parseInt(document.getElementById('sync-limit').value) || 50;
             const startPage = parseInt(document.getElementById('sync-page').value) || 0;
             const pageCount = parseInt(document.getElementById('sync-pages').value) || 1;
+            const stopBtn = document.getElementById('btnStop');
 
+            isStopRequested = false;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
+            stopBtn.disabled = false;
+            stopBtn.innerHTML = '<i class="fas fa-stop mr-2"></i> Stop Scan';
 
             log(`Starting Copilot sync: ${pageCount} pages, ${limit}/page, ${timeframe} horizon...`, 'info');
+
+            // Reset backend state
+            try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
 
             let totalSaved = 0;
             let totalFetched = 0;
 
             try {
                 for (let i = 0; i < pageCount; i++) {
+                    if (isStopRequested) {
+                        log('🛑 SYNC HALTED BY OPERATOR.', 'warn');
+                        break;
+                    }
+
                     const page = startPage + i;
                     log(`Fetching page ${page + 1}...`, 'info');
 
                     const res = await fetch('/api/copilot/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ timeframe, limit, page })
+                        body: JSON.stringify({ timeframe, limit, page, pages: 1 }) // pages: 1 to prevent backend nested loop
                     });
 
                     const data = await res.json();
 
-                    if (data.success) {
-                        totalSaved += data.saved;
-                        totalFetched += data.total_in_response;
-                        log(`>> Page ${page + 1}: Saved ${data.saved}/${data.total_in_response} products`, 'success');
+                    if (data.success || data.status === 'success') {
+                        totalSaved += (data.saved || data.synced || 0);
+                        totalFetched += (data.total_in_response || 0);
+                        log(`>> Page ${page + 1}: Saved ${(data.saved || data.synced || 0)} products`, 'success');
+
+                        if (data.stop_requested) {
+                            log('🛑 Backend confirmed sync interruption.', 'warn');
+                            break;
+                        }
                     } else {
                         log(`!! Page ${page + 1} failed: ${data.error}`, 'error');
                     }
 
                     // Rate limit protection
-                    await new Promise(r => setTimeout(r, 1500));
+                    if (i < pageCount - 1) await new Promise(r => setTimeout(r, 1500));
                 }
 
-                log(`✅ SYNC COMPLETE: ${totalSaved} products saved (${totalFetched} fetched, remainder filtered as placeholders)`, 'success');
+                if (isStopRequested) {
+                    log(`⏹️ PROCESS TERMINATED. ${totalSaved} products saved before stop.`, 'warn');
+                } else {
+                    log(`✅ SYNC COMPLETE: ${totalSaved} products saved (${totalFetched} fetched, remainder filtered as placeholders)`, 'success');
+                }
 
             } catch (e) {
                 log(`System Error: ${e.message}`, 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i> Sync Now';
+                btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i> Execute Sync';
+                stopBtn.disabled = true;
+                stopBtn.innerHTML = '<i class="fas fa-stop mr-2"></i> Stop Scan';
             }
         }
 

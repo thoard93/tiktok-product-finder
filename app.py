@@ -6828,7 +6828,13 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
     saved_count = 0
     processed_ids = set()  # Track IDs within this batch to prevent duplicates
     
+    global SYNC_STOP_REQUESTED
+    
     for p in products:
+        if SYNC_STOP_REQUESTED:
+            print("🛑 [Copilot Sync] Granular stop triggered!")
+            break
+            
         # DEBUG: Inspect raw product data for keys (first 3 only)
         if saved_count < 3:
             print(f"[DEBUG V2] Raw Product Keys: {list(p.keys())}")
@@ -7206,14 +7212,39 @@ def api_top_videos():
         return jsonify({'success': False, 'error': str(e), 'videos': []}), 200
 
 
+# TIKTOK_COPILOT_COOKIE - Session management for scraping
+# State control for product sync
+SYNC_STOP_REQUESTED = False
+
+@app.route('/api/copilot/stop-sync', methods=['POST'])
+@login_required
+@admin_required
+def copilot_stop_sync():
+    global SYNC_STOP_REQUESTED
+    SYNC_STOP_REQUESTED = True
+    print("🛑 [Copilot Sync] Stop signal received!")
+    return jsonify({'success': True, 'message': 'Stop signal sent'})
+
+@app.route('/api/copilot/reset-sync', methods=['POST'])
+@login_required
+@admin_required
+def copilot_reset_sync():
+    global SYNC_STOP_REQUESTED
+    SYNC_STOP_REQUESTED = False
+    return jsonify({'success': True, 'message': 'Sync state reset'})
+
 @app.route('/api/copilot/sync', methods=['POST'])
 @login_required
 @admin_required
 def copilot_sync():
     """Manual trigger to sync latest products from Copilot with massive multi-page support"""
+    global SYNC_STOP_REQUESTED
+    SYNC_STOP_REQUESTED = False  # Reset on new manual trigger
+    
     user = get_current_user()
     data = request.json or {}
     pages = int(data.get('pages', 1))
+    start_page = int(data.get('page', 0))  # Correctly get start page from frontend
     limit = int(data.get('limit', 50))
     timeframe = data.get('timeframe', 'all')  # Default to 'all' for all-time video/creator counts
     
@@ -7223,17 +7254,21 @@ def copilot_sync():
     products_synced = 0
     errors = []
     
-    for page in range(0, pages): # Copilot API uses 0-based paging
+    for page_idx in range(start_page, start_page + pages): # Use correct range based on start_page
+        if SYNC_STOP_REQUESTED:
+            print("🛑 [Copilot Sync] Interrupting batch processing...")
+            break
+            
         try:
-            print(f"[Copilot Sync] Processing page {page + 1}/{pages}")
-            saved, total = sync_copilot_products(timeframe=timeframe, limit=limit, page=page)
+            print(f"[Copilot Sync] Processing page {page_idx + 1}")
+            saved, total = sync_copilot_products(timeframe=timeframe, limit=limit, page=page_idx)
             products_synced += saved
             if total == 0: break # No more products
-            if page < pages - 1:
+            if page_idx < start_page + pages - 1:
                 time.sleep(2) # Polite delay
         except Exception as e:
-            print(f"Error syncing page {page}: {e}")
-            errors.append(f"Page {page}: {str(e)}")
+            print(f"Error syncing page {page_idx}: {e}")
+            errors.append(f"Page {page_idx}: {str(e)}")
             
     log_activity(user.id, 'copilot_sync', {'pages': pages, 'synced': products_synced})
     return jsonify({
@@ -7241,6 +7276,7 @@ def copilot_sync():
         'synced': products_synced,
         'pages_processed': pages,
         'total_pages_requested': pages,
+        'stop_requested': SYNC_STOP_REQUESTED,
         'errors': errors
     })
 
