@@ -7300,7 +7300,13 @@ def copilot_enrich_videos():
         enriched_count = 0
         total_fetched = 0
         
+        global SYNC_STOP_REQUESTED
+        SYNC_STOP_REQUESTED = False  # Reset on new enrichment trigger
+        
         for page in range(target_pages):
+            if SYNC_STOP_REQUESTED:
+                print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
+                break
             products_data = fetch_copilot_products(timeframe='all', limit=50, page=page)
             if not products_data:
                 print(f"[Video Enrich] Page {page}: Failed to fetch, stopping")
@@ -7314,6 +7320,8 @@ def copilot_enrich_videos():
             total_fetched += len(products_list)
             
             for p in products_list:
+                if SYNC_STOP_REQUESTED:
+                    break
                 product_id = str(p.get('productId', '')).strip()
                 if not product_id:
                     continue
@@ -7885,6 +7893,11 @@ def copilot_mass_sync():
             print(f"[LUDICROUS] 🚀🚀🚀 LUDICROUS SPEED ENGAGED: {pages_needed} pages, {BATCH_SIZE} parallel, {PRODUCTS_PER_PAGE}/page")
             
             for batch_start in range(0, pages_needed, BATCH_SIZE):
+                global SYNC_STOP_REQUESTED
+                if SYNC_STOP_REQUESTED:
+                    print("[LUDICROUS] 🛑 Stop requested, terminating background sync")
+                    break
+                    
                 # Stop only if we got 10+ consecutive empty pages (API truly exhausted)
                 if consecutive_empty >= MAX_CONSECUTIVE_EMPTY:
                     print(f"[LUDICROUS] {MAX_CONSECUTIVE_EMPTY} consecutive empty pages - API exhausted, stopping")

@@ -184,12 +184,18 @@
 
         <!-- System Controls -->
         <div class="bg-slate-900 border border-white/5 rounded-2xl p-8 shadow-lg">
-            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 text-white">
-                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-database text-primary text-xs"></i>
-                </div>
-                Database Controls
-            </h3>
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="font-heading font-bold text-lg flex items-center gap-3 text-white">
+                    <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <i class="fas fa-database text-primary text-xs"></i>
+                    </div>
+                    Database Controls
+                </h3>
+                <button onclick="stopSync(this)" id="btnStop" disabled
+                    class="bg-rose-600/20 text-rose-500 border border-rose-500/20 px-4 py-2 rounded-xl font-bold uppercase tracking-widest text-[9px] hover:bg-rose-600 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-2">
+                    <i class="fas fa-stop"></i> Stop Current Sync
+                </button>
+            </div>
 
             <div class="flex flex-wrap gap-4 mb-8">
                 <button onclick="syncCopilot()" id="btnCopilot"
@@ -382,49 +388,57 @@
             } catch (e) { console.error("Admin Load Error", e); }
         }
 
-        async function saveAnthropicKey() {
-            const key = document.getElementById('anthropicKeyInput').value;
-            if (!key || key.includes('•')) return alert("Please enter a valid key.");
+        let isStopRequested = false;
 
+        async function stopSync(btn) {
+            isStopRequested = true;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Stopping...';
             try {
-                const res = await fetch('/api/admin/config/ANTHROPIC_API_KEY', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ value: key })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    alert("Anthropic API Key secured and saved!");
-                    document.getElementById('anthropicKeyInput').value = "••••••••••••••••••••••••";
-                } else alert("Error: " + data.error);
-            } catch (e) { alert("Fault: " + e); }
+                await fetch('/api/copilot/stop-sync', { method: 'POST' });
+            } catch (e) { console.error("Stop signal error:", e); }
         }
 
         async function syncCopilot() {
             const btn = document.getElementById('btnCopilot');
+            const stopBtn = document.getElementById('btnStop');
             const original = btn.innerHTML;
+
+            isStopRequested = false;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Syncing...</span>';
             btn.disabled = true;
+            stopBtn.disabled = false;
 
             try {
+                // Reset backend state
+                try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
+
                 let totalSaved = 0;
                 for (let page = 0; page < 20; page++) {
+                    if (isStopRequested) {
+                        alert("🛑 Sync halted by operator.");
+                        break;
+                    }
                     const res = await fetch('/api/copilot/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ timeframe: '7d', limit: 50, page })
+                        body: JSON.stringify({ timeframe: '7d', limit: 50, page, pages: 1 })
                     });
                     const data = await res.json();
-                    if (data.success) totalSaved += data.saved;
+                    if (data.success || data.status === 'success') {
+                        totalSaved += (data.saved || data.synced || 0);
+                        if (data.stop_requested) break;
+                    }
                     await new Promise(r => setTimeout(r, 1500));
                 }
-                alert(`✅ Copilot Sync Complete! Saved ${totalSaved} products.`);
+                if (!isStopRequested) alert(`✅ Copilot Sync Complete! Saved ${totalSaved} products.`);
                 window.location.reload();
             } catch (e) {
                 alert('Sync Error: ' + e.message);
             } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
+                stopBtn.disabled = true;
             }
         }
 
@@ -500,11 +514,17 @@
         async function massSyncProducts(target) {
             const btnId = target >= 10000 ? 'btnMassSync10K' : 'btnMassSync5K';
             const btn = document.getElementById(btnId);
+            const stopBtn = document.getElementById('btnStop');
             const original = btn.innerHTML;
+
             btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">Starting...</span>';
             btn.disabled = true;
+            stopBtn.disabled = false;
 
             try {
+                // Reset backend state
+                try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
+
                 const res = await fetch('/api/copilot/mass-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -512,7 +532,7 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    alert(`🚀 SYNC STARTED!\n\n${data.message}\n\n⏳ Running in background. Refresh the dashboard in a few minutes to see new products.`);
+                    alert(`🚀 SYNC STARTED!\n\n${data.message}\n\n⏳ Running in background. Use the STOP button above if you need to cancel.`);
                 } else {
                     alert('❌ Sync Error: ' + (data.message || 'Unknown error'));
                 }
@@ -521,6 +541,7 @@
             } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
+                // Leave stop button enabled for background task
             }
         }
 
@@ -528,12 +549,18 @@
             if (!confirm("☢️ NUCLEAR SYNC - 100,000+ PRODUCTS\n\n⚠️ This will:\n• Fetch up to 2000 pages of products\n• Take 10-15 minutes to complete\n• Use significant API resources\n\nAre you absolutely sure?")) return;
 
             const btn = document.getElementById('btnNuclearSync');
+            const stopBtn = document.getElementById('btnStop');
             const original = btn.innerHTML;
+
             btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">☢️ STARTING...</span>';
             btn.disabled = true;
             btn.classList.remove('animate-pulse');
+            stopBtn.disabled = false;
 
             try {
+                // Reset backend state
+                try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
+
                 const res = await fetch('/api/copilot/mass-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -541,8 +568,7 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    alert(`☢️ NUCLEAR SYNC STARTED!\n\n${data.message}\n\n⏳ This runs in the background and may take 5-10 minutes.\n\n📊 Check Render logs for progress, then refresh this page to see new products.`);
-                    // Don't reload - let them see the message
+                    alert(`☢️ NUCLEAR SYNC STARTED!\n\n${data.message}\n\n⏳ This runs in the background. Use the STOP button above to cancel if needed.`);
                 } else {
                     alert('❌ Nuclear Sync Error: ' + (data.message || 'Unknown error'));
                 }
@@ -556,14 +582,20 @@
         }
 
         async function enrichVideos() {
-            if (!confirm("📊 ENRICH ALL-TIME STATS\\n\\nThis will fetch ALL-TIME video counts AND creator counts for products in the database.\\n\\nThese values will be preserved during regular syncs.\\n\\nProceed?")) return;
+            if (!confirm("📊 ENRICH ALL-TIME STATS\n\nThis will fetch ALL-TIME video counts AND creator counts for products in the database.\n\nThese values will be preserved during regular syncs.\n\nProceed?")) return;
 
             const btn = document.getElementById('btnEnrichVideos');
+            const stopBtn = document.getElementById('btnStop');
             const original = btn.innerHTML;
+
             btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">ENRICHING...</span>';
             btn.disabled = true;
+            stopBtn.disabled = false;
 
             try {
+                // Reset backend state
+                try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
+
                 const res = await fetch('/api/copilot/enrich-videos', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -571,7 +603,7 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    alert(`📊 All-Time Stats Enrichment Complete!\\n\\n${data.message}\\n\\n✅ ${data.enriched} products updated with all-time video+creator counts.`);
+                    alert(`📊 All-Time Stats Enrichment started!\n\n${data.message}\n\n⏳ Running in background. Use the STOP button above if needed.`);
                 } else {
                     alert('❌ Enrichment Error: ' + (data.message || 'Unknown error'));
                 }
