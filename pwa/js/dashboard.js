@@ -157,9 +157,6 @@ function createProductCard(product) {
     if (isNew) {
         badges += '<span class="badge badge-new">NEW</span>';
     }
-    if (product.hook_rate >= 30) {
-        badges += '<span class="badge badge-hot" style="background: linear-gradient(135deg, #ff0055, #ff5500); color: white;">🪝 HIGH HOOK</span>';
-    }
     if (commissionRate >= 20) {
         badges += '<span class="badge badge-commission">' + commissionRate.toFixed(0) + '%</span>';
     }
@@ -174,10 +171,6 @@ function createProductCard(product) {
     if (hasGmvMax) {
         commissionDisplay = commissionRate.toFixed(0) + '% + ' + shopAdsCommission.toFixed(0) + '%🚀';
     }
-
-    const hookRate = product.hook_rate ? product.hook_rate.toFixed(1) + '%' : '0%';
-    const likes = formatNumber(product.likes || 0);
-
     return `
         <div class="product-card" onclick="window.location.href='/product?id=${productId}'">
             <div class="product-image-container">
@@ -209,16 +202,16 @@ function createProductCard(product) {
                         <div class="metric-label">GMV</div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value highlight" style="color: #00ffcc;">${hookRate}</div>
-                        <div class="metric-label">Hook Rate</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-value">${likes}</div>
-                        <div class="metric-label">Likes</div>
+                        <div class="metric-value">${formatNumber(product.sales_7d || product.sales || 0)}</div>
+                        <div class="metric-label">7D Sold</div>
                     </div>
                     <div class="metric">
                         <div class="metric-value highlight">${formatCurrency(earnings)}</div>
                         <div class="metric-label">Potential</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" style="color: #fbbf24;">$${(product.price || 0).toFixed(2)}</div>
+                        <div class="metric-label">Price</div>
                     </div>
                 </div>
                 <div class="product-footer">
@@ -307,10 +300,10 @@ async function loadProducts(page = 1, filters = {}) {
     } catch (error) {
         console.error('Error loading products:', error);
         grid.innerHTML = `
-            <div class="empty-state">
+        < div class="empty-state" >
                 <h3>Error loading products</h3>
                 <p>${error.message}</p>
-            </div>
+            </div >
         `;
     }
 }
@@ -346,9 +339,9 @@ function updatePagination(pagination) {
 
     const container = document.getElementById('pagination');
     container.innerHTML = `
-        <button class="page-btn" onclick="goToPage(${pagination.page - 1})" ${!pagination.has_prev ? 'disabled' : ''}>
+        < button class="page-btn" onclick = "goToPage(${pagination.page - 1})" ${!pagination.has_prev ? 'disabled' : ''}>
             ← Previous
-        </button>
+        </button >
         <span class="page-info">
             Page ${pagination.page} of ${pagination.pages} (${pagination.total} products)
         </span>
@@ -438,15 +431,15 @@ function openAIModal(e, productName, gmv, influencers) {
     // Create modal if it doesn't exist
     if (!document.querySelector('.modal-overlay')) {
         const modalHTML = `
-            <div class="modal-overlay" onclick="closeAIModal(event)">
-                <div class="ai-modal" onclick="event.stopPropagation()">
-                    <div class="modal-header">
-                        <div class="modal-title">✨ AI Product Analysis</div>
-                        <button class="close-modal" onclick="closeAIModal()">×</button>
-                    </div>
-                    <div class="ai-content" id="aiContent"></div>
+        < div class="modal-overlay" onclick = "closeAIModal(event)" >
+            <div class="ai-modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <div class="modal-title">✨ AI Product Analysis</div>
+                    <button class="close-modal" onclick="closeAIModal()">×</button>
                 </div>
+                <div class="ai-content" id="aiContent"></div>
             </div>
+            </div >
         `;
         document.body.insertAdjacentHTML('beforeend', modalHTML);
     }
@@ -456,15 +449,15 @@ function openAIModal(e, productName, gmv, influencers) {
 
     // Show Loading
     content.innerHTML = `
-        <div class="ai-loading">
+        < div class="ai-loading" >
             <div class="ai-dots">
                 <div class="ai-dot"></div>
                 <div class="ai-dot"></div>
                 <div class="ai-dot"></div>
             </div>
             <p>Analyzing market trends & competition...</p>
-        </div>
-    `;
+        </div >
+        `;
 
     overlay.classList.add('active');
 
@@ -482,7 +475,7 @@ function openAIModal(e, productName, gmv, influencers) {
         }
 
         content.innerHTML = `
-            <div class="ai-score">${score}/100</div>
+        < div class="ai-score" > ${score} /100</div >
             <div class="product-name" style="-webkit-line-clamp: 1; margin-bottom: 1rem; text-align: center;">${productName}</div>
             <div class="ai-recommendation">
                 ${recommendation}
@@ -491,7 +484,7 @@ function openAIModal(e, productName, gmv, influencers) {
                 <button class="btn btn-outline" style="width: 100%" onclick="closeAIModal()">Close</button>
                 <button class="btn" style="width: 100%">GENERATE AD SCRIPT</button>
             </div>
-        `;
+    `;
     }, 1500);
 }
 

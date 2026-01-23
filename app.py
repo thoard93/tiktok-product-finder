@@ -473,13 +473,6 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
     ad_spend = safe_float(p_data.get('ad_spend') or p_data.get('periodAdSpend') or 0)
     ad_spend_total = safe_float(p_data.get('ad_spend_total') or p_data.get('productTotalAdSpend') or 0)
     
-    # NEW: Enhanced metrics
-    hook_rate = safe_float(p_data.get('hook_rate') or p_data.get('hookRatePct') or 0)
-    likes = int(p_data.get('likes') or p_data.get('likeCount') or 0)
-    shares = int(p_data.get('shares') or p_data.get('shareCount') or 0)
-    comments = int(p_data.get('comments') or p_data.get('commentCount') or 0)
-    collections = int(p_data.get('collections') or p_data.get('collectCount') or 0)
-    
     img = parse_cover_url(res['image_url'] or p_data.get('image_url') or p_data.get('item_img'))
     name = res['product_name'] or p_data.get('product_name') or p_data.get('title') or ""
 
@@ -523,13 +516,6 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
         if shop_ads > 0: existing.shop_ads_commission = shop_ads
         if ad_spend > 0: existing.ad_spend = ad_spend
         if ad_spend_total > 0: existing.ad_spend_total = ad_spend_total
-        
-        # New Creative Metrics
-        if hook_rate > 0: existing.hook_rate = hook_rate
-        if likes > 0: existing.likes = likes
-        if shares > 0: existing.shares = shares
-        if comments > 0: existing.comments = comments
-        if collections > 0: existing.collections = collections
         
         # Merge other stats if available
         existing.video_7d = parse_kmb_string(p_data.get('total_video_7d_cnt') or p_data.get('totalVideo7dCnt') or res.get('video_7d') or existing.video_7d or 0)
@@ -585,11 +571,6 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
             shop_ads_commission=shop_ads,
             ad_spend=ad_spend,
             ad_spend_total=ad_spend_total,
-            hook_rate=hook_rate,
-            likes=likes,
-            shares=shares,
-            comments=comments,
-            collections=collections,
             first_seen=datetime.utcnow()
         )
         db.session.add(product)
@@ -927,13 +908,6 @@ class Product(db.Model):
     ad_spend_total = db.Column(db.Float, default=0)  # Lifetime/Total Ad Spend
     gmv_growth = db.Column(db.Float, default=0)  # 7D GMV Growth Percentage
     
-    # NEW: Enhanced Video/Creative Metrics from Copilot
-    hook_rate = db.Column(db.Float, default=0) # Hook Rate %
-    likes = db.Column(db.Integer, default=0)   # Total Likes (Top Video)
-    shares = db.Column(db.Integer, default=0)  # Total Shares (Top Video)
-    comments = db.Column(db.Integer, default=0) # Total Comments (Top Video)
-    collections = db.Column(db.Integer, default=0) # Total Collections (Top Video)
-    
     # Composite indexes for common query patterns
     __table_args__ = (
         # For filtering by influencer range + sorting by sales
@@ -983,11 +957,6 @@ class Product(db.Model):
             'gmv': self.gmv,
             'gmv_30d': self.gmv_30d,
             'gmv_growth': self.gmv_growth or 0,
-            'hook_rate': self.hook_rate or 0,
-            'likes': self.likes or 0,
-            'shares': self.shares or 0,
-            'comments': self.comments or 0,
-            'collections': self.collections or 0,
             'video_count': self.video_count,  # 7D videos (momentum)
             'video_count_alltime': self.video_count_alltime or self.video_count,  # All-time for saturation
             'video_7d': self.video_7d,
@@ -4610,10 +4579,6 @@ def api_products():
             query = query.order_by(Product.price.desc().nullslast())
         elif sort_by == 'price_asc':
             query = query.order_by(Product.price.asc().nullsfirst())
-        elif sort_by in ['hook_rate', 'hook']:
-            query = query.order_by(Product.hook_rate.desc().nullslast())
-        elif sort_by in ['likes', 'engagement']:
-            query = query.order_by(Product.likes.desc().nullslast())
         else:
             query = query.order_by(Product.first_seen.desc().nullslast())
 
@@ -5398,11 +5363,6 @@ def init_database():
             ('ad_spend_total', 'FLOAT DEFAULT 0'),
             ('gmv_growth', 'FLOAT DEFAULT 0'),
             ('scan_type', 'VARCHAR(50) DEFAULT \'brand_hunter\''),
-            ('hook_rate', 'FLOAT DEFAULT 0'),
-            ('likes', 'INTEGER DEFAULT 0'),
-            ('shares', 'INTEGER DEFAULT 0'),
-            ('comments', 'INTEGER DEFAULT 0'),
-            ('collections', 'INTEGER DEFAULT 0'),
         ]
         
         added = []
@@ -6932,13 +6892,6 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             commission_rate = float(p.get('tapCommissionRate') or p.get('ocCommissionRate') or 0) / 10000.0
             shop_ads_rate = float(p.get('tapShopAdsRate') or p.get('ocShopAdsRate') or 0) / 10000.0
             
-            # NEW: Hook Rate and Engagement
-            hook_rate = float(p.get('hookRatePct') or 0)
-            likes = int(p.get('likeCount') or 0)
-            shares = int(p.get('shareCount') or 0)
-            comments = int(p.get('commentCount') or 0)
-            collections = int(p.get('collectCount') or 0)
-            
             # Growth (V2 may have different field names)
             growth_pct = float(p.get('revenueGrowthPct') or p.get('viewsGrowthPct') or p.get('productRevenueGrowthPct') or 0)
             
@@ -7008,13 +6961,6 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 
                 existing.ad_spend = ad_spend_7d
                 existing.ad_spend_total = ad_spend_total
-                
-                # New Metrics Persistence
-                existing.hook_rate = hook_rate
-                existing.likes = likes
-                existing.shares = shares
-                existing.comments = comments
-                existing.collections = collections
                 
                 if period_revenue > 0:
                     existing.gmv = period_revenue
@@ -7100,11 +7046,6 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                     shop_ads_commission=shop_ads_rate,
                     ad_spend=ad_spend_7d if ad_spend_7d > 0 else ad_spend_total * 0.15,
                     ad_spend_total=ad_spend_total,
-                    hook_rate=hook_rate,
-                    likes=likes,
-                    shares=shares,
-                    comments=comments,
-                    collections=collections,
                     views_count=period_views,
                     scan_type='copilot_v2',
                     first_seen=datetime.utcnow(),
