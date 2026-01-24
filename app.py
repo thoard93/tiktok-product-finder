@@ -7722,39 +7722,47 @@ def copilot_creator_products():
             time.sleep(delay_seconds)
         
         print(f"[Creator Export] Discovery complete! {len(all_products)} products found")
-        print(f"[Creator Export] Fetching ALL-TIME stats from trending/products API...")
+        print(f"[Creator Export] Fetching ALL-TIME stats from legacy trending API...")
         
-        # STEP 2: Build ALL-TIME stats lookup from /api/trending/products
-        # Fetch multiple pages to build a comprehensive lookup map
+        # STEP 2: Build ALL-TIME stats lookup from LEGACY /api/trending (NOT /api/trending/products)
+        # The legacy API works better with timeframe=all
         alltime_lookup = {}
-        lookup_pages = 20  # Fetch up to 20 pages (1000 products) of all-time data
+        lookup_pages = 20  # Fetch up to 20 pages (1200 videos) of all-time data
         
         for lookup_page in range(lookup_pages):
             try:
-                alltime_result = fetch_copilot_products(
+                # Use LEGACY endpoint which supports timeframe=all with cTimeframe=all
+                alltime_result = fetch_copilot_trending(
                     timeframe='all',  # All-time stats!
                     sort_by='revenue',
-                    limit=50,
-                    page=lookup_page
+                    limit=60,
+                    page=lookup_page,
+                    c_timeframe='all'  # Creator timeframe also all-time
                 )
                 
-                if not alltime_result or not alltime_result.get('products'):
-                    print(f"[Creator Export] All-time lookup page {lookup_page}: No more products")
+                if not alltime_result:
+                    print(f"[Creator Export] All-time lookup page {lookup_page}: No response")
                     break
                 
-                for p in alltime_result.get('products', []):
-                    p_id = str(p.get('productId', '')).replace('shop_', '')
-                    if p_id:
+                # Legacy API returns 'videos' array, not 'products'
+                videos = alltime_result.get('videos', [])
+                if not videos:
+                    print(f"[Creator Export] All-time lookup page {lookup_page}: No more videos")
+                    break
+                
+                for v in videos:
+                    p_id = str(v.get('productId', '')).strip()
+                    if p_id and p_id not in alltime_lookup:
                         alltime_lookup[p_id] = {
-                            'video_count_alltime': p.get('productVideoCount') or p.get('periodVideoCount') or 0,
-                            'creator_count': p.get('productCreatorCount') or p.get('periodCreatorCount') or 0,
-                            'sales_total': p.get('productTotalUnits') or p.get('unitsSold') or 0,
-                            'revenue_alltime': p.get('periodRevenue') or 0,
-                            'ad_spend_total': p.get('productTotalAdSpend') or p.get('totalAdSpend') or 0,
+                            'video_count_alltime': v.get('productVideoCount') or v.get('videoCount') or 0,
+                            'creator_count': v.get('productCreatorCount') or v.get('creatorCount') or 0,
+                            'sales_total': v.get('productTotalUnits') or v.get('unitsSold') or 0,
+                            'revenue_alltime': v.get('periodRevenue') or 0,
+                            'ad_spend_total': v.get('productTotalAdSpend') or v.get('totalAdSpend') or 0,
                         }
                 
-                print(f"[Creator Export] All-time lookup page {lookup_page}: {len(alltime_result.get('products', []))} products, {len(alltime_lookup)} total in lookup")
-                time.sleep(2)  # Delay between pages
+                print(f"[Creator Export] All-time lookup page {lookup_page}: {len(videos)} videos, {len(alltime_lookup)} unique products in lookup")
+                time.sleep(3)  # Longer delay between pages
                 
             except Exception as e:
                 print(f"[Creator Export] All-time lookup page {lookup_page} error: {e}")
