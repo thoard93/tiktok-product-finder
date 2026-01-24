@@ -6917,6 +6917,10 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     if kwargs.get('creator_ids'):
         params['creatorIds'] = kwargs.get('creator_ids')
     
+    # Add cTimeframe for all-time creator stats
+    if kwargs.get('c_timeframe'):
+        params['cTimeframe'] = kwargs.get('c_timeframe')
+    
     try:
         res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
         if res.status_code == 200:
@@ -7658,11 +7662,12 @@ def copilot_creator_products():
             
             # Use legacy endpoint with creatorIds filter
             result = fetch_copilot_trending(
-                timeframe='30d',
+                timeframe='all',  # Use all-time for accurate stats
                 sort_by='revenue',
                 limit=50,
                 page=page,
-                creator_ids=creator_id
+                creator_ids=creator_id,
+                c_timeframe='all'  # All-time creator stats
             )
             
             if not result:
