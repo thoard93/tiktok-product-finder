@@ -7709,8 +7709,8 @@ def copilot_creator_products():
             # Delay to avoid API limits
             time.sleep(delay_seconds)
         
-        # Convert to list and sort by revenue
-        products_list = sorted(all_products.values(), key=lambda x: x.get('revenue_period', 0), reverse=True)
+        # Convert to list and sort by revenue (handle None values)
+        products_list = sorted(all_products.values(), key=lambda x: x.get('revenue_period') or 0, reverse=True)
         
         print(f"[Creator Export] Complete! {total_videos} videos, {len(products_list)} unique products")
         
