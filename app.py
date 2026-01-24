@@ -7722,74 +7722,15 @@ def copilot_creator_products():
             time.sleep(delay_seconds)
         
         print(f"[Creator Export] Discovery complete! {len(all_products)} products found")
-        print(f"[Creator Export] Fetching ALL-TIME stats from legacy trending API...")
         
-        # STEP 2: Build ALL-TIME stats lookup from LEGACY /api/trending (NOT /api/trending/products)
-        # The legacy API works better with timeframe=all
-        alltime_lookup = {}
-        lookup_pages = 20  # Fetch up to 20 pages (1200 videos) of all-time data
-        
-        for lookup_page in range(lookup_pages):
-            try:
-                # Use LEGACY endpoint which supports timeframe=all with cTimeframe=all
-                alltime_result = fetch_copilot_trending(
-                    timeframe='all',  # All-time stats!
-                    sort_by='revenue',
-                    limit=60,
-                    page=lookup_page,
-                    c_timeframe='all'  # Creator timeframe also all-time
-                )
-                
-                if not alltime_result:
-                    print(f"[Creator Export] All-time lookup page {lookup_page}: No response")
-                    break
-                
-                # Legacy API returns 'videos' array, not 'products'
-                videos = alltime_result.get('videos', [])
-                if not videos:
-                    print(f"[Creator Export] All-time lookup page {lookup_page}: No more videos")
-                    break
-                
-                for v in videos:
-                    p_id = str(v.get('productId', '')).strip()
-                    if p_id and p_id not in alltime_lookup:
-                        alltime_lookup[p_id] = {
-                            'video_count_alltime': v.get('productVideoCount') or v.get('videoCount') or 0,
-                            'creator_count': v.get('productCreatorCount') or v.get('creatorCount') or 0,
-                            'sales_total': v.get('productTotalUnits') or v.get('unitsSold') or 0,
-                            'revenue_alltime': v.get('periodRevenue') or 0,
-                            'ad_spend_total': v.get('productTotalAdSpend') or v.get('totalAdSpend') or 0,
-                        }
-                
-                print(f"[Creator Export] All-time lookup page {lookup_page}: {len(videos)} videos, {len(alltime_lookup)} unique products in lookup")
-                time.sleep(3)  # Longer delay between pages
-                
-            except Exception as e:
-                print(f"[Creator Export] All-time lookup page {lookup_page} error: {e}")
-                break
-        
-        print(f"[Creator Export] Built lookup with {len(alltime_lookup)} all-time product stats")
-        
-        # STEP 3: Apply all-time stats to creator's products
-        matched_count = 0
+        # NOTE: All-time lookup disabled - Copilot API returns 500 memory error for timeframe=all
+        # The 7d discovery already includes productVideoCount which is ALL-TIME video count
+        # Add revenue_alltime placeholder for sorting consistency
         for product_id, product_data in all_products.items():
-            if product_id in alltime_lookup:
-                # Update with accurate all-time stats
-                alltime_stats = alltime_lookup[product_id]
-                product_data['video_count_alltime'] = alltime_stats['video_count_alltime']
-                product_data['creator_count'] = alltime_stats['creator_count']
-                product_data['sales_total'] = alltime_stats['sales_total']
-                product_data['revenue_alltime'] = alltime_stats['revenue_alltime']
-                product_data['ad_spend_total'] = alltime_stats['ad_spend_total']
-                matched_count += 1
-            else:
-                # Product not in top trending - add placeholder for all-time revenue
-                product_data['revenue_alltime'] = 0
+            product_data['revenue_alltime'] = product_data.get('revenue_7d', 0)
         
-        print(f"[Creator Export] Matched {matched_count}/{len(all_products)} products with all-time stats")
-        
-        # Sort by all-time revenue (or 7D if no all-time)
-        products_list = sorted(all_products.values(), key=lambda x: x.get('revenue_alltime') or x.get('revenue_7d') or 0, reverse=True)
+        # Sort by 7d revenue (which is the best metric we have)
+        products_list = sorted(all_products.values(), key=lambda x: x.get('revenue_7d') or 0, reverse=True)
         
         print(f"[Creator Export] Complete! {total_videos} videos, {len(products_list)} unique products")
         
