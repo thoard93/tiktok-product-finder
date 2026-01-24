@@ -7521,9 +7521,10 @@ def copilot_enrich_videos():
                 print(f"[Video Enrich] Page {page}: Both endpoints failed, stopping")
                 break
             
-            products_list = products_data.get('products', [])
+            # Handle both V2 ('products') and legacy ('videos') response keys
+            products_list = products_data.get('products', []) or products_data.get('videos', [])
             if not products_list:
-                print(f"[Video Enrich] Page {page}: No products, stopping")
+                print(f"[Video Enrich] Page {page}: No products in response, stopping")
                 break
             
             total_fetched += len(products_list)
