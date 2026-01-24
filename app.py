@@ -6682,8 +6682,9 @@ def get_copilot_refresh_credentials():
 def refresh_copilot_session():
     """Use refresh token to get a fresh session JWT from Clerk.
     
-    Clerk's token endpoint: POST /v1/client/sessions/{session_id}/tokens
-    With refresh token cookie to authenticate.
+    Clerk requires multiple cookies for authentication:
+    - __refresh_pOM46XQh: Long-lived refresh token
+    - __client_uat_pOM46XQh: Client user auth timestamp
     
     Returns:
         Fresh session JWT or None on error
@@ -6695,31 +6696,59 @@ def refresh_copilot_session():
         return _COPILOT_SESSION_CACHE['session_token']
     
     refresh_token, session_id = get_copilot_refresh_credentials()
+    client_uat = get_config_value('TIKTOK_COPILOT_CLIENT_UAT', os.environ.get('TIKTOK_COPILOT_CLIENT_UAT', ''))
     
     if not refresh_token or not session_id:
         print("[Copilot Auth] ❌ Missing TIKTOK_COPILOT_REFRESH_TOKEN or TIKTOK_COPILOT_SESSION_ID")
         return None
     
     try:
-        # Call Clerk's token refresh endpoint
-        url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/tokens"
+        # Try the touch endpoint first (more reliable for maintaining session)
+        url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/touch"
+        
+        # Build full cookie string with all required Clerk cookies
+        cookie_parts = [
+            f"__refresh_pOM46XQh={refresh_token}",
+            f"clerk_active_context={session_id}:",
+        ]
+        if client_uat:
+            cookie_parts.append(f"__client_uat_pOM46XQh={client_uat}")
+            cookie_parts.append(f"__client_uat={client_uat}")
+        
+        cookie_str = "; ".join(cookie_parts)
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-            "Accept": "*/*",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
             "Origin": "https://www.tiktokcopilot.com",
             "Referer": "https://www.tiktokcopilot.com/",
-            "Cookie": f"__refresh_pOM46XQh={refresh_token}"
+            "Cookie": cookie_str
         }
         
-        res = requests.post(url, headers=headers, timeout=30)
+        # Try touch endpoint first
+        res = requests.post(url, headers=headers, json={}, timeout=30)
+        
+        if res.status_code == 200:
+            data = res.json()
+            # Touch returns session with last_active_token
+            jwt_token = data.get('last_active_token', {}).get('jwt') or data.get('jwt')
+            
+            if jwt_token:
+                _COPILOT_SESSION_CACHE['session_token'] = jwt_token
+                _COPILOT_SESSION_CACHE['expires_at'] = time.time() + 50
+                print(f"[Copilot Auth] ✅ Refreshed session token via touch!")
+                return jwt_token
+        
+        # Fallback to tokens endpoint
+        url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/tokens"
+        res = requests.post(url, headers=headers, json={}, timeout=30)
         
         if res.status_code == 200:
             data = res.json()
             jwt_token = data.get('jwt') or data.get('token') or data.get('session_token')
             
             if jwt_token:
-                # Cache the token (expires in 60s, we'll refresh at 50s)
                 _COPILOT_SESSION_CACHE['session_token'] = jwt_token
                 _COPILOT_SESSION_CACHE['expires_at'] = time.time() + 50
                 print(f"[Copilot Auth] ✅ Refreshed session token successfully!")
