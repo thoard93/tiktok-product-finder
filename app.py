@@ -7716,7 +7716,13 @@ def copilot_creator_products():
         
         for product_id, basic_info in all_products.items():
             # Query our local Product table for accurate stats
-            db_product = Product.query.filter_by(product_id=product_id).first()
+            # Try both formats: with and without shop_ prefix
+            shop_pid = f"shop_{product_id}" if not product_id.startswith('shop_') else product_id
+            raw_pid = product_id.replace('shop_', '')
+            
+            db_product = Product.query.filter_by(product_id=shop_pid).first()
+            if not db_product:
+                db_product = Product.query.filter_by(product_id=raw_pid).first()
             
             if db_product:
                 # Use database stats (all-time accurate data)
