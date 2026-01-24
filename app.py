@@ -6786,7 +6786,7 @@ def get_copilot_cookie():
         print("[Copilot Cookie] Using static cookie (may be expired)")
     return static_cookie
 
-def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0, region='US'):
+def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0, region='US', keywords=None):
     """
     Fetch products from the ENHANCED TikTokCopilot /api/trending/products endpoint.
     This endpoint provides significantly more accurate stats than the legacy /api/trending.
@@ -6797,6 +6797,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         limit: products per page (max ~50)
         page: page number for pagination
         region: US, etc
+        keywords: Optional search keywords or product ID
     
     Returns:
         dict with products data or None on error
@@ -6832,6 +6833,10 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         "page": page,
         "region": region
     }
+    
+    # Add keywords for search
+    if keywords:
+        params["keywords"] = keywords
     
     try:
         # Use the NEW /api/trending/products endpoint
