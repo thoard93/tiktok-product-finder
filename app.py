@@ -7096,6 +7096,11 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             if ad_spend_7d <= 0 and commission_rate < 0.15:
                 continue
             
+            # FILTER: GMV Max Ads Required - Skip products without GMV Max bonus
+            # Only sync products with shop ads commission > 0% (tapShopAdsRate)
+            if shop_ads_rate <= 0:
+                continue
+            
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
             
             # Save or Update Product
