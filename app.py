@@ -7482,17 +7482,25 @@ def copilot_enrich_videos():
     This runs separately from the main sync to get all-time video counts
     while keeping 7D sales/ad_spend for momentum tracking.
     Paginates through multiple pages to enrich as many products as possible.
+    
+    Enhanced for 15k+ products:
+    - Longer delays to avoid API memory limits
+    - Continues past API errors with backoff
+    - Tracks progress for resumption
     """
     import gc
     user = get_current_user()
     data = request.json or {}
-    target_pages = int(data.get('pages', 20))  # Default: 20 pages = ~500 products
+    target_pages = int(data.get('pages', 300))  # Default: 300 pages = ~15k products
+    delay_seconds = float(data.get('delay', 3.0))  # Delay between pages
     
     try:
-        print(f"[Video Enrich] Starting enrichment with timeframe=all across {target_pages} pages...")
+        print(f"[Video Enrich] Starting enrichment across {target_pages} pages (delay: {delay_seconds}s)...")
         
         enriched_count = 0
         total_fetched = 0
+        consecutive_errors = 0
+        max_consecutive_errors = 5
         
         global SYNC_STOP_REQUESTED
         SYNC_STOP_REQUESTED = False  # Reset on new enrichment trigger
@@ -7508,7 +7516,7 @@ def copilot_enrich_videos():
             if SYNC_STOP_REQUESTED:
                 print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
                 break
-                
+            
             # Try V2 endpoint first (has timeframe=all), fallback to legacy
             products_data = fetch_copilot_products(timeframe='all', limit=25, page=page)
             
@@ -7517,17 +7525,33 @@ def copilot_enrich_videos():
                 print(f"[Video Enrich] V2 failed on page {page}, trying legacy 30d...")
                 products_data = fetch_copilot_trending(timeframe='30d', limit=50, page=page)
             
+            # Handle API errors gracefully - don't stop, just pause and continue
             if not products_data:
-                print(f"[Video Enrich] Page {page}: Both endpoints failed, stopping")
-                break
+                consecutive_errors += 1
+                print(f"[Video Enrich] Page {page}: API failed (error {consecutive_errors}/{max_consecutive_errors})")
+                
+                if consecutive_errors >= max_consecutive_errors:
+                    print(f"[Video Enrich] Too many consecutive errors, stopping")
+                    break
+                
+                # Exponential backoff: wait longer after each error
+                backoff_time = min(30, 5 * consecutive_errors)
+                print(f"[Video Enrich] Waiting {backoff_time}s before retry...")
+                time.sleep(backoff_time)
+                continue  # Try next page instead of stopping
+            
+            # Reset error counter on success
+            consecutive_errors = 0
             
             # Handle both V2 ('products') and legacy ('videos') response keys
             products_list = products_data.get('products', []) or products_data.get('videos', [])
             if not products_list:
-                print(f"[Video Enrich] Page {page}: No products in response, stopping")
-                break
+                print(f"[Video Enrich] Page {page}: Empty page, trying next...")
+                time.sleep(delay_seconds)
+                continue  # Try next page
             
             total_fetched += len(products_list)
+            page_enriched = 0
             
             for p in products_list:
                 if SYNC_STOP_REQUESTED:
@@ -7554,6 +7578,7 @@ def copilot_enrich_videos():
                     if alltime_creator_count > 0:
                         existing.influencer_count = alltime_creator_count
                     enriched_count += 1
+                    page_enriched += 1
             
             # Commit after each page to save progress
             db.session.commit()
@@ -7561,16 +7586,18 @@ def copilot_enrich_videos():
             # Force garbage collection to prevent memory buildup
             gc.collect()
             
-            print(f"[Video Enrich] Page {page}: fetched {len(products_list)}, enriched so far: {enriched_count}")
+            # Progress log every 10 pages
+            if page % 10 == 0 or page_enriched > 0:
+                print(f"[Video Enrich] Page {page}: fetched {len(products_list)}, page_enriched: {page_enriched}, total: {enriched_count}")
             
-            # Add delay for rate limiting and memory
-            time.sleep(1.5)
+            # Longer delay to avoid API memory issues (their server, not ours)
+            time.sleep(delay_seconds)
         
         log_activity(user.id, 'enrich_videos', {'enriched': enriched_count, 'pages': target_pages})
         
         return jsonify({
             'status': 'success',
-            'message': f'Enriched {enriched_count} products with all-time video counts across {target_pages} pages',
+            'message': f'Enriched {enriched_count} products across {target_pages} pages',
             'enriched': enriched_count,
             'total_fetched': total_fetched,
             'pages_processed': target_pages
@@ -7578,6 +7605,8 @@ def copilot_enrich_videos():
         
     except Exception as e:
         print(f"[Video Enrich] Error: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)})
 
