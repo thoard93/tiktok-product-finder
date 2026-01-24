@@ -241,6 +241,36 @@
                 </button>
             </div>
 
+            <!-- Creator Products Export -->
+            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
+                <div class="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center">
+                    <i class="fas fa-user-circle text-pink-500 text-xs"></i>
+                </div>
+                Creator Products Export
+            </h3>
+            <p class="text-slate-400 text-xs mb-4">Extract all products from a specific TikTok affiliate creator and
+                export to CSV.</p>
+
+            <div class="flex flex-wrap gap-4 items-end mb-8">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Creator
+                        ID</label>
+                    <input type="text" id="creatorIdInput" placeholder="e.g. 7436686228703265838"
+                        class="bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-pink-400 focus:border-pink-400/50 outline-none transition-all w-64">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Creator
+                        Name (for filename)</label>
+                    <input type="text" id="creatorNameInput" placeholder="e.g. cakedfinds"
+                        class="bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-pink-400/50 outline-none transition-all w-48">
+                </div>
+                <button onclick="exportCreatorProducts()" id="btnExportCreator"
+                    class="bg-pink-600 hover:bg-pink-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-pink-500/20">
+                    <i class="fas fa-file-csv text-xs"></i>
+                    <span>Export to CSV</span>
+                </button>
+            </div>
+
             <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
                 <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
                     <i class="fas fa-robot text-violet-500 text-xs"></i>
@@ -864,6 +894,56 @@
                 }
             } catch (e) {
                 alert('System Fault: ' + e);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function exportCreatorProducts() {
+            const creatorId = document.getElementById('creatorIdInput').value.trim();
+            const creatorName = document.getElementById('creatorNameInput').value.trim() || 'creator';
+
+            if (!creatorId) {
+                alert('Please enter a Creator ID');
+                return;
+            }
+
+            const btn = document.getElementById('btnExportCreator');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/copilot/creator-products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        creator_id: creatorId,
+                        creator_name: creatorName,
+                        max_pages: 100,  // ~2500 products max
+                        delay: 3.0
+                    })
+                });
+
+                if (res.ok) {
+                    // Download the CSV file
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${creatorName}_products.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                    alert(`✅ Export Complete! Downloaded ${creatorName}_products.csv`);
+                } else {
+                    const data = await res.json();
+                    alert('❌ Export Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e.message);
             } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
