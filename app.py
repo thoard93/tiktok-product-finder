@@ -7688,30 +7688,16 @@ def copilot_creator_products():
             total_videos += len(videos)
             
             for video in videos:
-                # Extract product data from video
+                # Extract product ID from video - we'll enrich from database
                 product_id = str(video.get('productId', '')).strip()
                 if not product_id or product_id in all_products:
                     continue
                 
-                # Store basic discovery data - we'll enrich with all-time stats later
+                # Store basic discovery data - will be enriched from database
                 all_products[product_id] = {
                     'product_id': product_id,
                     'product_name': video.get('productTitle', ''),
-                    'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
                     'seller_name': video.get('sellerName', ''),
-                    'price': video.get('productPrice') or video.get('avgUnitPrice') or 0,
-                    'commission_rate': (video.get('tapCommissionRate') or 0) / 10000,
-                    'gmv_max_rate': (video.get('tapShopAdsRate') or 0) / 10000,
-                    'video_count_alltime': video.get('productVideoCount') or video.get('videoCount') or 0,
-                    'video_count_7d': video.get('periodVideoCount') or video.get('newVideoCount') or 0,
-                    'creator_count': video.get('productCreatorCount') or video.get('creatorCount') or 0,  
-                    'sales_total': video.get('productTotalUnits') or video.get('unitsSold') or 0,
-                    'sales_7d': video.get('periodUnits') or 0,
-                    'revenue_7d': video.get('periodRevenue') or 0,
-                    'ad_spend_7d': video.get('periodAdSpend') or 0,
-                    'ad_spend_total': video.get('productTotalAdSpend') or video.get('totalAdSpend') or 0,
-                    'views': video.get('viewCount') or 0,
-                    'likes': video.get('likes') or video.get('diggCount') or 0,
                     'video_url': video.get('videoUrl') or video.get('url') or f"https://www.tiktok.com/@{creator_name}",
                     'creator_name': video.get('authorName') or video.get('author') or creator_name,
                 }
@@ -7722,15 +7708,64 @@ def copilot_creator_products():
             time.sleep(delay_seconds)
         
         print(f"[Creator Export] Discovery complete! {len(all_products)} products found")
+        print(f"[Creator Export] Enriching from local database for ALL-TIME stats...")
         
-        # NOTE: All-time lookup disabled - Copilot API returns 500 memory error for timeframe=all
-        # The 7d discovery already includes productVideoCount which is ALL-TIME video count
-        # Add revenue_alltime placeholder for sorting consistency
-        for product_id, product_data in all_products.items():
-            product_data['revenue_alltime'] = product_data.get('revenue_7d', 0)
+        # STEP 2: Enrich from local database (which has accurate all-time stats from syncs)
+        enriched_products = []
+        matched_count = 0
         
-        # Sort by 7d revenue (which is the best metric we have)
-        products_list = sorted(all_products.values(), key=lambda x: x.get('revenue_7d') or 0, reverse=True)
+        for product_id, basic_info in all_products.items():
+            # Query our local Product table for accurate stats
+            db_product = Product.query.filter_by(product_id=product_id).first()
+            
+            if db_product:
+                # Use database stats (all-time accurate data)
+                enriched_products.append({
+                    'product_id': product_id,
+                    'product_name': db_product.name or basic_info.get('product_name', ''),
+                    'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
+                    'seller_name': db_product.seller_name or basic_info.get('seller_name', ''),
+                    'price': db_product.price or 0,
+                    'commission_rate': f"{(db_product.commission_rate or 0) * 100:.1f}%",  # Format as percentage
+                    'gmv_max_rate': f"{(db_product.gmv_max_rate or 0) * 100:.1f}%",  # Format as percentage
+                    'video_count_alltime': db_product.video_count or 0,
+                    'creator_count': db_product.creator_count or 0,
+                    'sales_alltime': db_product.sales or 0,
+                    'sales_7d': db_product.sales_7d or 0,
+                    'revenue_alltime': db_product.gmv or 0,
+                    'revenue_7d': db_product.gmv_7d or 0,
+                    'ad_spend_alltime': db_product.ad_spend or db_product.total_ad_cost or 0,
+                    'ad_spend_7d': db_product.ad_spend_7d or 0,
+                    'video_url': basic_info.get('video_url', ''),
+                    'creator_name': basic_info.get('creator_name', creator_name),
+                })
+                matched_count += 1
+            else:
+                # Product not in database - use basic info with placeholders
+                enriched_products.append({
+                    'product_id': product_id,
+                    'product_name': basic_info.get('product_name', ''),
+                    'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
+                    'seller_name': basic_info.get('seller_name', ''),
+                    'price': 0,
+                    'commission_rate': '0%',
+                    'gmv_max_rate': '0%',
+                    'video_count_alltime': 0,
+                    'creator_count': 0,
+                    'sales_alltime': 0,
+                    'sales_7d': 0,
+                    'revenue_alltime': 0,
+                    'revenue_7d': 0,
+                    'ad_spend_alltime': 0,
+                    'ad_spend_7d': 0,
+                    'video_url': basic_info.get('video_url', ''),
+                    'creator_name': basic_info.get('creator_name', creator_name),
+                })
+        
+        print(f"[Creator Export] Matched {matched_count}/{len(all_products)} products from database")
+        
+        # Sort by all-time revenue
+        products_list = sorted(enriched_products, key=lambda x: x.get('revenue_alltime') or 0, reverse=True)
         
         print(f"[Creator Export] Complete! {total_videos} videos, {len(products_list)} unique products")
         
