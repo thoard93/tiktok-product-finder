@@ -7683,43 +7683,16 @@ def copilot_creator_products():
             total_videos += len(videos)
             
             for video in videos:
-                # Extract product data from video
+                # Extract product ID from video - we'll enrich later
                 product_id = str(video.get('productId', '')).strip()
                 if not product_id or product_id in all_products:
                     continue
                 
-                # Get video/creator counts - try multiple field names
-                # Legacy API uses different field names than V2
-                video_count_alltime = (
-                    video.get('productVideoCount') or 
-                    video.get('videoCount') or 
-                    video.get('periodVideoCount') or 0
-                )
-                creator_count = (
-                    video.get('productCreatorCount') or 
-                    video.get('creatorCount') or 
-                    video.get('periodCreatorCount') or 0
-                )
-                
-                # Get all the stats with proper fallbacks
+                # Store basic info from discovery - will be enriched
                 all_products[product_id] = {
                     'product_id': product_id,
                     'product_name': video.get('productTitle', ''),
-                    'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
                     'seller_name': video.get('sellerName', ''),
-                    'price': video.get('productPrice') or video.get('avgUnitPrice') or 0,
-                    'commission_rate': (video.get('tapCommissionRate') or 0) / 10000,  # Fix: divide by 10000
-                    'gmv_max_rate': (video.get('tapShopAdsRate') or 0) / 10000,  # Fix: divide by 10000
-                    'video_count_alltime': video_count_alltime,
-                    'video_count_period': video.get('periodVideoCount') or video.get('newVideoCount') or 0,
-                    'creator_count': creator_count,
-                    'sales_total': video.get('productTotalUnits') or video.get('unitsSold') or 0,
-                    'sales_period': video.get('periodUnits') or 0,
-                    'revenue_period': video.get('periodRevenue') or 0,
-                    'ad_spend_period': video.get('periodAdSpend') or 0,
-                    'ad_spend_total': video.get('productTotalAdSpend') or video.get('totalAdSpend') or 0,
-                    'video_views': video.get('viewCount') or 0,
-                    'video_likes': video.get('likes') or video.get('diggCount') or 0,
                     'video_url': video.get('videoUrl') or video.get('url') or '',
                     'creator_name': video.get('authorName') or video.get('author') or creator_name,
                 }
@@ -7729,8 +7702,102 @@ def copilot_creator_products():
             # Delay to avoid API limits
             time.sleep(delay_seconds)
         
-        # Convert to list and sort by revenue (handle None values)
-        products_list = sorted(all_products.values(), key=lambda x: x.get('revenue_period') or 0, reverse=True)
+        print(f"[Creator Export] Discovery complete! {total_videos} videos, {len(all_products)} unique products")
+        print(f"[Creator Export] Starting V2 enrichment for {len(all_products)} products...")
+        
+        # STEP 2: Enrich each product with V2 Products API (all-time stats)
+        enriched_products = []
+        for idx, (product_id, basic_info) in enumerate(all_products.items()):
+            try:
+                # Use V2 Products API to get accurate all-time stats
+                v2_result = fetch_copilot_products(
+                    timeframe='all',  # All-time for accurate totals
+                    limit=50,
+                    page=0,
+                    keywords=product_id  # Search by product ID
+                )
+                
+                if v2_result and v2_result.get('products'):
+                    # Find the matching product in the response
+                    for p in v2_result.get('products', []):
+                        p_id = str(p.get('productId', '')).replace('shop_', '')
+                        if p_id == product_id or p.get('productId') == product_id:
+                            # Use V2 data with all-time stats
+                            enriched_products.append({
+                                'product_id': product_id,
+                                'product_name': p.get('productTitle') or basic_info.get('product_name', ''),
+                                'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
+                                'seller_name': p.get('sellerName') or basic_info.get('seller_name', ''),
+                                'price': p.get('productPrice') or p.get('avgUnitPrice') or 0,
+                                'commission_rate': (p.get('tapCommissionRate') or 0) / 10000,
+                                'gmv_max_rate': (p.get('tapShopAdsRate') or 0) / 10000,
+                                'video_count_alltime': p.get('productVideoCount') or p.get('periodVideoCount') or 0,
+                                'video_count_7d': p.get('periodVideoCount') or p.get('newVideoCount') or 0,
+                                'creator_count': p.get('productCreatorCount') or p.get('periodCreatorCount') or 0,
+                                'sales_total': p.get('productTotalUnits') or p.get('unitsSold') or 0,
+                                'sales_7d': p.get('periodUnits') or 0,
+                                'revenue_7d': p.get('periodRevenue') or 0,
+                                'ad_spend_7d': p.get('periodAdSpend') or 0,
+                                'ad_spend_total': p.get('productTotalAdSpend') or p.get('totalAdSpend') or 0,
+                                'video_url': basic_info.get('video_url', ''),
+                                'creator_name': basic_info.get('creator_name', creator_name),
+                            })
+                            break
+                    else:
+                        # Product not found in V2 - use basic info with zeros
+                        enriched_products.append({
+                            'product_id': product_id,
+                            'product_name': basic_info.get('product_name', ''),
+                            'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
+                            'seller_name': basic_info.get('seller_name', ''),
+                            'price': 0,
+                            'commission_rate': 0,
+                            'gmv_max_rate': 0,
+                            'video_count_alltime': 0,
+                            'video_count_7d': 0,
+                            'creator_count': 0,
+                            'sales_total': 0,
+                            'sales_7d': 0,
+                            'revenue_7d': 0,
+                            'ad_spend_7d': 0,
+                            'ad_spend_total': 0,
+                            'video_url': basic_info.get('video_url', ''),
+                            'creator_name': basic_info.get('creator_name', creator_name),
+                        })
+                else:
+                    # V2 API failed - use basic info
+                    enriched_products.append({
+                        'product_id': product_id,
+                        'product_name': basic_info.get('product_name', ''),
+                        'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
+                        'seller_name': basic_info.get('seller_name', ''),
+                        'price': 0,
+                        'commission_rate': 0,
+                        'gmv_max_rate': 0,
+                        'video_count_alltime': 0,
+                        'video_count_7d': 0,
+                        'creator_count': 0,
+                        'sales_total': 0,
+                        'sales_7d': 0,
+                        'revenue_7d': 0,
+                        'ad_spend_7d': 0,
+                        'ad_spend_total': 0,
+                        'video_url': basic_info.get('video_url', ''),
+                        'creator_name': basic_info.get('creator_name', creator_name),
+                    })
+                
+                if (idx + 1) % 10 == 0:
+                    print(f"[Creator Export] Enriched {idx + 1}/{len(all_products)} products...")
+                
+                # Small delay between V2 calls
+                time.sleep(1.5)
+                
+            except Exception as e:
+                print(f"[Creator Export] Error enriching {product_id}: {e}")
+                continue
+        
+        # Sort by revenue
+        products_list = sorted(enriched_products, key=lambda x: x.get('revenue_7d') or 0, reverse=True)
         
         print(f"[Creator Export] Complete! {total_videos} videos, {len(products_list)} unique products")
         
