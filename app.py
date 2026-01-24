@@ -7492,7 +7492,7 @@ def copilot_enrich_videos():
     user = get_current_user()
     data = request.json or {}
     target_pages = int(data.get('pages', 300))  # Default: 300 pages = ~15k products
-    delay_seconds = float(data.get('delay', 3.0))  # Delay between pages
+    delay_seconds = float(data.get('delay', 10.0))  # 10s delay to avoid Copilot memory limits
     
     try:
         print(f"[Video Enrich] Starting enrichment across {target_pages} pages (delay: {delay_seconds}s)...")
