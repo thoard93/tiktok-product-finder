@@ -6662,9 +6662,100 @@ def scan_partner_opportunity_live():
 
 COPILOT_API_BASE = "https://www.tiktokcopilot.com/api"
 
+# Cache for refreshed session token
+_COPILOT_SESSION_CACHE = {
+    'session_token': None,
+    'expires_at': 0
+}
+
+def get_copilot_refresh_credentials():
+    """Get the long-lived refresh credentials from config/env.
+    
+    Required env vars:
+        TIKTOK_COPILOT_REFRESH_TOKEN: The __refresh_pOM46XQh value (long-lived)
+        TIKTOK_COPILOT_SESSION_ID: The session ID (e.g., sess_38c9F2BNijjuXJF4dANtbxnJQo6)
+    """
+    refresh_token = get_config_value('TIKTOK_COPILOT_REFRESH_TOKEN', os.environ.get('TIKTOK_COPILOT_REFRESH_TOKEN', ''))
+    session_id = get_config_value('TIKTOK_COPILOT_SESSION_ID', os.environ.get('TIKTOK_COPILOT_SESSION_ID', ''))
+    return refresh_token, session_id
+
+def refresh_copilot_session():
+    """Use refresh token to get a fresh session JWT from Clerk.
+    
+    Clerk's token endpoint: POST /v1/client/sessions/{session_id}/tokens
+    With refresh token cookie to authenticate.
+    
+    Returns:
+        Fresh session JWT or None on error
+    """
+    global _COPILOT_SESSION_CACHE
+    
+    # Check cache first - reuse if not expired (with 10s buffer)
+    if _COPILOT_SESSION_CACHE['session_token'] and time.time() < _COPILOT_SESSION_CACHE['expires_at'] - 10:
+        return _COPILOT_SESSION_CACHE['session_token']
+    
+    refresh_token, session_id = get_copilot_refresh_credentials()
+    
+    if not refresh_token or not session_id:
+        print("[Copilot Auth] ❌ Missing TIKTOK_COPILOT_REFRESH_TOKEN or TIKTOK_COPILOT_SESSION_ID")
+        return None
+    
+    try:
+        # Call Clerk's token refresh endpoint
+        url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/tokens"
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "Origin": "https://www.tiktokcopilot.com",
+            "Referer": "https://www.tiktokcopilot.com/",
+            "Cookie": f"__refresh_pOM46XQh={refresh_token}"
+        }
+        
+        res = requests.post(url, headers=headers, timeout=30)
+        
+        if res.status_code == 200:
+            data = res.json()
+            jwt_token = data.get('jwt') or data.get('token') or data.get('session_token')
+            
+            if jwt_token:
+                # Cache the token (expires in 60s, we'll refresh at 50s)
+                _COPILOT_SESSION_CACHE['session_token'] = jwt_token
+                _COPILOT_SESSION_CACHE['expires_at'] = time.time() + 50
+                print(f"[Copilot Auth] ✅ Refreshed session token successfully!")
+                return jwt_token
+            else:
+                print(f"[Copilot Auth] ⚠️ Response didn't contain JWT: {list(data.keys())}")
+        else:
+            print(f"[Copilot Auth] ❌ Refresh failed: {res.status_code}")
+            if res.text:
+                print(f"[DEBUG] Response: {res.text[:300]}")
+                
+    except Exception as e:
+        print(f"[Copilot Auth] ❌ Exception during refresh: {e}")
+    
+    return None
+
 def get_copilot_cookie():
-    """Get TikTokCopilot session cookie from DB or Env"""
-    return get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
+    """Get TikTokCopilot session cookie - tries refresh first, falls back to static cookie.
+    
+    Priority:
+    1. Refresh token mechanism (if configured)
+    2. Static cookie from TIKTOK_COPILOT_COOKIE env var
+    """
+    # Try refresh token first
+    refresh_token, session_id = get_copilot_refresh_credentials()
+    if refresh_token and session_id:
+        fresh_jwt = refresh_copilot_session()
+        if fresh_jwt:
+            # Build a minimal cookie string with the fresh session
+            return f"__session={fresh_jwt}; __session_pOM46XQh={fresh_jwt}"
+    
+    # Fall back to static cookie
+    static_cookie = get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
+    if static_cookie:
+        print("[Copilot Cookie] Using static cookie (may be expired)")
+    return static_cookie
 
 def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0, region='US'):
     """
