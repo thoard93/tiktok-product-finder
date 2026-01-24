@@ -7960,14 +7960,16 @@ def copilot_mass_sync():
                             else:
                                 return page_num, 0, -1, str(e)
                     return page_num, 0, -1, "Unknown error"
-            # Use 50 products per page (V2 limit might be 50)
-            PRODUCTS_PER_PAGE = 50 
+            # MEMORY-OPTIMIZED: Reduced for Render free/starter tier
+            # Sequential processing to minimize memory footprint
+            import gc
+            PRODUCTS_PER_PAGE = 25  # Smaller pages = less memory
             pages_needed = min((target_products // PRODUCTS_PER_PAGE) + 1, 2000)
             
-            # Reduced parallelization to avoid rate limits
-            BATCH_SIZE = 3 # Reduced from 5 to be safer
+            # SEQUENTIAL MODE: No parallelization to prevent memory spikes
+            BATCH_SIZE = 1  # One page at a time for stability
             MAX_CONSECUTIVE_EMPTY = 15  # More persistent through rate limits
-            print(f"[LUDICROUS] 🚀🚀🚀 LUDICROUS SPEED ENGAGED: {pages_needed} pages, {BATCH_SIZE} parallel, {PRODUCTS_PER_PAGE}/page")
+            print(f"[SYNC] 🚀 Memory-Optimized Sync: {pages_needed} pages, sequential, {PRODUCTS_PER_PAGE}/page")
             
             for batch_start in range(0, pages_needed, BATCH_SIZE):
                 global SYNC_STOP_REQUESTED
@@ -7975,50 +7977,51 @@ def copilot_mass_sync():
                 db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
                 if db_stop_flag == 'true':
                     SYNC_STOP_REQUESTED = True
-                    print("[LUDICROUS] 🛑 Stop signal loaded from DB!")
+                    print("[SYNC] 🛑 Stop signal loaded from DB!")
                     
                 if SYNC_STOP_REQUESTED:
-                    print("[LUDICROUS] 🛑 Stop requested, terminating background sync")
+                    print("[SYNC] 🛑 Stop requested, terminating background sync")
                     break
                     
                 # Stop only if we got 10+ consecutive empty pages (API truly exhausted)
                 if consecutive_empty >= MAX_CONSECUTIVE_EMPTY:
-                    print(f"[LUDICROUS] {MAX_CONSECUTIVE_EMPTY} consecutive empty pages - API exhausted, stopping")
+                    print(f"[SYNC] {MAX_CONSECUTIVE_EMPTY} consecutive empty pages - API exhausted, stopping")
                     break
                     
                 batch_end = min(batch_start + BATCH_SIZE, pages_needed)
                 batch_pages = list(range(batch_start, batch_end))
                 
-                with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
-                    futures = {executor.submit(fetch_page_with_retry, p): p for p in batch_pages}
+                # SEQUENTIAL: Process one page at a time to minimize memory
+                for page_num in batch_pages:
+                    page_num, saved, total, error = fetch_page_with_retry(page_num)
+                    products_synced += saved
+                    pages_done += 1
                     
-                    for future in as_completed(futures):
-                        page_num, saved, total, error = future.result()
-                        products_synced += saved
-                        pages_done += 1
-                        
-                        if error:
-                            error_count += 1
-                            consecutive_empty += 1  # Count errors toward empty
-                            print(f"[LUDICROUS] ⚠️ Error on page {page_num}: {error} ({consecutive_empty}/{MAX_CONSECUTIVE_EMPTY})")
-                        elif total == 0:
-                            consecutive_empty += 1
-                            print(f"[LUDICROUS] Empty page {page_num} ({consecutive_empty}/{MAX_CONSECUTIVE_EMPTY})")
-                        else:
-                            consecutive_empty = 0  # Reset on success
-                        
-                        # Update progress in DB every 5 pages
-                        if pages_done % 5 == 0:
-                            elapsed = time.time() - start_time
-                            rate = pages_done / elapsed if elapsed > 0 else 0
-                            set_config_value('sync_progress', str(products_synced))
-                            print(f"[LUDICROUS] ⚡ {pages_done}/{pages_needed} pages | {products_synced:,} products | {rate:.1f} pages/sec | {error_count} errors")
+                    if error:
+                        error_count += 1
+                        consecutive_empty += 1  # Count errors toward empty
+                        print(f"[SYNC] ⚠️ Error on page {page_num}: {error} ({consecutive_empty}/{MAX_CONSECUTIVE_EMPTY})")
+                    elif total == 0:
+                        consecutive_empty += 1
+                        print(f"[SYNC] Empty page {page_num} ({consecutive_empty}/{MAX_CONSECUTIVE_EMPTY})")
+                    else:
+                        consecutive_empty = 0  # Reset on success
+                    
+                    # Update progress in DB every 5 pages
+                    if pages_done % 5 == 0:
+                        elapsed = time.time() - start_time
+                        rate = pages_done / elapsed if elapsed > 0 else 0
+                        set_config_value('sync_progress', str(products_synced))
+                        print(f"[SYNC] ⚡ {pages_done}/{pages_needed} pages | {products_synced:,} products | {rate:.1f} pages/sec | {error_count} errors")
                 
-                # Longer delay between batches to avoid rate limits
-                time.sleep(1.0)
+                # Force garbage collection to free memory
+                gc.collect()
+                
+                # Longer delay between pages to let memory settle
+                time.sleep(2.0)
             
             elapsed = time.time() - start_time
-            print(f"[LUDICROUS] ✅ COMPLETE: {products_synced:,} products from {pages_done} pages in {elapsed:.1f}s")
+            print(f"[SYNC] ✅ COMPLETE: {products_synced:,} products from {pages_done} pages in {elapsed:.1f}s")
             set_config_value('sync_status', 'complete')
             set_config_value('sync_progress', str(products_synced))
             
