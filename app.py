@@ -7363,9 +7363,10 @@ def copilot_enrich_videos():
     while keeping 7D sales/ad_spend for momentum tracking.
     Paginates through multiple pages to enrich as many products as possible.
     """
+    import gc
     user = get_current_user()
     data = request.json or {}
-    target_pages = int(data.get('pages', 20))  # Default: 20 pages = ~1000 products
+    target_pages = int(data.get('pages', 20))  # Default: 20 pages = ~500 products
     
     try:
         print(f"[Video Enrich] Starting enrichment with timeframe=all across {target_pages} pages...")
@@ -7375,12 +7376,21 @@ def copilot_enrich_videos():
         
         global SYNC_STOP_REQUESTED
         SYNC_STOP_REQUESTED = False  # Reset on new enrichment trigger
+        set_config_value('SYNC_STOP_REQUESTED', 'false', 'Persistent stop flag for sync processes')
         
         for page in range(target_pages):
+            # Check persistent DB stop flag
+            db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
+            if db_stop_flag == 'true':
+                SYNC_STOP_REQUESTED = True
+                print("[Video Enrich] 🛑 Stop signal loaded from DB!")
+                
             if SYNC_STOP_REQUESTED:
                 print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
                 break
-            products_data = fetch_copilot_products(timeframe='all', limit=50, page=page)
+                
+            # Use smaller page size for memory efficiency
+            products_data = fetch_copilot_products(timeframe='all', limit=25, page=page)
             if not products_data:
                 print(f"[Video Enrich] Page {page}: Failed to fetch, stopping")
                 break
@@ -7403,18 +7413,30 @@ def copilot_enrich_videos():
                 if not product_id.startswith('shop_'):
                     product_id = f"shop_{product_id}"
                     
-                # Get all-time video count from the API response
-                alltime_video_count = int(p.get('periodVideoCount') or p.get('adVideoCount') or 0)
+                # FIXED: Use correct field names for all-time counts
+                # productVideoCount = all-time, periodVideoCount = 7-day
+                alltime_video_count = safe_int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount'))
+                alltime_creator_count = safe_int(p.get('productCreatorCount') or p.get('periodCreatorCount'))
                 
                 # Update the product in our database
                 existing = Product.query.get(product_id)
                 if existing:
-                    existing.video_count_alltime = alltime_video_count
+                    if alltime_video_count > 0:
+                        existing.video_count_alltime = alltime_video_count
+                    if alltime_creator_count > 0:
+                        existing.influencer_count = alltime_creator_count
                     enriched_count += 1
             
             # Commit after each page to save progress
             db.session.commit()
+            
+            # Force garbage collection to prevent memory buildup
+            gc.collect()
+            
             print(f"[Video Enrich] Page {page}: fetched {len(products_list)}, enriched so far: {enriched_count}")
+            
+            # Add delay for rate limiting and memory
+            time.sleep(1.5)
         
         log_activity(user.id, 'enrich_videos', {'enriched': enriched_count, 'pages': target_pages})
         
