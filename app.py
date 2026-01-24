@@ -7682,26 +7682,40 @@ def copilot_creator_products():
                 if not product_id or product_id in all_products:
                     continue
                 
-                # Get all the stats
+                # Get video/creator counts - try multiple field names
+                # Legacy API uses different field names than V2
+                video_count_alltime = (
+                    video.get('productVideoCount') or 
+                    video.get('videoCount') or 
+                    video.get('periodVideoCount') or 0
+                )
+                creator_count = (
+                    video.get('productCreatorCount') or 
+                    video.get('creatorCount') or 
+                    video.get('periodCreatorCount') or 0
+                )
+                
+                # Get all the stats with proper fallbacks
                 all_products[product_id] = {
                     'product_id': product_id,
                     'product_name': video.get('productTitle', ''),
                     'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
                     'seller_name': video.get('sellerName', ''),
-                    'price': video.get('productPrice', 0),
-                    'commission_rate': video.get('tapCommissionRate', 0) / 100 if video.get('tapCommissionRate') else 0,
-                    'gmv_max_rate': video.get('tapShopAdsRate', 0) / 100 if video.get('tapShopAdsRate') else 0,
-                    'video_count_alltime': video.get('productVideoCount', 0),
-                    'video_count_period': video.get('periodVideoCount', 0),
-                    'creator_count': video.get('productCreatorCount', 0),
-                    'sales_total': video.get('unitsSold', 0),
-                    'sales_period': video.get('periodUnits', 0),
-                    'revenue_period': video.get('periodRevenue', 0),
-                    'ad_spend_period': video.get('periodAdSpend', 0),
-                    'video_views': video.get('viewCount', 0),
-                    'video_likes': video.get('likes', 0),
-                    'video_url': video.get('videoUrl', ''),
-                    'creator_name': video.get('authorName', creator_name),
+                    'price': video.get('productPrice') or video.get('avgUnitPrice') or 0,
+                    'commission_rate': (video.get('tapCommissionRate') or 0) / 10000,  # Fix: divide by 10000
+                    'gmv_max_rate': (video.get('tapShopAdsRate') or 0) / 10000,  # Fix: divide by 10000
+                    'video_count_alltime': video_count_alltime,
+                    'video_count_period': video.get('periodVideoCount') or video.get('newVideoCount') or 0,
+                    'creator_count': creator_count,
+                    'sales_total': video.get('productTotalUnits') or video.get('unitsSold') or 0,
+                    'sales_period': video.get('periodUnits') or 0,
+                    'revenue_period': video.get('periodRevenue') or 0,
+                    'ad_spend_period': video.get('periodAdSpend') or 0,
+                    'ad_spend_total': video.get('productTotalAdSpend') or video.get('totalAdSpend') or 0,
+                    'video_views': video.get('viewCount') or 0,
+                    'video_likes': video.get('likes') or video.get('diggCount') or 0,
+                    'video_url': video.get('videoUrl') or video.get('url') or '',
+                    'creator_name': video.get('authorName') or video.get('author') or creator_name,
                 }
             
             print(f"[Creator Export] Page {page}: {len(videos)} videos, {len(all_products)} unique products so far")
