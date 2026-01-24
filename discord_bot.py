@@ -1010,7 +1010,7 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with 40-100 all-time videos, ad spend, 7D sales
+        # Query: Products with 40-100 all-time videos, ad spend, 7D sales, AND GMV Max Ads
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
             video_count_field >= 40,  # Min 40 all-time videos
@@ -1018,6 +1018,7 @@ def get_hot_products():
             Product.sales_7d >= 50,  # 7D sales
             Product.ad_spend >= 100,  # Ad spend ($100+)
             Product.commission_rate > 0,  # Must have regular commission
+            Product.shop_ads_commission > 0,  # REQUIRED: Must have GMV Max Ads
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date
