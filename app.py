@@ -7661,13 +7661,14 @@ def copilot_creator_products():
             print(f"[Creator Export] Fetching page {page}...")
             
             # Use legacy endpoint with creatorIds filter
+            # Note: creatorIds filter works with 7d timeframe, NOT 'all'
+            # The productVideoCount and productCreatorCount fields ARE all-time totals
             result = fetch_copilot_trending(
-                timeframe='all',  # Use all-time for accurate stats
+                timeframe='7d',  # Must use 7d for creatorIds filter to work
                 sort_by='revenue',
                 limit=50,
                 page=page,
-                creator_ids=creator_id,
-                c_timeframe='all'  # All-time creator stats
+                creator_ids=creator_id
             )
             
             if not result:
