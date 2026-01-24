@@ -7739,9 +7739,7 @@ def copilot_creator_products():
                     'sales_alltime': db_product.sales or 0,
                     'sales_7d': db_product.sales_7d or 0,
                     'revenue_alltime': db_product.gmv or 0,
-                    'revenue_7d': db_product.gmv_7d or 0,
-                    'ad_spend_alltime': db_product.ad_spend_total or db_product.ad_spend or 0,
-                    'ad_spend_7d': db_product.ad_spend or 0,
+                    'ad_spend': db_product.ad_spend or 0,
                     'video_url': basic_info.get('video_url', ''),
                     'creator_name': basic_info.get('creator_name', creator_name),
                 })
@@ -7761,9 +7759,7 @@ def copilot_creator_products():
                     'sales_alltime': 0,
                     'sales_7d': 0,
                     'revenue_alltime': 0,
-                    'revenue_7d': 0,
-                    'ad_spend_alltime': 0,
-                    'ad_spend_7d': 0,
+                    'ad_spend': 0,
                     'video_url': basic_info.get('video_url', ''),
                     'creator_name': basic_info.get('creator_name', creator_name),
                 })
