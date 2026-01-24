@@ -6912,8 +6912,10 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         # If it looks like a numeric ID, try to be more specific if Copilot supports it
         if str(target).isdigit() and len(str(target)) > 15:
              params['productId'] = str(target)
-             # Sometimes having both keywords and productId helps, sometimes it hurts. 
-             # We'll stick with both for now as a "wide net".
+    
+    # Filter by creator ID(s)
+    if kwargs.get('creator_ids'):
+        params['creatorIds'] = kwargs.get('creator_ids')
     
     try:
         res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
@@ -7608,6 +7610,128 @@ def copilot_enrich_videos():
         import traceback
         traceback.print_exc()
         db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/api/copilot/creator-products', methods=['POST'])
+@login_required
+@admin_required
+def copilot_creator_products():
+    """Scrape all products from a specific creator's videos and export to CSV.
+    
+    Takes a creator ID (from TikTok Copilot) and fetches all their viral videos,
+    extracting product data and stats.
+    
+    Request body:
+        creator_id: The TikTok creator ID (e.g. 7436686228703265838)
+        creator_name: Optional name for the export filename
+        max_pages: Maximum pages to fetch (default 50 = ~1200 products)
+    
+    Returns:
+        CSV file download with product data
+    """
+    import csv
+    import io
+    from flask import Response
+    
+    data = request.json or {}
+    creator_id = data.get('creator_id', '').strip()
+    creator_name = data.get('creator_name', 'creator').strip()
+    max_pages = int(data.get('max_pages', 50))
+    delay_seconds = float(data.get('delay', 5.0))
+    
+    if not creator_id:
+        return jsonify({'status': 'error', 'message': 'creator_id is required'})
+    
+    print(f"[Creator Export] Starting export for creator {creator_name} (ID: {creator_id})...")
+    
+    try:
+        all_products = {}  # Use dict to dedupe by product ID
+        total_videos = 0
+        
+        for page in range(max_pages):
+            print(f"[Creator Export] Fetching page {page}...")
+            
+            # Use legacy endpoint with creatorIds filter
+            result = fetch_copilot_trending(
+                timeframe='30d',
+                sort_by='revenue',
+                limit=50,
+                page=page,
+                creator_ids=creator_id
+            )
+            
+            if not result:
+                print(f"[Creator Export] Page {page}: No data, stopping")
+                break
+            
+            videos = result.get('videos', [])
+            if not videos:
+                print(f"[Creator Export] Page {page}: No more videos, stopping")
+                break
+            
+            total_videos += len(videos)
+            
+            for video in videos:
+                # Extract product data from video
+                product_id = str(video.get('productId', '')).strip()
+                if not product_id or product_id in all_products:
+                    continue
+                
+                # Get all the stats
+                all_products[product_id] = {
+                    'product_id': product_id,
+                    'product_name': video.get('productTitle', ''),
+                    'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
+                    'seller_name': video.get('sellerName', ''),
+                    'price': video.get('productPrice', 0),
+                    'commission_rate': video.get('tapCommissionRate', 0) / 100 if video.get('tapCommissionRate') else 0,
+                    'gmv_max_rate': video.get('tapShopAdsRate', 0) / 100 if video.get('tapShopAdsRate') else 0,
+                    'video_count_alltime': video.get('productVideoCount', 0),
+                    'video_count_period': video.get('periodVideoCount', 0),
+                    'creator_count': video.get('productCreatorCount', 0),
+                    'sales_total': video.get('unitsSold', 0),
+                    'sales_period': video.get('periodUnits', 0),
+                    'revenue_period': video.get('periodRevenue', 0),
+                    'ad_spend_period': video.get('periodAdSpend', 0),
+                    'video_views': video.get('viewCount', 0),
+                    'video_likes': video.get('likes', 0),
+                    'video_url': video.get('videoUrl', ''),
+                    'creator_name': video.get('authorName', creator_name),
+                }
+            
+            print(f"[Creator Export] Page {page}: {len(videos)} videos, {len(all_products)} unique products so far")
+            
+            # Delay to avoid API limits
+            time.sleep(delay_seconds)
+        
+        # Convert to list and sort by revenue
+        products_list = sorted(all_products.values(), key=lambda x: x.get('revenue_period', 0), reverse=True)
+        
+        print(f"[Creator Export] Complete! {total_videos} videos, {len(products_list)} unique products")
+        
+        # Generate CSV
+        output = io.StringIO()
+        if products_list:
+            writer = csv.DictWriter(output, fieldnames=products_list[0].keys())
+            writer.writeheader()
+            writer.writerows(products_list)
+        
+        # Create response with CSV download
+        csv_content = output.getvalue()
+        
+        return Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename={creator_name}_products.csv',
+                'Content-Type': 'text/csv; charset=utf-8'
+            }
+        )
+        
+    except Exception as e:
+        print(f"[Creator Export] Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)})
 
 # =============================================================================
