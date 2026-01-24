@@ -7509,10 +7509,16 @@ def copilot_enrich_videos():
                 print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
                 break
                 
-            # Use smaller page size for memory efficiency
+            # Try V2 endpoint first (has timeframe=all), fallback to legacy
             products_data = fetch_copilot_products(timeframe='all', limit=25, page=page)
+            
+            # If V2 fails, try legacy endpoint with 30d (longest available)
+            if not products_data or not products_data.get('products'):
+                print(f"[Video Enrich] V2 failed on page {page}, trying legacy 30d...")
+                products_data = fetch_copilot_trending(timeframe='30d', limit=50, page=page)
+            
             if not products_data:
-                print(f"[Video Enrich] Page {page}: Failed to fetch, stopping")
+                print(f"[Video Enrich] Page {page}: Both endpoints failed, stopping")
                 break
             
             products_list = products_data.get('products', [])
@@ -7535,6 +7541,7 @@ def copilot_enrich_videos():
                     
                 # FIXED: Use correct field names for all-time counts
                 # productVideoCount = all-time, periodVideoCount = 7-day
+                # Legacy also returns productVideoCount!
                 alltime_video_count = safe_int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount'))
                 alltime_creator_count = safe_int(p.get('productCreatorCount') or p.get('periodCreatorCount'))
                 
