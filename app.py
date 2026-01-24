@@ -7728,20 +7728,20 @@ def copilot_creator_products():
                 # Use database stats (all-time accurate data)
                 enriched_products.append({
                     'product_id': product_id,
-                    'product_name': db_product.name or basic_info.get('product_name', ''),
+                    'product_name': db_product.product_name or basic_info.get('product_name', ''),
                     'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
                     'seller_name': db_product.seller_name or basic_info.get('seller_name', ''),
                     'price': db_product.price or 0,
                     'commission_rate': f"{(db_product.commission_rate or 0) * 100:.1f}%",  # Format as percentage
-                    'gmv_max_rate': f"{(db_product.gmv_max_rate or 0) * 100:.1f}%",  # Format as percentage
+                    'gmv_max_rate': f"{(db_product.shop_ads_commission or 0) * 100:.1f}%",  # GMV Max
                     'video_count_alltime': db_product.video_count or 0,
-                    'creator_count': db_product.creator_count or 0,
+                    'creator_count': db_product.influencer_count or 0,
                     'sales_alltime': db_product.sales or 0,
                     'sales_7d': db_product.sales_7d or 0,
                     'revenue_alltime': db_product.gmv or 0,
                     'revenue_7d': db_product.gmv_7d or 0,
-                    'ad_spend_alltime': db_product.ad_spend or db_product.total_ad_cost or 0,
-                    'ad_spend_7d': db_product.ad_spend_7d or 0,
+                    'ad_spend_alltime': db_product.ad_spend_total or db_product.ad_spend or 0,
+                    'ad_spend_7d': db_product.ad_spend or 0,
                     'video_url': basic_info.get('video_url', ''),
                     'creator_name': basic_info.get('creator_name', creator_name),
                 })
