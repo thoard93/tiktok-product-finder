@@ -556,12 +556,12 @@
             btn.disabled = true;
 
             try {
-                const res = await fetch('/api/copilot/trending?limit=1');
+                const res = await fetch('/api/copilot/test');
                 const data = await res.json();
-                if (data.status === 'success' || data.success || data.products) {
-                    alert("✅ Connection Successful! Cookie is valid.");
+                if (data.success) {
+                    alert("✅ Connection Successful! " + (data.message || "Cookie is valid."));
                 } else {
-                    alert("❌ Connection Failed. Cookie may be invalid or expired.");
+                    alert("❌ Connection Failed: " + (data.error || "Cookie may be invalid or expired."));
                     console.log("Test Resp:", data);
                 }
             } catch (e) {
