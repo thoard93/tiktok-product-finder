@@ -7009,8 +7009,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
         - periodAdSpend (7-day ad spend)
     """
     # Use the NEW enhanced endpoint with 'all' timeframe for accurate totals
-    result = fetch_copilot_products(timeframe=timeframe, limit=limit, page=page)
-    
+    is_legacy_source = False
     if not result:
         # Fallback to legacy endpoint if new one fails
         print("[Copilot Sync] V2 endpoint failed, trying legacy...")
@@ -7018,6 +7017,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
         if not result:
             return 0, 0
         products = result.get('videos', [])
+        is_legacy_source = True
     else:
         products = result.get('products', [])
     
@@ -7068,49 +7068,94 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # ===== ENHANCED V2 FIELD EXTRACTION (Updated for 2026 API) =====
             # Note: API now returns Video-centric data in 'videos' list
             
-            # Video Count: productVideoCount is all-time total
-            # FALLBACK: periodVideoCount, videoCount, video_count
-            video_count = safe_int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount') or p.get('video_count'))
+            # ===== GREEDY STATS EXTRACTION (Robust for both V2 and Legacy) =====
             
-            # Creator Count: productCreatorCount is all-time
-            creator_count = safe_int(p.get('productCreatorCount') or p.get('periodCreatorCount') or p.get('creatorCount') or p.get('creator_count'))
+            # 1. Sales (7d)
+            sales_7d = safe_int(
+                p.get('periodUnits') or 
+                p.get('unitsSold7d') or 
+                p.get('videoUnits') or 
+                p.get('sales_7d') or 
+                p.get('units_sold') or 
+                0
+            )
             
-            # Ad Spend: 7-DAY period spend (periodAdSpend)
-            # Fallback to totalAdCost/15% if 7d is missing
-            ad_spend_7d = safe_float(p.get('periodAdSpend') or p.get('ad_spend_7d') or p.get('adSpend'))
-            total_ad_cost = safe_float(p.get('totalAdCost') or p.get('productTotalAdSpend') or p.get('totalAdSpend'))
+            # 2. Revenue (7d)
+            period_revenue = safe_float(
+                p.get('periodRevenue') or 
+                p.get('revenue7d') or 
+                p.get('videoRevenue') or 
+                p.get('revenue') or 
+                0
+            )
+
+            # 3. Ad Spend (7d)
+            ad_spend_7d = safe_float(
+                p.get('periodAdSpend') or 
+                p.get('ad_spend_7d') or 
+                p.get('videoAdSpend') or 
+                p.get('adSpend') or 
+                0
+            )
+
+            # 4. Total/All-Time Stats
+            total_sales = safe_int(
+                p.get('unitsSold') or 
+                p.get('productTotalUnits') or 
+                p.get('computedTotalUnits') or 
+                p.get('totalSales') or 
+                0
+            )
+            
+            total_revenue = safe_float(
+                p.get('totalRevenue') or 
+                p.get('estTotalEarnings') or 
+                p.get('productTotalRevenue') or 
+                p.get('revenue_alltime') or 
+                0
+            )
+            
+            total_ad_cost = safe_float(
+                p.get('totalAdCost') or 
+                p.get('productTotalAdSpend') or 
+                p.get('totalAdSpend') or 
+                0
+            )
+            
             if ad_spend_7d <= 0 and total_ad_cost > 0:
                 ad_spend_7d = total_ad_cost * 0.15 # Heuristic fallback
             
             ad_spend_total = total_ad_cost or ad_spend_7d
             
-            # Sales: 7-DAY period (periodUnits)
-            sales_7d = safe_int(p.get('periodUnits') or p.get('unitsSold7d') or p.get('sales_7d'))
+            # 5. Engagement Metrics
+            video_count = safe_int(
+                p.get('productVideoCount') or 
+                p.get('periodVideoCount') or 
+                p.get('video_count') or 
+                p.get('videoCount') or 
+                p.get('video_ct') or 
+                0
+            )
             
-            # Total Sales Fallback (check nested trend if needed)
-            total_sales = safe_int(p.get('unitsSold') or p.get('productTotalUnits') or p.get('computedTotalUnits') or p.get('totalSales'))
-            if total_sales <= 0 and p.get('viewAndRevenueTrend'):
-                trend_data = p.get('viewAndRevenueTrend', {})
-                total_sales = safe_int(trend_data.get('computedTotalUnits') or trend_data.get('totalUnits'))
-            
-            # Revenue
-            period_revenue = safe_float(p.get('periodRevenue') or p.get('revenue7d') or p.get('revenue'))
-            total_revenue = safe_float(p.get('totalRevenue') or p.get('estTotalEarnings') or p.get('productTotalRevenue') or p.get('revenue_alltime'))
+            creator_count = safe_int(
+                p.get('productCreatorCount') or 
+                p.get('periodCreatorCount') or 
+                p.get('creator_count') or 
+                p.get('creatorCount') or 
+                0
+            )
             
             # Views
-            period_views = safe_int(p.get('periodViews') or p.get('views7d'))
-            total_views = safe_int(p.get('totalViews') or p.get('allTimeViews'))
+            period_views = safe_int(p.get('periodViews') or p.get('views7d') or p.get('videoViews') or 0)
+            total_views = safe_int(p.get('totalViews') or p.get('allTimeViews') or 0)
             
-            # Commission Rates (divide by 10000 to get decimal)
-            commission_rate = safe_float(p.get('tapCommissionRate') or p.get('ocCommissionRate')) / 10000.0
-            shop_ads_rate = safe_float(p.get('tapShopAdsRate') or p.get('ocShopAdsRate')) / 10000.0
+            # Commission Rates
+            commission_rate = safe_float(p.get('tapCommissionRate') or p.get('ocCommissionRate') or p.get('commission_rate') or 0) / 10000.0
+            shop_ads_rate = safe_float(p.get('tapShopAdsRate') or p.get('ocShopAdsRate') or p.get('shop_ads_rate') or 0) / 10000.0
             
-            # Growth (V2 may have different field names)
-            # Try specific growth fields first, then fallback to general
-            growth_pct = safe_float(p.get('revenueGrowthPct') or p.get('productRevenueGrowthPct') or p.get('viewsGrowthPct'))
-            
-            # Price: productPrice or avgUnitPrice
-            price = safe_float(p.get('productPrice') or p.get('avgUnitPrice') or p.get('minPrice'))
+            # Fallback for growth and price
+            growth_pct = safe_float(p.get('revenueGrowthPct') or p.get('productRevenueGrowthPct') or p.get('viewsGrowthPct') or 0)
+            price = safe_float(p.get('productPrice') or p.get('avgUnitPrice') or p.get('minPrice') or 0)
             
             # Product URL
             raw_product_id = str(p.get('productId', '')).replace('shop_', '')
@@ -7128,21 +7173,24 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # FILTER: Quality Control - Skip low-quality products
             # V2: Relax sales filter - include Revenue in the checks!
             if (sales_7d <= 0 and total_sales <= 0 and period_revenue <= 0 and total_revenue <= 0) and ad_spend_7d < 100:
-                if saved_count < 5:
-                    print(f"[Copilot Sync V2] Skipping {product_id} - Low Activity: s7d={sales_7d}, r7d={period_revenue}, ad7d={ad_spend_7d}")
+                if saved_count < 10:
+                    print(f"[{'LEGACY' if is_legacy_source else 'V2'}] Skipping {product_id} - Debug Stats: sales_7d={sales_7d}, total_sales={total_sales}, ad_spend_7d={ad_spend_7d}")
                 continue
             
             # V2 FIX: Require 3+ videos for new discoveries (relaxed from 5)
-            if video_count < 3 and total_revenue < 1000:
+            # RELAX: Lower video count requirement for high-revenue products
+            if video_count < 2 and total_revenue < 500:
                 continue
                 
             # FILTER: Active ad spend or high commission or any revenue
-            if ad_spend_7d <= 0 and commission_rate < 0.15 and total_revenue < 500:
+            if ad_spend_7d <= 0 and commission_rate < 0.10 and total_revenue < 300:
                 continue
             
-            # FILTER: GMV Max Ads Required - Skip products without GMV Max bonus
-            # Only sync products with shop ads commission > 0% (tapShopAdsRate)
-            if shop_ads_rate <= 0:
+            # RELAX: GMV Max Ads - If legacy source, this field is MISSING (0).
+            # ONLY enforce if it's a V2 response.
+            if not is_legacy_source and shop_ads_rate <= 0:
+                if saved_count < 5:
+                    print(f"[V2] Skipping {product_id} - GMV Max Required (rate=0)")
                 continue
             
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
@@ -7857,6 +7905,44 @@ def get_google_sheets_config():
             'last_sync': os.environ.get('GOOGLE_SHEETS_LAST_SYNC', ''),
         }
     return GOOGLE_SHEETS_CONFIG
+
+@app.route('/api/admin/config/<key>', methods=['GET'])
+@admin_required
+def get_admin_config(key):
+    """Get any configuration value from DB"""
+    val = get_config_value(key)
+    return jsonify({'success': True, 'value': val})
+
+@app.route('/api/admin/config/<key>', methods=['POST'])
+@admin_required
+def save_admin_config(key):
+    """Save any configuration value to DB"""
+    try:
+        data = request.get_json()
+        val = data.get('value', '').strip()
+        if not val:
+            return jsonify({'success': False, 'error': 'Value is empty'}), 400
+        
+        set_config_value(key, val)
+        return jsonify({'success': True, 'message': f'{key} updated successfully.'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/copilot/test')
+@admin_required
+def test_copilot_connection():
+    """Test TikTokCopilot API connection manually"""
+    print("[Copilot] Running manual connection test...")
+    res = fetch_copilot_products(limit=1, page=0)
+    if res and (res.get('products') or res.get('videos')):
+        return jsonify({'success': True, 'message': 'Connection verified. (V2 Active)'})
+    
+    # Try legacy trending if products fails
+    res = fetch_copilot_trending(limit=1, page=0)
+    if res and (res.get('videos') or res.get('products')):
+        return jsonify({'success': True, 'message': 'Connection verified. (Legacy Fallback Active)'})
+        
+    return jsonify({'success': False, 'error': 'Cookie invalid or API blocked. Check logs for JSON Decode Errors.'}), 401
 
 @app.route('/api/admin/google-sheets-config', methods=['GET'])
 def get_sheets_config():
