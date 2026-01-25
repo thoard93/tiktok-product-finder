@@ -206,37 +206,21 @@
                         <option value="20">1,000 Products (Quick)</option>
                         <option value="50">2,500 Products (Standard)</option>
                         <option value="100">5,000 Products (Deep)</option>
-                        <option value="200">10,000 Products (Full)</option>
+                        <option value="200">10,000 Products (Mass)</option>
+                        <option value="400">20,000 Products (Mega)</option>
+                        <option value="600" selected>30,000 Products (Ultra)</option>
                     </select>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-950 border border-white/10 rounded-xl px-4 py-3">
+                    <input type="checkbox" id="autoEnrich" checked class="w-4 h-4 accent-cyan-500">
+                    <label for="autoEnrich"
+                        class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Auto-Enrich After
+                        Sync</label>
                 </div>
                 <button onclick="syncCopilot()" id="btnCopilot"
                     class="btn-premium px-8 py-3 shadow-lg shadow-primary/20">
                     <i class="fas fa-bolt mr-2 text-xs"></i>
                     Initiate Sync
-                </button>
-
-                <button onclick="massSyncProducts(10000)" id="btnMassSync5K"
-                    class="bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-500/20">
-                    <i class="fas fa-rocket text-xs"></i>
-                    <span>Mass Sync (10K)</span>
-                </button>
-
-                <button onclick="massSyncProducts(25000)" id="btnMassSync10K"
-                    class="bg-violet-600 hover:bg-violet-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-violet-500/20">
-                    <i class="fas fa-meteor text-xs"></i>
-                    <span>MEGA Sync (25K)</span>
-                </button>
-
-                <button onclick="massSyncProducts(50000)" id="btnMassSync50K"
-                    class="bg-rose-600 hover:bg-rose-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-rose-500/20">
-                    <i class="fas fa-fire text-xs"></i>
-                    <span>ULTRA Sync (50K)</span>
-                </button>
-
-                <button onclick="nuclearSync()" id="btnNuclearSync"
-                    class="bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 hover:from-amber-400 hover:via-orange-400 hover:to-red-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-orange-500/30 animate-pulse">
-                    <i class="fas fa-radiation text-xs"></i>
-                    <span>☢️ NUCLEAR (100K+)</span>
                 </button>
 
                 <button onclick="runCleanup()"
@@ -248,7 +232,7 @@
                 <button onclick="enrichVideos()" id="btnEnrichVideos"
                     class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-cyan-500/20">
                     <i class="fas fa-video text-xs"></i>
-                    <span>📊 Enrich All-Time Stats</span>
+                    <span>📊 Manual Enrich</span>
                 </button>
             </div>
 
@@ -607,6 +591,7 @@
             const btn = document.getElementById('btnCopilot');
             const stopBtn = document.getElementById('btnStop');
             const pageSelect = document.getElementById('syncPages');
+            const autoEnrichCheckbox = document.getElementById('autoEnrich');
             const maxPages = parseInt(pageSelect.value || 20);
             const original = btn.innerHTML;
 
@@ -637,9 +622,34 @@
                         totalSaved += (data.saved || data.synced || 0);
                         if (data.stop_requested) break;
                     }
-                    await new Promise(r => setTimeout(r, 2000)); // 2s delay between pages
+                    await new Promise(r => setTimeout(r, 2500)); // 2.5s delay between pages
                 }
-                if (!isStopRequested) alert(`✅ Copilot Sync Complete!\n\nProcessed ${maxPages} pages and saved ${totalSaved} products.`);
+
+                // === AUTO-ENRICH PHASE ===
+                if (!isStopRequested && autoEnrichCheckbox && autoEnrichCheckbox.checked) {
+                    btn.innerHTML = '<i class="fas fa-magic fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Enriching...</span>';
+
+                    // Wait 30 seconds before starting enrichment to give API a break
+                    await new Promise(r => setTimeout(r, 30000));
+
+                    try {
+                        const enrichRes = await fetch('/api/copilot/enrich-videos', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ max_pages: 50 })
+                        });
+                        const enrichData = await enrichRes.json();
+                        if (enrichData.success) {
+                            alert(`✅ Sync + Enrich Complete!\n\nSynced ${totalSaved} products.\nEnriched ${enrichData.enriched || 0} products with all-time stats.`);
+                        } else {
+                            alert(`✅ Sync Complete! (Enrich failed)\n\nSynced ${totalSaved} products.\nEnrich error: ${enrichData.error || 'Unknown'}`);
+                        }
+                    } catch (enrichErr) {
+                        alert(`✅ Sync Complete! (Enrich error)\n\nSynced ${totalSaved} products.\nEnrich error: ${enrichErr.message}`);
+                    }
+                } else if (!isStopRequested) {
+                    alert(`✅ Copilot Sync Complete!\n\nProcessed ${maxPages} pages and saved ${totalSaved} products.`);
+                }
                 window.location.reload();
             } catch (e) {
                 alert('Sync Error: ' + e.message);

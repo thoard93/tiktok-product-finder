@@ -7561,8 +7561,8 @@ def copilot_sync():
     limit = int(data.get('limit', 50))
     timeframe = data.get('timeframe', 'all')  # Default to 'all' for all-time video/creator counts
     
-    # Cap pages to prevent extreme load but allow high volume
-    if pages > 200: pages = 200 
+    # Cap pages to prevent extreme load but allow high volume (up to 40k products)
+    if pages > 800: pages = 800 
     
     products_synced = 0
     errors = []
