@@ -7734,7 +7734,7 @@ def copilot_creator_products():
                     'price': db_product.price or 0,
                     'commission_rate': f"{(db_product.commission_rate or 0) * 100:.1f}%",  # Format as percentage
                     'gmv_max_rate': f"{(db_product.shop_ads_commission or 0) * 100:.1f}%",  # GMV Max
-                    'video_count_alltime': db_product.video_count or 0,
+                    'video_count_alltime': db_product.video_count_alltime or db_product.video_count or 0,  # ALL-TIME first!
                     'creator_count': db_product.influencer_count or 0,
                     'sales_alltime': db_product.sales or 0,
                     'sales_7d': db_product.sales_7d or 0,
