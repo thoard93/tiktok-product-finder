@@ -330,6 +330,35 @@
             </div>
 
             <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                    <i class="fas fa-cookie-bite text-emerald-500 text-xs"></i>
+                </div>
+                TikTokCopilot Configuration
+            </h3>
+
+            <div class="space-y-6 max-w-2xl mb-10">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Session
+                        Cookie (Direct String)</label>
+                    <div class="flex gap-4">
+                        <textarea id="copilotCookieInput" rows="3"
+                            placeholder="_ga=...; __session=...; __session_pOM46XQh=..."
+                            class="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-emerald-400 focus:border-emerald-400/50 outline-none transition-all resize-none"></textarea>
+                    </div>
+                    <div class="mt-3 flex gap-4">
+                        <button onclick="saveCopilotCookie()"
+                            class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20">
+                            Save Cookie
+                        </button>
+                        <button onclick="testCopilotCookie()" id="btnTestCookie"
+                            class="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-widest transition-all border border-white/5">
+                            Test Connection
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
                 <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
                     <i class="fas fa-robot text-violet-500 text-xs"></i>
                 </div>
@@ -473,6 +502,14 @@
                         document.getElementById('anthropicKeyInput').value = "••••••••••••••••••••••••";
                     }
                 }
+
+                const cookieRes = await fetch('/api/admin/config/TIKTOK_COPILOT_COOKIE');
+                if (cookieRes.ok) {
+                    const ckData = await cookieRes.json();
+                    if (ckData.value) {
+                        document.getElementById('copilotCookieInput').value = "•••••••••••••••••••••••• (Active Cookie Set)";
+                    }
+                }
             } catch (e) { console.error("Admin Load Error", e); }
         }
 
@@ -492,6 +529,47 @@
                     document.getElementById('anthropicKeyInput').value = "••••••••••••••••••••••••";
                 } else alert("Error: " + data.error);
             } catch (e) { alert("Fault: " + e); }
+        }
+
+        async function saveCopilotCookie() {
+            const cookie = document.getElementById('copilotCookieInput').value;
+            if (!cookie || cookie.includes('•')) return alert("Please enter a valid cookie string.");
+
+            try {
+                const res = await fetch('/api/admin/config/TIKTOK_COPILOT_COOKIE', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: cookie })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("TikTokCopilot Cookie updated successfully!");
+                    document.getElementById('copilotCookieInput').value = "•••••••••••••••••••••••• (Active Cookie Set)";
+                } else alert("Error: " + data.error);
+            } catch (e) { alert("Fault: " + e); }
+        }
+
+        async function testCopilotCookie() {
+            const btn = document.getElementById('btnTestCookie');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/copilot/trending?limit=1');
+                const data = await res.json();
+                if (data.status === 'success' || data.success || data.products) {
+                    alert("✅ Connection Successful! Cookie is valid.");
+                } else {
+                    alert("❌ Connection Failed. Cookie may be invalid or expired.");
+                    console.log("Test Resp:", data);
+                }
+            } catch (e) {
+                alert("❌ Connection Fault: " + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
         }
 
         let isStopRequested = false;

@@ -23,6 +23,10 @@ import sys
 import subprocess
 import requests
 import urllib3
+try:
+    from curl_cffi import requests as requests_cffi
+except ImportError:
+    requests_cffi = None
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 try:
     import stripe
@@ -6765,50 +6769,43 @@ def refresh_copilot_session():
     
     return None
 
+def parse_cookie_string(cookie_str):
+    """Parse a cookie string into a dictionary."""
+    cookies = {}
+    if not cookie_str:
+        return cookies
+    for item in cookie_str.split(';'):
+        if '=' in item:
+            name, value = item.strip().split('=', 1)
+            cookies[name] = value
+    return cookies
+
 def get_copilot_cookie():
-    """Get TikTokCopilot session cookie - tries refresh first, falls back to static cookie.
+    """Get TikTokCopilot session cookie.
     
     Priority:
-    1. Refresh token mechanism (if configured)
-    2. Static cookie from TIKTOK_COPILOT_COOKIE env var
+    1. Static cookie from TIKTOK_COPILOT_COOKIE env var (Recommended)
+    2. Refresh token mechanism (Legacy fallback)
     """
-    # Try refresh token first
+    # 1. Direct cookie string (Simplified Auth)
+    static_cookie = get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
+    if static_cookie:
+        # If it contains '__session=', it's likely a full cookie string
+        return static_cookie
+        
+    # 2. Legacy refresh mechanism
     refresh_token, session_id = get_copilot_refresh_credentials()
     if refresh_token and session_id:
         fresh_jwt = refresh_copilot_session()
         if fresh_jwt:
-            # Build a minimal cookie string with the fresh session
             return f"__session={fresh_jwt}; __session_pOM46XQh={fresh_jwt}"
     
-    # Fall back to static cookie
-    static_cookie = get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
-    if static_cookie:
-        print("[Copilot Cookie] Using static cookie (may be expired)")
-    return static_cookie
+    return None
 
 def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0, region='US', keywords=None):
     """
     Fetch products from the ENHANCED TikTokCopilot /api/trending/products endpoint.
-    This endpoint provides significantly more accurate stats than the legacy /api/trending.
-    
-    Args:
-        timeframe: 1d, 7d, all (All Time)
-        sort_by: ad_spend, revenue, views
-        limit: products per page (max ~50)
-        page: page number for pagination
-        region: US, etc
-        keywords: Optional search keywords or product ID
-    
-    Returns:
-        dict with products data or None on error
-    
-    Key fields in response:
-        - periodVideoCount: Accurate video count (17.8K vs old 20)
-        - periodCreatorCount: Accurate creator count
-        - totalAdCost: Total ad spend
-        - unitsSold: Total units sold
-        - topVideos: Array of top 5 performing videos
-        - dailyStats: Day-by-day revenue/views/video count
+    Uses curl_cffi for browser impersonation to avoid blocks.
     """
     cookie_str = get_copilot_cookie()
     if not cookie_str:
@@ -6816,14 +6813,13 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         return None
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
-        "Cookie": cookie_str,
         "Referer": "https://www.tiktokcopilot.com/products",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin"
+        "Sec-Fetch-Site": "same-origin",
+        "Priority": "u=1, i"
     }
     
     params = {
@@ -6834,31 +6830,33 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         "region": region
     }
     
-    # Add keywords for search
     if keywords:
         params["keywords"] = keywords
     
     try:
-        # Use the NEW /api/trending/products endpoint
-        res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
+        # Use curl_cffi if available for better browser impersonation
+        if requests_cffi:
+            res = requests_cffi.get(
+                f"{COPILOT_API_BASE}/trending/products", 
+                headers=headers, 
+                params=params, 
+                cookies=parse_cookie_string(cookie_str),
+                impersonate="chrome120",
+                timeout=60
+            )
+        else:
+            headers["Cookie"] = cookie_str
+            headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
         
         if res.status_code == 200:
-            content = res.text.strip()
-            if not content:
-                print(f"[Copilot Products] ⚠️ Received EMPTY response from V2 ({timeframe})")
-                return None
-            try:
-                return res.json()
-            except Exception as e:
-                print(f"[Copilot Products] ❌ JSON Decode Error on V2: {e}")
-                print(f"[DEBUG] Raw Response Content (First 200 chars): {content[:200]}")
-                return None
+            return res.json()
         else:
             print(f"[Copilot Products] API Error: {res.status_code}")
-            # Log body for 4xx/5xx errors
-            if res.text:
-                print(f"[DEBUG] Error Body: {res.text[:200]}")
             return None
+    except Exception as e:
+        print(f"[Copilot Products] Exception: {e}")
+        return None
     except Exception as e:
         print(f"[Copilot Products] Exception: {e}")
         return None
@@ -6866,17 +6864,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
 def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US', **kwargs):
     """
     Fetch trending products from TikTokCopilot API.
-    
-    Args:
-        timeframe: 1d, 3d, 7d, 14d, 30d
-        sort_by: revenue, views, etc
-        limit: products per page (max ~50)
-        page: page number for pagination
-        region: US, etc
-        keywords: Optional search query (e.g. product ID)
-    
-    Returns:
-        dict with product data or None on error
+    Uses curl_cffi for browser impersonation.
     """
     cookie_str = get_copilot_cookie()
     if not cookie_str:
@@ -6884,14 +6872,13 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         return None
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
-        "Cookie": cookie_str,
         "Referer": "https://www.tiktokcopilot.com/",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin"
+        "Sec-Fetch-Site": "same-origin",
+        "Priority": "u=1, i"
     }
     
     params = {
@@ -6908,41 +6895,39 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     if kwargs.get('keywords') or kwargs.get('product_id'):
         target = kwargs.get('product_id') or kwargs.get('keywords')
         params['keywords'] = target
-        # If searching by ID, we should relax other filters
         params.pop('timeframe', None)
         params.pop('sortBy', None)
         params.pop('feedType', None)
         params['searchType'] = 'product'
         
-        # If it looks like a numeric ID, try to be more specific if Copilot supports it
         if str(target).isdigit() and len(str(target)) > 15:
              params['productId'] = str(target)
     
-    # Filter by creator ID(s)
     if kwargs.get('creator_ids'):
         params['creatorIds'] = kwargs.get('creator_ids')
     
-    # Add cTimeframe for all-time creator stats
     if kwargs.get('c_timeframe'):
         params['cTimeframe'] = kwargs.get('c_timeframe')
     
     try:
-        res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
+        if requests_cffi:
+            res = requests_cffi.get(
+                f"{COPILOT_API_BASE}/trending", 
+                headers=headers, 
+                params=params, 
+                cookies=parse_cookie_string(cookie_str),
+                impersonate="chrome120",
+                timeout=60
+            )
+        else:
+            headers["Cookie"] = cookie_str
+            headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
+            
         if res.status_code == 200:
-            content = res.text.strip()
-            if not content:
-                print(f"[Copilot Legacy] ⚠️ Received EMPTY response")
-                return None
-            try:
-                return res.json()
-            except Exception as e:
-                print(f"[Copilot Legacy] ❌ JSON Decode Error: {e}")
-                print(f"[DEBUG] Raw Response Content (First 200 chars): {content[:200]}")
-                return None
+            return res.json()
         else:
             print(f"[Copilot Legacy] API Error: {res.status_code}")
-            if res.text:
-                print(f"[DEBUG] Error Body: {res.text[:200]}")
             return None
     except Exception as e:
         print(f"[Copilot] Exception: {e}")
