@@ -6820,10 +6820,11 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
         "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"'
+        "sec-ch-ua-platform": '"Windows"',
+        "X-Requested-With": "XMLHttpRequest"
     }
     
     params = {
@@ -7185,9 +7186,10 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             
             if is_zero_stat and ad_spend_7d < 50:
                 if saved_count < 15:
-                    print(f"[{'LEGACY' if is_legacy_source else 'V2'}] Skipping {product_id} - Debug Stats: sales_7d={sales_7d}, r_7d={period_revenue}, total_rev={total_revenue}, ad_7d={ad_spend_7d}")
+                    msg_prefix = "[LEGACY] Ingesting" if is_legacy_source else "[V2] Skipping"
+                    print(f"{msg_prefix} {product_id} - Debug Stats: sales_7d={sales_7d}, r_7d={period_revenue}, total_rev={total_revenue}, ad_7d={ad_spend_7d}")
                     if is_legacy_source and saved_count < 3:
-                         print(f"[DEBUG LEGACY] FULL SKIPPED OBJECT: {p}")
+                         print(f"[DEBUG LEGACY] FULL PRODUCT OBJECT: {p}")
                 
                 # IN LEGACY MODE: If it's a zero-stat product from the TRENDING feed, 
                 # we still want it IF it has a productId because it's highly curated!
@@ -7345,7 +7347,8 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             continue
     
     db.session.commit()
-    print(f"[Copilot Sync V2] Saved {saved_count}/{len(products)} products from {timeframe} timeframe")
+    p_label = "LEGACY" if is_legacy_source else "Copilot V2"
+    print(f"[{p_label}] Final Yield: {saved_count}/{len(products)} products from {timeframe} timeframe")
     return saved_count, len(products)
 
 # =============================================================================
@@ -7575,7 +7578,9 @@ def copilot_sync():
             products_synced += saved
             if total == 0: break # No more products
             if page_idx < start_page + pages - 1:
-                time.sleep(2) # Polite delay
+                # Randomized delay between 1.5 and 4 seconds to bypass bot detection
+                delay = 1.5 + (secrets.randbelow(250) / 100.0)
+                time.sleep(delay)
         except Exception as e:
             print(f"Error syncing page {page_idx}: {e}")
             errors.append(f"Page {page_idx}: {str(e)}")
