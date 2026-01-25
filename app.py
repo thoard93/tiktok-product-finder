@@ -7714,6 +7714,11 @@ def copilot_creator_products():
         enriched_products = []
         matched_count = 0
         
+        # Get current time in EST for sync_date field
+        from datetime import datetime, timezone, timedelta
+        est = timezone(timedelta(hours=-5))  # EST is UTC-5
+        sync_date_est = datetime.now(est).strftime('%Y-%m-%d %I:%M %p EST')
+        
         for product_id, basic_info in all_products.items():
             # Query our local Product table for accurate stats
             # Try both formats: with and without shop_ prefix
@@ -7742,6 +7747,7 @@ def copilot_creator_products():
                     'ad_spend': db_product.ad_spend or 0,
                     'video_url': basic_info.get('video_url', ''),
                     'creator_name': basic_info.get('creator_name', creator_name),
+                    'sync_date': sync_date_est,  # EST timezone
                 })
                 matched_count += 1
             else:
@@ -7762,6 +7768,7 @@ def copilot_creator_products():
                     'ad_spend': 0,
                     'video_url': basic_info.get('video_url', ''),
                     'creator_name': basic_info.get('creator_name', creator_name),
+                    'sync_date': sync_date_est,  # EST timezone
                 })
         
         print(f"[Creator Export] Matched {matched_count}/{len(all_products)} products from database")
@@ -7931,6 +7938,11 @@ def sync_to_google_sheets():
         print(f"[Google Sheets] Found {len(all_products)} products, enriching from database...")
         
         # Enrich from database
+        # Get sync date in EST
+        from datetime import timedelta
+        est = timezone(timedelta(hours=-5))
+        sync_date_est = datetime.now(est).strftime('%Y-%m-%d %I:%M %p EST')
+        
         for product_id, basic_info in all_products.items():
             shop_pid = f"shop_{product_id}" if not product_id.startswith('shop_') else product_id
             raw_pid = product_id.replace('shop_', '')
@@ -7954,6 +7966,7 @@ def sync_to_google_sheets():
                     db_product.sales_7d or 0,
                     db_product.gmv or 0,
                     db_product.ad_spend or 0,
+                    sync_date_est,
                 ])
             else:
                 products_list.append([
@@ -7961,7 +7974,7 @@ def sync_to_google_sheets():
                     basic_info.get('product_name', ''),
                     f"https://shop.tiktok.com/view/product/{product_id}?region=US",
                     basic_info.get('seller_name', ''),
-                    0, '0%', '0%', 0, 0, 0, 0, 0, 0,
+                    0, '0%', '0%', 0, 0, 0, 0, 0, 0, sync_date_est,
                 ])
         
         # Sort by revenue (column 12, index 11) descending
@@ -7971,7 +7984,7 @@ def sync_to_google_sheets():
         sheet.clear()
         header = ['product_id', 'product_name', 'product_url', 'seller_name', 'price', 
                   'commission_rate', 'gmv_max_rate', 'video_count_alltime', 'creator_count',
-                  'sales_alltime', 'sales_7d', 'revenue_alltime', 'ad_spend']
+                  'sales_alltime', 'sales_7d', 'revenue_alltime', 'ad_spend', 'sync_date']
         
         all_data = [header] + products_list
         sheet.update('A1', all_data)
