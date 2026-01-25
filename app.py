@@ -7939,7 +7939,7 @@ def sync_to_google_sheets():
         
         # Enrich from database
         # Get sync date in EST
-        from datetime import timedelta
+        from datetime import datetime, timezone, timedelta
         est = timezone(timedelta(hours=-5))
         sync_date_est = datetime.now(est).strftime('%Y-%m-%d %I:%M %p EST')
         
