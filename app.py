@@ -6816,6 +6816,8 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
         "Referer": "https://www.tiktokcopilot.com/products",
+        "Origin": "https://www.tiktokcopilot.com",
+        "X-Requested-With": "XMLHttpRequest",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
@@ -7031,16 +7033,24 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
         SYNC_STOP_REQUESTED = True
         print("🛑 [Copilot Sync] Stop signal loaded from DB!")
     
-    for p in products:
+    for idx, p in enumerate(products):
         if SYNC_STOP_REQUESTED:
             print("🛑 [Copilot Sync] Granular stop triggered!")
             break
             
-        # DEBUG: Inspect raw product data for keys (first 3 only)
-        if saved_count < 3:
-            print(f"[DEBUG V2] Raw Product Keys: {list(p.keys())}")
+        # EXHAUSTIVE DEBUG: Log everything for the first product to find hidden stats
+        if idx == 0:
+            print(f"[DEBUG V2] --- FIRST PRODUCT FULL KEYS ---")
+            print(f"[DEBUG V2] Keys: {list(p.keys())}")
+            # Log some suspicious looking field values
+            suspicious_keys = [k for k in p.keys() if any(x in k.lower() for x in ['sale', 'unit', 'spend', 'ad', 'rev', 'growth', 'stat'])]
+            print(f"[DEBUG V2] Suspicious Values: { {k: p.get(k) for k in suspicious_keys} }")
+            if p.get('viewAndRevenueTrend'):
+                print(f"[DEBUG V2] Trend Keys: {list(p.get('viewAndRevenueTrend', {}).keys())}")
+        
         try:
-            product_id = str(p.get('productId', ''))
+            # FIX: Correct multi-key retrieval
+            product_id = str(p.get('productId') or p.get('product_id') or p.get('id') or '')
             if not product_id:
                 continue
             
@@ -7057,41 +7067,37 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # Note: API now returns Video-centric data in 'videos' list
             
             # Video Count: productVideoCount is all-time total
-            # FALLBACK: periodVideoCount
-            video_count = safe_int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount'))
-            
-            # DEBUG: Only log first 3 to avoid spam
-            if saved_count < 3:
-                print(f"[DEBUG V2] Product: {p.get('productTitle', 'N/A')}")
-                print(f"[DEBUG V2] Video Count: productVideoCount={p.get('productVideoCount')}, periodVideoCount={p.get('periodVideoCount')} => Using: {video_count}")
+            # FALLBACK: periodVideoCount, videoCount, video_count
+            video_count = safe_int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount') or p.get('video_count'))
             
             # Creator Count: productCreatorCount is all-time
-            creator_count = safe_int(p.get('productCreatorCount') or p.get('periodCreatorCount'))
+            creator_count = safe_int(p.get('productCreatorCount') or p.get('periodCreatorCount') or p.get('creatorCount') or p.get('creator_count'))
             
             # Ad Spend: 7-DAY period spend (periodAdSpend)
-            ad_spend_7d = safe_float(p.get('periodAdSpend'))
-            total_ad_cost = safe_float(p.get('totalAdCost') or p.get('productTotalAdSpend'))
+            # Fallback to totalAdCost/15% if 7d is missing
+            ad_spend_7d = safe_float(p.get('periodAdSpend') or p.get('ad_spend_7d') or p.get('adSpend'))
+            total_ad_cost = safe_float(p.get('totalAdCost') or p.get('productTotalAdSpend') or p.get('totalAdSpend'))
             if ad_spend_7d <= 0 and total_ad_cost > 0:
                 ad_spend_7d = total_ad_cost * 0.15 # Heuristic fallback
             
             ad_spend_total = total_ad_cost or ad_spend_7d
             
             # Sales: 7-DAY period (periodUnits)
-            sales_7d = safe_int(p.get('periodUnits') or p.get('unitsSold7d'))
+            sales_7d = safe_int(p.get('periodUnits') or p.get('unitsSold7d') or p.get('sales_7d'))
             
             # Total Sales Fallback (check nested trend if needed)
-            total_sales = safe_int(p.get('unitsSold') or p.get('productTotalUnits') or p.get('computedTotalUnits'))
+            total_sales = safe_int(p.get('unitsSold') or p.get('productTotalUnits') or p.get('computedTotalUnits') or p.get('totalSales'))
             if total_sales <= 0 and p.get('viewAndRevenueTrend'):
                 trend_data = p.get('viewAndRevenueTrend', {})
                 total_sales = safe_int(trend_data.get('computedTotalUnits') or trend_data.get('totalUnits'))
             
             # Revenue
-            period_revenue = safe_float(p.get('periodRevenue') or p.get('revenue7d'))
+            period_revenue = safe_float(p.get('periodRevenue') or p.get('revenue7d') or p.get('revenue'))
             total_revenue = safe_float(p.get('totalRevenue') or p.get('estTotalEarnings') or p.get('productTotalRevenue'))
             
             # Views
-            period_views = safe_int(p.get('periodViews'))
-            total_views = safe_int(p.get('totalViews'))
+            period_views = safe_int(p.get('periodViews') or p.get('views7d'))
+            total_views = safe_int(p.get('totalViews') or p.get('allTimeViews'))
             
             # Commission Rates (divide by 10000 to get decimal)
             commission_rate = safe_float(p.get('tapCommissionRate') or p.get('ocCommissionRate')) / 10000.0
