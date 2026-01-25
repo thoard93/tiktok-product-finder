@@ -7731,7 +7731,7 @@ def copilot_creator_products():
                     'product_name': db_product.product_name or basic_info.get('product_name', ''),
                     'product_url': f"https://shop.tiktok.com/view/product/{product_id}?region=US",
                     'seller_name': db_product.seller_name or basic_info.get('seller_name', ''),
-                    'price': db_product.price or 0,
+                    'price': round(db_product.price or 0, 2),  # Format to 2 decimal places
                     'commission_rate': f"{(db_product.commission_rate or 0) * 100:.1f}%",  # Format as percentage
                     'gmv_max_rate': f"{(db_product.shop_ads_commission or 0) * 100:.1f}%",  # GMV Max
                     'video_count_alltime': db_product.video_count_alltime or db_product.video_count or 0,  # ALL-TIME first!
@@ -7795,6 +7795,200 @@ def copilot_creator_products():
         import traceback
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)})
+
+# =============================================================================
+# GOOGLE SHEETS AUTO-SYNC
+# =============================================================================
+
+# Store Google Sheets config in environment/database
+# Format: { sheet_id, credentials_json, frequency, last_sync }
+GOOGLE_SHEETS_CONFIG = {}
+
+def get_google_sheets_config():
+    """Get Google Sheets config from environment or memory cache"""
+    global GOOGLE_SHEETS_CONFIG
+    if not GOOGLE_SHEETS_CONFIG.get('sheet_id'):
+        GOOGLE_SHEETS_CONFIG = {
+            'sheet_id': os.environ.get('GOOGLE_SHEET_ID', ''),
+            'credentials': os.environ.get('GOOGLE_SHEETS_CREDENTIALS', ''),
+            'frequency': os.environ.get('GOOGLE_SHEETS_FREQUENCY', '3days'),
+            'last_sync': os.environ.get('GOOGLE_SHEETS_LAST_SYNC', ''),
+        }
+    return GOOGLE_SHEETS_CONFIG
+
+@app.route('/api/admin/google-sheets-config', methods=['GET'])
+def get_sheets_config():
+    """Get Google Sheets configuration"""
+    config = get_google_sheets_config()
+    return jsonify({
+        'sheet_id': config.get('sheet_id', ''),
+        'credentials': bool(config.get('credentials')),  # Don't expose actual credentials
+        'frequency': config.get('frequency', '3days'),
+        'last_sync': config.get('last_sync', ''),
+    })
+
+@app.route('/api/admin/google-sheets-config', methods=['POST'])
+def save_sheets_config():
+    """Save Google Sheets configuration"""
+    global GOOGLE_SHEETS_CONFIG
+    try:
+        data = request.get_json()
+        
+        if data.get('sheet_id'):
+            GOOGLE_SHEETS_CONFIG['sheet_id'] = data['sheet_id']
+            os.environ['GOOGLE_SHEET_ID'] = data['sheet_id']
+        
+        if data.get('credentials'):
+            # Validate JSON
+            import json
+            json.loads(data['credentials'])  # Will throw if invalid
+            GOOGLE_SHEETS_CONFIG['credentials'] = data['credentials']
+            os.environ['GOOGLE_SHEETS_CREDENTIALS'] = data['credentials']
+        
+        if data.get('frequency'):
+            GOOGLE_SHEETS_CONFIG['frequency'] = data['frequency']
+            os.environ['GOOGLE_SHEETS_FREQUENCY'] = data['frequency']
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/google-sheets-sync', methods=['POST'])
+def sync_to_google_sheets():
+    """Sync creator products to Google Sheets"""
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        import json
+        
+        config = get_google_sheets_config()
+        
+        if not config.get('sheet_id'):
+            return jsonify({'success': False, 'error': 'No Google Sheet ID configured'})
+        
+        if not config.get('credentials'):
+            return jsonify({'success': False, 'error': 'No Google credentials configured'})
+        
+        data = request.get_json() or {}
+        creator_id = data.get('creator_id', '7436686228703265838')  # Default to cakedfinds
+        creator_name = data.get('creator_name', 'cakedfinds')
+        
+        print(f"[Google Sheets] Starting sync for {creator_name}...")
+        
+        # Authenticate with Google Sheets
+        creds_dict = json.loads(config['credentials'])
+        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+        credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        
+        # Open the sheet
+        sheet = gc.open_by_key(config['sheet_id']).sheet1
+        
+        # Get products data (reuse the export logic)
+        products_list = []
+        all_products = {}
+        total_videos = 0
+        delay_seconds = 3.0
+        max_pages = 100
+        
+        for page in range(max_pages):
+            try:
+                result = fetch_copilot_trending(
+                    timeframe='7d',
+                    sort_by='revenue',
+                    c_timeframe='7d',
+                    limit=50,
+                    page=page,
+                    creator_ids=creator_id
+                )
+                
+                if not result:
+                    break
+                    
+                videos = result.get('videos', [])
+                if not videos:
+                    break
+                    
+                total_videos += len(videos)
+                
+                for video in videos:
+                    product_id = str(video.get('productId', '')).strip()
+                    if not product_id or product_id in all_products:
+                        continue
+                    
+                    all_products[product_id] = {
+                        'product_id': product_id,
+                        'product_name': video.get('productTitle', ''),
+                        'seller_name': video.get('sellerName', ''),
+                    }
+                
+                time.sleep(delay_seconds)
+                
+            except Exception as e:
+                print(f"[Google Sheets] Page {page} error: {e}")
+                break
+        
+        print(f"[Google Sheets] Found {len(all_products)} products, enriching from database...")
+        
+        # Enrich from database
+        for product_id, basic_info in all_products.items():
+            shop_pid = f"shop_{product_id}" if not product_id.startswith('shop_') else product_id
+            raw_pid = product_id.replace('shop_', '')
+            
+            db_product = Product.query.filter_by(product_id=shop_pid).first()
+            if not db_product:
+                db_product = Product.query.filter_by(product_id=raw_pid).first()
+            
+            if db_product:
+                products_list.append([
+                    product_id,
+                    db_product.product_name or basic_info.get('product_name', ''),
+                    f"https://shop.tiktok.com/view/product/{product_id}?region=US",
+                    db_product.seller_name or basic_info.get('seller_name', ''),
+                    round(db_product.price or 0, 2),
+                    f"{(db_product.commission_rate or 0) * 100:.1f}%",
+                    f"{(db_product.shop_ads_commission or 0) * 100:.1f}%",
+                    db_product.video_count_alltime or db_product.video_count or 0,
+                    db_product.influencer_count or 0,
+                    db_product.sales or 0,
+                    db_product.sales_7d or 0,
+                    db_product.gmv or 0,
+                    db_product.ad_spend or 0,
+                ])
+            else:
+                products_list.append([
+                    product_id,
+                    basic_info.get('product_name', ''),
+                    f"https://shop.tiktok.com/view/product/{product_id}?region=US",
+                    basic_info.get('seller_name', ''),
+                    0, '0%', '0%', 0, 0, 0, 0, 0, 0,
+                ])
+        
+        # Sort by revenue (column 12, index 11) descending
+        products_list.sort(key=lambda x: x[11] if x[11] else 0, reverse=True)
+        
+        # Clear sheet and write header + data
+        sheet.clear()
+        header = ['product_id', 'product_name', 'product_url', 'seller_name', 'price', 
+                  'commission_rate', 'gmv_max_rate', 'video_count_alltime', 'creator_count',
+                  'sales_alltime', 'sales_7d', 'revenue_alltime', 'ad_spend']
+        
+        all_data = [header] + products_list
+        sheet.update('A1', all_data)
+        
+        # Update last sync time
+        from datetime import datetime, timezone
+        GOOGLE_SHEETS_CONFIG['last_sync'] = datetime.now(timezone.utc).isoformat()
+        
+        print(f"[Google Sheets] Sync complete! {len(products_list)} products")
+        
+        return jsonify({'success': True, 'rows': len(products_list)})
+        
+    except Exception as e:
+        print(f"[Google Sheets] Sync error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
 
 # =============================================================================
 # BRAND HUNTER API ENDPOINTS

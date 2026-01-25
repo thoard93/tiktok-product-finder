@@ -272,6 +272,63 @@
                 </button>
             </div>
 
+            <!-- Google Sheets Sync Section -->
+            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                    <i class="fas fa-table text-emerald-500 text-xs"></i>
+                </div>
+                Google Sheets Auto-Sync
+            </h3>
+            <p class="text-slate-400 text-xs mb-4">
+                Auto-sync cakedfinds products to Google Sheets.
+                <a href="https://console.cloud.google.com/" target="_blank" class="text-emerald-400 underline">Create
+                    service account</a>,
+                share sheet with the email, paste credentials below.
+            </p>
+
+            <div class="space-y-4 max-w-2xl mb-6">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Google
+                        Sheet ID</label>
+                    <input type="text" id="googleSheetIdInput"
+                        placeholder="e.g. 1_ZRoTnG3rd-cE5aZwGY5uFUrffjf6oP2itZZJvt82CY"
+                        class="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-emerald-400 focus:border-emerald-400/50 outline-none transition-all">
+                    <p class="text-slate-600 text-[10px] mt-1">From URL:
+                        docs.google.com/spreadsheets/d/<strong>[SHEET_ID]</strong>/edit</p>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Service
+                        Account JSON</label>
+                    <textarea id="googleCredsInput" rows="4"
+                        placeholder='{"type": "service_account", "project_id": "...", "private_key_id": "...", ...}'
+                        class="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-slate-400 focus:border-emerald-400/50 outline-none transition-all resize-none"></textarea>
+                </div>
+                <div class="flex flex-wrap gap-4 items-end">
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Auto-Sync
+                            Frequency</label>
+                        <select id="googleSyncFrequency"
+                            class="bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-emerald-400/50 outline-none transition-all">
+                            <option value="manual">Manual Only</option>
+                            <option value="daily">Daily</option>
+                            <option value="3days" selected>Every 3 Days</option>
+                            <option value="weekly">Weekly</option>
+                        </select>
+                    </div>
+                    <button onclick="saveGoogleSheetsConfig()"
+                        class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20">
+                        Save Config
+                    </button>
+                    <button onclick="syncToGoogleSheets()" id="btnSyncSheets"
+                        class="px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2">
+                        <i class="fas fa-sync text-xs"></i>
+                        Sync Now
+                    </button>
+                </div>
+                <p id="lastSyncTime" class="text-slate-600 text-[10px]">Last sync: Never</p>
+            </div>
+
             <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
                 <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
                     <i class="fas fa-robot text-violet-500 text-xs"></i>
@@ -951,7 +1008,90 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', loadAdmin);
+        // Google Sheets Sync Functions
+        async function loadGoogleSheetsConfig() {
+            try {
+                const res = await fetch('/api/admin/google-sheets-config');
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('googleSheetIdInput').value = data.sheet_id || '';
+                    document.getElementById('googleCredsInput').value = data.credentials ? '(credentials saved)' : '';
+                    document.getElementById('googleSyncFrequency').value = data.frequency || '3days';
+                    if (data.last_sync) {
+                        document.getElementById('lastSyncTime').textContent = 'Last sync: ' + new Date(data.last_sync).toLocaleString();
+                    }
+                }
+            } catch (e) { console.log('Google Sheets config not loaded:', e); }
+        }
+
+        async function saveGoogleSheetsConfig() {
+            const sheetId = document.getElementById('googleSheetIdInput').value.trim();
+            const credentials = document.getElementById('googleCredsInput').value.trim();
+            const frequency = document.getElementById('googleSyncFrequency').value;
+
+            if (!sheetId) {
+                alert('Please enter a Google Sheet ID');
+                return;
+            }
+
+            try {
+                const body = { sheet_id: sheetId, frequency: frequency };
+                // Only send credentials if they're not the placeholder
+                if (credentials && credentials !== '(credentials saved)') {
+                    body.credentials = credentials;
+                }
+
+                const res = await fetch('/api/admin/google-sheets-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ Google Sheets config saved!');
+                    document.getElementById('googleCredsInput').value = '(credentials saved)';
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e.message);
+            }
+        }
+
+        async function syncToGoogleSheets() {
+            const btn = document.getElementById('btnSyncSheets');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+            btn.disabled = true;
+
+            try {
+                const creatorId = document.getElementById('creatorIdInput').value.trim();
+                const creatorName = document.getElementById('creatorNameInput').value.trim() || 'creator';
+
+                const res = await fetch('/api/admin/google-sheets-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ creator_id: creatorId, creator_name: creatorName })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Synced ${data.rows} products to Google Sheets!`);
+                    document.getElementById('lastSyncTime').textContent = 'Last sync: ' + new Date().toLocaleString();
+                } else {
+                    alert('❌ Sync Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Fault: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAdmin();
+            loadGoogleSheetsConfig();
+        });
     </script>
 </body>
 
