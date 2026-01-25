@@ -6820,7 +6820,10 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"'
     }
     
     params = {
@@ -7092,7 +7095,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             
             # Revenue
             period_revenue = safe_float(p.get('periodRevenue') or p.get('revenue7d') or p.get('revenue'))
-            total_revenue = safe_float(p.get('totalRevenue') or p.get('estTotalEarnings') or p.get('productTotalRevenue'))
+            total_revenue = safe_float(p.get('totalRevenue') or p.get('estTotalEarnings') or p.get('productTotalRevenue') or p.get('revenue_alltime'))
             
             # Views
             period_views = safe_int(p.get('periodViews') or p.get('views7d'))
@@ -7121,21 +7124,20 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # Seller info
             seller_name = p.get('sellerName') or ''
             seller_id = p.get('sellerId') or ''
-
+ 
             # FILTER: Quality Control - Skip low-quality products
-            # V2: Relax sales filter slightly if ad spend is high
-            if sales_7d <= 0 and total_sales <= 0 and ad_spend_7d < 100:
-                # Diagnostics: why are we skipping?
+            # V2: Relax sales filter - include Revenue in the checks!
+            if (sales_7d <= 0 and total_sales <= 0 and period_revenue <= 0 and total_revenue <= 0) and ad_spend_7d < 100:
                 if saved_count < 5:
-                    print(f"[Copilot Sync V2] Skipping {product_id} - Debug Stats: sales_7d={sales_7d}, total_sales={total_sales}, ad_spend_7d={ad_spend_7d}")
+                    print(f"[Copilot Sync V2] Skipping {product_id} - Low Activity: s7d={sales_7d}, r7d={period_revenue}, ad7d={ad_spend_7d}")
                 continue
             
-            # V2 FIX: Require 5+ videos for new discoveries (relaxed from 10)
-            if video_count < 5:
+            # V2 FIX: Require 3+ videos for new discoveries (relaxed from 5)
+            if video_count < 3 and total_revenue < 1000:
                 continue
                 
-            # FILTER: Active ad spend or high commission
-            if ad_spend_7d <= 0 and commission_rate < 0.15:
+            # FILTER: Active ad spend or high commission or any revenue
+            if ad_spend_7d <= 0 and commission_rate < 0.15 and total_revenue < 500:
                 continue
             
             # FILTER: GMV Max Ads Required - Skip products without GMV Max bonus
