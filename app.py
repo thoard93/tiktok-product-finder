@@ -8805,15 +8805,112 @@ try:
             except Exception as e:
                 print(f"[SCHEDULER] ❌ Stale Refresh Error: {e}")
 
+    def scheduled_google_sheets_sync():
+        """Scheduled Google Sheets sync - runs every 3 days"""
+        with app.app_context():
+            try:
+                import gspread
+                from google.oauth2.service_account import Credentials
+                import json
+                from datetime import datetime, timezone, timedelta
+                
+                config = get_google_sheets_config()
+                
+                if not config.get('sheet_id') or not config.get('credentials'):
+                    print("[SCHEDULER] [Google Sheets] Skipping - not configured")
+                    return
+                
+                # Check frequency setting
+                frequency = config.get('frequency', '3days')
+                if frequency == 'manual':
+                    print("[SCHEDULER] [Google Sheets] Skipping - set to manual only")
+                    return
+                
+                print(f"[SCHEDULER] [Google Sheets] Starting scheduled sync...")
+                
+                # Authenticate
+                creds_dict = json.loads(config['credentials'])
+                scopes = ['https://www.googleapis.com/auth/spreadsheets']
+                credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+                gc = gspread.authorize(credentials)
+                sheet = gc.open_by_key(config['sheet_id']).sheet1
+                
+                # Default creator (cakedfinds)
+                creator_id = '7436686228703265838'
+                
+                # Fetch products
+                all_products = {}
+                for page in range(100):
+                    try:
+                        result = fetch_copilot_trending(
+                            timeframe='7d', sort_by='revenue', c_timeframe='7d',
+                            limit=50, page=page, creator_ids=creator_id
+                        )
+                        if not result or not result.get('videos'):
+                            break
+                        for video in result.get('videos', []):
+                            pid = str(video.get('productId', '')).strip()
+                            if pid and pid not in all_products:
+                                all_products[pid] = {
+                                    'product_name': video.get('productTitle', ''),
+                                    'seller_name': video.get('sellerName', ''),
+                                }
+                        time.sleep(3.0)
+                    except:
+                        break
+                
+                # Build rows with EST timestamp
+                est = timezone(timedelta(hours=-5))
+                sync_date_est = datetime.now(est).strftime('%Y-%m-%d %I:%M %p EST')
+                
+                products_list = []
+                for pid, info in all_products.items():
+                    db_product = Product.query.filter_by(product_id=f"shop_{pid}").first()
+                    if not db_product:
+                        db_product = Product.query.filter_by(product_id=pid).first()
+                    
+                    if db_product:
+                        products_list.append([
+                            pid, db_product.product_name or info.get('product_name', ''),
+                            f"https://shop.tiktok.com/view/product/{pid}?region=US",
+                            db_product.seller_name or '', round(db_product.price or 0, 2),
+                            f"{(db_product.commission_rate or 0) * 100:.1f}%",
+                            f"{(db_product.shop_ads_commission or 0) * 100:.1f}%",
+                            db_product.video_count_alltime or db_product.video_count or 0,
+                            db_product.influencer_count or 0, db_product.sales or 0,
+                            db_product.sales_7d or 0, db_product.gmv or 0,
+                            db_product.ad_spend or 0, sync_date_est,
+                        ])
+                    else:
+                        products_list.append([pid, info.get('product_name', ''),
+                            f"https://shop.tiktok.com/view/product/{pid}?region=US",
+                            info.get('seller_name', ''), 0, '0%', '0%', 0, 0, 0, 0, 0, 0, sync_date_est])
+                
+                products_list.sort(key=lambda x: x[11] if x[11] else 0, reverse=True)
+                
+                sheet.clear()
+                header = ['product_id', 'product_name', 'product_url', 'seller_name', 'price',
+                          'commission_rate', 'gmv_max_rate', 'video_count_alltime', 'creator_count',
+                          'sales_alltime', 'sales_7d', 'revenue_alltime', 'ad_spend', 'sync_date']
+                sheet.update('A1', [header] + products_list)
+                
+                print(f"[SCHEDULER] [Google Sheets] ✅ Sync complete! {len(products_list)} products")
+                
+            except Exception as e:
+                print(f"[SCHEDULER] [Google Sheets] ❌ Error: {e}")
+
     # Initialize Scheduler
     scheduler = BackgroundScheduler()
     # Run every 12 hours (twice daily for fresh data)
     scheduler.add_job(func=scheduled_copilot_refresh, trigger="interval", hours=12)
     # Run Stale Refresh every 4 hours
     scheduler.add_job(func=scheduled_stale_refresh, trigger="interval", hours=4)
+    # Run Google Sheets sync every 72 hours (3 days)
+    scheduler.add_job(func=scheduled_google_sheets_sync, trigger="interval", hours=72)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
     print("[SYSTEM] [CLOCK] TikTokCopilot Auto-Sync Scheduler Online (every 12 hours).")
+    print("[SYSTEM] [CLOCK] Google Sheets Auto-Sync Scheduled (every 3 days).")
 
 except ImportError:
     print("[SYSTEM] [WARN] APScheduler not found. Auto-refresh disabled. Install 'apscheduler' to enable.")
