@@ -6813,15 +6813,14 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         return None
     
     headers = {
-        "Accept": "*/*",
+        "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-US,en;q=0.9",
         "Referer": "https://www.tiktokcopilot.com/products",
         "Origin": "https://www.tiktokcopilot.com",
-        "X-Requested-With": "XMLHttpRequest",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
-        "Priority": "u=1, i"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     params = {
@@ -7038,15 +7037,15 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             print("🛑 [Copilot Sync] Granular stop triggered!")
             break
             
-        # EXHAUSTIVE DEBUG: Log everything for the first product to find hidden stats
+        # HYPER-VERBOSE DEBUG: Log EVERYTHING for the first product to solve the skipping mystery
         if idx == 0:
-            print(f"[DEBUG V2] --- FIRST PRODUCT FULL KEYS ---")
-            print(f"[DEBUG V2] Keys: {list(p.keys())}")
-            # Log some suspicious looking field values
-            suspicious_keys = [k for k in p.keys() if any(x in k.lower() for x in ['sale', 'unit', 'spend', 'ad', 'rev', 'growth', 'stat'])]
-            print(f"[DEBUG V2] Suspicious Values: { {k: p.get(k) for k in suspicious_keys} }")
-            if p.get('viewAndRevenueTrend'):
-                print(f"[DEBUG V2] Trend Keys: {list(p.get('viewAndRevenueTrend', {}).keys())}")
+            print(f"[DEBUG V2] --- FIRST PRODUCT FULL KEYS (idx=0) ---")
+            print(f"[DEBUG V2] Total Keys Count: {len(p.keys())}")
+            print(f"[DEBUG V2] All Keys: {', '.join(sorted(p.keys()))}")
+            
+            # Print ALL values for critical analysis
+            full_data = {k: p.get(k) for k in p.keys()}
+            print(f"[DEBUG V2] FULL OBJECT: {json.dumps(full_data, default=str)}")
         
         try:
             # FIX: Correct multi-key retrieval
