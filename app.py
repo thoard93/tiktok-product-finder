@@ -7009,10 +7009,12 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
         - periodAdSpend (7-day ad spend)
     """
     # Use the NEW enhanced endpoint with 'all' timeframe for accurate totals
+    result = fetch_copilot_products(timeframe=timeframe, limit=limit, page=page)
     is_legacy_source = False
     if not result:
         # Fallback to legacy endpoint if new one fails
         print("[Copilot Sync] V2 endpoint failed, trying legacy...")
+
         result = fetch_copilot_trending(timeframe=timeframe, limit=limit, page=page)
         if not result:
             return 0, 0
