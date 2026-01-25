@@ -7044,13 +7044,14 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             
         # HYPER-VERBOSE DEBUG: Log EVERYTHING for the first product to solve the skipping mystery
         if idx == 0:
-            print(f"[DEBUG V2] --- FIRST PRODUCT FULL KEYS (idx=0) ---")
-            print(f"[DEBUG V2] Total Keys Count: {len(p.keys())}")
-            print(f"[DEBUG V2] All Keys: {', '.join(sorted(p.keys()))}")
+            p_prefix = "LEGACY" if is_legacy_source else "V2"
+            print(f"[DEBUG {p_prefix}] --- FIRST PRODUCT FULL KEYS (idx=0) ---")
+            print(f"[DEBUG {p_prefix}] Total Keys Count: {len(p.keys())}")
+            print(f"[DEBUG {p_prefix}] All Keys: {', '.join(sorted(p.keys()))}")
             
             # Print ALL values for critical analysis
             full_data = {k: p.get(k) for k in p.keys()}
-            print(f"[DEBUG V2] FULL OBJECT: {json.dumps(full_data, default=str)}")
+            print(f"[DEBUG {p_prefix}] FULL OBJECT: {json.dumps(full_data, default=str)}")
         
         try:
             # FIX: Correct multi-key retrieval
@@ -7077,8 +7078,10 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 p.get('periodUnits') or 
                 p.get('unitsSold7d') or 
                 p.get('videoUnits') or 
+                p.get('videoUnitsSold7d') or 
                 p.get('sales_7d') or 
                 p.get('units_sold') or 
+                p.get('units') or 
                 0
             )
             
@@ -7087,7 +7090,10 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 p.get('periodRevenue') or 
                 p.get('revenue7d') or 
                 p.get('videoRevenue') or 
+                p.get('videoRevenue7d') or 
                 p.get('revenue') or 
+                p.get('gmv7d') or 
+                p.get('gmv') or 
                 0
             )
 
@@ -7114,6 +7120,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 p.get('estTotalEarnings') or 
                 p.get('productTotalRevenue') or 
                 p.get('revenue_alltime') or 
+                p.get('videoRevenue') or # Fallback in video objects
                 0
             )
             
@@ -7174,22 +7181,31 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
  
             # FILTER: Quality Control - Skip low-quality products
             # V2: Relax sales filter - include Revenue in the checks!
-            if (sales_7d <= 0 and total_sales <= 0 and period_revenue <= 0 and total_revenue <= 0) and ad_spend_7d < 100:
-                if saved_count < 10:
-                    print(f"[{'LEGACY' if is_legacy_source else 'V2'}] Skipping {product_id} - Debug Stats: sales_7d={sales_7d}, total_sales={total_sales}, ad_spend_7d={ad_spend_7d}")
-                continue
+            is_zero_stat = (sales_7d <= 0 and total_sales <= 0 and period_revenue <= 0 and total_revenue <= 0)
             
-            # V2 FIX: Require 3+ videos for new discoveries (relaxed from 5)
-            # RELAX: Lower video count requirement for high-revenue products
-            if video_count < 2 and total_revenue < 500:
+            if is_zero_stat and ad_spend_7d < 50:
+                if saved_count < 15:
+                    print(f"[{'LEGACY' if is_legacy_source else 'V2'}] Skipping {product_id} - Debug Stats: sales_7d={sales_7d}, r_7d={period_revenue}, total_rev={total_revenue}, ad_7d={ad_spend_7d}")
+                    if is_legacy_source and saved_count < 3:
+                         print(f"[DEBUG LEGACY] FULL SKIPPED OBJECT: {p}")
+                
+                # IN LEGACY MODE: If it's a zero-stat product from the TRENDING feed, 
+                # we still want it IF it has a productId because it's highly curated!
+                if is_legacy_source and product_id:
+                     pass # Allow through to enrichment
+                else:
+                    continue
+            
+            # V2 RELAX: Lower video count requirement for high-revenue products
+            if video_count < 2 and total_revenue < 300 and not is_legacy_source:
                 continue
                 
             # FILTER: Active ad spend or high commission or any revenue
-            if ad_spend_7d <= 0 and commission_rate < 0.10 and total_revenue < 300:
+            if not is_legacy_source and ad_spend_7d <= 0 and commission_rate < 0.10 and total_revenue < 200:
                 continue
             
             # RELAX: GMV Max Ads - If legacy source, this field is MISSING (0).
-            # ONLY enforce if it's a V2 response.
+            # ONLY enforce if it's a V2 response and we have some data.
             if not is_legacy_source and shop_ads_rate <= 0:
                 if saved_count < 5:
                     print(f"[V2] Skipping {product_id} - GMV Max Required (rate=0)")
