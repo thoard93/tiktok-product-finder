@@ -6833,33 +6833,53 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
     if keywords:
         params["keywords"] = keywords
     
-    try:
-        # Use curl_cffi if available for better browser impersonation
-        if requests_cffi:
-            res = requests_cffi.get(
-                f"{COPILOT_API_BASE}/trending/products", 
-                headers=headers, 
-                params=params, 
-                cookies=parse_cookie_string(cookie_str),
-                impersonate="chrome120",
-                timeout=60
-            )
-        else:
-            headers["Cookie"] = cookie_str
-            headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
-        
-        if res.status_code == 200:
-            return res.json()
-        else:
-            print(f"[Copilot Products] API Error: {res.status_code}")
+    retries = 3
+    for attempt in range(retries):
+        try:
+            # Use curl_cffi if available for better browser impersonation
+            if requests_cffi:
+                res = requests_cffi.get(
+                    f"{COPILOT_API_BASE}/trending/products", 
+                    headers=headers, 
+                    params=params, 
+                    cookies=parse_cookie_string(cookie_str),
+                    impersonate="chrome120",
+                    timeout=60
+                )
+            else:
+                headers["Cookie"] = cookie_str
+                headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
+            
+            if res.status_code == 200:
+                try:
+                    return res.json()
+                except Exception as e:
+                    print(f"[Copilot Products] ❌ JSON Decode Error (Attempt {attempt+1}/{retries}): {e}")
+                    resp_text = getattr(res, 'text', '')
+                    if resp_text:
+                        print(f"[DEBUG] Raw Response (first 100 chars): {resp_text[:100]}")
+                    
+                    if attempt < retries - 1:
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    return None
+            elif res.status_code == 429:
+                print(f"[Copilot Products] ⚠️ Rate Limited (429) - Backing off...")
+                if attempt < retries - 1:
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                return None
+            else:
+                print(f"[Copilot Products] API Error: {res.status_code}")
+                return None
+        except Exception as e:
+            print(f"[Copilot Products] Exception (Attempt {attempt+1}/{retries}): {e}")
+            if attempt < retries - 1:
+                time.sleep(3)
+                continue
             return None
-    except Exception as e:
-        print(f"[Copilot Products] Exception: {e}")
-        return None
-    except Exception as e:
-        print(f"[Copilot Products] Exception: {e}")
-        return None
+    return None
 
 def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US', **kwargs):
     """
@@ -6909,29 +6929,52 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     if kwargs.get('c_timeframe'):
         params['cTimeframe'] = kwargs.get('c_timeframe')
     
-    try:
-        if requests_cffi:
-            res = requests_cffi.get(
-                f"{COPILOT_API_BASE}/trending", 
-                headers=headers, 
-                params=params, 
-                cookies=parse_cookie_string(cookie_str),
-                impersonate="chrome120",
-                timeout=60
-            )
-        else:
-            headers["Cookie"] = cookie_str
-            headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
-            
-        if res.status_code == 200:
-            return res.json()
-        else:
-            print(f"[Copilot Legacy] API Error: {res.status_code}")
+    retries = 3
+    for attempt in range(retries):
+        try:
+            if requests_cffi:
+                res = requests_cffi.get(
+                    f"{COPILOT_API_BASE}/trending", 
+                    headers=headers, 
+                    params=params, 
+                    cookies=parse_cookie_string(cookie_str),
+                    impersonate="chrome120",
+                    timeout=60
+                )
+            else:
+                headers["Cookie"] = cookie_str
+                headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
+                
+            if res.status_code == 200:
+                try:
+                    return res.json()
+                except Exception as e:
+                    print(f"[Copilot Legacy] ❌ JSON Decode Error (Attempt {attempt+1}/{retries}): {e}")
+                    resp_text = getattr(res, 'text', '')
+                    if resp_text:
+                        print(f"[DEBUG] Raw Response (first 100 chars): {resp_text[:100]}")
+                    
+                    if attempt < retries - 1:
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    return None
+            elif res.status_code == 429:
+                print(f"[Copilot Legacy] ⚠️ Rate Limited (429) - Backing off...")
+                if attempt < retries - 1:
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                return None
+            else:
+                print(f"[Copilot Legacy] API Error: {res.status_code}")
+                return None
+        except Exception as e:
+            print(f"[Copilot] Exception (Attempt {attempt+1}/{retries}): {e}")
+            if attempt < retries - 1:
+                time.sleep(3)
+                continue
             return None
-    except Exception as e:
-        print(f"[Copilot] Exception: {e}")
-        return None
+    return None
 
 def calculate_winner_score(ad_spend, video_count, creator_count):
     """
