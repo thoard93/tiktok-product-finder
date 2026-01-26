@@ -7078,6 +7078,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             sales_7d = safe_int(
                 p.get('periodUnits') or 
                 p.get('unitsSold7d') or 
+                p.get('productPeriodUnits') or 
                 p.get('videoUnits') or 
                 p.get('videoUnitsSold7d') or 
                 p.get('sales_7d') or 
@@ -7089,6 +7090,7 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
             # 2. Revenue (7d)
             period_revenue = safe_float(
                 p.get('periodRevenue') or 
+                p.get('productPeriodRevenue') or 
                 p.get('revenue7d') or 
                 p.get('videoRevenue') or 
                 p.get('videoRevenue7d') or 
@@ -7109,31 +7111,32 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
 
             # 4. Total/All-Time Stats
             total_sales = safe_int(
-                p.get('unitsSold') or 
                 p.get('productTotalUnits') or 
                 p.get('computedTotalUnits') or 
+                p.get('unitsSold') or 
                 p.get('totalSales') or 
                 0
             )
             
             total_revenue = safe_float(
                 p.get('totalRevenue') or 
-                p.get('estTotalEarnings') or 
+                p.get('computedTotalRevenue') or 
                 p.get('productTotalRevenue') or 
+                p.get('estTotalEarnings') or 
                 p.get('revenue_alltime') or 
                 p.get('videoRevenue') or # Fallback in video objects
                 0
             )
             
             total_ad_cost = safe_float(
-                p.get('totalAdCost') or 
                 p.get('productTotalAdSpend') or 
+                p.get('totalAdCost') or 
                 p.get('totalAdSpend') or 
                 0
             )
             
             if ad_spend_7d <= 0 and total_ad_cost > 0:
-                ad_spend_7d = total_ad_cost * 0.15 # Heuristic fallback
+                ad_spend_7d = total_ad_cost * 0.1 # Conservative heuristic fallback
             
             ad_spend_total = total_ad_cost or ad_spend_7d
             
@@ -7613,8 +7616,8 @@ def copilot_enrich_videos():
     import gc
     user = get_current_user()
     data = request.json or {}
-    target_pages = int(data.get('pages', 300))  # Default: 300 pages = ~15k products
-    delay_seconds = float(data.get('delay', 10.0))  # 10s delay to avoid Copilot memory limits
+    target_pages = int(data.get('pages', 600))  # Default: 600 pages = 30k products
+    delay_seconds = float(data.get('delay', 3.0))  # Faster 3s delay (optimized)
     
     try:
         print(f"[Video Enrich] Starting enrichment across {target_pages} pages (delay: {delay_seconds}s)...")
