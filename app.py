@@ -6802,29 +6802,28 @@ def get_copilot_cookie():
     
     return None
 
-def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0, region='US', keywords=None):
+def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US', keywords=None):
     """
-    Fetch products from the ENHANCED TikTokCopilot /api/trending/products endpoint.
-    Uses curl_cffi for browser impersonation to avoid blocks.
+    Fetch products from the V2 TikTokCopilot /api/trending/products endpoint.
+    Uses curl_cffi for browser impersonation with SAME-ORIGIN headers per Grok analysis.
     """
     cookie_str = get_copilot_cookie()
     if not cookie_str:
         print("[Copilot Products] ❌ No cookie configured!")
         return None
     
+    # CRITICAL: Same-origin headers per Grok's analysis (no Origin/Referer/X-Requested-With)
     headers = {
-        "Accept": "application/json, text/plain, */*",
+        "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.tiktokcopilot.com/products",
-        "Origin": "https://www.tiktokcopilot.com",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "sec-ch-ua": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+        "Sec-Fetch-Site": "same-origin",  # CRITICAL: same-origin, not same-site
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Windows"',
-        "X-Requested-With": "XMLHttpRequest"
+        "priority": "u=1, i",  # Modern fetch metadata
     }
     
     params = {
@@ -6832,7 +6831,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
         "sortBy": sort_by,
         "limit": limit,
         "page": page,
-        "region": region
+        "region": region  # CRITICAL: 'region' not 'shopRegion'
     }
     
     if keywords:
@@ -6841,19 +6840,18 @@ def fetch_copilot_products(timeframe='7d', sort_by='ad_spend', limit=50, page=0,
     retries = 3
     for attempt in range(retries):
         try:
-            # Use curl_cffi if available for better browser impersonation
+            # Use curl_cffi with Chrome 131 impersonation (latest supported)
             if requests_cffi:
                 res = requests_cffi.get(
                     f"{COPILOT_API_BASE}/trending/products", 
                     headers=headers, 
                     params=params, 
                     cookies=parse_cookie_string(cookie_str),
-                    impersonate="chrome120",
+                    impersonate="chrome131",  # Upgraded from chrome120
                     timeout=60
                 )
             else:
                 headers["Cookie"] = cookie_str
-                headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
             
             if res.status_code == 200:
@@ -6899,11 +6897,14 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     headers = {
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.tiktokcopilot.com/",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
-        "Priority": "u=1, i"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "priority": "u=1, i"
     }
     
     params = {
@@ -6943,12 +6944,11 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                     headers=headers, 
                     params=params, 
                     cookies=parse_cookie_string(cookie_str),
-                    impersonate="chrome120",
+                    impersonate="chrome131",
                     timeout=60
                 )
             else:
                 headers["Cookie"] = cookie_str
-                headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 res = requests.get(f"{COPILOT_API_BASE}/trending", headers=headers, params=params, timeout=60)
                 
             if res.status_code == 200:
