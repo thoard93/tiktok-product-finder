@@ -6936,10 +6936,11 @@ def _do_full_login():
         
         print(f"[Copilot Login] ✅ Sign-in created: {sign_in_id[:20]}...")
         
-        # Step 2: Attempt password using Grok's exact endpoint
-        # NOTE: Using /attempt (not /attempt_first_factor)
+        # Step 2: Attempt password via first factor
+        # NOTE: Using /attempt_first_factor (the correct Clerk endpoint)
+        # /attempt returned 404 - doesn't exist on this Clerk instance
         attempt_res = sess.post(
-            f"{base}/sign_ins/{sign_in_id}/attempt",
+            f"{base}/sign_ins/{sign_in_id}/attempt_first_factor",
             json={"strategy": "password", "password": password},
             timeout=30
         )
