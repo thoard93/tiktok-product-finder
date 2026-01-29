@@ -1,0 +1,33 @@
+# Ignore git
+.git
+.gitignore
+
+# Ignore Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+venv
+.venv
+
+# Ignore local files
+*.db
+*.sqlite3
+.env
+.env.local
+
+# Ignore IDE
+.vscode
+.idea
+*.swp
+
+# Ignore docs/artifacts
+*.md
+!README.md
+.gemini
+
+# Ignore test files
+test_*.py
+debug_*.py
