@@ -7024,17 +7024,18 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         return None
     
     # CRITICAL: Same-origin headers per Grok's analysis (no Origin/Referer/X-Requested-With)
+    # ALL sec-* headers must be lowercase to exactly match browser fingerprint
     headers = {
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",  # CRITICAL: same-origin, not same-site
+        "sec-fetch-dest": "empty",           # LOWERCASE per browser
+        "sec-fetch-mode": "cors",            # LOWERCASE per browser
+        "sec-fetch-site": "same-origin",     # CRITICAL: same-origin (lowercase)
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
         "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Windows"',
-        "priority": "u=1, i",  # Modern fetch metadata
+        "priority": "u=1, i",
     }
     
     params = {
@@ -7051,14 +7052,14 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     retries = 3
     for attempt in range(retries):
         try:
-            # Use curl_cffi with Chrome 131 impersonation (latest supported)
+            # Use curl_cffi with Chrome 124 impersonation (Grok's recommended version)
             if requests_cffi:
                 res = requests_cffi.get(
                     f"{COPILOT_API_BASE}/trending/products", 
                     headers=headers, 
                     params=params, 
                     cookies=parse_cookie_string(cookie_str),
-                    impersonate="chrome131",  # Upgraded from chrome120
+                    impersonate="chrome124",  # Grok recommends chrome124 for Geist bypass
                     timeout=60
                 )
             else:
@@ -7105,12 +7106,13 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         print("[Copilot] ❌ No cookie configured!")
         return None
     
+    # Same-origin headers with lowercase sec-* to match browser fingerprint exactly
     headers = {
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
+        "sec-fetch-dest": "empty",           # LOWERCASE
+        "sec-fetch-mode": "cors",            # LOWERCASE
+        "sec-fetch-site": "same-origin",     # LOWERCASE
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
         "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
         "sec-ch-ua-mobile": "?0",
@@ -7155,7 +7157,7 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                     headers=headers, 
                     params=params, 
                     cookies=parse_cookie_string(cookie_str),
-                    impersonate="chrome131",
+                    impersonate="chrome124",  # Grok recommends chrome124 for Geist bypass
                     timeout=60
                 )
             else:
