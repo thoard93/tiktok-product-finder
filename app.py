@@ -6786,9 +6786,9 @@ _COPILOT_LAST_REFRESH = None
 
 def auto_login_copilot():
     """
-    Rotate TikTokCopilot session tokens using existing cookies.
-    Uses the stored __session JWT to get a fresh token via Clerk's session touch endpoint.
-    This avoids password auth and verification challenges entirely.
+    Refresh TikTokCopilot session using a hybrid approach:
+    1. First try token rotation using existing session (faster, no login)
+    2. If rotation fails (401/expired), fallback to full password login
     
     Returns:
         Full cookie string on success, None on failure
@@ -6797,52 +6797,57 @@ def auto_login_copilot():
     
     # Get currently stored cookie string
     current_cookie = get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
-    if not current_cookie:
-        print("[Copilot Token Rotation] ⚠️ No cookies stored - manual cookie paste required first")
-        return None
+    
+    # Try rotation first if we have stored cookies
+    if current_cookie and '__session' in current_cookie:
+        result = _try_token_rotation(current_cookie)
+        if result:
+            return result
+        print("[Copilot] 🔄 Token rotation failed, attempting full login...")
+    
+    # Fallback to full password login
+    return _do_full_login()
+
+def _try_token_rotation(current_cookie):
+    """Attempt token rotation using existing session cookies."""
+    global _COPILOT_LAST_REFRESH
     
     print("[Copilot Token Rotation] 🔄 Attempting session token refresh...")
     
     try:
         # Parse the session ID from the __session JWT
         session_jwt = None
-        session_id = None
-        
         for cookie in current_cookie.split(';'):
             cookie = cookie.strip()
             if cookie.startswith('__session=') and not cookie.startswith('__session_'):
                 session_jwt = cookie.split('=', 1)[1]
                 break
             elif cookie.startswith('__session_'):
-                # Fallback to suffixed session cookie
                 session_jwt = cookie.split('=', 1)[1]
         
         if not session_jwt:
             print("[Copilot Token Rotation] ❌ No __session JWT in stored cookies")
             return None
         
-        # Decode JWT without verification to get session ID
-        try:
-            import base64
-            import json as json_lib
-            # JWT has 3 parts: header.payload.signature
-            parts = session_jwt.split('.')
-            if len(parts) >= 2:
-                # Pad the payload for proper base64 decoding
-                payload = parts[1]
-                payload += '=' * (4 - len(payload) % 4)
-                decoded = base64.urlsafe_b64decode(payload)
-                claims = json_lib.loads(decoded)
-                session_id = claims.get('sid')
-                print(f"[Copilot Token Rotation] 📋 Session ID: {session_id[:20]}..." if session_id else "[Copilot Token Rotation] ⚠️ No sid in JWT claims")
-        except Exception as decode_err:
-            print(f"[Copilot Token Rotation] ⚠️ JWT decode failed: {decode_err}")
-        
-        if not session_id:
-            print("[Copilot Token Rotation] ❌ Could not extract session ID from JWT")
+        # Decode JWT to get session ID
+        import base64
+        import json as json_lib
+        parts = session_jwt.split('.')
+        if len(parts) >= 2:
+            payload = parts[1]
+            payload += '=' * (4 - len(payload) % 4)
+            decoded = base64.urlsafe_b64decode(payload)
+            claims = json_lib.loads(decoded)
+            session_id = claims.get('sid')
+            if session_id:
+                print(f"[Copilot Token Rotation] 📋 Session ID: {session_id[:20]}...")
+            else:
+                print("[Copilot Token Rotation] ❌ No sid in JWT claims")
+                return None
+        else:
             return None
         
-        # Setup session with browser fingerprint
+        # Setup session
         if requests_cffi:
             session = requests_cffi.Session(impersonate="chrome124")
         else:
@@ -6851,90 +6856,133 @@ def auto_login_copilot():
         session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
             "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-origin",
         })
         
-        # Set cookies on the session
         cookies_dict = parse_cookie_string(current_cookie)
         
-        # Try multiple token refresh approaches
-        success = False
-        new_jwt = None
+        # Try token refresh via /tokens endpoint
+        tokens_url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/tokens"
+        res = session.post(tokens_url, json={}, cookies=cookies_dict, timeout=30)
         
-        # Approach 1: Touch the session (keeps it alive, sometimes returns new token)
-        touch_url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/touch"
-        try:
-            res = session.post(touch_url, json={}, cookies=cookies_dict, timeout=30)
-            if res.status_code == 200:
-                data = res.json()
-                new_jwt = data.get('jwt') or (data.get('last_active_token') or {}).get('jwt')
-                if new_jwt:
-                    print("[Copilot Token Rotation] ✅ Got fresh token from session touch!")
-                    success = True
-        except Exception as e:
-            print(f"[Copilot Token Rotation] ⚠️ Touch failed: {e}")
-        
-        # Approach 2: Get tokens directly
-        if not success:
-            tokens_url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/tokens"
-            try:
-                res = session.post(tokens_url, json={}, cookies=cookies_dict, timeout=30)
-                if res.status_code == 200:
-                    data = res.json()
-                    new_jwt = data.get('jwt') or data.get('token')
-                    if new_jwt:
-                        print("[Copilot Token Rotation] ✅ Got fresh token from tokens endpoint!")
-                        success = True
-                else:
-                    print(f"[Copilot Token Rotation] ⚠️ Tokens endpoint returned {res.status_code}")
-            except Exception as e:
-                print(f"[Copilot Token Rotation] ⚠️ Tokens failed: {e}")
-        
-        if success and new_jwt:
-            # Build new cookie string with the fresh JWT
-            # Preserve other cookies but update __session tokens
-            new_cookies = []
-            jwt_added = False
-            
-            for cookie in current_cookie.split(';'):
-                cookie = cookie.strip()
-                if not cookie:
-                    continue
-                    
-                # Skip old session tokens, we'll add the new one
-                if cookie.startswith('__session'):
-                    continue
+        if res.status_code == 200:
+            data = res.json()
+            new_jwt = data.get('jwt') or data.get('token')
+            if new_jwt:
+                # Build new cookie string
+                new_cookies = [c.strip() for c in current_cookie.split(';') if c.strip() and not c.strip().startswith('__session')]
+                new_cookies.append(f"__session={new_jwt}")
+                new_cookies.append(f"__session_pOM46XQh={new_jwt}")
+                full_cookie_str = "; ".join(new_cookies)
                 
-                new_cookies.append(cookie)
-            
-            # Add fresh session tokens
-            new_cookies.append(f"__session={new_jwt}")
-            new_cookies.append(f"__session_pOM46XQh={new_jwt}")
-            
-            full_cookie_str = "; ".join(new_cookies)
-            
-            # Store in database
-            try:
-                set_config_value('TIKTOK_COPILOT_COOKIE', full_cookie_str, 'Auto-rotated by token refresh')
+                set_config_value('TIKTOK_COPILOT_COOKIE', full_cookie_str, 'Auto-rotated tokens')
                 _COPILOT_LAST_REFRESH = datetime.utcnow()
-                print(f"[Copilot Token Rotation] ✅ Session refreshed! New token stored.")
-                return full_cookie_str
-            except Exception as db_err:
-                print(f"[Copilot Token Rotation] ⚠️ DB save failed: {db_err}")
+                print("[Copilot Token Rotation] ✅ Session refreshed via token rotation!")
                 return full_cookie_str
         
-        print("[Copilot Token Rotation] ❌ Could not get fresh token - session may have expired")
-        print("[Copilot Token Rotation] 💡 You may need to paste a fresh cookie manually")
+        print(f"[Copilot Token Rotation] ⚠️ Tokens endpoint returned {res.status_code}")
         return None
         
     except Exception as e:
         print(f"[Copilot Token Rotation] ❌ Exception: {e}")
+        return None
+
+def _do_full_login():
+    """
+    Full password login via Clerk API using Grok's exact flow.
+    Uses /sign_ins/{id}/attempt endpoint (not /attempt_first_factor).
+    """
+    global _COPILOT_LAST_REFRESH
+    
+    email = os.environ.get('COPILOT_EMAIL')
+    password = os.environ.get('COPILOT_PASSWORD')
+    
+    if not email or not password:
+        print("[Copilot Login] ⚠️ No credentials configured (set COPILOT_EMAIL + COPILOT_PASSWORD)")
+        return None
+    
+    print(f"[Copilot Login] 🔐 Attempting full login for {email[:5]}***...")
+    
+    try:
+        # Use standard requests (Grok's recommendation for Clerk)
+        sess = requests.Session()
+        sess.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+            "Origin": "https://www.tiktokcopilot.com",
+            "Referer": "https://www.tiktokcopilot.com/",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        })
+        
+        base = "https://clerk.tiktokcopilot.com/v1/client"
+        
+        # Step 1: Create sign-in (identify email)
+        create_res = sess.post(f"{base}/sign_ins", json={"identifier": email}, timeout=30)
+        if create_res.status_code != 200:
+            print(f"[Copilot Login] ❌ Sign-in create failed: {create_res.status_code}")
+            print(f"[DEBUG] {create_res.text[:300]}")
+            return None
+        
+        create_data = create_res.json()
+        # Try multiple response structures for sign_in_id
+        sign_in_id = (
+            create_data.get('response', {}).get('id') or
+            create_data.get('id') or
+            (create_data.get('client', {}).get('sign_ins', [{}])[0].get('id') if create_data.get('client', {}).get('sign_ins') else None)
+        )
+        
+        if not sign_in_id:
+            print(f"[Copilot Login] ❌ No sign_in_id in response")
+            return None
+        
+        print(f"[Copilot Login] ✅ Sign-in created: {sign_in_id[:20]}...")
+        
+        # Step 2: Attempt password using Grok's exact endpoint
+        # NOTE: Using /attempt (not /attempt_first_factor)
+        attempt_res = sess.post(
+            f"{base}/sign_ins/{sign_in_id}/attempt",
+            json={"strategy": "password", "password": password},
+            timeout=30
+        )
+        
+        if attempt_res.status_code != 200:
+            print(f"[Copilot Login] ❌ Password attempt failed: {attempt_res.status_code}")
+            print(f"[DEBUG] {attempt_res.text[:500]}")
+            return None
+        
+        attempt_data = attempt_res.json()
+        status = attempt_data.get('status') or attempt_data.get('response', {}).get('status')
+        
+        if status != 'complete':
+            print(f"[Copilot Login] ⚠️ Login status: {status} (not complete)")
+            # Still try to extract cookies
+        
+        print("[Copilot Login] ✅ Password accepted!")
+        
+        # Step 3: Extract cookies from session
+        cookies = sess.cookies.get_dict()
+        
+        # Also try to get JWT from response body
+        sessions = attempt_data.get('client', {}).get('sessions', [])
+        if sessions:
+            jwt = sessions[0].get('last_active_token', {}).get('jwt')
+            if jwt:
+                cookies['__session'] = jwt
+                cookies['__session_pOM46XQh'] = jwt
+        
+        if not cookies.get('__session'):
+            print("[Copilot Login] ❌ No session cookies in response")
+            return None
+        
+        # Build cookie string
+        full_cookie_str = "; ".join([f"{k}={v}" for k, v in cookies.items()])
+        
+        set_config_value('TIKTOK_COPILOT_COOKIE', full_cookie_str, 'Fresh login via Clerk')
+        _COPILOT_LAST_REFRESH = datetime.utcnow()
+        print(f"[Copilot Login] ✅ Fresh session! {len(cookies)} cookies saved")
+        return full_cookie_str
+        
+    except Exception as e:
+        print(f"[Copilot Login] ❌ Exception: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -7035,6 +7083,12 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     retries = 3
     for attempt in range(retries):
         try:
+            # DEBUG: Log exact request details (Grok's recommendation)
+            v2_url = f"{COPILOT_API_BASE}/trending/products"
+            print(f"[V2 DEBUG] URL: {v2_url}")
+            print(f"[V2 DEBUG] Params: {params}")
+            print(f"[V2 DEBUG] Headers: {list(headers.keys())}")
+            
             # Use curl_cffi with Chrome 124 impersonation (Grok's recommended version)
             if requests_cffi:
                 res = requests_cffi.get(
