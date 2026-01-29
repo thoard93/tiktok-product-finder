@@ -6858,13 +6858,15 @@ def auto_login_copilot():
         time.sleep(random.uniform(0.5, 1.5))
         
         # Step 2: Attempt password authentication
+        # NOTE: Clerk expects form-encoded data, NOT JSON, for attempt_first_factor
         attempt_url = f"https://clerk.tiktokcopilot.com/v1/client/sign_ins/{sign_in_id}/attempt_first_factor"
         attempt_payload = {
             "strategy": "password",
             "password": password
         }
         
-        res2 = session.post(attempt_url, json=attempt_payload, timeout=30)
+        # Use data= for form encoding, not json=
+        res2 = session.post(attempt_url, data=attempt_payload, timeout=30)
         
         if res2.status_code != 200:
             print(f"[Copilot Auto-Login] ❌ Password auth failed: {res2.status_code}")
