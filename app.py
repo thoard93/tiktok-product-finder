@@ -6888,8 +6888,9 @@ def _try_token_rotation(current_cookie):
 
 def _do_full_login():
     """
-    Full password login via Clerk API using Grok's exact flow.
-    Uses /sign_ins/{id}/attempt endpoint (not /attempt_first_factor).
+    Full login via Playwright headless browser.
+    Bypasses Clerk API restrictions by mimicking real browser behavior.
+    Navigates to login page, fills credentials, extracts cookies.
     """
     global _COPILOT_LAST_REFRESH
     
@@ -6897,96 +6898,129 @@ def _do_full_login():
     password = os.environ.get('COPILOT_PASSWORD')
     
     if not email or not password:
-        print("[Copilot Login] ⚠️ No credentials configured (set COPILOT_EMAIL + COPILOT_PASSWORD)")
+        print("[Playwright Login] ⚠️ No credentials configured (set COPILOT_EMAIL + COPILOT_PASSWORD)")
         return None
     
-    print(f"[Copilot Login] 🔐 Attempting full login for {email[:5]}***...")
+    print(f"[Playwright Login] 🎭 Starting headless browser login for {email[:5]}***...")
     
     try:
-        # Use standard requests (Grok's recommendation for Clerk)
-        sess = requests.Session()
-        sess.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-            "Origin": "https://www.tiktokcopilot.com",
-            "Referer": "https://www.tiktokcopilot.com/",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        })
-        
-        base = "https://clerk.tiktokcopilot.com/v1/client"
-        
-        # Step 1: Create sign-in (identify email)
-        create_res = sess.post(f"{base}/sign_ins", json={"identifier": email}, timeout=30)
-        if create_res.status_code != 200:
-            print(f"[Copilot Login] ❌ Sign-in create failed: {create_res.status_code}")
-            print(f"[DEBUG] {create_res.text[:300]}")
-            return None
-        
-        create_data = create_res.json()
-        # Try multiple response structures for sign_in_id
-        sign_in_id = (
-            create_data.get('response', {}).get('id') or
-            create_data.get('id') or
-            (create_data.get('client', {}).get('sign_ins', [{}])[0].get('id') if create_data.get('client', {}).get('sign_ins') else None)
-        )
-        
-        if not sign_in_id:
-            print(f"[Copilot Login] ❌ No sign_in_id in response")
-            return None
-        
-        print(f"[Copilot Login] ✅ Sign-in created: {sign_in_id[:20]}...")
-        
-        # Step 2: Attempt password via first factor
-        # NOTE: Using /attempt_first_factor (the correct Clerk endpoint)
-        # /attempt returned 404 - doesn't exist on this Clerk instance
-        attempt_res = sess.post(
-            f"{base}/sign_ins/{sign_in_id}/attempt_first_factor",
-            json={"strategy": "password", "password": password},
-            timeout=30
-        )
-        
-        if attempt_res.status_code != 200:
-            print(f"[Copilot Login] ❌ Password attempt failed: {attempt_res.status_code}")
-            print(f"[DEBUG] {attempt_res.text[:500]}")
-            return None
-        
-        attempt_data = attempt_res.json()
-        status = attempt_data.get('status') or attempt_data.get('response', {}).get('status')
-        
-        if status != 'complete':
-            print(f"[Copilot Login] ⚠️ Login status: {status} (not complete)")
-            # Still try to extract cookies
-        
-        print("[Copilot Login] ✅ Password accepted!")
-        
-        # Step 3: Extract cookies from session
-        cookies = sess.cookies.get_dict()
-        
-        # Also try to get JWT from response body
-        sessions = attempt_data.get('client', {}).get('sessions', [])
-        if sessions:
-            jwt = sessions[0].get('last_active_token', {}).get('jwt')
-            if jwt:
-                cookies['__session'] = jwt
-                cookies['__session_pOM46XQh'] = jwt
-        
-        if not cookies.get('__session'):
-            print("[Copilot Login] ❌ No session cookies in response")
-            return None
-        
-        # Build cookie string
-        full_cookie_str = "; ".join([f"{k}={v}" for k, v in cookies.items()])
-        
-        set_config_value('TIKTOK_COPILOT_COOKIE', full_cookie_str, 'Fresh login via Clerk')
-        _COPILOT_LAST_REFRESH = datetime.utcnow()
-        print(f"[Copilot Login] ✅ Fresh session! {len(cookies)} cookies saved")
-        return full_cookie_str
-        
+        # Import playwright (installed via requirements.txt)
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("[Playwright Login] ❌ Playwright not installed - run: pip install playwright && playwright install chromium")
+        return None
+    
+    try:
+        with sync_playwright() as p:
+            # Launch headless Chromium
+            print("[Playwright Login] 🚀 Launching headless Chromium...")
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+            )
+            page = context.new_page()
+            
+            # Navigate to sign-in page
+            print("[Playwright Login] 🌐 Navigating to TikTokCopilot sign-in...")
+            page.goto("https://www.tiktokcopilot.com/auth-sign-in", timeout=30000)
+            
+            # Wait for email input to be ready
+            print("[Playwright Login] ⏳ Waiting for login form...")
+            page.wait_for_selector('input[name="identifier"], input[type="email"]', timeout=15000)
+            
+            # Fill email
+            email_input = page.query_selector('input[name="identifier"]') or page.query_selector('input[type="email"]')
+            if email_input:
+                email_input.fill(email)
+                print("[Playwright Login] ✅ Email entered")
+            else:
+                print("[Playwright Login] ❌ Could not find email input")
+                browser.close()
+                return None
+            
+            # Click continue/next button after email
+            continue_btn = page.query_selector('button[type="submit"], button:has-text("Continue"), button:has-text("Next")')
+            if continue_btn:
+                continue_btn.click()
+                print("[Playwright Login] ✅ Clicked Continue")
+                time.sleep(1)  # Wait for password field
+            
+            # Wait for and fill password
+            try:
+                page.wait_for_selector('input[type="password"]', timeout=10000)
+                password_input = page.query_selector('input[type="password"]')
+                if password_input:
+                    password_input.fill(password)
+                    print("[Playwright Login] ✅ Password entered")
+                else:
+                    print("[Playwright Login] ❌ Could not find password input")
+                    browser.close()
+                    return None
+            except Exception as pwd_err:
+                print(f"[Playwright Login] ⚠️ Password field issue: {pwd_err}")
+                browser.close()
+                return None
+            
+            # Click sign-in/submit button
+            submit_btn = page.query_selector('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
+            if submit_btn:
+                submit_btn.click()
+                print("[Playwright Login] ✅ Clicked Sign In")
+            else:
+                print("[Playwright Login] ⚠️ No submit button found, pressing Enter")
+                page.keyboard.press("Enter")
+            
+            # Wait for successful login (dashboard redirect)
+            print("[Playwright Login] ⏳ Waiting for dashboard...")
+            try:
+                page.wait_for_url("**/products**", timeout=30000)
+                print("[Playwright Login] ✅ Successfully redirected to dashboard!")
+            except:
+                # Try alternative success indicators
+                current_url = page.url
+                if "/auth" not in current_url and "sign" not in current_url.lower():
+                    print(f"[Playwright Login] ✅ Login appears successful (URL: {current_url})")
+                else:
+                    print(f"[Playwright Login] ⚠️ Still on login page: {current_url}")
+                    # Check for error messages
+                    error_el = page.query_selector('.cl-formFieldErrorText, [data-clerk-error], .error')
+                    if error_el:
+                        print(f"[Playwright Login] ❌ Login error: {error_el.inner_text()}")
+                    browser.close()
+                    return None
+            
+            # Extract cookies
+            cookies = context.cookies()
+            copilot_cookies = [c for c in cookies if 'tiktokcopilot' in c.get('domain', '')]
+            
+            if not copilot_cookies:
+                print("[Playwright Login] ⚠️ No TikTokCopilot cookies found, trying all cookies")
+                copilot_cookies = cookies
+            
+            # Build cookie string
+            full_cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in copilot_cookies])
+            
+            # Check for session cookie
+            has_session = any(c['name'].startswith('__session') for c in copilot_cookies)
+            
+            if has_session:
+                set_config_value('TIKTOK_COPILOT_COOKIE', full_cookie_str, 'Fresh login via Playwright')
+                _COPILOT_LAST_REFRESH = datetime.utcnow()
+                print(f"[Playwright Login] ✅ Fresh session! {len(copilot_cookies)} cookies saved")
+                browser.close()
+                return full_cookie_str
+            else:
+                print("[Playwright Login] ❌ No __session cookie found despite apparent login success")
+                print(f"[DEBUG] Cookie names: {[c['name'] for c in copilot_cookies[:10]]}")
+                browser.close()
+                return None
+                
     except Exception as e:
-        print(f"[Copilot Login] ❌ Exception: {e}")
+        print(f"[Playwright Login] ❌ Exception: {e}")
         import traceback
         traceback.print_exc()
         return None
+
 
 def schedule_copilot_auto_refresh(interval_minutes=45):
     """
