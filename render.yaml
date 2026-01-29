@@ -3,7 +3,7 @@ services:
   - type: web
     name: gem-hunter
     runtime: python
-    buildCommand: pip install -r requirements.txt && python -m playwright install-deps && python -m playwright install chromium --with-deps
+    buildCommand: pip install -r requirements.txt && python -m playwright install-deps && python -m playwright install chromium
     startCommand: gunicorn app:app --workers 3 --threads 2 --timeout 120
     envVars:
       - key: PYTHON_VERSION
@@ -20,7 +20,7 @@ services:
     name: copilot-sync
     runtime: python
     schedule: "0 */12 * * *"  # Every 12 hours
-    buildCommand: pip install -r requirements.txt && python -m playwright install-deps && python -m playwright install chromium --with-deps
+    buildCommand: pip install -r requirements.txt && python -m playwright install-deps && python -m playwright install chromium
     startCommand: python -c "from app import sync_copilot_products; [sync_copilot_products(page=p) for p in range(3)]"
     envVars:
       - key: PYTHON_VERSION

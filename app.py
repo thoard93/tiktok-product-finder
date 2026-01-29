@@ -6912,20 +6912,11 @@ def _do_full_login():
     
     try:
         with sync_playwright() as p:
-            # Launch headless Chromium (with fallback install if missing)
+            # Launch headless Chromium (build-time install handles binary)
             print("[Playwright Login] 🚀 Launching headless Chromium...")
-            try:
-                browser = p.chromium.launch(headless=True)
-            except Exception as launch_err:
-                if "Executable doesn't exist" in str(launch_err):
-                    print("[Playwright Login] ⚠️ Browser binary missing - installing now...")
-                    import subprocess
-                    subprocess.run(["python", "-m", "playwright", "install", "chromium", "--with-deps"], check=True)
-                    print("[Playwright Login] 🔄 Retrying browser launch...")
-                    browser = p.chromium.launch(headless=True)
-                else:
-                    raise launch_err
+            browser = p.chromium.launch(headless=True)
             context = browser.new_context(
+
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
             )
             page = context.new_page()
