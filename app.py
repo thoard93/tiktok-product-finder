@@ -6780,6 +6780,215 @@ def parse_cookie_string(cookie_str):
             cookies[name] = value
     return cookies
 
+# Global tracking for auto-refresh
+_COPILOT_AUTO_REFRESH_THREAD = None
+_COPILOT_LAST_REFRESH = None
+
+def auto_login_copilot():
+    """
+    Automatically login to TikTokCopilot via Clerk API using email/password.
+    Stores fresh cookies in database config.
+    
+    Env vars required:
+        COPILOT_EMAIL: Your TikTokCopilot login email
+        COPILOT_PASSWORD: Your TikTokCopilot password
+    
+    Returns:
+        Full cookie string on success, None on failure
+    """
+    global _COPILOT_LAST_REFRESH
+    import random
+    
+    email = os.environ.get('COPILOT_EMAIL')
+    password = os.environ.get('COPILOT_PASSWORD')
+    
+    if not email or not password:
+        print("[Copilot Auto-Login] ⚠️ No credentials configured (set COPILOT_EMAIL + COPILOT_PASSWORD env vars)")
+        return None
+    
+    print(f"[Copilot Auto-Login] 🔄 Attempting login for {email[:5]}***@***...")
+    
+    try:
+        # Use curl_cffi if available for better fingerprinting
+        if requests_cffi:
+            session = requests_cffi.Session(impersonate="chrome131")
+        else:
+            session = requests.Session()
+        
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "https://www.tiktokcopilot.com",
+            "Referer": "https://www.tiktokcopilot.com/auth-sign-in",
+            "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+        })
+        
+        # Step 1: Create a sign-in attempt
+        create_url = "https://clerk.tiktokcopilot.com/v1/client/sign_ins"
+        create_payload = {"identifier": email}
+        
+        res1 = session.post(create_url, json=create_payload, timeout=30)
+        
+        if res1.status_code != 200:
+            print(f"[Copilot Auto-Login] ❌ Create sign-in failed: {res1.status_code}")
+            if hasattr(res1, 'text'):
+                print(f"[DEBUG] Response: {res1.text[:300]}")
+            return None
+        
+        data1 = res1.json()
+        sign_in_id = data1.get('response', {}).get('id') or data1.get('id')
+        
+        if not sign_in_id:
+            # Try alternate response structure
+            client_data = data1.get('client', {})
+            sign_ins = client_data.get('sign_ins', [])
+            if sign_ins:
+                sign_in_id = sign_ins[0].get('id')
+        
+        if not sign_in_id:
+            print(f"[Copilot Auto-Login] ❌ No sign_in_id in response: {list(data1.keys())}")
+            return None
+        
+        print(f"[Copilot Auto-Login] ✅ Sign-in created: {sign_in_id[:20]}...")
+        
+        # Small delay to mimic human
+        time.sleep(random.uniform(0.5, 1.5))
+        
+        # Step 2: Attempt password authentication
+        attempt_url = f"https://clerk.tiktokcopilot.com/v1/client/sign_ins/{sign_in_id}/attempt_first_factor"
+        attempt_payload = {
+            "strategy": "password",
+            "password": password
+        }
+        
+        res2 = session.post(attempt_url, json=attempt_payload, timeout=30)
+        
+        if res2.status_code != 200:
+            print(f"[Copilot Auto-Login] ❌ Password auth failed: {res2.status_code}")
+            if hasattr(res2, 'text'):
+                error_text = res2.text[:500]
+                if 'incorrect' in error_text.lower():
+                    print("[Copilot Auto-Login] ❌ Password is incorrect!")
+                else:
+                    print(f"[DEBUG] Response: {error_text}")
+            return None
+        
+        print(f"[Copilot Auto-Login] ✅ Password accepted!")
+        
+        # Step 3: Extract cookies from session
+        cookies_dict = {}
+        if hasattr(session, 'cookies'):
+            for cookie in session.cookies:
+                if hasattr(cookie, 'name') and hasattr(cookie, 'value'):
+                    cookies_dict[cookie.name] = cookie.value
+                elif isinstance(cookie, tuple):
+                    cookies_dict[cookie[0]] = cookie[1]
+            
+            # Also check response cookies
+            if hasattr(res2, 'cookies'):
+                try:
+                    for cookie in res2.cookies:
+                        if hasattr(cookie, 'name'):
+                            cookies_dict[cookie.name] = cookie.value
+                except:
+                    pass
+        
+        # Build cookie string with session tokens
+        relevant_cookies = []
+        for name, value in cookies_dict.items():
+            if any(prefix in name for prefix in ['__session', '__client', '__refresh', 'clerk']):
+                relevant_cookies.append(f"{name}={value}")
+        
+        if not relevant_cookies:
+            # Try to extract __session from response body
+            data2 = res2.json()
+            sessions = data2.get('client', {}).get('sessions', [])
+            if sessions:
+                active_session = sessions[0]
+                jwt = active_session.get('last_active_token', {}).get('jwt')
+                if jwt:
+                    relevant_cookies.append(f"__session={jwt}")
+                    relevant_cookies.append(f"__session_pOM46XQh={jwt}")
+        
+        if not relevant_cookies:
+            print("[Copilot Auto-Login] ❌ No session cookies found in response")
+            # Try one more approach - refresh the session to get cookies
+            data2 = res2.json()
+            sessions = data2.get('client', {}).get('sessions', [])
+            if sessions:
+                session_id = sessions[0].get('id')
+                if session_id:
+                    print(f"[Copilot Auto-Login] 🔄 Trying token refresh for session {session_id[:20]}...")
+                    touch_url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/touch"
+                    res3 = session.post(touch_url, json={}, timeout=30)
+                    if res3.status_code == 200:
+                        data3 = res3.json()
+                        jwt = data3.get('last_active_token', {}).get('jwt') or data3.get('jwt')
+                        if jwt:
+                            relevant_cookies.append(f"__session={jwt}")
+                            relevant_cookies.append(f"__session_pOM46XQh={jwt}")
+                            print("[Copilot Auto-Login] ✅ Got JWT from session touch!")
+        
+        if relevant_cookies:
+            full_cookie_str = "; ".join(relevant_cookies)
+            
+            # Store in database config
+            try:
+                set_config_value('TIKTOK_COPILOT_COOKIE', full_cookie_str, 'Auto-refreshed by Clerk login')
+                _COPILOT_LAST_REFRESH = datetime.utcnow()
+                print(f"[Copilot Auto-Login] ✅ Session refreshed! Cookies stored in DB ({len(relevant_cookies)} tokens)")
+                return full_cookie_str
+            except Exception as db_err:
+                print(f"[Copilot Auto-Login] ⚠️ DB save failed, returning cookies: {db_err}")
+                return full_cookie_str
+        
+        print("[Copilot Auto-Login] ❌ Failed to extract session cookies")
+        return None
+        
+    except Exception as e:
+        print(f"[Copilot Auto-Login] ❌ Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def schedule_copilot_auto_refresh(interval_minutes=45):
+    """
+    Schedule automatic session refresh every N minutes.
+    Uses threading.Timer for lightweight background execution.
+    """
+    global _COPILOT_AUTO_REFRESH_THREAD
+    import threading
+    
+    def refresh_job():
+        global _COPILOT_AUTO_REFRESH_THREAD
+        try:
+            print(f"[Copilot Scheduler] ⏰ Running scheduled session refresh...")
+            result = auto_login_copilot()
+            if result:
+                print(f"[Copilot Scheduler] ✅ Auto-refresh successful!")
+            else:
+                print(f"[Copilot Scheduler] ⚠️ Auto-refresh returned None - check credentials")
+        except Exception as e:
+            print(f"[Copilot Scheduler] ❌ Error in scheduled refresh: {e}")
+        finally:
+            # Schedule next run
+            _COPILOT_AUTO_REFRESH_THREAD = threading.Timer(interval_minutes * 60, refresh_job)
+            _COPILOT_AUTO_REFRESH_THREAD.daemon = True
+            _COPILOT_AUTO_REFRESH_THREAD.start()
+    
+    # Cancel existing timer if any
+    if _COPILOT_AUTO_REFRESH_THREAD and _COPILOT_AUTO_REFRESH_THREAD.is_alive():
+        _COPILOT_AUTO_REFRESH_THREAD.cancel()
+    
+    # Start the timer
+    _COPILOT_AUTO_REFRESH_THREAD = threading.Timer(interval_minutes * 60, refresh_job)
+    _COPILOT_AUTO_REFRESH_THREAD.daemon = True
+    _COPILOT_AUTO_REFRESH_THREAD.start()
+    print(f"[Copilot Scheduler] 📅 Auto-refresh scheduled every {interval_minutes} minutes")
+
 def get_copilot_cookie():
     """Get TikTokCopilot session cookie.
     
@@ -7969,6 +8178,55 @@ def test_copilot_connection():
         return jsonify({'success': True, 'message': 'Connection verified. (Legacy Fallback Active)'})
         
     return jsonify({'success': False, 'error': 'Cookie invalid or API blocked. Check logs for JSON Decode Errors.'}), 401
+
+@app.route('/api/copilot/refresh-session', methods=['POST'])
+@admin_required
+def api_copilot_refresh_session():
+    """
+    Manually trigger TikTokCopilot session refresh.
+    Attempts auto-login via Clerk API using stored credentials.
+    """
+    try:
+        result = auto_login_copilot()
+        if result:
+            return jsonify({
+                'success': True, 
+                'message': 'Session refreshed successfully!',
+                'last_refresh': _COPILOT_LAST_REFRESH.isoformat() if _COPILOT_LAST_REFRESH else None
+            })
+        else:
+            # Check if credentials are configured
+            email = os.environ.get('COPILOT_EMAIL')
+            password = os.environ.get('COPILOT_PASSWORD')
+            if not email or not password:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Missing credentials. Set COPILOT_EMAIL and COPILOT_PASSWORD env vars on Render.'
+                }), 400
+            return jsonify({
+                'success': False, 
+                'error': 'Login failed. Check server logs for details.'
+            }), 401
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/copilot/refresh-status', methods=['GET'])
+@admin_required
+def api_copilot_refresh_status():
+    """Get the status of auto-refresh system."""
+    global _COPILOT_AUTO_REFRESH_THREAD, _COPILOT_LAST_REFRESH
+    
+    email = os.environ.get('COPILOT_EMAIL')
+    has_credentials = bool(email and os.environ.get('COPILOT_PASSWORD'))
+    
+    scheduler_active = _COPILOT_AUTO_REFRESH_THREAD is not None and _COPILOT_AUTO_REFRESH_THREAD.is_alive()
+    
+    return jsonify({
+        'has_credentials': has_credentials,
+        'credentials_email': email[:5] + '***' if email else None,
+        'scheduler_active': scheduler_active,
+        'last_refresh': _COPILOT_LAST_REFRESH.isoformat() if _COPILOT_LAST_REFRESH else None
+    })
 
 @app.route('/api/admin/google-sheets-config', methods=['GET'])
 def get_sheets_config():
@@ -9251,6 +9509,18 @@ def cleanup_zero_sales():
 
 # Run on module load (ensures it runs on Render gunicorn start)
 ensure_schema_integrity()
+
+# Start auto-refresh scheduler if credentials are configured
+if os.environ.get('COPILOT_EMAIL') and os.environ.get('COPILOT_PASSWORD'):
+    print("[Copilot] 🔐 Credentials detected - starting auto-refresh scheduler...")
+    schedule_copilot_auto_refresh(interval_minutes=45)
+    # Also do an initial refresh on startup
+    try:
+        auto_login_copilot()
+    except Exception as e:
+        print(f"[Copilot] ⚠️ Initial auto-login failed: {e}")
+else:
+    print("[Copilot] ℹ️ No credentials configured - auto-refresh disabled (set COPILOT_EMAIL + COPILOT_PASSWORD env vars)")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
