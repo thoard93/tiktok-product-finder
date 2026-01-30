@@ -6929,25 +6929,31 @@ def _do_full_login():
             except:
                 print("[Playwright Login] ⚠️ Networkidle timeout, continuing...")
             
-            # Step 1: Handle initial marketing popup - click "Sign in" at bottom
+            # Step 1: Click top-right 'Sign in' button (priority) or popup link (fallback)
+            sign_in_button_selector = "button:has-text('Sign in'), a:has-text('Sign in'), button[role='button']:has-text('Sign in')"
             try:
-                print("[Playwright Login] 🔍 Looking for 'Sign in' link in popup...")
-                sign_in_link = page.locator("text='Sign in', a:has-text('Sign in'), button:has-text('Sign in')").first
-                sign_in_link.wait_for(state="visible", timeout=20000)
-                sign_in_link.click(force=True)  # Force click to bypass any overlay
-                print("[Playwright Login] ✅ Clicked 'Sign in' on initial popup")
+                print("[Playwright Login] 🔍 Looking for top-right 'Sign in' button...")
+                page.wait_for_selector(sign_in_button_selector, timeout=20000)
+                page.click(sign_in_button_selector, force=True)
+                print("[Playwright Login] ✅ Clicked top-right 'Sign in' button")
                 page.wait_for_load_state("networkidle", timeout=30000)
-            except Exception as popup_err:
-                print(f"[Playwright Login] ⚠️ No initial popup or click failed: {popup_err}")
+            except Exception as btn_err:
+                print(f"[Playwright Login] ⚠️ Top-right button failed: {btn_err}")
+                # Fallback for marketing popup 'Sign in' link
+                try:
+                    popup_sign_in = "text='Already have an account? Sign in', text='Sign in'"
+                    page.wait_for_selector(popup_sign_in, timeout=10000)
+                    page.click(popup_sign_in, force=True)
+                    print("[Playwright Login] ✅ Clicked popup 'Sign in' link (fallback)")
+                    page.wait_for_load_state("networkidle", timeout=30000)
+                except Exception as popup_err:
+                    print(f"[Playwright Login] ❌ Both Sign in clicks failed: {popup_err}")
+                    page.screenshot(path="/tmp/login_signin_fail.png")
+                    browser.close()
+                    return None
             
-            # Step 2: Wait for sign-in modal/form to load (overlay fades)
+            # Step 2: Wait for form fields (extra time for modal animation)
             print("[Playwright Login] ⏳ Waiting for login form...")
-            try:
-                page.wait_for_load_state("networkidle", timeout=30000)
-            except:
-                pass
-            
-            # Wait for email field with longer timeout
             email_selector = 'input[type="email"], input[placeholder*="Email"], input[name="identifier"]'
             page.wait_for_selector(email_selector, timeout=30000, state="visible")
             
