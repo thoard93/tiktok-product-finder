@@ -6912,11 +6912,23 @@ def _do_full_login():
     
     try:
         with sync_playwright() as p:
-            # Launch headless Chromium (build-time install handles binary)
-            print("[Playwright Login] 🚀 Launching headless Chromium...")
-            browser = p.chromium.launch(headless=True)
+            # Launch headless Chromium with low-memory flags to avoid OOM on Render
+            print("[Playwright Login] 🚀 Launching headless Chromium (low-memory mode)...")
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-gpu',
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',  # Critical for Docker/Render
+                    '--single-process',  # Reduces memory footprint
+                    '--disable-extensions',
+                    '--disable-background-networking',
+                    '--disable-default-apps',
+                    '--no-first-run',
+                ]
+            )
             context = browser.new_context(
-
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
             )
             page = context.new_page()
