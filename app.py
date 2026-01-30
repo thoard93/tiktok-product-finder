@@ -6921,13 +6921,13 @@ def _do_full_login():
             )
             page = context.new_page()
             
-            # Navigate to sign-in page
+            # Navigate to sign-in page (increased timeout for slow loads)
             print("[Playwright Login] 🌐 Navigating to TikTokCopilot sign-in...")
-            page.goto("https://www.tiktokcopilot.com/auth-sign-in", timeout=30000)
+            page.goto("https://www.tiktokcopilot.com/auth-sign-in", timeout=60000, wait_until="domcontentloaded")
             
             # Wait for email input to be ready
             print("[Playwright Login] ⏳ Waiting for login form...")
-            page.wait_for_selector('input[name="identifier"], input[type="email"]', timeout=15000)
+            page.wait_for_selector('input[name="identifier"], input[type="email"]', timeout=30000)
             
             # Fill email
             email_input = page.query_selector('input[name="identifier"]') or page.query_selector('input[type="email"]')
