@@ -6946,10 +6946,14 @@ def _do_full_login():
                 print("[Playwright Login] ✅ Clicked Continue")
                 time.sleep(1)  # Wait for password field
             
-            # Wait for and fill password
+            # Wait for and fill password (exclude hidden autofill inputs)
             try:
-                page.wait_for_selector('input[type="password"]', timeout=10000)
-                password_input = page.query_selector('input[type="password"]')
+                # Wait longer for password field and use more specific selector
+                time.sleep(2)  # Extra wait for form transition
+                # Target visible password input, exclude hidden autofill field
+                password_selector = 'input[type="password"]:not([aria-hidden="true"]):not([name="hiddenPassword"])'
+                page.wait_for_selector(password_selector, timeout=15000, state="visible")
+                password_input = page.query_selector(password_selector)
                 if password_input:
                     password_input.fill(password)
                     print("[Playwright Login] ✅ Password entered")
