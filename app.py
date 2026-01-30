@@ -6921,113 +6921,60 @@ def _do_full_login():
             )
             page = context.new_page()
             
-            # Navigate to TikTokCopilot (popup will appear)
+            # Navigate to TikTokCopilot homepage
             print("[Playwright Login] 🌐 Navigating to TikTokCopilot...")
-            page.goto("https://www.tiktokcopilot.com/?auth=sign-in", timeout=90000, wait_until="domcontentloaded")
-            
-            # Wait for page to fully load
+            page.goto("https://www.tiktokcopilot.com", timeout=60000)
             try:
-                page.wait_for_load_state("networkidle", timeout=20000)
+                page.wait_for_load_state("networkidle", timeout=30000)
             except:
                 print("[Playwright Login] ⚠️ Networkidle timeout, continuing...")
             
-            # Step 1: Click "Sign in" link in the initial popup
-            # The popup shows "Already have an account? Sign in"
-            print("[Playwright Login] 🔍 Looking for 'Sign in' link in popup...")
-            sign_in_link_selectors = [
-                'text="Sign in"',  # Exact text match
-                'a:has-text("Sign in")',  # Link with text
-                'button:has-text("Sign in"):not(:has-text("Sign In"))',  # Button but not the submit
-                '[class*="link"]:has-text("Sign in")',  # Link-styled element
-            ]
-            
-            sign_in_clicked = False
-            for selector in sign_in_link_selectors:
-                try:
-                    # Wait briefly for this selector
-                    link = page.wait_for_selector(selector, timeout=3000, state="visible")
-                    if link:
-                        link.click()
-                        print(f"[Playwright Login] ✅ Clicked 'Sign in' link with: {selector}")
-                        sign_in_clicked = True
-                        break
-                except:
-                    continue
-            
-            if not sign_in_clicked:
-                # Maybe the form is already showing (no popup)
-                print("[Playwright Login] ⚠️ No 'Sign in' link found - checking if form is visible...")
-            
-            # Wait for the login form to load after clicking
+            # Step 1: Handle initial marketing popup - click "Sign in" at bottom
             try:
-                page.wait_for_load_state("networkidle", timeout=10000)
+                print("[Playwright Login] 🔍 Looking for 'Sign in' link in popup...")
+                sign_in_link = page.locator("text='Sign in', a:has-text('Sign in'), button:has-text('Sign in')").first
+                sign_in_link.wait_for(state="visible", timeout=20000)
+                sign_in_link.click(force=True)  # Force click to bypass any overlay
+                print("[Playwright Login] ✅ Clicked 'Sign in' on initial popup")
+                page.wait_for_load_state("networkidle", timeout=30000)
+            except Exception as popup_err:
+                print(f"[Playwright Login] ⚠️ No initial popup or click failed: {popup_err}")
+            
+            # Step 2: Wait for sign-in modal/form to load (overlay fades)
+            print("[Playwright Login] ⏳ Waiting for login form...")
+            try:
+                page.wait_for_load_state("networkidle", timeout=30000)
             except:
                 pass
             
-            print("[Playwright Login] ⏳ Waiting for login form...")
+            # Wait for email field with longer timeout
+            email_selector = 'input[type="email"], input[placeholder*="Email"], input[name="identifier"]'
+            page.wait_for_selector(email_selector, timeout=30000, state="visible")
             
-            # Step 2: Wait for email field
-            email_selector = 'input[type="email"], input[name="identifier"], input[placeholder*="Email"]'
-            page.wait_for_selector(email_selector, timeout=15000, state="visible")
-            
-            # Fill email directly
+            # Fill email
             page.fill(email_selector, email)
             print("[Playwright Login] ✅ Email entered")
             
-            # Wait a moment for password field to be interactive
-            time.sleep(0.5)
+            # Step 3: Fill password (honeypot-safe)
+            password_selector = 'input[type="password"]:not([aria-hidden="true"]):not([name="hiddenPassword"])'
+            page.wait_for_selector(password_selector, timeout=30000, state="visible")
+            page.fill(password_selector, password)
+            print("[Playwright Login] ✅ Password entered")
             
-            # Fill password directly (exclude hidden honeypot inputs)
-            password_selector = 'input[type="password"]:not([aria-hidden="true"]):not([name="hiddenPassword"]):not([tabindex="-1"])'
-            try:
-                page.wait_for_selector(password_selector, timeout=10000, state="visible")
-                page.fill(password_selector, password)
-                print("[Playwright Login] ✅ Password entered")
-            except Exception as pwd_err:
-                print(f"[Playwright Login] ⚠️ Password selector failed, trying fallback...")
-                # Fallback: try to find any visible password input
-                all_password_inputs = page.query_selector_all('input[type="password"]')
-                filled = False
-                for pwd_input in all_password_inputs:
-                    if pwd_input.is_visible():
-                        pwd_input.fill(password)
-                        print("[Playwright Login] ✅ Password entered (fallback)")
-                        filled = True
-                        break
-                if not filled:
-                    print("[Playwright Login] ❌ Could not find any visible password input")
-                    page.screenshot(path="/tmp/login_debug.png")
-                    print("[Playwright Login] 📸 Debug screenshot saved")
-                    browser.close()
-                    return None
+            # Step 4: Click Sign In button (force=True to bypass any lingering overlay)
+            print("[Playwright Login] 🔘 Clicking Sign In button...")
+            sign_in_button = page.locator("button:has-text('Sign In'), button[type='submit']")
+            sign_in_button.wait_for(state="visible", timeout=30000)
+            sign_in_button.click(force=True)
+            print("[Playwright Login] ✅ Submitted sign-in form (force click)")
             
-            # Click Sign In button (NOT Continue - that triggers Google OAuth)
-            sign_in_selector = 'button:has-text("Sign In"), button:has-text("Sign in"), button[type="submit"]:not(:has-text("Continue")):not(:has-text("Google"))'
-            try:
-                sign_in_btn = page.wait_for_selector(sign_in_selector, timeout=5000, state="visible")
-                sign_in_btn.click()
-                print("[Playwright Login] ✅ Clicked Sign In")
-            except:
-                # Fallback: press Enter to submit
-                print("[Playwright Login] ⚠️ Sign In button not found, pressing Enter...")
-                page.keyboard.press("Enter")
-            
-            # Handle potential errors
+            # Handle potential credential errors
             time.sleep(2)
             if page.is_visible("text=Incorrect email or password") or page.is_visible("text=Invalid"):
                 print("[Playwright Login] ❌ Invalid credentials!")
                 page.screenshot(path="/tmp/login_error.png")
                 browser.close()
                 return None
-            
-            # Click sign-in/submit button
-            submit_btn = page.query_selector('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
-            if submit_btn:
-                submit_btn.click()
-                print("[Playwright Login] ✅ Clicked Sign In")
-            else:
-                print("[Playwright Login] ⚠️ No submit button found, pressing Enter")
-                page.keyboard.press("Enter")
             
             # Wait for successful login (dashboard redirect)
             print("[Playwright Login] ⏳ Waiting for dashboard...")
