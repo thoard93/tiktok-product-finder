@@ -1,7 +1,7 @@
 # Dockerfile for Vantage - TikTok Shop Intelligence Platform
 # Uses Playwright's official image with Chromium pre-installed
 
-FROM mcr.microsoft.com/playwright/python:v1.48.0-noble
+FROM mcr.microsoft.com/playwright/python:v1.57.0-noble
 
 WORKDIR /app
 
