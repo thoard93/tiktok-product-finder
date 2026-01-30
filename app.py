@@ -268,7 +268,7 @@ def handle_exception(e):
 # Discord OAuth Settings (set these in Render environment variables)
 DISCORD_CLIENT_ID = os.environ.get('DISCORD_CLIENT_ID', '')
 DISCORD_CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
-DISCORD_REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://tiktok-product-finder.onrender.com/auth/discord/callback')
+DISCORD_REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://thoardburgersauce.com/auth/discord/callback')
 DISCORD_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '')  # Your Discord server ID
 
 # Developer passkey (set in Render environment variables)
