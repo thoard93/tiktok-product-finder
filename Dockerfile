@@ -16,6 +16,6 @@ COPY . .
 ENV PORT=10000
 EXPOSE 10000
 
-# Start command - gunicorn with your current config
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 3 --threads 2 --timeout 120
+# Start command - reduced workers for 512MB memory limit (leaves room for Chromium)
+CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 1 --timeout 180
 

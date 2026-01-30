@@ -6923,7 +6923,7 @@ def _do_full_login():
             
             # Navigate to sign-in page (increased timeout for slow loads)
             print("[Playwright Login] 🌐 Navigating to TikTokCopilot sign-in...")
-            page.goto("https://www.tiktokcopilot.com/auth-sign-in", timeout=60000, wait_until="domcontentloaded")
+            page.goto("https://www.tiktokcopilot.com/auth-sign-in", timeout=90000, wait_until="domcontentloaded")
             
             # Wait for email input to be ready
             print("[Playwright Login] ⏳ Waiting for login form...")
