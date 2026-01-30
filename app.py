@@ -6921,8 +6921,8 @@ def _do_full_login():
             )
             page = context.new_page()
             
-            # Navigate to sign-in page (increased timeout for slow loads)
-            print("[Playwright Login] 🌐 Navigating to TikTokCopilot sign-in...")
+            # Navigate to TikTokCopilot (popup will appear)
+            print("[Playwright Login] 🌐 Navigating to TikTokCopilot...")
             page.goto("https://www.tiktokcopilot.com/?auth=sign-in", timeout=90000, wait_until="domcontentloaded")
             
             # Wait for page to fully load
@@ -6931,9 +6931,42 @@ def _do_full_login():
             except:
                 print("[Playwright Login] ⚠️ Networkidle timeout, continuing...")
             
+            # Step 1: Click "Sign in" link in the initial popup
+            # The popup shows "Already have an account? Sign in"
+            print("[Playwright Login] 🔍 Looking for 'Sign in' link in popup...")
+            sign_in_link_selectors = [
+                'text="Sign in"',  # Exact text match
+                'a:has-text("Sign in")',  # Link with text
+                'button:has-text("Sign in"):not(:has-text("Sign In"))',  # Button but not the submit
+                '[class*="link"]:has-text("Sign in")',  # Link-styled element
+            ]
+            
+            sign_in_clicked = False
+            for selector in sign_in_link_selectors:
+                try:
+                    # Wait briefly for this selector
+                    link = page.wait_for_selector(selector, timeout=3000, state="visible")
+                    if link:
+                        link.click()
+                        print(f"[Playwright Login] ✅ Clicked 'Sign in' link with: {selector}")
+                        sign_in_clicked = True
+                        break
+                except:
+                    continue
+            
+            if not sign_in_clicked:
+                # Maybe the form is already showing (no popup)
+                print("[Playwright Login] ⚠️ No 'Sign in' link found - checking if form is visible...")
+            
+            # Wait for the login form to load after clicking
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except:
+                pass
+            
             print("[Playwright Login] ⏳ Waiting for login form...")
             
-            # Wait for email field
+            # Step 2: Wait for email field
             email_selector = 'input[type="email"], input[name="identifier"], input[placeholder*="Email"]'
             page.wait_for_selector(email_selector, timeout=15000, state="visible")
             
