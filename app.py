@@ -6944,25 +6944,57 @@ def _do_full_login():
             if continue_btn:
                 continue_btn.click()
                 print("[Playwright Login] ✅ Clicked Continue")
-                time.sleep(1)  # Wait for password field
+                # Wait for dynamic JS to load password form
+                try:
+                    page.wait_for_load_state("networkidle", timeout=20000)
+                    print("[Playwright Login] ✅ Page settled (networkidle)")
+                except Exception as idle_err:
+                    print(f"[Playwright Login] ⚠️ Networkidle timeout, continuing anyway...")
             
-            # Wait for and fill password (exclude hidden autofill inputs)
+            # Wait for and fill password (Clerk uses dynamic forms)
             try:
-                # Wait longer for password field and use more specific selector
-                time.sleep(2)  # Extra wait for form transition
-                # Target visible password input, exclude hidden autofill field
-                password_selector = 'input[type="password"]:not([aria-hidden="true"]):not([name="hiddenPassword"])'
-                page.wait_for_selector(password_selector, timeout=15000, state="visible")
-                password_input = page.query_selector(password_selector)
+                # Clerk-specific: try multiple password selectors
+                password_selectors = [
+                    'input[type="password"]:visible',  # Playwright's :visible pseudo-class
+                    'input[type="password"]:not([aria-hidden="true"]):not([name="hiddenPassword"])',
+                    'input[name="password"]',  # By name attribute
+                    '[data-form-type="password"] input',  # Clerk data attribute
+                ]
+                
+                password_input = None
+                for selector in password_selectors:
+                    try:
+                        page.wait_for_selector(selector, timeout=5000, state="visible")
+                        password_input = page.query_selector(selector)
+                        if password_input and password_input.is_visible():
+                            print(f"[Playwright Login] ✅ Found password with: {selector}")
+                            break
+                    except:
+                        continue
+                
                 if password_input:
                     password_input.fill(password)
                     print("[Playwright Login] ✅ Password entered")
                 else:
-                    print("[Playwright Login] ❌ Could not find password input")
+                    # Capture debug screenshot
+                    print("[Playwright Login] ❌ Could not find visible password input")
+                    try:
+                        page.screenshot(path="/tmp/login_debug.png")
+                        print("[Playwright Login] 📸 Debug screenshot saved to /tmp/login_debug.png")
+                    except:
+                        pass
+                    # Check for magic link flow
+                    if page.is_visible("text=Check your email"):
+                        print("[Playwright Login] ⚠️ Magic link flow detected - manual intervention needed")
                     browser.close()
                     return None
             except Exception as pwd_err:
                 print(f"[Playwright Login] ⚠️ Password field issue: {pwd_err}")
+                try:
+                    page.screenshot(path="/tmp/login_error.png")
+                    print("[Playwright Login] 📸 Error screenshot saved to /tmp/login_error.png")
+                except:
+                    pass
                 browser.close()
                 return None
             
