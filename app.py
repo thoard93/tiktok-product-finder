@@ -6976,8 +6976,26 @@ def _do_full_login():
                     password_input.fill(password)
                     print("[Playwright Login] ✅ Password entered")
                 else:
-                    # Capture debug screenshot
+                    # Debug: List all inputs on page
                     print("[Playwright Login] ❌ Could not find visible password input")
+                    print(f"[Playwright Login] 🔍 Page URL: {page.url}")
+                    try:
+                        # List all input elements
+                        all_inputs = page.query_selector_all('input')
+                        print(f"[Playwright Login] 🔍 Found {len(all_inputs)} total inputs:")
+                        for i, inp in enumerate(all_inputs[:10]):  # Limit to first 10
+                            inp_type = inp.get_attribute('type') or 'unknown'
+                            inp_name = inp.get_attribute('name') or ''
+                            inp_aria = inp.get_attribute('aria-hidden') or ''
+                            inp_visible = inp.is_visible()
+                            print(f"  [{i}] type={inp_type}, name={inp_name}, aria-hidden={inp_aria}, visible={inp_visible}")
+                        
+                        # Check for specific text on page
+                        page_text = page.text_content('body')[:500] if page.query_selector('body') else ''
+                        print(f"[Playwright Login] 🔍 Page content preview: {page_text[:200]}...")
+                    except Exception as debug_err:
+                        print(f"[Playwright Login] 🔍 Debug error: {debug_err}")
+                    
                     try:
                         page.screenshot(path="/tmp/login_debug.png")
                         print("[Playwright Login] 📸 Debug screenshot saved to /tmp/login_debug.png")
