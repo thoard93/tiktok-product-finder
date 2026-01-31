@@ -7840,10 +7840,10 @@ def copilot_enrich_videos():
             # Try V2 endpoint first (has timeframe=all), fallback to legacy
             products_data = fetch_copilot_products(timeframe='all', limit=25, page=page)
             
-            # If V2 fails, try legacy endpoint with 30d (longest available)
+            # If V2 fails, try legacy endpoint with all-time timeframe
             if not products_data or not products_data.get('products'):
-                print(f"[Video Enrich] V2 failed on page {page}, trying legacy 30d...")
-                products_data = fetch_copilot_trending(timeframe='30d', limit=50, page=page)
+                print(f"[Video Enrich] V2 failed on page {page}, trying legacy ALL-TIME...")
+                products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
             
             # Handle API errors gracefully - don't stop, just pause and continue
             if not products_data:
