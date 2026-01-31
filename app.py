@@ -7313,24 +7313,22 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
     full_cookie = get_copilot_cookie()
     if not full_cookie:
         print("[Scrapfly V2] ⚠️ No stored cookies - Scrapfly will get sign-in page")
-        # Continue anyway - might work for public endpoints
+        return None  # Don't even try without cookies
     
-    # Parse cookies to JSON string for Scrapfly
-    cookies_json = None
-    if full_cookie:
-        cookies_dict = {}
-        for cookie in full_cookie.split(';'):
-            if '=' in cookie:
-                name, value = cookie.strip().split('=', 1)
-                cookies_dict[name] = value
-        cookies_json = json.dumps(cookies_dict)
-        print(f"[Scrapfly V2] 🍪 Sending {len(cookies_dict)} cookies for auth")
+    print(f"[Scrapfly V2] 🍪 Cookie length: {len(full_cookie)} chars")
     
     # Target URL (the V2 API endpoint)
     target_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
     
     # Scrapfly API URL with anti-bot bypass enabled
     scrapfly_url = "https://api.scrapfly.io/scrape"
+    
+    # Build params - use headers param to send Cookie header (more reliable than cookies param)
+    # Scrapfly 'headers' param takes a JSON object of headers to forward
+    headers_to_forward = json.dumps({
+        "Cookie": full_cookie
+    })
+    
     params = {
         'key': api_key,
         'url': target_url,
@@ -7338,15 +7336,12 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
         'country': 'US',       # US IP
         'asp': 'true',         # Anti-Scrape Protection bypass (Vercel, Cloudflare)
         'retry': 'false',      # Disable retry to avoid timeout conflict
+        'headers': headers_to_forward,  # Forward Cookie header to target
     }
-    
-    # Add cookies if available
-    if cookies_json:
-        params['cookies'] = cookies_json
     
     full_url = f"{scrapfly_url}?{urllib.parse.urlencode(params)}"
     
-    # Debug: Log key status and URL (mask key)
+    # Debug: Log key status
     key_status = "SET" if api_key else "MISSING"
     print(f"[Scrapfly V2] 📡 Fetching page {page_num} (API key: {key_status})")
     print(f"[Scrapfly V2] 🔗 URL (masked): {scrapfly_url}?key=***&url={target_url}&render_js=true&asp=true&country=US&retry=false")
