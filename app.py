@@ -7441,8 +7441,18 @@ def get_copilot_cookie():
 def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US', keywords=None):
     """
     Fetch products from the V2 TikTokCopilot /api/trending/products endpoint.
-    Uses curl_cffi for browser impersonation with SAME-ORIGIN headers per Grok analysis.
+    Tries Scrapfly first (guaranteed bypass), then curl_cffi as fallback.
     """
+    # Try Scrapfly first if API key is configured (guaranteed Vercel bypass)
+    scrapfly_key = os.environ.get('SCRAPFLY_API_KEY')
+    if scrapfly_key:
+        print(f"[Copilot Products] 🌐 Trying Scrapfly for page {page}...")
+        result = fetch_v2_via_scrapfly(page_num=page, timeframe=timeframe, sort_by=sort_by, limit=limit, region=region)
+        if result:
+            return result
+        print("[Copilot Products] ⚠️ Scrapfly failed, falling back to curl_cffi...")
+    
+    # Fallback to curl_cffi with cookie-based auth
     cookie_str = get_copilot_cookie()
     if not cookie_str:
         print("[Copilot Products] ❌ No cookie configured!")
