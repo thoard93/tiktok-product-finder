@@ -7323,25 +7323,42 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
     }
     
     full_url = f"{scrapfly_url}?{urllib.parse.urlencode(params)}"
-    print(f"[Scrapfly V2] 📡 Fetching page {page_num} via Scrapfly...")
+    
+    # Debug: Log key status and URL (mask key)
+    key_status = "SET" if api_key else "MISSING"
+    print(f"[Scrapfly V2] 📡 Fetching page {page_num} (API key: {key_status})")
+    print(f"[Scrapfly V2] 🔗 URL (masked): {scrapfly_url}?key=***&url={target_url}&render_js=true&asp=true&country=US&retry=false")
     
     try:
         response = requests.get(full_url)
+        print(f"[Scrapfly V2] 📊 HTTP Status: {response.status_code}")
         
         # Check HTTP status first
         if not response.ok:
-            print(f"[Scrapfly V2] ❌ HTTP {response.status_code}: {response.text[:200]}")
+            print(f"[Scrapfly V2] ❌ HTTP {response.status_code}: {response.text[:300]}")
             return None
         
-        # Parse response
-        data = response.json()
+        # Parse response - explicit JSON decode handling
+        try:
+            data = response.json()
+        except json.JSONDecodeError as jde:
+            print(f"[Scrapfly V2] ❌ JSON decode error: {jde}")
+            print(f"[Scrapfly V2] 📄 Raw response (first 300 chars): {response.text[:300]}")
+            return None
+        
         if not data:
             print("[Scrapfly V2] ❌ Empty response from Scrapfly")
             return None
         
+        # Debug: Log response keys
+        print(f"[Scrapfly V2] 🔑 Response keys: {list(data.keys())}")
+        
         # Check for success (Scrapfly uses 'success' key at top level)
         if not data.get('success', False):
             error_msg = data.get('error', '') or data.get('message', 'Unknown Scrapfly error')
+            # If error is a dict, extract message
+            if isinstance(error_msg, dict):
+                error_msg = error_msg.get('message', str(error_msg))
             print(f"[Scrapfly V2] ❌ Scrapfly failed: {error_msg}")
             return None
         
@@ -7360,7 +7377,7 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
         try:
             v2_data = json.loads(content)
             products = v2_data.get('products', v2_data.get('data', []))
-            print(f"[Scrapfly V2] ✅ Fetched {len(products)} products from page {page_num}")
+            print(f"[Scrapfly V2] ✅ SUCCESS! Fetched {len(products)} products from page {page_num}")
             return v2_data
         except json.JSONDecodeError:
             # Content might be HTML (Geist challenge)
@@ -7371,7 +7388,7 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
             return None
             
     except Exception as e:
-        print(f"[Scrapfly V2] ❌ Exception: {e}")
+        print(f"[Scrapfly V2] ❌ Exception: {type(e).__name__}: {e}")
         return None
 
 
