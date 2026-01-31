@@ -6980,52 +6980,27 @@ def _do_full_login():
             except:
                 print("[Playwright Login] ⚠️ Networkidle timeout, continuing...")
             
-            # Step 1: Click top-right 'Sign in' button (priority) or popup link (fallback)
-            sign_in_button_selector = "button:has-text('Sign in'), a:has-text('Sign in'), button[role='button']:has-text('Sign in')"
-            sign_in_clicked = False
+            # Step 1: Navigate directly to sign-in page (clicking buttons was unreliable)
+            print("[Playwright Login] 🔐 Navigating to sign-in page...")
+            page.goto("https://www.tiktokcopilot.com/?auth=sign-in", timeout=60000)
+            
+            # Wait for page to settle
+            print("[Playwright Login] ⏳ Waiting for sign-in modal to load (5s)...")
+            page.wait_for_timeout(5000)  # 5 second wait for modal animation
             
             try:
-                print("[Playwright Login] 🔍 Looking for top-right 'Sign in' button...")
-                page.wait_for_selector(sign_in_button_selector, timeout=20000)
-                page.click(sign_in_button_selector, force=True)
-                print("[Playwright Login] ✅ Clicked top-right 'Sign in' button")
-                sign_in_clicked = True
-            except Exception as btn_err:
-                print(f"[Playwright Login] ⚠️ Top-right button not found: {btn_err}")
-            
-            # If top-right button failed, try popup fallback
-            if not sign_in_clicked:
-                try:
-                    popup_sign_in = "text='Already have an account? Sign in', text='Sign in'"
-                    page.wait_for_selector(popup_sign_in, timeout=10000)
-                    page.click(popup_sign_in, force=True)
-                    print("[Playwright Login] ✅ Clicked popup 'Sign in' link (fallback)")
-                    sign_in_clicked = True
-                except Exception as popup_err:
-                    print(f"[Playwright Login] ❌ Both Sign in clicks failed: {popup_err}")
-                    try:
-                        page.screenshot(path="/tmp/login_signin_fail.png")
-                    except:
-                        pass
-                    browser.close()
-                    return None
-            
-            # Wait for form to load (separate from click - don't fail if networkidle times out)
-            print("[Playwright Login] ⏳ Waiting for form to load...")
-            page.wait_for_timeout(2000)  # Wait for modal animation
-            try:
-                page.wait_for_load_state("networkidle", timeout=15000)
+                page.wait_for_load_state("networkidle", timeout=30000)
             except:
-                print("[Playwright Login] ⚠️ Networkidle timeout after click, continuing anyway...")
+                print("[Playwright Login] ⚠️ Networkidle timeout, continuing anyway...")
             
-            # Step 2: Wait for form fields (extra time for modal animation)
-            print("[Playwright Login] ⏳ Waiting for login form...")
-            email_selector = 'input[type="email"], input[placeholder*="Email"], input[name="identifier"]'
+            # Step 2: Wait for email field with 90s timeout and broader selectors
+            print("[Playwright Login] ⏳ Waiting for login form (90s timeout)...")
+            email_selector = 'input[type="email"], input[placeholder*="Email"], input[name="identifier"], input[autocomplete="email"], input[autocomplete="username"]'
             try:
-                page.wait_for_selector(email_selector, timeout=60000, state="visible")  # Bumped to 60s
+                page.wait_for_selector(email_selector, timeout=90000, state="visible")  # 90s for slow headless
             except Exception as email_wait_err:
                 # Debug: log what's on the page
-                print(f"[Playwright Login] ❌ Email field not found after 60s: {email_wait_err}")
+                print(f"[Playwright Login] ❌ Email field not found after 90s: {email_wait_err}")
                 print(f"[Playwright Login] 🔍 Current URL: {page.url}")
                 print(f"[Playwright Login] 📄 Page content preview: {page.content()[:500]}")
                 try:
