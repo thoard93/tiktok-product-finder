@@ -7293,6 +7293,7 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
     """
     Fetch V2 API data via Scrapfly (guaranteed bypass for Vercel/Cloudflare).
     Uses render_js=true + asp=true for full JS execution and anti-scrape protection bypass.
+    Sends authenticated cookies for session access.
     
     Set SCRAPFLY_API_KEY env var to enable.
     Free tier: 1000 API credits/month.
@@ -7308,6 +7309,23 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
         print("[Scrapfly V2] ⚠️ SCRAPFLY_API_KEY not set - skipping Scrapfly fetch")
         return None
     
+    # Get stored cookies for authentication
+    full_cookie = get_copilot_cookie()
+    if not full_cookie:
+        print("[Scrapfly V2] ⚠️ No stored cookies - Scrapfly will get sign-in page")
+        # Continue anyway - might work for public endpoints
+    
+    # Parse cookies to JSON string for Scrapfly
+    cookies_json = None
+    if full_cookie:
+        cookies_dict = {}
+        for cookie in full_cookie.split(';'):
+            if '=' in cookie:
+                name, value = cookie.strip().split('=', 1)
+                cookies_dict[name] = value
+        cookies_json = json.dumps(cookies_dict)
+        print(f"[Scrapfly V2] 🍪 Sending {len(cookies_dict)} cookies for auth")
+    
     # Target URL (the V2 API endpoint)
     target_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
     
@@ -7321,6 +7339,10 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
         'asp': 'true',         # Anti-Scrape Protection bypass (Vercel, Cloudflare)
         'retry': 'false',      # Disable retry to avoid timeout conflict
     }
+    
+    # Add cookies if available
+    if cookies_json:
+        params['cookies'] = cookies_json
     
     full_url = f"{scrapfly_url}?{urllib.parse.urlencode(params)}"
     
