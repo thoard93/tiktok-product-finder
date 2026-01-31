@@ -66,6 +66,45 @@ executor = ThreadPoolExecutor(max_workers=4) # Global executor for background ta
 def serve_logo():
     return send_from_directory('pwa', 'vantage_logo.png')
 
+@app.route('/api/test-v2')
+def test_v2_playwright():
+    """
+    Test endpoint to validate V2 API fetch via Playwright browser context.
+    Returns JSON with V2 product data or error message.
+    """
+    try:
+        page = request.args.get('page', 1, type=int)
+        timeframe = request.args.get('timeframe', '7d')
+        limit = request.args.get('limit', 20, type=int)  # Small batch for testing
+        
+        print(f"[Test V2] Starting Playwright V2 fetch - page={page}, timeframe={timeframe}")
+        
+        data = fetch_v2_via_playwright(page_num=page, timeframe=timeframe, limit=limit)
+        
+        if data:
+            products = data.get('products', data.get('data', []))
+            return jsonify({
+                'success': True,
+                'message': f'V2 Playwright fetch successful! Got {len(products)} products',
+                'product_count': len(products),
+                'sample': products[:3] if products else [],
+                'raw_keys': list(data.keys()) if isinstance(data, dict) else 'not a dict'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'V2 fetch returned None - check Render logs for details',
+                'error': 'fetch_v2_via_playwright returned None'
+            }), 500
+            
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
 # Force absolute path for SQLite to prevent subprocess mismatches
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'products.db')
@@ -7059,6 +7098,115 @@ def _do_full_login():
         traceback.print_exc()
         return None
 
+
+def fetch_v2_via_playwright(page_num=1, timeframe="7d", sort_by="revenue", limit=50, region="US"):
+    """
+    Fetch V2 API data through Playwright browser context (bypasses Geist detection).
+    Uses real browser to make API requests - indistinguishable from manual browsing.
+    
+    Returns: dict with products list or None on failure
+    """
+    from playwright.sync_api import sync_playwright
+    import os
+    
+    email = os.environ.get('TIKTOK_COPILOT_EMAIL')
+    password = os.environ.get('TIKTOK_COPILOT_PASSWORD')
+    
+    if not email or not password:
+        print("[Playwright V2] ❌ Missing TIKTOK_COPILOT_EMAIL or TIKTOK_COPILOT_PASSWORD")
+        return None
+    
+    print(f"[Playwright V2] 🌐 Starting browser fetch for page {page_num}...")
+    
+    try:
+        with sync_playwright() as p:
+            # Launch with low-memory flags
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-gpu',
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--single-process',
+                    '--disable-extensions',
+                ]
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+            )
+            page = context.new_page()
+            
+            # Navigate and login
+            print("[Playwright V2] 🔐 Logging in...")
+            page.goto("https://www.tiktokcopilot.com", timeout=60000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=30000)
+            except:
+                pass
+            
+            # Click Sign in button
+            sign_in_clicked = False
+            try:
+                page.wait_for_selector("button:has-text('Sign in'), a:has-text('Sign in')", timeout=10000)
+                page.click("button:has-text('Sign in'), a:has-text('Sign in')", force=True)
+                sign_in_clicked = True
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except:
+                    pass
+            except:
+                pass
+            
+            # Fill login form if present
+            try:
+                page.wait_for_selector('input[type="email"]', timeout=15000, state="visible")
+                page.fill('input[type="email"]', email)
+                page.fill('input[type="password"]:not([aria-hidden="true"])', password)
+                page.click("button:has-text('Sign In'), button[type='submit']", force=True)
+                print("[Playwright V2] ✅ Submitted login")
+                
+                # Wait for dashboard
+                page.wait_for_load_state("networkidle", timeout=30000)
+            except Exception as login_err:
+                print(f"[Playwright V2] ⚠️ Login form handling: {login_err}")
+            
+            # Now fetch the V2 API
+            api_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
+            print(f"[Playwright V2] 📡 Fetching: {api_url}")
+            
+            try:
+                response = page.request.get(api_url, timeout=30000)
+                
+                if response.ok:
+                    content_type = response.headers.get('content-type', '')
+                    if 'application/json' in content_type:
+                        data = response.json()
+                        products = data.get('products', data.get('data', []))
+                        print(f"[Playwright V2] ✅ Fetched {len(products)} products from page {page_num}")
+                        browser.close()
+                        return data
+                    else:
+                        # Might be Geist HTML
+                        text = response.text()[:200]
+                        print(f"[Playwright V2] ⚠️ Non-JSON response: {text}")
+                        browser.close()
+                        return None
+                else:
+                    print(f"[Playwright V2] ❌ API returned {response.status}")
+                    browser.close()
+                    return None
+                    
+            except Exception as api_err:
+                print(f"[Playwright V2] ❌ API fetch error: {api_err}")
+                browser.close()
+                return None
+                
+    except Exception as e:
+        print(f"[Playwright V2] ❌ Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def schedule_copilot_auto_refresh(interval_minutes=45):
     """
