@@ -6954,13 +6954,14 @@ def _do_full_login():
             # Launch headless Chromium with low-memory flags to avoid OOM on Render
             print("[Playwright Login] 🚀 Launching headless Chromium (STEALTH mode)...")
             
-            # Use stealth to bypass Vercel BotID detection
+            # Use stealth to bypass Vercel BotID detection (v2.0 API)
+            stealth = None
             try:
-                from playwright_stealth import stealth_sync
-                stealth_enabled = True
-            except ImportError:
-                print("[Playwright Login] ⚠️ playwright-stealth not installed, running without stealth")
-                stealth_enabled = False
+                from playwright_stealth import Stealth
+                stealth = Stealth()
+                print("[Playwright Login] 🥷 Stealth module loaded!")
+            except ImportError as ie:
+                print(f"[Playwright Login] ⚠️ playwright-stealth not installed: {ie}")
             
             browser = p.chromium.launch(
                 headless=True,
@@ -7015,10 +7016,10 @@ def _do_full_login():
                 )
             page = context.new_page()
             
-            # Apply stealth to hide automation indicators
-            if stealth_enabled:
-                stealth_sync(page)
-                print("[Playwright Login] 🥷 Stealth mode applied!")
+            # Apply stealth to hide automation indicators (v2.0 API applies to context)
+            if stealth:
+                stealth.apply_stealth_sync(context)
+                print("[Playwright Login] 🥷 Stealth evasions applied to context!")
             
             # Navigate to TikTokCopilot homepage
             print("[Playwright Login] 🌐 Navigating to TikTokCopilot...")
