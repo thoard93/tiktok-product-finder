@@ -7012,6 +7012,7 @@ def _do_full_login():
             
             # Wait for form to load (separate from click - don't fail if networkidle times out)
             print("[Playwright Login] ⏳ Waiting for form to load...")
+            page.wait_for_timeout(2000)  # Wait for modal animation
             try:
                 page.wait_for_load_state("networkidle", timeout=15000)
             except:
@@ -7020,10 +7021,23 @@ def _do_full_login():
             # Step 2: Wait for form fields (extra time for modal animation)
             print("[Playwright Login] ⏳ Waiting for login form...")
             email_selector = 'input[type="email"], input[placeholder*="Email"], input[name="identifier"]'
-            page.wait_for_selector(email_selector, timeout=30000, state="visible")
+            try:
+                page.wait_for_selector(email_selector, timeout=60000, state="visible")  # Bumped to 60s
+            except Exception as email_wait_err:
+                # Debug: log what's on the page
+                print(f"[Playwright Login] ❌ Email field not found after 60s: {email_wait_err}")
+                print(f"[Playwright Login] 🔍 Current URL: {page.url}")
+                print(f"[Playwright Login] 📄 Page content preview: {page.content()[:500]}")
+                try:
+                    page.screenshot(path="/tmp/login_email_timeout.png")
+                except:
+                    pass
+                browser.close()
+                return None
             
             # Fill email
             page.fill(email_selector, email)
+            page.wait_for_timeout(500)  # Brief delay
             print("[Playwright Login] ✅ Email entered")
             
             # Step 3: Fill password (honeypot-safe)
