@@ -7395,6 +7395,12 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
             print("[Scrapfly V2] ❌ No content in result")
             return None
         
+        # Check for sign-in redirect (expired cookies)
+        content_lower = content.lower()[:1000]
+        if 'sign-in' in content_lower or 'signin' in content_lower or 'geistsans' in content_lower:
+            print("[Scrapfly V2] 🔐 Got sign-in page - cookies expired! Update cookies in Admin UI")
+            return None
+        
         # Parse the JSON content
         try:
             v2_data = json.loads(content)
@@ -7402,11 +7408,8 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
             print(f"[Scrapfly V2] ✅ SUCCESS! Fetched {len(products)} products from page {page_num}")
             return v2_data
         except json.JSONDecodeError:
-            # Content might be HTML (Geist challenge)
-            if 'geist' in content.lower()[:500]:
-                print(f"[Scrapfly V2] 🚫 Still got Geist HTML - detection not bypassed")
-            else:
-                print(f"[Scrapfly V2] ⚠️ Non-JSON content: {content[:200]}...")
+            # Content might be HTML (other challenge)
+            print(f"[Scrapfly V2] ⚠️ Non-JSON content (first 200 chars): {content[:200]}...")
             return None
             
     except Exception as e:
