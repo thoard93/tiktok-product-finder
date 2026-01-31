@@ -7148,11 +7148,12 @@ def fetch_v2_via_playwright(page_num=1, timeframe="7d", sort_by="revenue", limit
             # Click Sign in button
             sign_in_clicked = False
             try:
-                page.wait_for_selector("button:has-text('Sign in'), a:has-text('Sign in')", timeout=10000)
+                page.wait_for_selector("button:has-text('Sign in'), a:has-text('Sign in')", timeout=20000)
                 page.click("button:has-text('Sign in'), a:has-text('Sign in')", force=True)
                 sign_in_clicked = True
+                page.wait_for_timeout(2000)  # Wait for modal animation
                 try:
-                    page.wait_for_load_state("networkidle", timeout=15000)
+                    page.wait_for_load_state("networkidle", timeout=30000)
                 except:
                     pass
             except:
@@ -7160,11 +7161,14 @@ def fetch_v2_via_playwright(page_num=1, timeframe="7d", sort_by="revenue", limit
             
             # Fill login form if present
             try:
-                page.wait_for_selector('input[type="email"]', timeout=15000, state="visible")
+                page.wait_for_selector('input[type="email"]', timeout=60000, state="visible")  # Bumped to 60s
                 page.fill('input[type="email"]', email)
+                page.wait_for_timeout(500)  # Brief delay
                 page.fill('input[type="password"]:not([aria-hidden="true"])', password)
+                page.wait_for_timeout(500)
                 page.click("button:has-text('Sign In'), button[type='submit']", force=True)
                 print("[Playwright V2] ✅ Submitted login")
+                page.wait_for_timeout(2000)  # Wait for auth processing
                 
                 # Wait for dashboard
                 page.wait_for_load_state("networkidle", timeout=30000)
@@ -7176,7 +7180,7 @@ def fetch_v2_via_playwright(page_num=1, timeframe="7d", sort_by="revenue", limit
             print(f"[Playwright V2] 📡 Fetching: {api_url}")
             
             try:
-                response = page.request.get(api_url, timeout=30000)
+                response = page.request.get(api_url, timeout=60000)  # Bumped to 60s
                 
                 if response.ok:
                     content_type = response.headers.get('content-type', '')
