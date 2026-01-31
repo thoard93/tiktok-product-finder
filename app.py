@@ -7289,6 +7289,98 @@ def fetch_v2_via_playwright(page_num=1, timeframe="7d", sort_by="revenue", limit
         traceback.print_exc()
         return None
 
+def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=50, region="US"):
+    """
+    Fetch V2 API data via Scrapfly (guaranteed bypass for Vercel/Cloudflare).
+    Uses render_js=true + asp=true for full JS execution and anti-scrape protection bypass.
+    
+    Set SCRAPFLY_API_KEY env var to enable.
+    Free tier: 1000 API credits/month.
+    
+    Returns: dict with products list or None on failure
+    """
+    import requests
+    import json
+    import urllib.parse
+    
+    api_key = os.environ.get('SCRAPFLY_API_KEY')
+    if not api_key:
+        print("[Scrapfly V2] ⚠️ SCRAPFLY_API_KEY not set - skipping Scrapfly fetch")
+        return None
+    
+    # Target URL (the V2 API endpoint)
+    target_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
+    
+    # Scrapfly API URL with anti-bot bypass enabled
+    scrapfly_url = "https://api.scrapfly.io/scrape"
+    params = {
+        'key': api_key,
+        'url': target_url,
+        'render_js': 'true',  # Execute JavaScript
+        'country': 'US',       # US IP
+        'asp': 'true',         # Anti-Scrape Protection bypass (Vercel, Cloudflare)
+        'timeout': '60000',    # 60s timeout
+    }
+    
+    full_url = f"{scrapfly_url}?{urllib.parse.urlencode(params)}"
+    print(f"[Scrapfly V2] 📡 Fetching page {page_num} via Scrapfly...")
+    
+    try:
+        response = requests.get(full_url, timeout=90)
+        
+        if response.ok:
+            data = response.json()
+            result = data.get('result', {})
+            status = result.get('status')
+            
+            if status == 'success':
+                # The content is the actual API response (JSON as string)
+                content = result.get('content', '')
+                
+                # Parse the JSON content
+                try:
+                    v2_data = json.loads(content)
+                    products = v2_data.get('products', v2_data.get('data', []))
+                    print(f"[Scrapfly V2] ✅ Fetched {len(products)} products from page {page_num}")
+                    return v2_data
+                except json.JSONDecodeError:
+                    # Content might be HTML (Geist challenge)
+                    if 'geist' in content.lower()[:500]:
+                        print(f"[Scrapfly V2] 🚫 Still got Geist HTML - detection not bypassed")
+                    else:
+                        print(f"[Scrapfly V2] ⚠️ Non-JSON content: {content[:200]}...")
+                    return None
+            else:
+                error = result.get('error', {})
+                print(f"[Scrapfly V2] ❌ Scrapfly error: {error.get('message', status)}")
+                return None
+        else:
+            print(f"[Scrapfly V2] ❌ HTTP {response.status_code}: {response.text[:200]}")
+            return None
+            
+    except requests.exceptions.Timeout:
+        print("[Scrapfly V2] ⏱️ Request timed out after 90s")
+        return None
+    except Exception as e:
+        print(f"[Scrapfly V2] ❌ Exception: {e}")
+        return None
+
+
+def fetch_v2_products(page_num=1, timeframe="7d", sort_by="revenue", limit=50, region="US"):
+    """
+    Main V2 fetch entry point - tries Scrapfly first (guaranteed), falls back to Playwright.
+    """
+    # Try Scrapfly first (most reliable)
+    result = fetch_v2_via_scrapfly(page_num, timeframe, sort_by, limit, region)
+    if result:
+        return result
+    
+    # Fall back to Playwright (may fail due to bot detection)
+    print("[V2 Fetch] Scrapfly unavailable, trying Playwright...")
+    result = fetch_v2_via_playwright(page_num, timeframe, sort_by, limit, region)
+    return result
+
+
 def schedule_copilot_auto_refresh(interval_minutes=45):
     """
     Schedule automatic session refresh every N minutes.
