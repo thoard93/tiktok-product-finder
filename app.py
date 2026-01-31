@@ -6952,15 +6952,25 @@ def _do_full_login():
     try:
         with sync_playwright() as p:
             # Launch headless Chromium with low-memory flags to avoid OOM on Render
-            print("[Playwright Login] 🚀 Launching headless Chromium (low-memory mode)...")
+            print("[Playwright Login] 🚀 Launching headless Chromium (STEALTH mode)...")
+            
+            # Use stealth to bypass Vercel BotID detection
+            try:
+                from playwright_stealth import stealth_sync
+                stealth_enabled = True
+            except ImportError:
+                print("[Playwright Login] ⚠️ playwright-stealth not installed, running without stealth")
+                stealth_enabled = False
+            
             browser = p.chromium.launch(
                 headless=True,
                 args=[
+                    '--disable-blink-features=AutomationControlled',  # Key anti-bot bypass
                     '--disable-gpu',
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',  # Critical for Docker/Render
-                    '--single-process',  # Reduces memory footprint
+                    '--disable-dev-shm-usage',
+                    '--single-process',
                     '--disable-extensions',
                     '--disable-background-networking',
                     '--disable-default-apps',
@@ -6968,9 +6978,16 @@ def _do_full_login():
                 ]
             )
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={'width': 1920, 'height': 1080},
+                locale='en-US',
             )
             page = context.new_page()
+            
+            # Apply stealth to hide automation indicators
+            if stealth_enabled:
+                stealth_sync(page)
+                print("[Playwright Login] 🥷 Stealth mode applied!")
             
             # Navigate to TikTokCopilot homepage
             print("[Playwright Login] 🌐 Navigating to TikTokCopilot...")
@@ -6978,7 +6995,17 @@ def _do_full_login():
             try:
                 page.wait_for_load_state("networkidle", timeout=30000)
             except:
-                print("[Playwright Login] ⚠️ Networkidle timeout, continuing...")
+                pass
+            
+            # Debug: Log homepage state
+            print(f"[Playwright Login] 📍 Homepage URL: {page.url}")
+            content_preview = page.content()[:300]
+            is_geist = 'geist' in content_preview.lower()
+            print(f"[Playwright Login] 📄 Homepage preview (Geist detected: {is_geist}): {content_preview[:150]}...")
+            try:
+                page.screenshot(path="/tmp/login_01_homepage.png")
+            except:
+                pass
             
             # Step 1: Navigate directly to sign-in page (clicking buttons was unreliable)
             print("[Playwright Login] 🔐 Navigating to sign-in page...")
@@ -7105,14 +7132,22 @@ def fetch_v2_via_playwright(page_num=1, timeframe="7d", sort_by="revenue", limit
         print("[Playwright V2] ❌ Missing TIKTOK_COPILOT_EMAIL or TIKTOK_COPILOT_PASSWORD")
         return None
     
-    print(f"[Playwright V2] 🌐 Starting browser fetch for page {page_num}...")
+    print(f"[Playwright V2] 🌐 Starting STEALTH browser fetch for page {page_num}...")
     
     try:
+        # Import stealth
+        try:
+            from playwright_stealth import stealth_sync
+            stealth_enabled = True
+        except ImportError:
+            stealth_enabled = False
+        
         with sync_playwright() as p:
-            # Launch with low-memory flags
+            # Launch with stealth args
             browser = p.chromium.launch(
                 headless=True,
                 args=[
+                    '--disable-blink-features=AutomationControlled',
                     '--disable-gpu',
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -7122,13 +7157,21 @@ def fetch_v2_via_playwright(page_num=1, timeframe="7d", sort_by="revenue", limit
                 ]
             )
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={'width': 1920, 'height': 1080},
+                locale='en-US',
             )
             page = context.new_page()
             
+            # Apply stealth
+            if stealth_enabled:
+                stealth_sync(page)
+                print("[Playwright V2] 🥷 Stealth mode applied!")
+            
             # Navigate and login
             print("[Playwright V2] 🔐 Logging in...")
-            page.goto("https://www.tiktokcopilot.com", timeout=60000)
+            page.goto("https://www.tiktokcopilot.com/?auth=sign-in", timeout=60000)
+            page.wait_for_timeout(8000)  # Wait for modal
             try:
                 page.wait_for_load_state("networkidle", timeout=30000)
             except:
