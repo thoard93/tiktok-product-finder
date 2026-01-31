@@ -7390,6 +7390,9 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
             print("[Scrapfly V2] ❌ No content in result")
             return None
         
+        # Debug: Log content preview to see what we're getting
+        print(f"[Scrapfly V2] 📄 Content preview (500 chars): {content[:500]}...")
+        
         # Check for sign-in redirect (expired cookies)
         content_lower = content.lower()[:1000]
         if 'sign-in' in content_lower or 'signin' in content_lower or 'geistsans' in content_lower:
