@@ -1,9 +1,15 @@
 # Dockerfile for Vantage - TikTok Shop Intelligence Platform
-# Uses Playwright's official image with Chromium pre-installed
+# Lightweight Python image - no Playwright/Chromium needed
 
-FROM mcr.microsoft.com/playwright/python:v1.58.0-noble
+FROM python:3.11-slim
 
 WORKDIR /app
+
+# Install build deps for python-Levenshtein
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python deps
 COPY requirements.txt .
@@ -16,7 +22,6 @@ COPY . .
 ENV PORT=10000
 EXPOSE 10000
 
-# Start command - reduced for memory (Playwright needs ~500-800MB)
-# 2 workers x 1 thread = ~200MB, leaves ~1.5GB for Chromium
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 1 --timeout 180
-
+# Optimized for 2GB RAM - no Playwright overhead!
+# 4 workers x 2 threads = handles more concurrent requests
+CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 4 --threads 2 --timeout 180

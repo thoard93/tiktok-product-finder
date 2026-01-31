@@ -8,7 +8,5 @@ emoji
 psycopg2-binary
 gspread>=5.12.0
 google-auth>=2.25.0
-playwright>=1.48.0
-playwright-stealth>=2.0.0
 fuzzywuzzy>=0.18.0
 python-Levenshtein>=0.12.2
