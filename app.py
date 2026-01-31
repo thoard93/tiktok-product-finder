@@ -6943,26 +6943,40 @@ def _do_full_login():
             
             # Step 1: Click top-right 'Sign in' button (priority) or popup link (fallback)
             sign_in_button_selector = "button:has-text('Sign in'), a:has-text('Sign in'), button[role='button']:has-text('Sign in')"
+            sign_in_clicked = False
+            
             try:
                 print("[Playwright Login] 🔍 Looking for top-right 'Sign in' button...")
                 page.wait_for_selector(sign_in_button_selector, timeout=20000)
                 page.click(sign_in_button_selector, force=True)
                 print("[Playwright Login] ✅ Clicked top-right 'Sign in' button")
-                page.wait_for_load_state("networkidle", timeout=30000)
+                sign_in_clicked = True
             except Exception as btn_err:
-                print(f"[Playwright Login] ⚠️ Top-right button failed: {btn_err}")
-                # Fallback for marketing popup 'Sign in' link
+                print(f"[Playwright Login] ⚠️ Top-right button not found: {btn_err}")
+            
+            # If top-right button failed, try popup fallback
+            if not sign_in_clicked:
                 try:
                     popup_sign_in = "text='Already have an account? Sign in', text='Sign in'"
                     page.wait_for_selector(popup_sign_in, timeout=10000)
                     page.click(popup_sign_in, force=True)
                     print("[Playwright Login] ✅ Clicked popup 'Sign in' link (fallback)")
-                    page.wait_for_load_state("networkidle", timeout=30000)
+                    sign_in_clicked = True
                 except Exception as popup_err:
                     print(f"[Playwright Login] ❌ Both Sign in clicks failed: {popup_err}")
-                    page.screenshot(path="/tmp/login_signin_fail.png")
+                    try:
+                        page.screenshot(path="/tmp/login_signin_fail.png")
+                    except:
+                        pass
                     browser.close()
                     return None
+            
+            # Wait for form to load (separate from click - don't fail if networkidle times out)
+            print("[Playwright Login] ⏳ Waiting for form to load...")
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except:
+                print("[Playwright Login] ⚠️ Networkidle timeout after click, continuing anyway...")
             
             # Step 2: Wait for form fields (extra time for modal animation)
             print("[Playwright Login] ⏳ Waiting for login form...")
