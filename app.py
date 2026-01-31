@@ -6979,17 +6979,35 @@ def _do_full_login():
             )
             
             # Check for residential proxy (bypasses IP-based detection)
+            # Proxiware format: http://host:port:username:password → convert to http://username:password@host:port
             proxy_url = os.environ.get('PLAYWRIGHT_PROXY')
+            proxy_config = None
             if proxy_url:
-                print(f"[Playwright Login] 🌐 Using residential proxy: {proxy_url[:30]}...")
+                try:
+                    # Parse Proxiware format: http://host:port:username:password
+                    if proxy_url.count(':') >= 3:
+                        parts = proxy_url.replace('http://', '').split(':')
+                        if len(parts) >= 4:
+                            host, port, username, password = parts[0], parts[1], parts[2], ':'.join(parts[3:])
+                            proxy_config = {'server': f'http://{host}:{port}', 'username': username, 'password': password}
+                            print(f"[Playwright Login] 🌐 Using residential proxy: {host}:{port} (user: {username[:10]}...)")
+                    else:
+                        # Standard format: http://user:pass@host:port
+                        proxy_config = {'server': proxy_url}
+                        print(f"[Playwright Login] 🌐 Using proxy: {proxy_url[:30]}...")
+                except Exception as proxy_err:
+                    print(f"[Playwright Login] ⚠️ Proxy parse error: {proxy_err} - continuing without proxy")
+            
+            if proxy_config:
                 context = browser.new_context(
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     viewport={'width': 1920, 'height': 1080},
                     locale='en-US',
-                    proxy={'server': proxy_url}
+                    ignore_https_errors=True,
+                    proxy=proxy_config
                 )
             else:
-                print("[Playwright Login] ⚠️ No proxy configured (set PLAYWRIGHT_PROXY env var for better evasion)")
+                print("[Playwright Login] ⚠️ No proxy - running direct (may trigger bot detection)")
                 context = browser.new_context(
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     viewport={'width': 1920, 'height': 1080},
@@ -7004,21 +7022,34 @@ def _do_full_login():
             
             # Navigate to TikTokCopilot homepage
             print("[Playwright Login] 🌐 Navigating to TikTokCopilot...")
-            page.goto("https://www.tiktokcopilot.com", timeout=60000)
+            try:
+                page.goto("https://www.tiktokcopilot.com", timeout=60000)
+            except Exception as goto_err:
+                print(f"[Playwright Login] ❌ Navigation failed: {goto_err}")
+                browser.close()
+                return None
+                
             try:
                 page.wait_for_load_state("networkidle", timeout=30000)
             except:
                 pass
             
-            # Debug: Log homepage state
+            # Debug: Log homepage state and check for Geist bot detection
             print(f"[Playwright Login] 📍 Homepage URL: {page.url}")
-            content_preview = page.content()[:300]
+            content_preview = page.content()[:500]
             is_geist = 'geist' in content_preview.lower()
             print(f"[Playwright Login] 📄 Homepage preview (Geist detected: {is_geist}): {content_preview[:150]}...")
             try:
                 page.screenshot(path="/tmp/login_01_homepage.png")
             except:
                 pass
+            
+            # Early exit if bot detection triggered
+            if is_geist:
+                print("[Playwright Login] 🚫 BOT DETECTION TRIGGERED - Geist challenge served")
+                print("[Playwright Login] 💡 Try adding PLAYWRIGHT_PROXY env var with residential proxy")
+                browser.close()
+                return None
             
             # Step 1: Navigate directly to sign-in page (clicking buttons was unreliable)
             print("[Playwright Login] 🔐 Navigating to sign-in page...")
