@@ -56,6 +56,14 @@ except ImportError:
     WhiteNoise = None
     print("WARNING: WhiteNoise not found. Static files may not be served correctly if running as web server.")
 
+# Fuzzy matching for enrichment (improves PID match rate)
+try:
+    from fuzzywuzzy import fuzz, process
+    FUZZY_AVAILABLE = True
+except ImportError:
+    FUZZY_AVAILABLE = False
+    print("WARNING: fuzzywuzzy not found. Enrichment will use exact matching only.")
+
 app = Flask(__name__, static_folder='pwa')
 if WhiteNoise:
     app.wsgi_app = WhiteNoise(app.wsgi_app, root='pwa/')
@@ -665,19 +673,48 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
         print(f"{i_log_prefix} ❌ Copilot Search Found Nothing for {raw_pid} after all stages. Full Response: {res}")
         return False, "Copilot Search Found Nothing"
         
-    # Find exact match or best match
+    # ========== 3-STAGE MATCHING FOR BEST MATCH ==========
     best_match = None
     videos = res.get('videos', [])
+    result_pids = [str(v.get('productId', '')) for v in videos]
+    
+    # STAGE A: Exact PID match
     for v in videos:
         v_pid = str(v.get('productId', ''))
-        # Try both exact and partial matches to be safe
-        if raw_pid == v_pid or raw_pid in v_pid:
+        if raw_pid == v_pid:
             best_match = v
+            print(f"{i_log_prefix} ✅ Exact PID match!")
             break
-            
+    
+    # STAGE B: Fuzzy PID match (if no exact, requires 85%+ similarity)
+    if not best_match and FUZZY_AVAILABLE and result_pids:
+        try:
+            fuzzy_result = process.extractOne(raw_pid, result_pids, scorer=fuzz.ratio)
+            if fuzzy_result and fuzzy_result[1] >= 85:
+                matched_pid = fuzzy_result[0]
+                for v in videos:
+                    if str(v.get('productId', '')) == matched_pid:
+                        best_match = v
+                        print(f"{i_log_prefix} 🎯 Fuzzy match: {raw_pid} → {matched_pid} ({fuzzy_result[1]}%)")
+                        break
+        except Exception as fuzzy_err:
+            print(f"{i_log_prefix} ⚠️ Fuzzy matching error: {fuzzy_err}")
+    
+    # STAGE C: Keyword fallback with productTitle + sellerName
     if not best_match:
-        print(f"{i_log_prefix} ❌ No exact PID match in results found for {raw_pid}. Results: {[v.get('productId') for v in videos]}")
-        return False, "Copilot Search: No exact PID match found"
+        product_title = gv(p, 'product_name') or gv(p, 'title') or ''
+        seller_name = gv(p, 'seller_name') or ''
+        query = f"{product_title} {seller_name}".strip()
+        if query and len(query) > 5:
+            print(f"{i_log_prefix} 🔍 Trying keyword search: '{query[:50]}...'")
+            kw_res = fetch_copilot_trending(timeframe='30d', limit=10, keywords=query)
+            if kw_res and kw_res.get('videos'):
+                best_match = kw_res['videos'][0]  # Take top result
+                print(f"{i_log_prefix} 📦 Keyword match found: {best_match.get('productId')}")
+    
+    if not best_match:
+        print(f"{i_log_prefix} ❌ No match after all 3 stages for {raw_pid}. Result PIDs: {result_pids[:5]}")
+        return False, "No match found after exact, fuzzy, and keyword searches"
         
     # Extract Data from Best Match
     v = best_match
