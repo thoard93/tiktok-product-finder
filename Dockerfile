@@ -16,6 +16,7 @@ COPY . .
 ENV PORT=10000
 EXPOSE 10000
 
-# Start command - optimized for 2GB server (4 workers x 2 threads = handles concurrent requests well)
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 4 --threads 2 --timeout 180
+# Start command - reduced for memory (Playwright needs ~500-800MB)
+# 2 workers x 1 thread = ~200MB, leaves ~1.5GB for Chromium
+CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 1 --timeout 180
 
