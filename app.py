@@ -7758,6 +7758,7 @@ def copilot_sync():
     start_page = int(data.get('page', 0))  # Correctly get start page from frontend
     limit = int(data.get('limit', 50))
     timeframe = data.get('timeframe', 'all')  # Default to 'all' for all-time video/creator counts
+    auto_enrich = data.get('auto_enrich', False)  # Auto-trigger enrichment after sync
     
     # Cap pages to prevent extreme load but allow high volume (up to 40k products)
     if pages > 800: pages = 800 
@@ -7783,13 +7784,63 @@ def copilot_sync():
             print(f"Error syncing page {page_idx}: {e}")
             errors.append(f"Page {page_idx}: {str(e)}")
             
-    log_activity(user.id, 'copilot_sync', {'pages': pages, 'synced': products_synced})
+    log_activity(user.id, 'copilot_sync', {'pages': pages, 'synced': products_synced, 'auto_enrich': auto_enrich})
+    
+    # Auto-enrich after sync if enabled (runs in background with delay)
+    enrich_triggered = False
+    if auto_enrich and products_synced > 0 and not SYNC_STOP_REQUESTED:
+        import threading
+        def delayed_enrich():
+            print("[Auto-Enrich] ⏳ Waiting 30 seconds before starting enrichment...")
+            time.sleep(30)  # Delay to avoid API rate limits
+            print("[Auto-Enrich] 🚀 Starting all-time video enrichment...")
+            try:
+                # Run enrichment for a reasonable number of pages
+                enrich_pages = min(100, pages * 2)  # Enrich 2x synced pages, max 100
+                for page in range(enrich_pages):
+                    if SYNC_STOP_REQUESTED:
+                        print("[Auto-Enrich] 🛑 Stop requested, halting enrichment")
+                        break
+                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
+                    if not products_data or not products_data.get('videos'):
+                        print(f"[Auto-Enrich] Page {page}: No more data, stopping")
+                        break
+                    videos = products_data.get('videos', [])
+                    enriched = 0
+                    for v in videos:
+                        pid = str(v.get('productId', '')).strip()
+                        if not pid:
+                            continue
+                        if not pid.startswith('shop_'):
+                            pid = f"shop_{pid}"
+                        existing = Product.query.get(pid)
+                        if existing:
+                            v_count = safe_int(v.get('productVideoCount') or 0)
+                            c_count = safe_int(v.get('productCreatorCount') or 0)
+                            if v_count > 0 and v_count > (existing.video_count_alltime or 0):
+                                existing.video_count_alltime = v_count
+                            if c_count > 0 and c_count > (existing.influencer_count or 0):
+                                existing.influencer_count = c_count
+                            enriched += 1
+                    db.session.commit()
+                    print(f"[Auto-Enrich] Page {page}: Enriched {enriched} products")
+                    time.sleep(3)  # 3s delay between pages
+                print("[Auto-Enrich] ✅ Enrichment complete!")
+            except Exception as e:
+                print(f"[Auto-Enrich] ❌ Error: {e}")
+        
+        thread = threading.Thread(target=delayed_enrich, daemon=True)
+        thread.start()
+        enrich_triggered = True
+        print("[Copilot Sync] 🔄 Auto-enrich scheduled (starts in 30s)")
+    
     return jsonify({
         'status': 'success',
         'synced': products_synced,
         'pages_processed': pages,
         'total_pages_requested': pages,
         'stop_requested': SYNC_STOP_REQUESTED,
+        'auto_enrich_triggered': enrich_triggered,
         'errors': errors
     })
 
