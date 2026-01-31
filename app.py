@@ -8942,6 +8942,7 @@ def copilot_mass_sync():
     data = request.json or {}
     target_products = int(data.get('target', 10000))
     timeframe = data.get('timeframe', 'all')  # Default to 'all' for all-time video/creator counts
+    auto_enrich = data.get('auto_enrich', False)  # Auto-trigger enrichment after sync
     
     # 100 products per page, up to 2000 pages max (200K theoretical max)
     PRODUCTS_PER_PAGE = 100
@@ -9043,6 +9044,45 @@ def copilot_mass_sync():
                 log_activity(user_id, 'mass_sync', {'pages': pages_done, 'synced': products_synced, 'seconds': int(elapsed)})
             except:
                 pass
+            
+            # AUTO-ENRICH after sync if enabled
+            if auto_enrich and products_synced > 0 and not SYNC_STOP_REQUESTED:
+                print("[SYNC] 🔄 Auto-enrich enabled, starting in 30 seconds...")
+                time.sleep(30)
+                print("[SYNC] 🚀 Starting all-time video enrichment...")
+                try:
+                    enrich_pages = min(100, pages_done * 2)  # Enrich 2x synced pages, max 100
+                    for page in range(enrich_pages):
+                        if SYNC_STOP_REQUESTED:
+                            print("[SYNC] 🛑 Stop requested, halting enrichment")
+                            break
+                        products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
+                        if not products_data or not products_data.get('videos'):
+                            print(f"[SYNC] Enrich page {page}: No more data, stopping")
+                            break
+                        videos = products_data.get('videos', [])
+                        enriched = 0
+                        for v in videos:
+                            pid = str(v.get('productId', '')).strip()
+                            if not pid:
+                                continue
+                            if not pid.startswith('shop_'):
+                                pid = f"shop_{pid}"
+                            existing = Product.query.get(pid)
+                            if existing:
+                                v_count = safe_int(v.get('productVideoCount') or 0)
+                                c_count = safe_int(v.get('productCreatorCount') or 0)
+                                if v_count > 0 and v_count > (existing.video_count_alltime or 0):
+                                    existing.video_count_alltime = v_count
+                                if c_count > 0 and c_count > (existing.influencer_count or 0):
+                                    existing.influencer_count = c_count
+                                enriched += 1
+                        db.session.commit()
+                        print(f"[SYNC] Enrich page {page}: {enriched} products")
+                        time.sleep(3)
+                    print("[SYNC] ✅ Auto-enrich complete!")
+                except Exception as e:
+                    print(f"[SYNC] ❌ Enrich error: {e}")
     
     # Start background thread and return immediately
     sync_thread = threading.Thread(target=run_sync_in_background, daemon=True)

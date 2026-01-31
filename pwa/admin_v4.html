@@ -683,9 +683,9 @@
             const pageSelect = document.getElementById('syncPages');
             const autoEnrichCheckbox = document.getElementById('autoEnrich');
             const maxPages = parseInt(pageSelect.value || 20);
+            const targetProducts = maxPages * 50; // ~50 products per page
             const original = btn.innerHTML;
 
-            isStopRequested = false;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Starting...</span>';
             btn.disabled = true;
             stopBtn.disabled = false;
@@ -694,57 +694,36 @@
                 // Reset backend state
                 try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
 
-                let totalSaved = 0;
-                for (let page = 0; page < maxPages; page++) {
-                    if (isStopRequested) {
-                        alert("🛑 Sync halted by operator.");
-                        break;
-                    }
-                    btn.innerHTML = `<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Page ${page + 1}/${maxPages}...</span>`;
+                // Use server-side mass-sync (runs in background - can close browser!)
+                const autoEnrichEnabled = autoEnrichCheckbox && autoEnrichCheckbox.checked;
+                const res = await fetch('/api/copilot/mass-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target: targetProducts,
+                        timeframe: 'all',  // All-time for video/creator counts
+                        auto_enrich: autoEnrichEnabled
+                    })
+                });
+                const data = await res.json();
 
-                    const isLastPage = (page === maxPages - 1);
-                    const autoEnrichEnabled = autoEnrichCheckbox && autoEnrichCheckbox.checked;
-
-                    const res = await fetch('/api/copilot/sync', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            timeframe: '7d',
-                            limit: 50,
-                            page,
-                            pages: 1,
-                            // Trigger auto-enrich on last page (runs server-side in background)
-                            auto_enrich: isLastPage && autoEnrichEnabled
-                        })
-                    });
-                    const data = await res.json();
-                    if (data.success || data.status === 'success') {
-                        totalSaved += (data.saved || data.synced || 0);
-                        if (data.stop_requested) break;
-                        // Check if backend triggered enrich
-                        if (data.auto_enrich_triggered) {
-                            console.log('Auto-enrich triggered server-side');
-                        }
-                    }
-                    await new Promise(r => setTimeout(r, 2500)); // 2.5s delay between pages
-                }
-
-                // Show completion message
-                if (!isStopRequested) {
-                    const autoEnrichEnabled = autoEnrichCheckbox && autoEnrichCheckbox.checked;
+                if (data.status === 'success') {
+                    let msg = `🚀 SYNC STARTED (Server-Side)\n\n${data.message}\n\n`;
+                    msg += `✅ You can close this page - sync runs in background on server.\n`;
+                    msg += `📊 Check Render logs for progress.`;
                     if (autoEnrichEnabled) {
-                        alert(`✅ Copilot Sync Complete!\n\nProcessed ${maxPages} pages and saved ${totalSaved} products.\n\n🔄 Auto-enrichment will start in 30 seconds (runs in background on server).`);
-                    } else {
-                        alert(`✅ Copilot Sync Complete!\n\nProcessed ${maxPages} pages and saved ${totalSaved} products.`);
+                        msg += `\n\n🔄 Auto-enrich will run after sync completes.`;
                     }
+                    alert(msg);
+                } else {
+                    alert('❌ Sync Error: ' + (data.message || data.error || 'Unknown error'));
                 }
-                window.location.reload();
             } catch (e) {
                 alert('Sync Error: ' + e.message);
             } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
-                stopBtn.disabled = true;
+                stopBtn.disabled = false; // Keep stop enabled for background task
             }
         }
 
