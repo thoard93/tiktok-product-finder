@@ -6985,17 +6985,17 @@ def _do_full_login():
             page.goto("https://www.tiktokcopilot.com/?auth=sign-in", timeout=60000)
             
             # Wait for page to settle
-            print("[Playwright Login] ⏳ Waiting for sign-in modal to load (5s)...")
-            page.wait_for_timeout(5000)  # 5 second wait for modal animation
+            print("[Playwright Login] ⏳ Waiting for sign-in modal to load (8s)...")
+            page.wait_for_timeout(8000)  # 8 second wait for modal animation
             
             try:
                 page.wait_for_load_state("networkidle", timeout=30000)
             except:
                 print("[Playwright Login] ⚠️ Networkidle timeout, continuing anyway...")
             
-            # Step 2: Wait for email field with 90s timeout and broader selectors
+            # Step 2: Wait for email field with broader selectors (Clerk-specific)
             print("[Playwright Login] ⏳ Waiting for login form (90s timeout)...")
-            email_selector = 'input[type="email"], input[placeholder*="Email"], input[name="identifier"], input[autocomplete="email"], input[autocomplete="username"]'
+            email_selector = 'input[type="email"], input[placeholder*="Email"], input[name="identifier"], input[autocomplete="email"], input[autocomplete="username"], input[data-clerk*="email"]'
             try:
                 page.wait_for_selector(email_selector, timeout=90000, state="visible")  # 90s for slow headless
             except Exception as email_wait_err:
