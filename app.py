@@ -7326,41 +7326,50 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
     print(f"[Scrapfly V2] 📡 Fetching page {page_num} via Scrapfly...")
     
     try:
-        response = requests.get(full_url)  # No timeout - Scrapfly handles it
+        response = requests.get(full_url)
         
-        if response.ok:
-            data = response.json()
-            result = data.get('result', {})
-            status = result.get('status')
-            
-            if status == 'success':
-                # The content is the actual API response (JSON as string)
-                content = result.get('content', '')
-                
-                # Parse the JSON content
-                try:
-                    v2_data = json.loads(content)
-                    products = v2_data.get('products', v2_data.get('data', []))
-                    print(f"[Scrapfly V2] ✅ Fetched {len(products)} products from page {page_num}")
-                    return v2_data
-                except json.JSONDecodeError:
-                    # Content might be HTML (Geist challenge)
-                    if 'geist' in content.lower()[:500]:
-                        print(f"[Scrapfly V2] 🚫 Still got Geist HTML - detection not bypassed")
-                    else:
-                        print(f"[Scrapfly V2] ⚠️ Non-JSON content: {content[:200]}...")
-                    return None
-            else:
-                error = result.get('error', {})
-                print(f"[Scrapfly V2] ❌ Scrapfly error: {error.get('message', status)}")
-                return None
-        else:
+        # Check HTTP status first
+        if not response.ok:
             print(f"[Scrapfly V2] ❌ HTTP {response.status_code}: {response.text[:200]}")
             return None
+        
+        # Parse response
+        data = response.json()
+        if not data:
+            print("[Scrapfly V2] ❌ Empty response from Scrapfly")
+            return None
+        
+        # Check for success (Scrapfly uses 'success' key at top level)
+        if not data.get('success', False):
+            error_msg = data.get('error', '') or data.get('message', 'Unknown Scrapfly error')
+            print(f"[Scrapfly V2] ❌ Scrapfly failed: {error_msg}")
+            return None
+        
+        # Extract result content
+        result = data.get('result', {})
+        if not result:
+            print("[Scrapfly V2] ❌ No result in response")
+            return None
+        
+        content = result.get('content', '')
+        if not content:
+            print("[Scrapfly V2] ❌ No content in result")
+            return None
+        
+        # Parse the JSON content
+        try:
+            v2_data = json.loads(content)
+            products = v2_data.get('products', v2_data.get('data', []))
+            print(f"[Scrapfly V2] ✅ Fetched {len(products)} products from page {page_num}")
+            return v2_data
+        except json.JSONDecodeError:
+            # Content might be HTML (Geist challenge)
+            if 'geist' in content.lower()[:500]:
+                print(f"[Scrapfly V2] 🚫 Still got Geist HTML - detection not bypassed")
+            else:
+                print(f"[Scrapfly V2] ⚠️ Non-JSON content: {content[:200]}...")
+            return None
             
-    except requests.exceptions.Timeout:
-        print("[Scrapfly V2] ⏱️ Request timed out after 90s")
-        return None
     except Exception as e:
         print(f"[Scrapfly V2] ❌ Exception: {e}")
         return None
