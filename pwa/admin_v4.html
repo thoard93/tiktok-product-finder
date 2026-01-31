@@ -702,43 +702,41 @@
                     }
                     btn.innerHTML = `<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Page ${page + 1}/${maxPages}...</span>`;
 
+                    const isLastPage = (page === maxPages - 1);
+                    const autoEnrichEnabled = autoEnrichCheckbox && autoEnrichCheckbox.checked;
+
                     const res = await fetch('/api/copilot/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ timeframe: '7d', limit: 50, page, pages: 1 })
+                        body: JSON.stringify({
+                            timeframe: '7d',
+                            limit: 50,
+                            page,
+                            pages: 1,
+                            // Trigger auto-enrich on last page (runs server-side in background)
+                            auto_enrich: isLastPage && autoEnrichEnabled
+                        })
                     });
                     const data = await res.json();
                     if (data.success || data.status === 'success') {
                         totalSaved += (data.saved || data.synced || 0);
                         if (data.stop_requested) break;
+                        // Check if backend triggered enrich
+                        if (data.auto_enrich_triggered) {
+                            console.log('Auto-enrich triggered server-side');
+                        }
                     }
                     await new Promise(r => setTimeout(r, 2500)); // 2.5s delay between pages
                 }
 
-                // === AUTO-ENRICH PHASE ===
-                if (!isStopRequested && autoEnrichCheckbox && autoEnrichCheckbox.checked) {
-                    btn.innerHTML = '<i class="fas fa-magic fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Enriching...</span>';
-
-                    // Wait 30 seconds before starting enrichment to give API a break
-                    await new Promise(r => setTimeout(r, 30000));
-
-                    try {
-                        const enrichRes = await fetch('/api/copilot/enrich-videos', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ pages: 600 }) // Sufficient for 30k products
-                        });
-                        const enrichData = await enrichRes.json();
-                        if (enrichData.success) {
-                            alert(`✅ Sync + Enrich Complete!\n\nSynced ${totalSaved} products.\nEnriched ${enrichData.enriched || 0} products with all-time stats.`);
-                        } else {
-                            alert(`✅ Sync Complete! (Enrich failed)\n\nSynced ${totalSaved} products.\nEnrich error: ${enrichData.error || 'Unknown'}`);
-                        }
-                    } catch (enrichErr) {
-                        alert(`✅ Sync Complete! (Enrich error)\n\nSynced ${totalSaved} products.\nEnrich error: ${enrichErr.message}`);
+                // Show completion message
+                if (!isStopRequested) {
+                    const autoEnrichEnabled = autoEnrichCheckbox && autoEnrichCheckbox.checked;
+                    if (autoEnrichEnabled) {
+                        alert(`✅ Copilot Sync Complete!\n\nProcessed ${maxPages} pages and saved ${totalSaved} products.\n\n🔄 Auto-enrichment will start in 30 seconds (runs in background on server).`);
+                    } else {
+                        alert(`✅ Copilot Sync Complete!\n\nProcessed ${maxPages} pages and saved ${totalSaved} products.`);
                     }
-                } else if (!isStopRequested) {
-                    alert(`✅ Copilot Sync Complete!\n\nProcessed ${maxPages} pages and saved ${totalSaved} products.`);
                 }
                 window.location.reload();
             } catch (e) {
