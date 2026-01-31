@@ -6977,11 +6977,24 @@ def _do_full_login():
                     '--no-first-run',
                 ]
             )
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={'width': 1920, 'height': 1080},
-                locale='en-US',
-            )
+            
+            # Check for residential proxy (bypasses IP-based detection)
+            proxy_url = os.environ.get('PLAYWRIGHT_PROXY')
+            if proxy_url:
+                print(f"[Playwright Login] 🌐 Using residential proxy: {proxy_url[:30]}...")
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    viewport={'width': 1920, 'height': 1080},
+                    locale='en-US',
+                    proxy={'server': proxy_url}
+                )
+            else:
+                print("[Playwright Login] ⚠️ No proxy configured (set PLAYWRIGHT_PROXY env var for better evasion)")
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    viewport={'width': 1920, 'height': 1080},
+                    locale='en-US',
+                )
             page = context.new_page()
             
             # Apply stealth to hide automation indicators
