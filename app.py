@@ -7319,14 +7319,14 @@ def fetch_v2_via_scrapfly(page_num=1, timeframe="7d", sort_by="revenue", limit=5
         'render_js': 'true',  # Execute JavaScript
         'country': 'US',       # US IP
         'asp': 'true',         # Anti-Scrape Protection bypass (Vercel, Cloudflare)
-        'timeout': '60000',    # 60s timeout
+        'retry': 'false',      # Disable retry to avoid timeout conflict
     }
     
     full_url = f"{scrapfly_url}?{urllib.parse.urlencode(params)}"
     print(f"[Scrapfly V2] 📡 Fetching page {page_num} via Scrapfly...")
     
     try:
-        response = requests.get(full_url, timeout=90)
+        response = requests.get(full_url)  # No timeout - Scrapfly handles it
         
         if response.ok:
             data = response.json()
