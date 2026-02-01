@@ -7282,6 +7282,13 @@ def sync_copilot_products(timeframe='all', limit=50, page=0):
                 0
             )
             
+            # FILTER: Skip products with less than 10 7D sales (no momentum)
+            MIN_7D_SALES = 10
+            if sales_7d < MIN_7D_SALES:
+                if saved_count < 3:  # Only log first few for debugging
+                    print(f"[Sync Filter] Skipping {product_id} - only {sales_7d} 7D sales (min: {MIN_7D_SALES})")
+                continue
+            
             # 2. Revenue (7d)
             period_revenue = safe_float(
                 p.get('periodRevenue') or 
