@@ -7870,7 +7870,7 @@ def copilot_enrich_videos():
     user = get_current_user()
     data = request.json or {}
     target_pages = int(data.get('pages', 600))  # Default: 600 pages = 30k products
-    delay_seconds = float(data.get('delay', 3.0))  # Faster 3s delay (optimized)
+    delay_seconds = float(data.get('delay', 5.0))  # 5s delay to avoid 500 rate limits
     
     try:
         print(f"[Video Enrich] Starting enrichment across {target_pages} pages (delay: {delay_seconds}s)...")
@@ -7895,13 +7895,9 @@ def copilot_enrich_videos():
                 print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
                 break
             
-            # Try V2 endpoint first (has timeframe=all), fallback to legacy
-            products_data = fetch_copilot_products(timeframe='all', limit=25, page=page)
-            
-            # If V2 fails, try legacy endpoint with all-time timeframe
-            if not products_data or not products_data.get('products'):
-                print(f"[Video Enrich] V2 failed on page {page}, trying legacy ALL-TIME...")
-                products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
+            # SKIP V2 - it's blocked by Geist. Use ONLY legacy endpoint
+            # Legacy endpoint with all-time timeframe for video counts
+            products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
             
             # Handle API errors gracefully - don't stop, just pause and continue
             if not products_data:
@@ -7912,7 +7908,7 @@ def copilot_enrich_videos():
                     print(f"[Video Enrich] Too many consecutive errors, stopping")
                     break
                 
-                # Exponential backoff: wait longer after each error
+                # Exponential backoff: wait longer after each error (5s, 10s, 15s, 20s, 25s)
                 backoff_time = min(30, 5 * consecutive_errors)
                 print(f"[Video Enrich] Waiting {backoff_time}s before retry...")
                 time.sleep(backoff_time)
