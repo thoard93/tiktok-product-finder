@@ -7028,11 +7028,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     retries = 3
     for attempt in range(retries):
         try:
-            # DEBUG: Log exact request details (Grok's recommendation)
             v2_url = f"{COPILOT_API_BASE}/trending/products"
-            print(f"[V2 DEBUG] URL: {v2_url}")
-            print(f"[V2 DEBUG] Params: {params}")
-            print(f"[V2 DEBUG] Headers: {list(headers.keys())}")
             
             # Use curl_cffi with Chrome 124 impersonation (Grok's recommended version)
             if requests_cffi:
@@ -7052,8 +7048,13 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                 try:
                     return res.json()
                 except Exception as e:
-                    print(f"[Copilot Products] ❌ JSON Decode Error (Attempt {attempt+1}/{retries}): {e}")
                     resp_text = getattr(res, 'text', '')
+                    # DETECT GEIST ANTI-BOT: HTML response means blocked, don't retry
+                    if resp_text and resp_text.strip().startswith('<!DOCTYPE') or 'geist' in resp_text.lower():
+                        print(f"[V2] ⛔ Geist anti-bot detected, skipping retries", flush=True)
+                        return None  # Fail immediately, use legacy
+                    
+                    print(f"[Copilot Products] ❌ JSON Decode Error (Attempt {attempt+1}/{retries}): {e}")
                     if resp_text:
                         print(f"[DEBUG] Raw Response (first 100 chars): {resp_text[:100]}")
                     
