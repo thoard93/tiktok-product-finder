@@ -7133,6 +7133,7 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     retries = 3
     for attempt in range(retries):
         try:
+            print(f"[Legacy API] 📡 Calling page {page}, attempt {attempt+1}...", flush=True)
             if requests_cffi:
                 res = requests_cffi.get(
                     f"{COPILOT_API_BASE}/trending", 
