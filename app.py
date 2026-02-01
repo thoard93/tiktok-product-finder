@@ -7909,8 +7909,24 @@ def copilot_enrich_videos():
                         print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
                         break
                     
-                    # SKIP V2 - it's blocked by Geist. Use ONLY legacy endpoint
-                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
+                    # Try V2 first (has all-time counts), fall back to legacy
+                    products_data = None
+                    api_source = None
+                    
+                    # V2 endpoint - all-time productVideoCount
+                    v2_data = fetch_copilot_products(timeframe='all', limit=50, page=page)
+                    if v2_data and v2_data.get('products'):
+                        products_data = v2_data
+                        api_source = 'V2'
+                    else:
+                        # Fallback to legacy
+                        legacy_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
+                        if legacy_data:
+                            products_data = legacy_data
+                            api_source = 'legacy'
+                    
+                    if page < 3:
+                        print(f"[API] Page {page}: Using {api_source or 'FAILED'}", flush=True)
                     
                     # Handle API errors gracefully
                     if not products_data:
