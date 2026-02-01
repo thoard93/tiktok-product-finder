@@ -7917,17 +7917,8 @@ def copilot_enrich_videos():
                         print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
                         break
                     
-                    # Try V2 first (now with sentry headers for Geist bypass)
-                    products_data = fetch_copilot_products(timeframe='all', limit=50, page=page)
-                    api_source = 'V2'
-                    
-                    # Fall back to legacy if V2 blocked
-                    if not products_data or not products_data.get('products'):
-                        products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
-                        api_source = 'legacy'
-                    
-                    if page < 3:
-                        print(f"[API] Page {page}: Using {api_source}", flush=True)
+                    # Skip V2 (Geist blocked) - use legacy directly
+                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
                     
                     # Handle API errors gracefully
                     if not products_data:
@@ -7976,14 +7967,6 @@ def copilot_enrich_videos():
                         Product.product_id.in_(shop_pids)
                     ).all()
                     
-                    # DEBUG: Log matching stats
-                    if page < 5:  # First 5 pages
-                        print(f"[DEBUG] Page {page}: page_pids={len(page_pids)}, db_matches={len(db_products_to_check)}", flush=True)
-                        if page_pids and db_products_to_check:
-                            sample_pid = list(page_pids.keys())[0]
-                            sample_db = db_products_to_check[0]
-                            print(f"[DEBUG] Sample Copilot: {sample_pid} | Sample DB: {sample_db.product_id}", flush=True)
-                    
                     for db_product in db_products_to_check:
                         if SYNC_STOP_REQUESTED:
                             break
@@ -7996,8 +7979,6 @@ def copilot_enrich_videos():
                         if raw_pid in page_pids:
                             matched_data = page_pids[raw_pid]
                             match_type = 'direct'
-                            if page < 3:
-                                print(f"[MATCH] Direct: {db_product.product_id}", flush=True)
                         
                         # STAGE 2: Fuzzy PID match (85%+)
                         if not matched_data and FUZZY_AVAILABLE and raw_pids:
@@ -8035,19 +8016,10 @@ def copilot_enrich_videos():
                             # Take the MAX as best all-time estimate
                             alltime_video_count = max(pvc, period_vc, vc, top_videos_len)
                             
-                            # DEBUG: Show which field we used (first 3 pages)
-                            if page < 3:
-                                source = 'pvc' if alltime_video_count == pvc else ('period' if alltime_video_count == period_vc else ('vc' if alltime_video_count == vc else 'topV'))
-                                print(f"[FIELDS] {db_product.product_id}: pvc={pvc}, period={period_vc}, vc={vc}, topV={top_videos_len} -> using {source}={alltime_video_count}", flush=True)
-                            
                             alltime_creator_count = safe_int(
                                 matched_data.get('productCreatorCount') or 
                                 matched_data.get('periodCreatorCount')
                             )
-                            
-                            # DEBUG: Show video count comparison
-                            if page < 3:
-                                print(f"[COMPARE] {db_product.product_id}: API={alltime_video_count}, DB={db_product.video_count_alltime}", flush=True)
                             
                             if alltime_video_count > 0 and alltime_video_count > (db_product.video_count_alltime or 0):
                                 db_product.video_count_alltime = alltime_video_count
