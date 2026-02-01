@@ -7931,32 +7931,99 @@ def copilot_enrich_videos():
             total_fetched += len(products_list)
             page_enriched = 0
             
+            # Build PID lookup for this page (for fast direct and fuzzy matching)
+            page_pids = {}
             for p in products_list:
+                pid = str(p.get('productId', '')).strip()
+                if pid:
+                    page_pids[pid] = p
+            
+            # Get DB products that need enrichment (missing or low all-time video count)
+            # Query products that might match this page's PIDs
+            raw_pids = list(page_pids.keys())
+            shop_pids = [f"shop_{pid}" for pid in raw_pids]
+            
+            db_products_to_check = Product.query.filter(
+                db.or_(
+                    Product.product_id.in_(shop_pids),
+                    Product.video_count_alltime == None,
+                    Product.video_count_alltime == 0,
+                    Product.video_count_alltime < 20
+                )
+            ).limit(500).all()  # Batch to avoid memory spikes
+            
+            for db_product in db_products_to_check:
                 if SYNC_STOP_REQUESTED:
                     break
-                product_id = str(p.get('productId', '')).strip()
-                if not product_id:
-                    continue
-                
-                # Normalize to our shop_ prefix (same as main sync)
-                if not product_id.startswith('shop_'):
-                    product_id = f"shop_{product_id}"
                     
-                # FIXED: Use correct field names for all-time counts
-                # productVideoCount = all-time, periodVideoCount = 7-day
-                # Legacy also returns productVideoCount!
-                alltime_video_count = safe_int(p.get('productVideoCount') or p.get('periodVideoCount') or p.get('videoCount'))
-                alltime_creator_count = safe_int(p.get('productCreatorCount') or p.get('periodCreatorCount'))
+                # Extract raw PID from our shop_ prefixed ID
+                raw_pid = db_product.product_id.replace('shop_', '')
                 
-                # Update the product in our database
-                existing = Product.query.get(product_id)
-                if existing:
-                    if alltime_video_count > 0:
-                        existing.video_count_alltime = alltime_video_count
-                    if alltime_creator_count > 0:
-                        existing.influencer_count = alltime_creator_count
-                    enriched_count += 1
-                    page_enriched += 1
+                matched_data = None
+                match_type = None
+                
+                # STAGE 1: Direct PID match (fast)
+                if raw_pid in page_pids:
+                    matched_data = page_pids[raw_pid]
+                    match_type = 'direct'
+                
+                # STAGE 2: Fuzzy PID match (85%+ similarity)
+                if not matched_data and FUZZY_AVAILABLE and raw_pids:
+                    try:
+                        fuzzy_result = process.extractOne(raw_pid, raw_pids, scorer=fuzz.ratio)
+                        if fuzzy_result and fuzzy_result[1] >= 85:
+                            matched_pid = fuzzy_result[0]
+                            matched_data = page_pids.get(matched_pid)
+                            match_type = f'fuzzy_{fuzzy_result[1]}%'
+                    except Exception as e:
+                        pass  # Fuzzy failed, try keyword
+                
+                # STAGE 3: Keyword fallback (title + seller) - only if we have title
+                if not matched_data and db_product.product_name:
+                    title = db_product.product_name or ''
+                    seller = db_product.seller_name or ''
+                    query = f"{title} {seller}".strip()
+                    
+                    if query and len(query) > 5:
+                        # Search within current page results first (fast)
+                        for p in products_list:
+                            p_title = str(p.get('productTitle', '')).lower()
+                            p_seller = str(p.get('sellerName', '')).lower()
+                            
+                            if title.lower() in p_title or p_title in title.lower():
+                                matched_data = p
+                                match_type = 'keyword_title'
+                                break
+                            elif seller and seller.lower() in p_seller:
+                                matched_data = p
+                                match_type = 'keyword_seller'
+                                break
+                
+                # Apply the match if found
+                if matched_data:
+                    # Extract all-time video count (try multiple keys)
+                    alltime_video_count = safe_int(
+                        matched_data.get('productVideoCount') or 
+                        matched_data.get('periodVideoCount') or 
+                        matched_data.get('videoCount') or
+                        len(matched_data.get('topVideos', []))
+                    )
+                    alltime_creator_count = safe_int(
+                        matched_data.get('productCreatorCount') or 
+                        matched_data.get('periodCreatorCount')
+                    )
+                    
+                    # Only update if we got better data
+                    if alltime_video_count > 0 and alltime_video_count > (db_product.video_count_alltime or 0):
+                        db_product.video_count_alltime = alltime_video_count
+                        enriched_count += 1
+                        page_enriched += 1
+                        
+                        if page_enriched <= 5:  # Log first few matches per page
+                            print(f"[Video Enrich] {match_type}: {db_product.product_id} -> {alltime_video_count} videos")
+                    
+                    if alltime_creator_count > 0 and alltime_creator_count > (db_product.influencer_count or 0):
+                        db_product.influencer_count = alltime_creator_count
             
             # Commit after each page to save progress
             db.session.commit()
