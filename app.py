@@ -7959,6 +7959,16 @@ def copilot_enrich_videos():
                         )
                     ).limit(500).all()
                     
+                    # DEBUG: Log matching stats
+                    if page < 3:  # First 3 pages only
+                        print(f"[DEBUG] Page {page}: page_pids={len(page_pids)}, db_check={len(db_products_to_check)}", flush=True)
+                        if page_pids:
+                            sample_pid = list(page_pids.keys())[0]
+                            print(f"[DEBUG] Sample Copilot PID: {sample_pid}", flush=True)
+                        if db_products_to_check:
+                            sample_db = db_products_to_check[0]
+                            print(f"[DEBUG] Sample DB PID: {sample_db.product_id}, video_alltime={sample_db.video_count_alltime}", flush=True)
+                    
                     for db_product in db_products_to_check:
                         if SYNC_STOP_REQUESTED:
                             break
