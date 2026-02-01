@@ -7001,6 +7001,10 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     
     # CRITICAL: Same-origin headers per Grok's analysis (no Origin/Referer/X-Requested-With)
     # ALL sec-* headers must be lowercase to exactly match browser fingerprint
+    import uuid
+    trace_id = uuid.uuid4().hex[:32]
+    span_id = uuid.uuid4().hex[:16]
+    
     headers = {
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
@@ -7012,6 +7016,9 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Windows"',
         "priority": "u=1, i",
+        # ADDED: Sentry headers that real browsers send (Geist may validate these)
+        "baggage": f"sentry-environment=vercel-production,sentry-public_key=0718b8c1b0e1386acd40331786775abe,sentry-trace_id={trace_id},sentry-transaction=GET%20%2Fproducts,sentry-sampled=true",
+        "sentry-trace": f"{trace_id}-{span_id}-1",
     }
     
     params = {
@@ -7910,8 +7917,17 @@ def copilot_enrich_videos():
                         print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
                         break
                     
-                    # Use legacy endpoint directly (V2 is blocked by Geist)
-                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
+                    # Try V2 first (now with sentry headers for Geist bypass)
+                    products_data = fetch_copilot_products(timeframe='all', limit=50, page=page)
+                    api_source = 'V2'
+                    
+                    # Fall back to legacy if V2 blocked
+                    if not products_data or not products_data.get('products'):
+                        products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
+                        api_source = 'legacy'
+                    
+                    if page < 3:
+                        print(f"[API] Page {page}: Using {api_source}", flush=True)
                     
                     # Handle API errors gracefully
                     if not products_data:
