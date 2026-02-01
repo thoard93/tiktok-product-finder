@@ -7979,6 +7979,8 @@ def copilot_enrich_videos():
                         if raw_pid in page_pids:
                             matched_data = page_pids[raw_pid]
                             match_type = 'direct'
+                            if page < 3:
+                                print(f"[MATCH] Direct: {db_product.product_id}", flush=True)
                         
                         # STAGE 2: Fuzzy PID match (85%+)
                         if not matched_data and FUZZY_AVAILABLE and raw_pids:
@@ -8016,6 +8018,10 @@ def copilot_enrich_videos():
                                 matched_data.get('productCreatorCount') or 
                                 matched_data.get('periodCreatorCount')
                             )
+                            
+                            # DEBUG: Show video count comparison
+                            if page < 3:
+                                print(f"[COMPARE] {db_product.product_id}: API={alltime_video_count}, DB={db_product.video_count_alltime}", flush=True)
                             
                             if alltime_video_count > 0 and alltime_video_count > (db_product.video_count_alltime or 0):
                                 db_product.video_count_alltime = alltime_video_count
