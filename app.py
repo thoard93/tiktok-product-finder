@@ -7879,161 +7879,175 @@ def copilot_enrich_videos():
     set_config_value('enrich_status', 'running', 'Enrichment status')
     set_config_value('enrich_progress', '0', 'Enrichment progress')
     
+    print(f"[Video Enrich] 📋 Request received: {target_pages} pages, delay: {delay_seconds}s", flush=True)
+    
     def run_enrich_in_background():
         """Background enrichment task"""
-        with app.app_context():
-            global SYNC_STOP_REQUESTED
-            enriched_count = 0
-            total_fetched = 0
-            consecutive_errors = 0
-            max_consecutive_errors = 5
-            
-            print(f"[Video Enrich] 🚀 Starting background enrichment across {target_pages} pages (delay: {delay_seconds}s)...")
-            
-            for page in range(target_pages):
-                # Check persistent DB stop flag
-                db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
-                if db_stop_flag == 'true':
-                    SYNC_STOP_REQUESTED = True
-                    print("[Video Enrich] 🛑 Stop signal loaded from DB!")
-                    
-                if SYNC_STOP_REQUESTED:
-                    print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
-                    break
-                
-                # SKIP V2 - it's blocked by Geist. Use ONLY legacy endpoint
-                products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
-                
-                # Handle API errors gracefully
-                if not products_data:
-                    consecutive_errors += 1
-                    print(f"[Video Enrich] Page {page}: API failed (error {consecutive_errors}/{max_consecutive_errors})")
-                    
-                    if consecutive_errors >= max_consecutive_errors:
-                        print(f"[Video Enrich] Too many consecutive errors, stopping")
-                        break
-                    
-                    backoff_time = min(30, 5 * consecutive_errors)
-                    print(f"[Video Enrich] Waiting {backoff_time}s before retry...")
-                    time.sleep(backoff_time)
-                    continue
-                
-                # Reset error counter on success
+        import sys
+        print("[Video Enrich] 🧵 Background thread started!", flush=True)
+        sys.stdout.flush()
+        
+        try:
+            with app.app_context():
+                global SYNC_STOP_REQUESTED
+                enriched_count = 0
+                total_fetched = 0
                 consecutive_errors = 0
+                max_consecutive_errors = 5
                 
-                # Handle both V2 ('products') and legacy ('videos') response keys
-                products_list = products_data.get('products', []) or products_data.get('videos', [])
-                if not products_list:
-                    print(f"[Video Enrich] Page {page}: Empty page, trying next...")
-                    time.sleep(delay_seconds)
-                    continue
+                print(f"[Video Enrich] 🚀 Starting background enrichment across {target_pages} pages (delay: {delay_seconds}s)...", flush=True)
                 
-                total_fetched += len(products_list)
-                page_enriched = 0
-                
-                # Build PID lookup for this page
-                page_pids = {}
-                for p in products_list:
-                    pid = str(p.get('productId', '')).strip()
-                    if pid:
-                        page_pids[pid] = p
-                
-                # Get DB products that might match
-                raw_pids = list(page_pids.keys())
-                shop_pids = [f"shop_{pid}" for pid in raw_pids]
-                
-                db_products_to_check = Product.query.filter(
-                    db.or_(
-                        Product.product_id.in_(shop_pids),
-                        Product.video_count_alltime == None,
-                        Product.video_count_alltime == 0,
-                        Product.video_count_alltime < 20
-                    )
-                ).limit(500).all()
-                
-                for db_product in db_products_to_check:
+                for page in range(target_pages):
+                    # Check persistent DB stop flag
+                    db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
+                    if db_stop_flag == 'true':
+                        SYNC_STOP_REQUESTED = True
+                        print("[Video Enrich] 🛑 Stop signal loaded from DB!")
+                        
                     if SYNC_STOP_REQUESTED:
+                        print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
                         break
+                    
+                    # SKIP V2 - it's blocked by Geist. Use ONLY legacy endpoint
+                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
+                    
+                    # Handle API errors gracefully
+                    if not products_data:
+                        consecutive_errors += 1
+                        print(f"[Video Enrich] Page {page}: API failed (error {consecutive_errors}/{max_consecutive_errors})")
                         
-                    raw_pid = db_product.product_id.replace('shop_', '')
-                    matched_data = None
-                    match_type = None
-                    
-                    # STAGE 1: Direct PID match
-                    if raw_pid in page_pids:
-                        matched_data = page_pids[raw_pid]
-                        match_type = 'direct'
-                    
-                    # STAGE 2: Fuzzy PID match (85%+)
-                    if not matched_data and FUZZY_AVAILABLE and raw_pids:
-                        try:
-                            fuzzy_result = process.extractOne(raw_pid, raw_pids, scorer=fuzz.ratio)
-                            if fuzzy_result and fuzzy_result[1] >= 85:
-                                matched_pid = fuzzy_result[0]
-                                matched_data = page_pids.get(matched_pid)
-                                match_type = f'fuzzy_{fuzzy_result[1]}%'
-                        except:
-                            pass
-                    
-                    # STAGE 3: Keyword fallback
-                    if not matched_data and db_product.product_name:
-                        title = db_product.product_name or ''
-                        seller = db_product.seller_name or ''
+                        if consecutive_errors >= max_consecutive_errors:
+                            print(f"[Video Enrich] Too many consecutive errors, stopping")
+                            break
                         
-                        if len(title) > 5:
-                            for p in products_list:
-                                p_title = str(p.get('productTitle', '')).lower()
-                                if title.lower() in p_title or p_title in title.lower():
-                                    matched_data = p
-                                    match_type = 'keyword_title'
-                                    break
+                        backoff_time = min(30, 5 * consecutive_errors)
+                        print(f"[Video Enrich] Waiting {backoff_time}s before retry...")
+                        time.sleep(backoff_time)
+                        continue
                     
-                    # Apply match
-                    if matched_data:
-                        alltime_video_count = safe_int(
-                            matched_data.get('productVideoCount') or 
-                            matched_data.get('periodVideoCount') or 
-                            matched_data.get('videoCount') or
-                            len(matched_data.get('topVideos', []))
+                    # Reset error counter on success
+                    consecutive_errors = 0
+                    
+                    # Handle both V2 ('products') and legacy ('videos') response keys
+                    products_list = products_data.get('products', []) or products_data.get('videos', [])
+                    if not products_list:
+                        print(f"[Video Enrich] Page {page}: Empty page, trying next...")
+                        time.sleep(delay_seconds)
+                        continue
+                    
+                    total_fetched += len(products_list)
+                    page_enriched = 0
+                    
+                    # Build PID lookup for this page
+                    page_pids = {}
+                    for p in products_list:
+                        pid = str(p.get('productId', '')).strip()
+                        if pid:
+                            page_pids[pid] = p
+                    
+                    # Get DB products that might match
+                    raw_pids = list(page_pids.keys())
+                    shop_pids = [f"shop_{pid}" for pid in raw_pids]
+                    
+                    db_products_to_check = Product.query.filter(
+                        db.or_(
+                            Product.product_id.in_(shop_pids),
+                            Product.video_count_alltime == None,
+                            Product.video_count_alltime == 0,
+                            Product.video_count_alltime < 20
                         )
-                        alltime_creator_count = safe_int(
-                            matched_data.get('productCreatorCount') or 
-                            matched_data.get('periodCreatorCount')
-                        )
-                        
-                        if alltime_video_count > 0 and alltime_video_count > (db_product.video_count_alltime or 0):
-                            db_product.video_count_alltime = alltime_video_count
-                            enriched_count += 1
-                            page_enriched += 1
+                    ).limit(500).all()
+                    
+                    for db_product in db_products_to_check:
+                        if SYNC_STOP_REQUESTED:
+                            break
                             
-                            if page_enriched <= 3:
-                                print(f"[Video Enrich] {match_type}: {db_product.product_id} -> {alltime_video_count} videos")
+                        raw_pid = db_product.product_id.replace('shop_', '')
+                        matched_data = None
+                        match_type = None
                         
-                        if alltime_creator_count > 0 and alltime_creator_count > (db_product.influencer_count or 0):
-                            db_product.influencer_count = alltime_creator_count
+                        # STAGE 1: Direct PID match
+                        if raw_pid in page_pids:
+                            matched_data = page_pids[raw_pid]
+                            match_type = 'direct'
+                        
+                        # STAGE 2: Fuzzy PID match (85%+)
+                        if not matched_data and FUZZY_AVAILABLE and raw_pids:
+                            try:
+                                fuzzy_result = process.extractOne(raw_pid, raw_pids, scorer=fuzz.ratio)
+                                if fuzzy_result and fuzzy_result[1] >= 85:
+                                    matched_pid = fuzzy_result[0]
+                                    matched_data = page_pids.get(matched_pid)
+                                    match_type = f'fuzzy_{fuzzy_result[1]}%'
+                            except:
+                                pass
+                        
+                        # STAGE 3: Keyword fallback
+                        if not matched_data and db_product.product_name:
+                            title = db_product.product_name or ''
+                            seller = db_product.seller_name or ''
+                            
+                            if len(title) > 5:
+                                for p in products_list:
+                                    p_title = str(p.get('productTitle', '')).lower()
+                                    if title.lower() in p_title or p_title in title.lower():
+                                        matched_data = p
+                                        match_type = 'keyword_title'
+                                        break
+                        
+                        # Apply match
+                        if matched_data:
+                            alltime_video_count = safe_int(
+                                matched_data.get('productVideoCount') or 
+                                matched_data.get('periodVideoCount') or 
+                                matched_data.get('videoCount') or
+                                len(matched_data.get('topVideos', []))
+                            )
+                            alltime_creator_count = safe_int(
+                                matched_data.get('productCreatorCount') or 
+                                matched_data.get('periodCreatorCount')
+                            )
+                            
+                            if alltime_video_count > 0 and alltime_video_count > (db_product.video_count_alltime or 0):
+                                db_product.video_count_alltime = alltime_video_count
+                                enriched_count += 1
+                                page_enriched += 1
+                                
+                                if page_enriched <= 3:
+                                    print(f"[Video Enrich] {match_type}: {db_product.product_id} -> {alltime_video_count} videos")
+                            
+                            if alltime_creator_count > 0 and alltime_creator_count > (db_product.influencer_count or 0):
+                                db_product.influencer_count = alltime_creator_count
+                    
+                    db.session.commit()
+                    gc.collect()
+                    
+                    # Update progress in DB
+                    set_config_value('enrich_progress', str(enriched_count))
+                    
+                    if page % 10 == 0 or page_enriched > 0:
+                        print(f"[Video Enrich] Page {page}: fetched {len(products_list)}, enriched: {page_enriched}, total: {enriched_count}")
+                    
+                    time.sleep(delay_seconds)
                 
-                db.session.commit()
-                gc.collect()
+                print(f"[Video Enrich] ✅ COMPLETE: Enriched {enriched_count} products across {target_pages} pages")
+                set_config_value('enrich_status', 'complete')
                 
-                # Update progress in DB
-                set_config_value('enrich_progress', str(enriched_count))
-                
-                if page % 10 == 0 or page_enriched > 0:
-                    print(f"[Video Enrich] Page {page}: fetched {len(products_list)}, enriched: {page_enriched}, total: {enriched_count}")
-                
-                time.sleep(delay_seconds)
-            
-            print(f"[Video Enrich] ✅ COMPLETE: Enriched {enriched_count} products across {target_pages} pages")
-            set_config_value('enrich_status', 'complete')
-            
-            try:
-                log_activity(user_id, 'enrich_videos', {'enriched': enriched_count, 'pages': target_pages})
-            except:
-                pass
+                try:
+                    log_activity(user_id, 'enrich_videos', {'enriched': enriched_count, 'pages': target_pages})
+                except:
+                    pass
+        except Exception as e:
+            import traceback
+            print(f"[Video Enrich] ❌ BACKGROUND THREAD ERROR: {e}", flush=True)
+            traceback.print_exc()
+            set_config_value('enrich_status', f'error: {str(e)[:100]}')
     
     # Start background thread and return immediately
+    print("[Video Enrich] 🚀 Starting background thread...", flush=True)
     enrich_thread = threading.Thread(target=run_enrich_in_background, daemon=True)
     enrich_thread.start()
+    print(f"[Video Enrich] ✅ Thread started: {enrich_thread.name}", flush=True)
     
     return jsonify({
         'status': 'success',
