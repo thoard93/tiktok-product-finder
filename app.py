@@ -8025,12 +8025,21 @@ def copilot_enrich_videos():
                         
                         # Apply match
                         if matched_data:
-                            alltime_video_count = safe_int(
-                                matched_data.get('productVideoCount') or 
-                                matched_data.get('periodVideoCount') or 
-                                matched_data.get('videoCount') or
-                                len(matched_data.get('topVideos', []))
-                            )
+                            # Per Grok: productVideoCount is all-time, periodVideoCount is 7D
+                            # Use MAX of available fields to get best all-time estimate
+                            pvc = safe_int(matched_data.get('productVideoCount', 0))
+                            period_vc = safe_int(matched_data.get('periodVideoCount', 0))
+                            vc = safe_int(matched_data.get('videoCount', 0))
+                            top_videos_len = len(matched_data.get('topVideos', []))
+                            
+                            # Take the MAX as best all-time estimate
+                            alltime_video_count = max(pvc, period_vc, vc, top_videos_len)
+                            
+                            # DEBUG: Show which field we used (first 3 pages)
+                            if page < 3:
+                                source = 'pvc' if alltime_video_count == pvc else ('period' if alltime_video_count == period_vc else ('vc' if alltime_video_count == vc else 'topV'))
+                                print(f"[FIELDS] {db_product.product_id}: pvc={pvc}, period={period_vc}, vc={vc}, topV={top_videos_len} -> using {source}={alltime_video_count}", flush=True)
+                            
                             alltime_creator_count = safe_int(
                                 matched_data.get('productCreatorCount') or 
                                 matched_data.get('periodCreatorCount')
