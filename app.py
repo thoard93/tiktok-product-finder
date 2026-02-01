@@ -7950,24 +7950,22 @@ def copilot_enrich_videos():
                     raw_pids = list(page_pids.keys())
                     shop_pids = [f"shop_{pid}" for pid in raw_pids]
                     
+                    # FIXED: Only query products that match THIS page's PIDs
+                    # Old logic was grabbing random low-video products that didn't match
+                    if not shop_pids:
+                        continue  # No PIDs on this page, skip
+                    
                     db_products_to_check = Product.query.filter(
-                        db.or_(
-                            Product.product_id.in_(shop_pids),
-                            Product.video_count_alltime == None,
-                            Product.video_count_alltime == 0,
-                            Product.video_count_alltime < 20
-                        )
-                    ).limit(500).all()
+                        Product.product_id.in_(shop_pids)
+                    ).all()
                     
                     # DEBUG: Log matching stats
-                    if page < 3:  # First 3 pages only
-                        print(f"[DEBUG] Page {page}: page_pids={len(page_pids)}, db_check={len(db_products_to_check)}", flush=True)
-                        if page_pids:
+                    if page < 5:  # First 5 pages
+                        print(f"[DEBUG] Page {page}: page_pids={len(page_pids)}, db_matches={len(db_products_to_check)}", flush=True)
+                        if page_pids and db_products_to_check:
                             sample_pid = list(page_pids.keys())[0]
-                            print(f"[DEBUG] Sample Copilot PID: {sample_pid}", flush=True)
-                        if db_products_to_check:
                             sample_db = db_products_to_check[0]
-                            print(f"[DEBUG] Sample DB PID: {sample_db.product_id}, video_alltime={sample_db.video_count_alltime}", flush=True)
+                            print(f"[DEBUG] Sample Copilot: {sample_pid} | Sample DB: {sample_db.product_id}", flush=True)
                     
                     for db_product in db_products_to_check:
                         if SYNC_STOP_REQUESTED:
