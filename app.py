@@ -7879,7 +7879,7 @@ def copilot_enrich_videos():
     user_id = user.id
     data = request.json or {}
     target_pages = int(data.get('pages', 600))  # Default: 600 pages = 30k products
-    delay_seconds = float(data.get('delay', 1.0))  # 1s delay - safe for legacy API
+    delay_seconds = float(data.get('delay', 2.0))  # 2s delay - safe with 4 workers
     
     # Reset stop flag
     global SYNC_STOP_REQUESTED
@@ -8017,7 +8017,7 @@ def copilot_enrich_videos():
             with app.app_context():
                 global SYNC_STOP_REQUESTED
                 
-                num_workers = 6  # Parallel API calls
+                num_workers = 4  # Safe concurrency (avoid 500 errors)
                 effective_delay = max(1.0, delay_seconds)  # Minimum 1s between batches
                 
                 print(f"[Video Enrich] 🚀 Starting MULTITHREADED enrichment: {target_pages} pages, {num_workers} workers, {effective_delay}s delay", flush=True)
