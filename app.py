@@ -8013,21 +8013,26 @@ def copilot_enrich_videos():
                             vc = safe_int(matched_data.get('videoCount', 0))
                             top_videos_len = len(matched_data.get('topVideos', []))
                             
-                            # Take the MAX as best all-time estimate
-                            alltime_video_count = max(pvc, period_vc, vc, top_videos_len)
+                            # Take the MAX from API fields
+                            api_video_count = max(pvc, period_vc, vc, top_videos_len)
+                            db_video_count = db_product.video_count_alltime or 0
+                            
+                            # GROK: Use max(API, DB) to preserve high DB values
+                            best_video_count = max(api_video_count, db_video_count)
                             
                             alltime_creator_count = safe_int(
                                 matched_data.get('productCreatorCount') or 
                                 matched_data.get('periodCreatorCount')
                             )
                             
-                            if alltime_video_count > 0 and alltime_video_count > (db_product.video_count_alltime or 0):
-                                db_product.video_count_alltime = alltime_video_count
+                            # Update if API provides a HIGHER value than DB
+                            if api_video_count > 0 and api_video_count > db_video_count:
+                                db_product.video_count_alltime = api_video_count
                                 enriched_count += 1
                                 page_enriched += 1
                                 
-                                if page_enriched <= 3:
-                                    print(f"[Video Enrich] {match_type}: {db_product.product_id} -> {alltime_video_count} videos")
+                                if page_enriched <= 5:
+                                    print(f"[ENRICH] {match_type}: {db_product.product_id} | {db_video_count} → {api_video_count}", flush=True)
                             
                             if alltime_creator_count > 0 and alltime_creator_count > (db_product.influencer_count or 0):
                                 db_product.influencer_count = alltime_creator_count
