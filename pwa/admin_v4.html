@@ -1280,6 +1280,8 @@
         function updateMaintenanceButton() {
             const btn = document.getElementById('btnMaintenance');
             const text = document.getElementById('maintenanceBtnText');
+            if (!btn || !text) return; // Elements not loaded yet
+
             if (isMaintenanceMode) {
                 btn.classList.remove('bg-amber-950/20', 'border-amber-500/20', 'text-amber-500', 'hover:bg-amber-500');
                 btn.classList.add('bg-emerald-950/20', 'border-emerald-500/20', 'text-emerald-500', 'hover:bg-emerald-500');
