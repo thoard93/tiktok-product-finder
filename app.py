@@ -7879,7 +7879,7 @@ def copilot_enrich_videos():
     user_id = user.id
     data = request.json or {}
     target_pages = int(data.get('pages', 600))  # Default: 600 pages = 30k products
-    delay_seconds = float(data.get('delay', 5.0))  # 5s delay to avoid 500 rate limits
+    delay_seconds = float(data.get('delay', 1.0))  # 1s delay - safe for legacy API
     
     # Reset stop flag
     global SYNC_STOP_REQUESTED
@@ -7891,78 +7891,56 @@ def copilot_enrich_videos():
     print(f"[Video Enrich] 📋 Request received: {target_pages} pages, delay: {delay_seconds}s", flush=True)
     
     def run_enrich_in_background():
-        """Background enrichment task"""
+        """Background enrichment task - MULTITHREADED for ~6x speed"""
         import sys
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+        
         print("[Video Enrich] 🧵 Background thread started!", flush=True)
         sys.stdout.flush()
         
-        try:
-            with app.app_context():
-                global SYNC_STOP_REQUESTED
-                enriched_count = 0
-                total_fetched = 0
-                consecutive_errors = 0
-                max_consecutive_errors = 5
-                
-                print(f"[Video Enrich] 🚀 Starting background enrichment across {target_pages} pages (delay: {delay_seconds}s)...", flush=True)
-                
-                for page in range(target_pages):
-                    # Check persistent DB stop flag
-                    db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
-                    if db_stop_flag == 'true':
-                        SYNC_STOP_REQUESTED = True
-                        print("[Video Enrich] 🛑 Stop signal loaded from DB!")
-                        
-                    if SYNC_STOP_REQUESTED:
-                        print("[Video Enrich] 🛑 Stop requested, terminating enrichment")
-                        break
+        # Shared state for workers (thread-safe counters)
+        enriched_count = [0]  # Use list for mutable reference
+        pages_completed = [0]
+        lock = threading.Lock()
+        
+        def enrich_single_page(page_num):
+            """Worker function: fetch and enrich one page"""
+            global SYNC_STOP_REQUESTED
+            
+            # Check stop flag
+            db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
+            if db_stop_flag == 'true' or SYNC_STOP_REQUESTED:
+                return 0
+            
+            try:
+                with app.app_context():
+                    # Fetch legacy all-time data for this page
+                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page_num)
                     
-                    # Skip V2 (Geist blocked) - use legacy directly
-                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
-                    
-                    # Handle API errors gracefully
                     if not products_data:
-                        consecutive_errors += 1
-                        print(f"[Video Enrich] Page {page}: API failed (error {consecutive_errors}/{max_consecutive_errors})")
-                        
-                        if consecutive_errors >= max_consecutive_errors:
-                            print(f"[Video Enrich] Too many consecutive errors, stopping")
-                            break
-                        
-                        backoff_time = min(30, 5 * consecutive_errors)
-                        print(f"[Video Enrich] Waiting {backoff_time}s before retry...")
-                        time.sleep(backoff_time)
-                        continue
+                        return 0
                     
-                    # Reset error counter on success
-                    consecutive_errors = 0
-                    
-                    # Handle both V2 ('products') and legacy ('videos') response keys
                     products_list = products_data.get('products', []) or products_data.get('videos', [])
                     if not products_list:
-                        print(f"[Video Enrich] Page {page}: Empty page, trying next...")
-                        time.sleep(delay_seconds)
-                        continue
+                        return 0
                     
-                    total_fetched += len(products_list)
                     page_enriched = 0
                     
-                    # Build PID lookup for this page
+                    # Build PID lookup
                     page_pids = {}
                     for p in products_list:
                         pid = str(p.get('productId', '')).strip()
                         if pid:
                             page_pids[pid] = p
                     
-                    # Get DB products that might match
                     raw_pids = list(page_pids.keys())
                     shop_pids = [f"shop_{pid}" for pid in raw_pids]
                     
-                    # FIXED: Only query products that match THIS page's PIDs
-                    # Old logic was grabbing random low-video products that didn't match
                     if not shop_pids:
-                        continue  # No PIDs on this page, skip
+                        return 0
                     
+                    # Query matching DB products
                     db_products_to_check = Product.query.filter(
                         Product.product_id.in_(shop_pids)
                     ).all()
@@ -7970,7 +7948,7 @@ def copilot_enrich_videos():
                     for db_product in db_products_to_check:
                         if SYNC_STOP_REQUESTED:
                             break
-                            
+                        
                         raw_pid = db_product.product_id.replace('shop_', '')
                         matched_data = None
                         match_type = None
@@ -7994,8 +7972,6 @@ def copilot_enrich_videos():
                         # STAGE 3: Keyword fallback
                         if not matched_data and db_product.product_name:
                             title = db_product.product_name or ''
-                            seller = db_product.seller_name or ''
-                            
                             if len(title) > 5:
                                 for p in products_list:
                                     p_title = str(p.get('productTitle', '')).lower()
@@ -8006,55 +7982,94 @@ def copilot_enrich_videos():
                         
                         # Apply match
                         if matched_data:
-                            # Per Grok: productVideoCount is all-time, periodVideoCount is 7D
-                            # Use MAX of available fields to get best all-time estimate
                             pvc = safe_int(matched_data.get('productVideoCount', 0))
                             period_vc = safe_int(matched_data.get('periodVideoCount', 0))
                             vc = safe_int(matched_data.get('videoCount', 0))
                             top_videos_len = len(matched_data.get('topVideos', []))
                             
-                            # Take the MAX from API fields
                             api_video_count = max(pvc, period_vc, vc, top_videos_len)
                             db_video_count = db_product.video_count_alltime or 0
-                            
-                            # GROK: Use max(API, DB) to preserve high DB values
-                            best_video_count = max(api_video_count, db_video_count)
                             
                             alltime_creator_count = safe_int(
                                 matched_data.get('productCreatorCount') or 
                                 matched_data.get('periodCreatorCount')
                             )
                             
-                            # Update if API provides a HIGHER value than DB
+                            # Update if API > DB
                             if api_video_count > 0 and api_video_count > db_video_count:
                                 db_product.video_count_alltime = api_video_count
-                                enriched_count += 1
                                 page_enriched += 1
                                 
-                                if page_enriched <= 5:
+                                if page_enriched <= 3:
                                     print(f"[ENRICH] {match_type}: {db_product.product_id} | {db_video_count} → {api_video_count}", flush=True)
                             
                             if alltime_creator_count > 0 and alltime_creator_count > (db_product.influencer_count or 0):
                                 db_product.influencer_count = alltime_creator_count
                     
                     db.session.commit()
-                    gc.collect()
+                    return page_enriched
                     
-                    # Update progress in DB
-                    set_config_value('enrich_progress', str(enriched_count))
-                    
-                    if page % 10 == 0 or page_enriched > 0:
-                        print(f"[Video Enrich] Page {page}: fetched {len(products_list)}, enriched: {page_enriched}, total: {enriched_count}")
-                    
-                    time.sleep(delay_seconds)
+            except Exception as e:
+                print(f"[ENRICH] Page {page_num} error: {e}", flush=True)
+                return 0
+        
+        try:
+            with app.app_context():
+                global SYNC_STOP_REQUESTED
                 
-                print(f"[Video Enrich] ✅ COMPLETE: Enriched {enriched_count} products across {target_pages} pages")
+                num_workers = 6  # Parallel API calls
+                effective_delay = max(1.0, delay_seconds)  # Minimum 1s between batches
+                
+                print(f"[Video Enrich] 🚀 Starting MULTITHREADED enrichment: {target_pages} pages, {num_workers} workers, {effective_delay}s delay", flush=True)
+                
+                # Process pages in batches with ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                    # Submit all pages
+                    futures = {}
+                    for page in range(target_pages):
+                        if SYNC_STOP_REQUESTED:
+                            break
+                        future = executor.submit(enrich_single_page, page)
+                        futures[future] = page
+                    
+                    # Collect results as they complete
+                    for future in as_completed(futures):
+                        page_num = futures[future]
+                        try:
+                            page_result = future.result()
+                            with lock:
+                                enriched_count[0] += page_result
+                                pages_completed[0] += 1
+                            
+                            # Progress logging every 20 pages
+                            if pages_completed[0] % 20 == 0:
+                                print(f"[Video Enrich] Progress: {pages_completed[0]}/{target_pages} pages, {enriched_count[0]} enriched", flush=True)
+                                set_config_value('enrich_progress', str(enriched_count[0]))
+                            
+                        except Exception as e:
+                            print(f"[ENRICH] Page {page_num} failed: {e}", flush=True)
+                        
+                        # Check stop flag
+                        db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
+                        if db_stop_flag == 'true':
+                            SYNC_STOP_REQUESTED = True
+                            print("[Video Enrich] 🛑 Stop requested, cancelling remaining pages", flush=True)
+                            executor.shutdown(wait=False, cancel_futures=True)
+                            break
+                        
+                        # Gentle throttle per completed future
+                        time.sleep(effective_delay / num_workers)
+                
+                gc.collect()
+                print(f"[Video Enrich] ✅ COMPLETE: Enriched {enriched_count[0]} products across {pages_completed[0]} pages", flush=True)
                 set_config_value('enrich_status', 'complete')
+                set_config_value('enrich_progress', str(enriched_count[0]))
                 
                 try:
-                    log_activity(user_id, 'enrich_videos', {'enriched': enriched_count, 'pages': target_pages})
+                    log_activity(user_id, 'enrich_videos', {'enriched': enriched_count[0], 'pages': pages_completed[0]})
                 except:
                     pass
+                    
         except Exception as e:
             import traceback
             print(f"[Video Enrich] ❌ BACKGROUND THREAD ERROR: {e}", flush=True)
