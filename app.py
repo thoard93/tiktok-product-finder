@@ -271,6 +271,43 @@ def handle_exception(e):
     return e
 
 # =============================================================================
+# MAINTENANCE MODE MIDDLEWARE
+# =============================================================================
+
+@app.before_request
+def check_maintenance_mode():
+    """Block all access when in maintenance mode, except for maintenance endpoints"""
+    # These paths are always allowed
+    allowed_paths = [
+        '/maintenance',
+        '/pwa/maintenance.html',
+        '/api/maintenance/status',
+        '/api/maintenance/resume',
+        '/pwa/css/',
+        '/pwa/js/',
+        '/favicon.ico',
+        '/logo.png'
+    ]
+    
+    # Check if path starts with any allowed prefix
+    for allowed in allowed_paths:
+        if request.path.startswith(allowed):
+            return None
+    
+    # Check if maintenance mode is enabled (late import to avoid circular)
+    try:
+        from app import is_maintenance_mode
+        if is_maintenance_mode():
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Site in maintenance mode', 'maintenance': True}), 503
+            return redirect('/maintenance')
+    except Exception as e:
+        # If error checking, allow through (don't break the site)
+        pass
+    
+    return None
+
+# =============================================================================
 # AUTHENTICATION CONFIG
 # =============================================================================
 
@@ -903,6 +940,38 @@ class ActivityLog(db.Model):
             'created_at_est': est_time.strftime('%m/%d/%Y, %I:%M:%S %p') if est_time else None
         }
 
+class SiteConfig(db.Model):
+    """Site-wide configuration stored in DB"""
+    __tablename__ = 'site_config'
+    
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+def is_maintenance_mode():
+    """Check if site is in maintenance mode"""
+    try:
+        config = SiteConfig.query.get('MAINTENANCE_MODE')
+        return config and config.value == 'true'
+    except:
+        return False
+
+def set_maintenance_mode(enabled: bool):
+    """Enable or disable maintenance mode"""
+    try:
+        config = SiteConfig.query.get('MAINTENANCE_MODE')
+        if not config:
+            config = SiteConfig(key='MAINTENANCE_MODE')
+        config.value = 'true' if enabled else 'false'
+        config.updated_at = datetime.utcnow()
+        db.session.add(config)
+        db.session.commit()
+        print(f"[Maintenance] Mode set to: {'ENABLED' if enabled else 'DISABLED'}", flush=True)
+        return True
+    except Exception as e:
+        print(f"[Maintenance] Error setting mode: {e}", flush=True)
+        return False
+
 class Product(db.Model):
     """Products found by scanner"""
     __tablename__ = 'products'
@@ -1240,6 +1309,52 @@ def privacy_page():
 def cookies_page():
     """Show Cookie Policy"""
     return send_from_directory(app.static_folder, 'cookies.html')
+
+@app.route('/maintenance')
+def maintenance_page():
+    """Show Maintenance Mode page"""
+    return send_from_directory(app.static_folder, 'maintenance.html')
+
+@app.route('/api/maintenance/status')
+def maintenance_status():
+    """Check if site is in maintenance mode"""
+    return jsonify({'maintenance': is_maintenance_mode()})
+
+@app.route('/api/maintenance/enable', methods=['POST'])
+@login_required
+@admin_required
+def enable_maintenance():
+    """Enable maintenance mode - admin only"""
+    user = get_current_user()
+    set_maintenance_mode(True)
+    log_activity(user.id if user else None, 'maintenance_enabled', {})
+    return jsonify({'success': True, 'message': 'Maintenance mode enabled. Site is now blocked.'})
+
+@app.route('/api/maintenance/disable', methods=['POST'])
+@login_required
+@admin_required
+def disable_maintenance():
+    """Disable maintenance mode - admin only"""
+    user = get_current_user()
+    set_maintenance_mode(False)
+    log_activity(user.id if user else None, 'maintenance_disabled', {})
+    return jsonify({'success': True, 'message': 'Maintenance mode disabled. Site is now live.'})
+
+@app.route('/api/maintenance/resume', methods=['POST'])
+def resume_from_maintenance():
+    """Resume site from maintenance mode with password"""
+    data = request.json or {}
+    password = data.get('password', '')
+    
+    # Check against developer password
+    correct_password = os.environ.get('DEVELOPER_PASSWORD', 'vantage2024')
+    
+    if password == correct_password:
+        set_maintenance_mode(False)
+        log_activity(None, 'maintenance_resumed', {'method': 'password'})
+        return jsonify({'success': True, 'message': 'Site resumed from maintenance mode'})
+    
+    return jsonify({'success': False, 'error': 'Invalid password'}), 401
 
 
 @app.route('/auth/discord')

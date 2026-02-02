@@ -404,6 +404,11 @@
                 class="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4 mt-12 border-t border-white/5 pt-8">
                 Danger Zone</h4>
             <div class="flex flex-wrap gap-4">
+                <button onclick="toggleMaintenanceMode()" id="btnMaintenance"
+                    class="bg-amber-950/20 border border-amber-500/20 px-6 py-3 rounded-xl hover:bg-amber-500 hover:text-white text-amber-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
+                    <i class="fas fa-tools text-xs group-hover:animate-spin"></i>
+                    <span id="maintenanceBtnText">Enable Maintenance</span>
+                </button>
                 <button onclick="restoreHiddenProducts()" id="btnRestoreHidden"
                     class="bg-emerald-950/20 border border-emerald-500/20 px-6 py-3 rounded-xl hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-eye text-xs"></i>
@@ -1258,9 +1263,76 @@
             }
         }
 
+        // ===== MAINTENANCE MODE =====
+        let isMaintenanceMode = false;
+
+        async function checkMaintenanceStatus() {
+            try {
+                const res = await fetch('/api/maintenance/status');
+                const data = await res.json();
+                isMaintenanceMode = data.maintenance;
+                updateMaintenanceButton();
+            } catch (e) {
+                console.log('Maintenance status check failed:', e);
+            }
+        }
+
+        function updateMaintenanceButton() {
+            const btn = document.getElementById('btnMaintenance');
+            const text = document.getElementById('maintenanceBtnText');
+            if (isMaintenanceMode) {
+                btn.classList.remove('bg-amber-950/20', 'border-amber-500/20', 'text-amber-500', 'hover:bg-amber-500');
+                btn.classList.add('bg-emerald-950/20', 'border-emerald-500/20', 'text-emerald-500', 'hover:bg-emerald-500');
+                text.textContent = 'Disable Maintenance';
+            } else {
+                btn.classList.remove('bg-emerald-950/20', 'border-emerald-500/20', 'text-emerald-500', 'hover:bg-emerald-500');
+                btn.classList.add('bg-amber-950/20', 'border-amber-500/20', 'text-amber-500', 'hover:bg-amber-500');
+                text.textContent = 'Enable Maintenance';
+            }
+        }
+
+        async function toggleMaintenanceMode() {
+            const action = isMaintenanceMode ? 'disable' : 'enable';
+            const confirmMsg = isMaintenanceMode
+                ? 'Disable maintenance mode? Site will be accessible again.'
+                : '⚠️ Enable maintenance mode?\n\nThis will:\n• Block all site access\n• Stop all background automation\n\nVisitors will see a maintenance page.';
+
+            if (!confirm(confirmMsg)) return;
+
+            const btn = document.getElementById('btnMaintenance');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/maintenance/${action}`, { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    isMaintenanceMode = !isMaintenanceMode;
+                    updateMaintenanceButton();
+                    alert(data.message);
+
+                    if (isMaintenanceMode) {
+                        // Redirect to maintenance page after enabling
+                        setTimeout(() => window.location.href = '/maintenance', 1000);
+                    }
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('System Error: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+                updateMaintenanceButton();
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             loadAdmin();
             loadGoogleSheetsConfig();
+            checkMaintenanceStatus();
         });
     </script>
 </body>

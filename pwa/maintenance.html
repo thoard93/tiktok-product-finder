@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance Mode | Vantage</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f172a 0%, #020617 50%, #1e1b4b 100%);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #e2e8f0;
+            padding: 2rem;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .icon-wrap {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 2rem;
+            background: linear-gradient(135deg, rgba(251, 146, 60, 0.1), rgba(249, 115, 22, 0.2));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(251, 146, 60, 0.3);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(251, 146, 60, 0.4);
+            }
+
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 30px 10px rgba(251, 146, 60, 0.1);
+            }
+        }
+
+        .icon-wrap i {
+            font-size: 3rem;
+            color: #fb923c;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(251, 146, 60, 0.1);
+            border: 1px solid rgba(251, 146, 60, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #fb923c;
+            margin-bottom: 3rem;
+        }
+
+        .status-badge .dot {
+            width: 8px;
+            height: 8px;
+            background: #fb923c;
+            border-radius: 50%;
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .admin-section {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .admin-toggle {
+            font-size: 0.7rem;
+            color: #475569;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .admin-toggle:hover {
+            color: #64748b;
+        }
+
+        .admin-form {
+            display: none;
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+        }
+
+        .admin-form.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .admin-form label {
+            display: block;
+            text-align: left;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+
+        .admin-form input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: #020617;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            color: #fff;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .admin-form input:focus {
+            border-color: #3b82f6;
+        }
+
+        .btn-resume {
+            width: 100%;
+            padding: 0.875rem 1.5rem;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border: none;
+            border-radius: 0.75rem;
+            color: #fff;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-resume:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-resume:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-msg {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 0.5rem;
+            color: #f87171;
+            font-size: 0.8rem;
+            display: none;
+        }
+
+        .error-msg.show {
+            display: block;
+        }
+
+        .success-msg {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 0.5rem;
+            color: #4ade80;
+            font-size: 0.8rem;
+            display: none;
+        }
+
+        .success-msg.show {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="icon-wrap">
+            <i class="fas fa-tools"></i>
+        </div>
+
+        <h1>We'll Be Back Soon</h1>
+
+        <p class="subtitle">
+            Vantage is currently undergoing scheduled maintenance.
+            We're working hard to improve your experience.
+        </p>
+
+        <div class="status-badge">
+            <div class="dot"></div>
+            <span>Maintenance in Progress</span>
+        </div>
+
+        <div class="admin-section">
+            <p class="admin-toggle" onclick="toggleAdminForm()">
+                <i class="fas fa-lock"></i> Admin Access
+            </p>
+
+            <div class="admin-form" id="adminForm">
+                <label for="adminPassword">Developer Password</label>
+                <input type="password" id="adminPassword" placeholder="Enter password to resume site">
+
+                <button class="btn-resume" id="btnResume" onclick="resumeSite()">
+                    <i class="fas fa-play"></i> Resume Site
+                </button>
+
+                <div class="error-msg" id="errorMsg"></div>
+                <div class="success-msg" id="successMsg"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleAdminForm() {
+            document.getElementById('adminForm').classList.toggle('show');
+            document.getElementById('adminPassword').focus();
+        }
+
+        async function resumeSite() {
+            const password = document.getElementById('adminPassword').value;
+            const btn = document.getElementById('btnResume');
+            const errorMsg = document.getElementById('errorMsg');
+            const successMsg = document.getElementById('successMsg');
+
+            if (!password) {
+                errorMsg.textContent = 'Please enter the developer password';
+                errorMsg.classList.add('show');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resuming...';
+            errorMsg.classList.remove('show');
+            successMsg.classList.remove('show');
+
+            try {
+                const res = await fetch('/api/maintenance/resume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    successMsg.textContent = 'Site resumed! Redirecting...';
+                    successMsg.classList.add('show');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1500);
+                } else {
+                    errorMsg.textContent = data.error || 'Invalid password';
+                    errorMsg.classList.add('show');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-play"></i> Resume Site';
+                }
+            } catch (e) {
+                errorMsg.textContent = 'Connection error: ' + e.message;
+                errorMsg.classList.add('show');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-play"></i> Resume Site';
+            }
+        }
+
+        // Enter key to submit
+        document.getElementById('adminPassword').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') resumeSite();
+        });
+    </script>
+</body>
+
+</html>
