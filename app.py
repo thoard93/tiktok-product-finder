@@ -8017,20 +8017,25 @@ def copilot_enrich_videos():
             with app.app_context():
                 global SYNC_STOP_REQUESTED
                 
-                num_workers = 4  # Safe concurrency (avoid 500 errors)
-                effective_delay = max(1.0, delay_seconds)  # Minimum 1s between batches
+                num_workers = 2  # Conservative - avoid 500 errors
+                submission_delay = 3.0  # Delay between submitting new pages
                 
-                print(f"[Video Enrich] 🚀 Starting MULTITHREADED enrichment: {target_pages} pages, {num_workers} workers, {effective_delay}s delay", flush=True)
+                print(f"[Video Enrich] 🚀 Starting STAGGERED enrichment: {target_pages} pages, {num_workers} workers, {submission_delay}s between submissions", flush=True)
                 
-                # Process pages in batches with ThreadPoolExecutor
+                # Process pages with staggered submission
                 with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                    # Submit all pages
                     futures = {}
+                    
+                    # Submit pages with delay to avoid hammering
                     for page in range(target_pages):
                         if SYNC_STOP_REQUESTED:
                             break
                         future = executor.submit(enrich_single_page, page)
                         futures[future] = page
+                        
+                        # Stagger submissions to prevent API overload
+                        if page < target_pages - 1:
+                            time.sleep(submission_delay)
                     
                     # Collect results as they complete
                     for future in as_completed(futures):
