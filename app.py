@@ -948,9 +948,25 @@ class SiteConfig(db.Model):
     value = db.Column(db.Text)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+def _ensure_site_config_table():
+    """Create site_config table if it doesn't exist"""
+    try:
+        db.session.execute(db.text('''
+            CREATE TABLE IF NOT EXISTS site_config (
+                key VARCHAR(100) PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        '''))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[Maintenance] Table check error: {e}", flush=True)
+
 def is_maintenance_mode():
     """Check if site is in maintenance mode"""
     try:
+        _ensure_site_config_table()
         config = SiteConfig.query.get('MAINTENANCE_MODE')
         return config and config.value == 'true'
     except:
@@ -959,6 +975,7 @@ def is_maintenance_mode():
 def set_maintenance_mode(enabled: bool):
     """Enable or disable maintenance mode"""
     try:
+        _ensure_site_config_table()
         config = SiteConfig.query.get('MAINTENANCE_MODE')
         if not config:
             config = SiteConfig(key='MAINTENANCE_MODE')
@@ -969,6 +986,7 @@ def set_maintenance_mode(enabled: bool):
         print(f"[Maintenance] Mode set to: {'ENABLED' if enabled else 'DISABLED'}", flush=True)
         return True
     except Exception as e:
+        db.session.rollback()
         print(f"[Maintenance] Error setting mode: {e}", flush=True)
         return False
 
