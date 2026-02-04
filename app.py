@@ -8043,25 +8043,27 @@ def copilot_enrich_videos():
         lock = threading.Lock()
         
         def fetch_with_retry(page_num, attempt=1):
-            """Fetch page data with exponential backoff on 500 errors"""
+            """Fetch page data with 5 retries and exponential backoff on 500 errors"""
+            max_retries = 5
             try:
                 products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page_num)
                 if products_data:
                     return products_data
                 else:
-                    if attempt < 3:
-                        backoff = 10 * attempt + random.uniform(0, 5)
-                        print(f"[ENRICH] Page {page_num} empty - retry {attempt+1} after {backoff:.1f}s", flush=True)
+                    if attempt < max_retries:
+                        backoff = 15 * (2 ** attempt) + random.uniform(0, 10)  # Exponential + jitter
+                        print(f"[ENRICH] Page {page_num} empty - retry {attempt+1}/{max_retries} after {backoff:.1f}s", flush=True)
                         time.sleep(backoff)
                         return fetch_with_retry(page_num, attempt + 1)
+                    print(f"[ENRICH] Page {page_num} empty after {max_retries} retries", flush=True)
                     return None
             except Exception as e:
-                if attempt < 3:
-                    backoff = 10 * attempt + random.uniform(0, 5)
-                    print(f"[ENRICH] Page {page_num} error (try {attempt}): {e} - retry after {backoff:.1f}s", flush=True)
+                if attempt < max_retries:
+                    backoff = 15 * (2 ** attempt) + random.uniform(0, 10)  # Exponential + jitter
+                    print(f"[ENRICH] Page {page_num} error (try {attempt}/{max_retries}): {e} - retry after {backoff:.1f}s", flush=True)
                     time.sleep(backoff)
                     return fetch_with_retry(page_num, attempt + 1)
-                print(f"[ENRICH] Page {page_num} failed after 3 retries: {e}", flush=True)
+                print(f"[ENRICH] Page {page_num} failed after {max_retries} retries: {e}", flush=True)
                 return None
         
         def enrich_single_page(page_num):
@@ -8177,61 +8179,43 @@ def copilot_enrich_videos():
             with app.app_context():
                 global SYNC_STOP_REQUESTED
                 
-                num_workers = 2  # Ultra-conservative - avoid 500 errors
+                # SINGLE-THREADED: Eliminates all concurrency pressure
+                print(f"[Video Enrich] 🚀 Starting SINGLE-THREAD BULLETPROOF enrichment: {target_pages} pages, 10-15s delays, 5 retries", flush=True)
                 
-                print(f"[Video Enrich] 🚀 Starting ULTRA-CONSERVATIVE enrichment: {target_pages} pages, {num_workers} workers, 8-12s random delays", flush=True)
+                enriched_total = 0
+                pages_processed = 0
                 
-                # Process pages with staggered submission
-                with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                    futures = {}
+                for page in range(target_pages):
+                    # Check stop flag
+                    db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
+                    if db_stop_flag == 'true' or SYNC_STOP_REQUESTED:
+                        print("[Video Enrich] 🛑 Stop requested, halting enrichment", flush=True)
+                        break
                     
-                    # Submit pages with RANDOM delay to avoid hammering
-                    for page in range(target_pages):
-                        if SYNC_STOP_REQUESTED:
-                            break
-                        future = executor.submit(enrich_single_page, page)
-                        futures[future] = page
-                        
-                        # 8-12s random delay between submissions (ultra-conservative)
-                        if page < target_pages - 1:
-                            delay = random.uniform(8, 12)
-                            time.sleep(delay)
+                    print(f"[Video Enrich] Processing page {page}/{target_pages-1}", flush=True)
                     
-                    # Collect results as they complete
-                    for future in as_completed(futures):
-                        page_num = futures[future]
-                        try:
-                            page_result = future.result()
-                            with lock:
-                                enriched_count[0] += page_result
-                                pages_completed[0] += 1
-                            
-                            # Progress logging every 20 pages
-                            if pages_completed[0] % 20 == 0:
-                                print(f"[Video Enrich] Progress: {pages_completed[0]}/{target_pages} pages, {enriched_count[0]} enriched", flush=True)
-                                set_config_value('enrich_progress', str(enriched_count[0]))
-                            
-                        except Exception as e:
-                            print(f"[ENRICH] Page {page_num} failed: {e}", flush=True)
-                        
-                        # Check stop flag
-                        db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
-                        if db_stop_flag == 'true':
-                            SYNC_STOP_REQUESTED = True
-                            print("[Video Enrich] 🛑 Stop requested, cancelling remaining pages", flush=True)
-                            executor.shutdown(wait=False, cancel_futures=True)
-                            break
-                        
-                        # Gentle throttle per completed future
-                        time.sleep(effective_delay / num_workers)
+                    page_enriched = enrich_single_page(page)
+                    enriched_total += page_enriched
+                    pages_processed += 1
+                    
+                    # Progress logging every 10 pages
+                    if pages_processed % 10 == 0:
+                        print(f"[Video Enrich] Progress: {pages_processed}/{target_pages} pages, {enriched_total} enriched", flush=True)
+                        set_config_value('enrich_progress', str(enriched_total))
+                    
+                    # 10-15s random delay between pages (bulletproof rate limiting)
+                    if page < target_pages - 1:
+                        delay = random.uniform(10, 15)
+                        print(f"[Video Enrich] Sleeping {delay:.1f}s...", flush=True)
+                        time.sleep(delay)
                 
                 gc.collect()
-                print(f"[Video Enrich] ✅ COMPLETE: Enriched {enriched_count[0]} products across {pages_completed[0]} pages", flush=True)
+                print(f"[Video Enrich] ✅ COMPLETE: Enriched {enriched_total} products across {pages_processed} pages", flush=True)
                 set_config_value('enrich_status', 'complete')
-                set_config_value('enrich_progress', str(enriched_count[0]))
+                set_config_value('enrich_progress', str(enriched_total))
                 
                 try:
-                    log_activity(user_id, 'enrich_videos', {'enriched': enriched_count[0], 'pages': pages_completed[0]})
+                    log_activity(user_id, 'enrich_videos', {'enriched': enriched_total, 'pages': pages_processed})
                 except:
                     pass
                     
