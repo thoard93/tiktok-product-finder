@@ -8028,10 +8028,11 @@ def copilot_enrich_videos():
     print(f"[Video Enrich] 📋 Request received: {target_pages} pages, delay: {delay_seconds}s", flush=True)
     
     def run_enrich_in_background():
-        """Background enrichment task - MULTITHREADED for ~6x speed"""
+        """Background enrichment task - ULTRA-CONSERVATIVE to avoid 500 errors"""
         import sys
         from concurrent.futures import ThreadPoolExecutor, as_completed
         import threading
+        import random
         
         print("[Video Enrich] 🧵 Background thread started!", flush=True)
         sys.stdout.flush()
@@ -8040,6 +8041,28 @@ def copilot_enrich_videos():
         enriched_count = [0]  # Use list for mutable reference
         pages_completed = [0]
         lock = threading.Lock()
+        
+        def fetch_with_retry(page_num, attempt=1):
+            """Fetch page data with exponential backoff on 500 errors"""
+            try:
+                products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page_num)
+                if products_data:
+                    return products_data
+                else:
+                    if attempt < 3:
+                        backoff = 10 * attempt + random.uniform(0, 5)
+                        print(f"[ENRICH] Page {page_num} empty - retry {attempt+1} after {backoff:.1f}s", flush=True)
+                        time.sleep(backoff)
+                        return fetch_with_retry(page_num, attempt + 1)
+                    return None
+            except Exception as e:
+                if attempt < 3:
+                    backoff = 10 * attempt + random.uniform(0, 5)
+                    print(f"[ENRICH] Page {page_num} error (try {attempt}): {e} - retry after {backoff:.1f}s", flush=True)
+                    time.sleep(backoff)
+                    return fetch_with_retry(page_num, attempt + 1)
+                print(f"[ENRICH] Page {page_num} failed after 3 retries: {e}", flush=True)
+                return None
         
         def enrich_single_page(page_num):
             """Worker function: fetch and enrich one page"""
@@ -8052,8 +8075,8 @@ def copilot_enrich_videos():
             
             try:
                 with app.app_context():
-                    # Fetch legacy all-time data for this page
-                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page_num)
+                    # Fetch legacy all-time data with retry logic
+                    products_data = fetch_with_retry(page_num)
                     
                     if not products_data:
                         return 0
@@ -8154,25 +8177,25 @@ def copilot_enrich_videos():
             with app.app_context():
                 global SYNC_STOP_REQUESTED
                 
-                num_workers = 2  # Conservative - avoid 500 errors
-                submission_delay = 3.0  # Delay between submitting new pages
+                num_workers = 2  # Ultra-conservative - avoid 500 errors
                 
-                print(f"[Video Enrich] 🚀 Starting STAGGERED enrichment: {target_pages} pages, {num_workers} workers, {submission_delay}s between submissions", flush=True)
+                print(f"[Video Enrich] 🚀 Starting ULTRA-CONSERVATIVE enrichment: {target_pages} pages, {num_workers} workers, 8-12s random delays", flush=True)
                 
                 # Process pages with staggered submission
                 with ThreadPoolExecutor(max_workers=num_workers) as executor:
                     futures = {}
                     
-                    # Submit pages with delay to avoid hammering
+                    # Submit pages with RANDOM delay to avoid hammering
                     for page in range(target_pages):
                         if SYNC_STOP_REQUESTED:
                             break
                         future = executor.submit(enrich_single_page, page)
                         futures[future] = page
                         
-                        # Stagger submissions to prevent API overload
+                        # 8-12s random delay between submissions (ultra-conservative)
                         if page < target_pages - 1:
-                            time.sleep(submission_delay)
+                            delay = random.uniform(8, 12)
+                            time.sleep(delay)
                     
                     # Collect results as they complete
                     for future in as_completed(futures):
