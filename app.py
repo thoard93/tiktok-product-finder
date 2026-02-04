@@ -1364,14 +1364,18 @@ def resume_from_maintenance():
     data = request.json or {}
     password = data.get('password', '')
     
-    # Check against developer password
-    correct_password = os.environ.get('DEVELOPER_PASSWORD', 'vantage2024')
+    # Check against developer password (fallback to common password if not set)
+    correct_password = os.environ.get('DEVELOPER_PASSWORD', 'Batman7193!')
+    
+    print(f"[Maintenance Resume] Attempt with password length: {len(password)}", flush=True)
     
     if password == correct_password:
         set_maintenance_mode(False)
         log_activity(None, 'maintenance_resumed', {'method': 'password'})
+        print("[Maintenance Resume] SUCCESS - Site resumed!", flush=True)
         return jsonify({'success': True, 'message': 'Site resumed from maintenance mode'})
     
+    print(f"[Maintenance Resume] FAILED - Password mismatch", flush=True)
     return jsonify({'success': False, 'error': 'Invalid password'}), 401
 
 
