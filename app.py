@@ -8043,15 +8043,15 @@ def copilot_enrich_videos():
         lock = threading.Lock()
         
         def fetch_with_retry(page_num, attempt=1):
-            """Fetch page data with 8 retries and big backoff on 500 errors"""
-            max_retries = 8
+            """Fetch page data with 10 retries and big backoff on 500 errors"""
+            max_retries = 10
             try:
                 products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page_num)
                 if products_data:
                     return products_data
                 else:
                     if attempt < max_retries:
-                        backoff = 30 * attempt + random.uniform(0, 20)  # 30-50s+ growing
+                        backoff = 45 * attempt + random.uniform(0, 30)  # 45-75s+ growing
                         print(f"[ENRICH] Page {page_num} empty - retry {attempt+1}/{max_retries} after {backoff:.1f}s", flush=True)
                         time.sleep(backoff)
                         return fetch_with_retry(page_num, attempt + 1)
@@ -8059,7 +8059,7 @@ def copilot_enrich_videos():
                     return None
             except Exception as e:
                 if attempt < max_retries:
-                    backoff = 30 * attempt + random.uniform(0, 20)  # 30-50s+ growing
+                    backoff = 45 * attempt + random.uniform(0, 30)  # 45-75s+ growing
                     print(f"[ENRICH] Page {page_num} error (try {attempt}/{max_retries}): {e} - retry after {backoff:.1f}s", flush=True)
                     time.sleep(backoff)
                     return fetch_with_retry(page_num, attempt + 1)
@@ -8203,9 +8203,9 @@ def copilot_enrich_videos():
                         print(f"[Video Enrich] Progress: {pages_processed}/{target_pages} pages, {enriched_total} enriched", flush=True)
                         set_config_value('enrich_progress', str(enriched_total))
                     
-                    # 20-30s random delay between pages (ultra-safe rate limiting)
+                    # 30-45s random delay between pages (final ultra-safe rate limiting)
                     if page < target_pages - 1:
-                        delay = random.uniform(20, 30)
+                        delay = random.uniform(30, 45)
                         print(f"[Video Enrich] Sleeping {delay:.1f}s...", flush=True)
                         time.sleep(delay)
                 
