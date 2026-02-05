@@ -7107,31 +7107,20 @@ def get_copilot_cookie():
     """Get TikTokCopilot session cookie.
     
     Priority:
-    1. admin_config table (Settings UI saves here)
+    1. SystemConfig table (Settings UI saves here via /api/admin/config)
     2. Static cookie from TIKTOK_COPILOT_COOKIE env var
     3. Legacy refresh token mechanism
     """
-    # 1. Check admin_config table first (Settings UI saves here)
+    # 1. Check SystemConfig table (Settings UI saves here)
     try:
-        from sqlalchemy import text
-        
-        # Clear any aborted transaction state
-        try:
-            db.session.rollback()
-        except:
-            pass
-        
-        result = db.session.execute(
-            text("SELECT value FROM admin_config WHERE key = 'TIKTOK_COPILOT_COOKIE'")
-        ).fetchone()
-        if result and result[0]:
-            print(f"[Copilot Cookie] ✅ Using cookie from admin_config (length: {len(result[0])})", flush=True)
-            return result[0]
+        config_cookie = get_config_value('TIKTOK_COPILOT_COOKIE', None)
+        if config_cookie:
+            print(f"[Copilot Cookie] ✅ Using cookie from SystemConfig (length: {len(config_cookie)})", flush=True)
+            return config_cookie
     except Exception as e:
-        # Table might not exist yet, continue to fallback
-        print(f"[Copilot Cookie] admin_config check error: {e}", flush=True)
+        print(f"[Copilot Cookie] SystemConfig check error: {e}", flush=True)
     
-    # 2. Direct env var or old config
+    # 2. Direct env var fallback
     static_cookie = os.environ.get('TIKTOK_COPILOT_COOKIE', '')
     if static_cookie:
         print(f"[Copilot Cookie] Using env var (length: {len(static_cookie)})", flush=True)
