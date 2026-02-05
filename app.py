@@ -7313,6 +7313,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                     cookies=parse_cookie_string(cookie_str),
                     impersonate="chrome124",  # Widely supported version for Clerk bypass
                     proxies=proxies,
+                    verify=False,  # Disable SSL verification for BrightData proxy
                     timeout=60
                 )
             else:

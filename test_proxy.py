@@ -1,7 +1,7 @@
 """Test BrightData proxy credentials locally"""
 import requests
 
-proxy_url = "http://brd-customer-hl_ccfe19a-zone-residential-country-us:cgg791a7Ax68@brd.superproxy.io:22225"
+proxy_url = "http://brd-customer-hl_ccfbe19a-zone-testkey:cgg791a7ax68@brd.superproxy.io:33335"
 
 proxies = {
     "http": proxy_url,
@@ -12,7 +12,7 @@ print("Testing BrightData proxy...")
 print(f"Proxy: {proxy_url[:50]}...")
 
 try:
-    response = requests.get("https://httpbin.org/ip", proxies=proxies, timeout=30)
+    response = requests.get("https://httpbin.org/ip", proxies=proxies, timeout=30, verify=False)
     print(f"Status: {response.status_code}")
     print(f"Response: {response.text}")
     print("✅ Proxy works!" if response.status_code == 200 else "❌ Proxy failed")
