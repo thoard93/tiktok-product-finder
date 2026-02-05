@@ -7316,8 +7316,11 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                 except Exception as e:
                     resp_text = getattr(res, 'text', '')
                     # DETECT GEIST ANTI-BOT: HTML response means blocked, don't retry
-                    if resp_text and resp_text.strip().startswith('<!DOCTYPE') or 'geist' in resp_text.lower():
+                    if resp_text and (resp_text.strip().startswith('<!DOCTYPE') or 'geist' in resp_text.lower()):
                         print(f"[V2] ⛔ Geist anti-bot detected, skipping retries", flush=True)
+                        print(f"[V2] Response preview: {resp_text[:300]}", flush=True)
+                        print(f"[V2] Using sentry-trace: {sentry_trace[:30]}...", flush=True)
+                        print(f"[V2] Using baggage: {sentry_baggage[:50]}...", flush=True)
                         return None  # Fail immediately, use legacy
                     
                     print(f"[Copilot Products] ❌ JSON Decode Error (Attempt {attempt+1}/{retries}): {e}")
