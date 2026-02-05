@@ -7125,6 +7125,93 @@ def get_copilot_cookie():
     
     return None
 
+def fetch_v2_via_scrapfly(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
+    """Fetch products via V2 API using Scrapfly for ASP bypass.
+    
+    This is the primary fetch method - V2 only, no legacy fallback.
+    Returns list of products or None on failure.
+    """
+    import json
+    
+    cookie_str = get_copilot_cookie()
+    scrapfly_key = os.environ.get('SCRAPFLY_API_KEY', '').strip()
+    
+    if not cookie_str:
+        print("[V2 Scrapfly] ❌ No cookie configured - update in Admin UI", flush=True)
+        return None
+    
+    if not scrapfly_key:
+        print("[V2 Scrapfly] ❌ No SCRAPFLY_API_KEY env var set", flush=True)
+        return None
+    
+    # Parse cookies into dict for Scrapfly
+    cookies_dict = {}
+    for item in cookie_str.split(';'):
+        item = item.strip()
+        if '=' in item:
+            key, value = item.split('=', 1)
+            cookies_dict[key.strip()] = value.strip()
+    
+    print(f"[V2 Scrapfly] Page {page_num} with {len(cookies_dict)} cookies", flush=True)
+    
+    # Build TikTokCopilot V2 API URL
+    api_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
+    
+    # Scrapfly params with ASP bypass
+    params = {
+        "key": scrapfly_key,
+        "url": api_url,
+        "render_js": "true",
+        "asp": "true",           # Anti-scraping protection bypass
+        "country": "US",
+        "session": "true",       # Sticky session for auth
+        "retry": "false",
+        "timeout": "60000"
+    }
+    
+    # Add cookies as JSON string (Scrapfly format)
+    import urllib.parse
+    cookies_json = json.dumps(cookies_dict)
+    params["cookies"] = cookies_json
+    
+    try:
+        response = requests.get("https://api.scrapfly.io/scrape", params=params, timeout=90)
+        
+        if not response.ok:
+            print(f"[V2 Scrapfly] HTTP {response.status_code}: {response.text[:200]}", flush=True)
+            return None
+        
+        result = response.json()
+        
+        if not result.get('result', {}).get('success', True):
+            print(f"[V2 Scrapfly] Scrapfly failed: {result.get('result', {}).get('reason', 'unknown')}", flush=True)
+            return None
+        
+        content = result.get('result', {}).get('content', '')
+        
+        # Check for sign-in page (cookie expired)
+        if "sign-in" in content.lower() or "geistsans" in content.lower() or "<!DOCTYPE html>" in content[:100]:
+            print("[V2 Scrapfly] ⚠️ Got sign-in page - cookie expired, update in Admin UI", flush=True)
+            return None
+        
+        # Parse JSON response
+        try:
+            data = json.loads(content)
+            products = data.get('products', [])
+            print(f"[V2 Scrapfly] ✅ Success - {len(products)} products on page {page_num}", flush=True)
+            return products
+        except json.JSONDecodeError as e:
+            print(f"[V2 Scrapfly] ❌ JSON decode error: {e}", flush=True)
+            print(f"[V2 Scrapfly] Raw content (first 200): {content[:200]}", flush=True)
+            return None
+            
+    except requests.exceptions.Timeout:
+        print("[V2 Scrapfly] ❌ Request timeout (90s)", flush=True)
+        return None
+    except Exception as e:
+        print(f"[V2 Scrapfly] ❌ Exception: {e}", flush=True)
+        return None
+
 def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US', keywords=None):
     """
     Fetch products from TikTokCopilot /api/trending/products endpoint.
@@ -7995,6 +8082,27 @@ def copilot_sync():
         'stop_requested': SYNC_STOP_REQUESTED,
         'auto_enrich_triggered': enrich_triggered,
         'errors': errors
+    })
+
+@app.route('/api/test-v2', methods=['GET'])
+@login_required
+@admin_required
+def test_v2_scrapfly():
+    """Test V2 Scrapfly connection with a single page fetch."""
+    products = fetch_v2_via_scrapfly(page_num=0, limit=10)
+    
+    if products is None:
+        return jsonify({
+            'success': False,
+            'error': 'V2 fetch failed - check logs for details',
+            'hint': 'Ensure SCRAPFLY_API_KEY is set and cookie is fresh'
+        }), 500
+    
+    return jsonify({
+        'success': True,
+        'product_count': len(products),
+        'sample': products[0] if products else None,
+        'fields_available': list(products[0].keys()) if products else []
     })
 
 @app.route('/api/copilot/enrich-videos', methods=['POST'])
