@@ -7289,7 +7289,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     if keywords:
         params["keywords"] = keywords
     
-    retries = 3
+    retries = 5  # Increased for V2 stability per Grok recommendation
     for attempt in range(retries):
         try:
             v2_url = f"{COPILOT_API_BASE}/trending/products"
@@ -7326,10 +7326,20 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                         time.sleep(2 * (attempt + 1))
                         continue
                     return None
+            elif res.status_code == 401:
+                print("[Copilot Products] 🔐 Cookie expired (401) - update in Admin UI!", flush=True)
+                print("[ALERT] Cookie needs manual refresh at /settings", flush=True)
+                return None  # Don't retry, cookie is invalid
             elif res.status_code == 429:
                 print(f"[Copilot Products] ⚠️ Rate Limited (429) - Backing off...")
                 if attempt < retries - 1:
                     time.sleep(5 * (attempt + 1))
+                    continue
+                return None
+            elif res.status_code in (500, 502, 503):
+                print(f"[Copilot Products] ⚠️ Server error ({res.status_code}) - Attempt {attempt+1}/{retries}", flush=True)
+                if attempt < retries - 1:
+                    time.sleep(3 * (attempt + 1))  # Exponential backoff
                     continue
                 return None
             else:
@@ -7456,17 +7466,17 @@ def calculate_winner_score(ad_spend, video_count, creator_count):
     except:
         return 0
 
-def sync_copilot_products(timeframe='all', limit=50, page=0):
+def sync_copilot_products(timeframe='7d', limit=50, page=0):
     """
     Core sync function - fetches from the ENHANCED Copilot /api/trending/products endpoint.
     Returns (saved_count, total_in_response) tuple.
     
-    V2: Uses timeframe='all' by default to get ALL-TIME video/creator counts (23.5K vs 778).
-    The 7d sales and ad_spend are still extracted from period fields.
+    V2: Uses timeframe='7d' by default for 7-day sales/ad_spend stats.
+    Enrichment uses 'all' for ALL-TIME video/creator counts (23.5K vs 778).
     
     Uses the new /api/trending/products endpoint with significantly more accurate stats:
-        - productVideoCount (ALL-TIME: 23.5K)
-        - productCreatorCount (ALL-TIME)
+        - productVideoCount (ALL-TIME when timeframe='all')
+        - productCreatorCount (ALL-TIME when timeframe='all')
         - periodUnits (7-day sales)
         - periodAdSpend (7-day ad spend)
     """
@@ -8030,7 +8040,7 @@ def copilot_sync():
     pages = int(data.get('pages', 1))
     start_page = int(data.get('page', 0))  # Correctly get start page from frontend
     limit = int(data.get('limit', 50))
-    timeframe = data.get('timeframe', 'all')  # Default to 'all' for all-time video/creator counts
+    timeframe = data.get('timeframe', '7d')  # Default to '7d' for 7-day stats; enrichment uses 'all' for all-time counts
     auto_enrich = data.get('auto_enrich', False)  # Auto-trigger enrichment after sync
     
     # Cap pages to prevent extreme load but allow high volume (up to 40k products)
@@ -9811,7 +9821,7 @@ def copilot_mass_sync():
     user_id = user.id
     data = request.json or {}
     target_products = int(data.get('target', 10000))
-    timeframe = data.get('timeframe', 'all')  # Default to 'all' for all-time video/creator counts
+    timeframe = data.get('timeframe', '7d')  # Default to '7d' for 7-day stats; enrichment uses 'all' for all-time counts
     auto_enrich = data.get('auto_enrich', False)  # Auto-trigger enrichment after sync
     
     # 100 products per page, up to 2000 pages max (200K theoretical max)
