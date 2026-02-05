@@ -7308,7 +7308,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                     headers=headers, 
                     params=params, 
                     cookies=parse_cookie_string(cookie_str),
-                    impersonate="chrome110",  # More widely supported for Clerk bypass
+                    impersonate="chrome144",  # Latest Chrome for Clerk bypass per Grok
                     proxy=proxy_url if proxy_url else None,
                     timeout=60
                 )
