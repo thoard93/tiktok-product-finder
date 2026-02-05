@@ -7290,15 +7290,26 @@ def refresh_clerk_session(cookie_str):
                 key, val = part.strip().split('=', 1)
                 cookies_dict[key] = val
         
+        # Log which cookies we're sending (especially refresh token)
+        refresh_cookies = [k for k in cookies_dict.keys() if 'refresh' in k.lower()]
+        print(f"[Clerk Refresh] Sending {len(cookies_dict)} cookies", flush=True)
+        print(f"[Clerk Refresh] Refresh-related cookies: {refresh_cookies}", flush=True)
+        if not refresh_cookies:
+            print("[Clerk Refresh] ⚠️ WARNING: No refresh token found in cookies!", flush=True)
+        
         headers = {
             "accept": "*/*",
             "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/x-www-form-urlencoded",  # Clerk expects this for refresh
             "origin": "https://www.tiktokcopilot.com",
             "referer": "https://www.tiktokcopilot.com/",
-            "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124"',
+            "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors", 
+            "sec-fetch-site": "same-site",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
         }
         
         if requests_cffi:
