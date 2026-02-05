@@ -7296,14 +7296,20 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         try:
             v2_url = f"{COPILOT_API_BASE}/trending/products"
             
-            # Use curl_cffi with Chrome 124 impersonation (Grok's recommended version)
+            # Use curl_cffi with Chrome 110 impersonation + residential proxy per Grok recommendation
             if requests_cffi:
+                # Get proxy from env or database (Proxiware residential)
+                proxy_url = os.getenv('COPILOT_PROXY') or get_config_value('COPILOT_PROXY', '')
+                if proxy_url:
+                    print(f"[V2] Using proxy: {proxy_url[:30]}...", flush=True)
+                
                 res = requests_cffi.get(
                     f"{COPILOT_API_BASE}/trending/products", 
                     headers=headers, 
                     params=params, 
                     cookies=parse_cookie_string(cookie_str),
-                    impersonate="chrome110",  # More widely supported version for Render
+                    impersonate="chrome110",  # More widely supported for Clerk bypass
+                    proxy=proxy_url if proxy_url else None,
                     timeout=60
                 )
             else:
