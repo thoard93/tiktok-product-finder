@@ -7174,8 +7174,22 @@ def fetch_v2_via_scrapfly(page_num, timeframe='7d', sort_by='revenue', limit=50,
     cookies_json = json.dumps(cookies_dict)
     params["cookies"] = cookies_json
     
+    # Browser headers for fingerprinting
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "priority": "u=1, i"
+    }
+    
     try:
-        response = requests.get("https://api.scrapfly.io/scrape", params=params, timeout=90)
+        response = requests.get("https://api.scrapfly.io/scrape", params=params, headers=headers, timeout=90)
         
         if not response.ok:
             print(f"[V2 Scrapfly] HTTP {response.status_code}: {response.text[:200]}", flush=True)
