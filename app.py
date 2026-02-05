@@ -7257,6 +7257,11 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         return None
     
     
+    # Get configurable sentry headers from database (update via Admin UI with fresh browser values)
+    sentry_baggage = get_config_value('SENTRY_BAGGAGE', 
+        "sentry-environment=vercel-production,sentry-release=2afef984cd424df8581a416ac8f8ff9d8bc3f274,sentry-public_key=0718b8c1b0e1386acd40331786775abe,sentry-trace_id=d4de60086273456b81fac34910362f67,sentry-org_id=4510467450863616,sentry-sampled=true,sentry-sample_rand=0.41877421401190396,sentry-sample_rate=1")
+    sentry_trace = get_config_value('SENTRY_TRACE', "d4de60086273456b81fac34910362f67-80e18f101afbb322-1")
+    
     # CRITICAL: Headers must exactly match working browser cURL for Clerk fingerprint validation
     # All header keys lowercase to match browser, include sentry-trace/baggage from fresh browser
     headers = {
@@ -7270,9 +7275,9 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         "sec-fetch-mode": "cors",
         "sec-fetch-site": "same-origin",
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-        # Sentry headers from working browser (update from fresh browser Network tab if needed)
-        "baggage": "sentry-environment=vercel-production,sentry-release=2afef984cd424df8581a416ac8f8ff9d8bc3f274,sentry-public_key=0718b8c1b0e1386acd40331786775abe,sentry-trace_id=d4de60086273456b81fac34910362f67,sentry-org_id=4510467450863616,sentry-sampled=true,sentry-sample_rand=0.41877421401190396,sentry-sample_rate=1",
-        "sentry-trace": "d4de60086273456b81fac34910362f67-80e18f101afbb322-1"
+        # Sentry headers from database config (update via Admin UI Settings page)
+        "baggage": sentry_baggage,
+        "sentry-trace": sentry_trace
     }
     
     params = {
@@ -7360,6 +7365,11 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         print("[Copilot] ❌ No cookie configured!")
         return None
     
+    # Get configurable sentry headers from database (update via Admin UI)
+    sentry_baggage = get_config_value('SENTRY_BAGGAGE', 
+        "sentry-environment=vercel-production,sentry-release=2afef984cd424df8581a416ac8f8ff9d8bc3f274,sentry-public_key=0718b8c1b0e1386acd40331786775abe,sentry-trace_id=d4de60086273456b81fac34910362f67,sentry-org_id=4510467450863616,sentry-sampled=true,sentry-sample_rand=0.41877421401190396,sentry-sample_rate=1")
+    sentry_trace = get_config_value('SENTRY_TRACE', "d4de60086273456b81fac34910362f67-80e18f101afbb322-1")
+    
     # CRITICAL: Headers must exactly match working browser cURL for Clerk fingerprint validation
     headers = {
         "accept": "*/*",
@@ -7372,8 +7382,8 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         "sec-fetch-mode": "cors",
         "sec-fetch-site": "same-origin",
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-        "baggage": "sentry-environment=vercel-production,sentry-release=2afef984cd424df8581a416ac8f8ff9d8bc3f274,sentry-public_key=0718b8c1b0e1386acd40331786775abe,sentry-trace_id=d4de60086273456b81fac34910362f67,sentry-org_id=4510467450863616,sentry-sampled=true,sentry-sample_rand=0.41877421401190396,sentry-sample_rate=1",
-        "sentry-trace": "d4de60086273456b81fac34910362f67-80e18f101afbb322-1"
+        "baggage": sentry_baggage,
+        "sentry-trace": sentry_trace
     }
     
     params = {
