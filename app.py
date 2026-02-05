@@ -8423,6 +8423,31 @@ def test_v2_scrapfly():
         'fields_available': list(products[0].keys()) if products else []
     })
 
+@app.route('/api/test-v2-cffi', methods=['GET'])
+@login_required
+@admin_required
+def test_v2_cffi():
+    """Test V2 API using curl_cffi instead of Scrapfly."""
+    result = fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=10, page=0, region='US')
+    
+    if result is None:
+        return jsonify({
+            'success': False,
+            'error': 'curl_cffi fetch failed - check logs for details',
+            'hint': 'Cookie may be expired or curl_cffi not installed'
+        }), 500
+    
+    # fetch_copilot_products returns the full response, get products
+    products = result.get('products', []) if isinstance(result, dict) else result
+    
+    return jsonify({
+        'success': True,
+        'method': 'curl_cffi',
+        'product_count': len(products) if products else 0,
+        'sample': products[0] if products else None,
+        'fields_available': list(products[0].keys()) if products else []
+    })
+
 @app.route('/api/copilot/enrich-videos', methods=['POST'])
 @login_required
 @admin_required
