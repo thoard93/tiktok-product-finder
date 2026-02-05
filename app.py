@@ -8320,6 +8320,77 @@ def debug_cookie_status():
     
     return jsonify(debug_info)
 
+@app.route('/api/test-cookie-save', methods=['GET'])
+@login_required
+@admin_required
+def test_cookie_save():
+    """Test the admin_config save/read cycle with a test value."""
+    from sqlalchemy import text
+    import time
+    
+    test_key = "TEST_COOKIE_SAVE"
+    test_value = f"test_value_{int(time.time())}"
+    
+    results = {
+        "step1_table_check": None,
+        "step2_write_result": None,
+        "step3_read_result": None,
+        "step4_direct_query": None,
+        "step5_all_keys": None,
+        "test_passed": False
+    }
+    
+    # Step 1: Check table exists
+    try:
+        db.session.rollback()
+        table_exists = _ensure_admin_config_table()
+        results["step1_table_check"] = "Table ready" if table_exists else "Table creation failed"
+    except Exception as e:
+        results["step1_table_check"] = f"Error: {e}"
+        return jsonify(results)
+    
+    # Step 2: Write test value
+    try:
+        write_success = set_admin_config(test_key, test_value, "Test write")
+        results["step2_write_result"] = f"Success - wrote '{test_value}'" if write_success else "Failed"
+    except Exception as e:
+        results["step2_write_result"] = f"Error: {e}"
+        return jsonify(results)
+    
+    # Step 3: Read back via function
+    try:
+        read_value = get_admin_config(test_key)
+        results["step3_read_result"] = f"Read back: '{read_value}'" if read_value else "Got None"
+    except Exception as e:
+        results["step3_read_result"] = f"Error: {e}"
+    
+    # Step 4: Direct SQL query
+    try:
+        db.session.rollback()
+        result = db.session.execute(
+            text("SELECT key, value FROM admin_config WHERE key = :key"),
+            {"key": test_key}
+        ).fetchone()
+        if result:
+            results["step4_direct_query"] = f"Found: key='{result[0]}', value='{result[1]}'"
+        else:
+            results["step4_direct_query"] = "Not found in database"
+    except Exception as e:
+        results["step4_direct_query"] = f"Error: {e}"
+    
+    # Step 5: List all keys in admin_config
+    try:
+        db.session.rollback()
+        all_rows = db.session.execute(text("SELECT key, LENGTH(value) as val_len FROM admin_config")).fetchall()
+        results["step5_all_keys"] = [{"key": r[0], "value_length": r[1]} for r in all_rows]
+    except Exception as e:
+        results["step5_all_keys"] = f"Error: {e}"
+    
+    # Final verdict
+    results["test_passed"] = (read_value == test_value) if read_value else False
+    
+    return jsonify(results)
+
 @app.route('/api/test-v2', methods=['GET'])
 @login_required
 @admin_required
