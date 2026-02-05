@@ -7114,6 +7114,13 @@ def get_copilot_cookie():
     # 1. Check admin_config table first (Settings UI saves here)
     try:
         from sqlalchemy import text
+        
+        # Clear any aborted transaction state
+        try:
+            db.session.rollback()
+        except:
+            pass
+        
         result = db.session.execute(
             text("SELECT value FROM admin_config WHERE key = 'TIKTOK_COPILOT_COOKIE'")
         ).fetchone()
@@ -8127,6 +8134,13 @@ def _ensure_admin_config_table():
     
     try:
         from sqlalchemy import text
+        
+        # CRITICAL: Rollback any aborted transaction first
+        try:
+            db.session.rollback()
+        except:
+            pass
+        
         # Check if table exists first
         check_result = db.session.execute(text(
             "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_config')"
