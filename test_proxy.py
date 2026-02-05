@@ -12,9 +12,20 @@ print("Testing BrightData proxy...")
 print(f"Proxy: {proxy_url[:50]}...")
 
 try:
+    # Test 1: httpbin (basic connectivity)
+    print("Test 1: httpbin.org...")
     response = requests.get("https://httpbin.org/ip", proxies=proxies, timeout=30, verify=False)
-    print(f"Status: {response.status_code}")
-    print(f"Response: {response.text}")
-    print("✅ Proxy works!" if response.status_code == 200 else "❌ Proxy failed")
+    print(f"  Status: {response.status_code} - {response.text.strip()}")
+    
+    # Test 2: tiktokcopilot.com (the actual target)
+    print("\nTest 2: tiktokcopilot.com...")
+    response2 = requests.get("https://www.tiktokcopilot.com/api/trending/products?timeframe=7d&limit=1", proxies=proxies, timeout=30, verify=False)
+    print(f"  Status: {response2.status_code}")
+    print(f"  Response: {response2.text[:300]}")
+    
+    if response2.status_code == 200:
+        print("✅ BrightData works for tiktokcopilot!")
+    else:
+        print(f"❌ BrightData returned {response2.status_code} for tiktokcopilot")
 except Exception as e:
     print(f"❌ Error: {e}")
