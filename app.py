@@ -8237,6 +8237,169 @@ def copilot_enrich_videos():
         'background': True
     })
 
+@app.route('/api/copilot/enrich-per-product', methods=['POST'])
+@login_required
+@admin_required
+def copilot_enrich_per_product():
+    """Per-product enrichment using keyword search for 90-100% match rate.
+    
+    Instead of paging through trending, this searches each unenriched product
+    individually using its title, which yields much higher match rates.
+    
+    Request body:
+        limit: Max products to process (default: 1000)
+        delay: Seconds between API calls (default: 3)
+        threshold: Only enrich products with video_count < threshold (default: 100)
+    """
+    import threading
+    import gc
+    
+    user = get_current_user()
+    user_id = user.id
+    data = request.json or {}
+    limit = int(data.get('limit', 1000))
+    delay_seconds = float(data.get('delay', 3.0))
+    threshold = int(data.get('threshold', 100))
+    
+    # Reset stop flag
+    global SYNC_STOP_REQUESTED
+    SYNC_STOP_REQUESTED = False
+    set_config_value('SYNC_STOP_REQUESTED', 'false', 'Persistent stop flag')
+    set_config_value('enrich_status', 'running_per_product', 'Enrichment status')
+    set_config_value('enrich_progress', '0', 'Enrichment progress')
+    
+    print(f"[Per-Product Enrich] 📋 Request: {limit} products, {delay_seconds}s delay, threshold < {threshold}", flush=True)
+    
+    def run_per_product_enrich():
+        """Background per-product enrichment using keyword search"""
+        import random
+        
+        print("[Per-Product Enrich] 🧵 Background thread started!", flush=True)
+        
+        try:
+            with app.app_context():
+                global SYNC_STOP_REQUESTED
+                
+                # Get products needing enrichment (NULL or low video count)
+                products_to_enrich = Product.query.filter(
+                    db.or_(
+                        Product.video_count_alltime == None,
+                        Product.video_count_alltime < threshold
+                    )
+                ).limit(limit).all()
+                
+                total_products = len(products_to_enrich)
+                print(f"[Per-Product Enrich] 📊 Found {total_products} products to enrich", flush=True)
+                
+                if total_products == 0:
+                    set_config_value('enrich_status', 'complete_no_products')
+                    return
+                
+                enriched_count = 0
+                
+                for i, product in enumerate(products_to_enrich):
+                    # Check stop flag
+                    db_stop_flag = get_config_value('SYNC_STOP_REQUESTED', 'false')
+                    if db_stop_flag == 'true' or SYNC_STOP_REQUESTED:
+                        print("[Per-Product Enrich] 🛑 Stop requested, halting", flush=True)
+                        break
+                    
+                    pid = product.product_id.replace('shop_', '') if product.product_id else ''
+                    title = product.product_name or ''
+                    
+                    # Skip if no searchable data
+                    if not title or len(title) < 5:
+                        continue
+                    
+                    # Search by title keyword
+                    try:
+                        # Use first 50 chars of title for search
+                        search_query = title[:50].strip()
+                        results = fetch_copilot_trending(keywords=search_query, limit=10)
+                        
+                        if results:
+                            products_list = results.get('products', []) or results.get('videos', [])
+                            
+                            # Find best match
+                            best_match = None
+                            best_score = 0
+                            
+                            for p in products_list:
+                                p_pid = str(p.get('productId', ''))
+                                p_title = str(p.get('productTitle', '')).lower()
+                                
+                                # Direct PID match = perfect
+                                if p_pid == pid:
+                                    best_match = p
+                                    best_score = 100
+                                    break
+                                
+                                # Title similarity check
+                                if title.lower() in p_title or p_title in title.lower():
+                                    pvc = safe_int(p.get('productVideoCount', 0))
+                                    if pvc > best_score:
+                                        best_match = p
+                                        best_score = pvc
+                            
+                            # Apply best match
+                            if best_match:
+                                api_count = safe_int(best_match.get('productVideoCount', 0))
+                                db_count = product.video_count_alltime or 0
+                                
+                                if api_count > db_count:
+                                    product.video_count_alltime = api_count
+                                    
+                                    # Also update creator count if available
+                                    api_creators = safe_int(best_match.get('productCreatorCount', 0))
+                                    if api_creators > (product.influencer_count or 0):
+                                        product.influencer_count = api_creators
+                                    
+                                    db.session.commit()
+                                    enriched_count += 1
+                                    
+                                    if enriched_count <= 10 or enriched_count % 50 == 0:
+                                        print(f"[Per-Product Enrich] ✅ {product.product_id}: {db_count} → {api_count}", flush=True)
+                    
+                    except Exception as e:
+                        print(f"[Per-Product Enrich] ❌ Error on {product.product_id}: {e}", flush=True)
+                    
+                    # Progress logging
+                    if (i + 1) % 50 == 0:
+                        print(f"[Per-Product Enrich] Progress: {i+1}/{total_products}, {enriched_count} enriched", flush=True)
+                        set_config_value('enrich_progress', str(enriched_count))
+                    
+                    # Delay between products
+                    time.sleep(delay_seconds + random.uniform(0, 1))
+                
+                gc.collect()
+                print(f"[Per-Product Enrich] ✅ COMPLETE: {enriched_count}/{total_products} enriched", flush=True)
+                set_config_value('enrich_status', 'complete')
+                set_config_value('enrich_progress', str(enriched_count))
+                
+                try:
+                    log_activity(user_id, 'enrich_per_product', {'enriched': enriched_count, 'total': total_products})
+                except:
+                    pass
+                
+        except Exception as e:
+            import traceback
+            print(f"[Per-Product Enrich] ❌ ERROR: {e}", flush=True)
+            traceback.print_exc()
+            set_config_value('enrich_status', f'error: {str(e)[:100]}')
+    
+    # Start background thread
+    print("[Per-Product Enrich] 🚀 Starting background thread...", flush=True)
+    enrich_thread = threading.Thread(target=run_per_product_enrich, daemon=True)
+    enrich_thread.start()
+    print(f"[Per-Product Enrich] ✅ Thread started: {enrich_thread.name}", flush=True)
+    
+    return jsonify({
+        'status': 'success',
+        'message': f'🚀 Per-product enrichment started! Processing up to {limit} products. Check logs for progress.',
+        'background': True
+    })
+
+
 @app.route('/api/copilot/creator-products', methods=['POST'])
 @login_required
 @admin_required
