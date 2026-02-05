@@ -7302,6 +7302,8 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                 proxy_url = os.getenv('COPILOT_PROXY') or get_config_value('COPILOT_PROXY', '')
                 if proxy_url:
                     print(f"[V2] Using proxy: {proxy_url[:30]}...", flush=True)
+                else:
+                    print(f"[V2] No proxy - direct connection", flush=True)
                 
                 res = requests_cffi.get(
                     f"{COPILOT_API_BASE}/trending/products", 
@@ -7314,25 +7316,43 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                     timeout=60
                 )
             else:
+                print(f"[V2] curl_cffi not available - using requests", flush=True)
                 headers["Cookie"] = cookie_str
                 res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
+            
+            # ===== COMPREHENSIVE DIAGNOSTIC LOGGING =====
+            resp_text = getattr(res, 'text', '')[:1000]  # First 1000 chars
+            resp_headers = dict(res.headers) if hasattr(res, 'headers') else {}
+            
+            print(f"[V2 DIAG] Status: {res.status_code}", flush=True)
+            print(f"[V2 DIAG] Response Length: {len(resp_text)} chars", flush=True)
+            print(f"[V2 DIAG] Content-Type: {resp_headers.get('content-type', 'unknown')}", flush=True)
+            
+            # Check for common blocking indicators
+            is_html = resp_text.strip().startswith('<!DOCTYPE') or resp_text.strip().startswith('<html')
+            has_geist = 'geistsans' in resp_text.lower() or 'geist' in resp_text.lower()
+            has_signin = 'sign-in' in resp_text.lower() or 'clerk' in resp_text.lower()
+            has_cf = 'cloudflare' in resp_text.lower() or 'cf-ray' in str(resp_headers).lower()
+            
+            print(f"[V2 DIAG] Is HTML: {is_html} | Geist: {has_geist} | SignIn: {has_signin} | CF: {has_cf}", flush=True)
+            
+            if res.status_code != 200 or is_html or has_geist:
+                print(f"[V2 DIAG] Response Body Preview: {resp_text[:500]}", flush=True)
+                print(f"[V2 DIAG] Response Headers: {resp_headers}", flush=True)
+            # ===== END DIAGNOSTIC LOGGING =====
             
             if res.status_code == 200:
                 try:
                     return res.json()
                 except Exception as e:
-                    resp_text = getattr(res, 'text', '')
                     # DETECT GEIST ANTI-BOT: HTML response means blocked, don't retry
-                    if resp_text and (resp_text.strip().startswith('<!DOCTYPE') or 'geist' in resp_text.lower()):
+                    if is_html or has_geist:
                         print(f"[V2] ⛔ Geist anti-bot detected, skipping retries", flush=True)
-                        print(f"[V2] Response preview: {resp_text[:300]}", flush=True)
                         print(f"[V2] Using sentry-trace: {sentry_trace[:30]}...", flush=True)
                         print(f"[V2] Using baggage: {sentry_baggage[:50]}...", flush=True)
                         return None  # Fail immediately, use legacy
                     
                     print(f"[Copilot Products] ❌ JSON Decode Error (Attempt {attempt+1}/{retries}): {e}")
-                    if resp_text:
-                        print(f"[DEBUG] Raw Response (first 100 chars): {resp_text[:100]}")
                     
                     if attempt < retries - 1:
                         time.sleep(2 * (attempt + 1))
@@ -7342,6 +7362,13 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                 print("[Copilot Products] 🔐 Cookie expired (401) - update in Admin UI!", flush=True)
                 print("[ALERT] Cookie needs manual refresh at /settings", flush=True)
                 return None  # Don't retry, cookie is invalid
+            elif res.status_code == 403:
+                print(f"[Copilot Products] 🚫 Forbidden (403) - Blocked by Geist/Clerk", flush=True)
+                print(f"[V2 403] This usually means IP/fingerprint blocked", flush=True)
+                if attempt < retries - 1:
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                return None
             elif res.status_code == 429:
                 print(f"[Copilot Products] ⚠️ Rate Limited (429) - Backing off...")
                 if attempt < retries - 1:
