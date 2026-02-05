@@ -8238,14 +8238,19 @@ def save_admin_config():
     value = data.get('value', '')
     description = data.get('description', '')
     
+    print(f"[Admin Config] POST received: key='{key}', value_length={len(value) if value else 0}", flush=True)
+    
     if not key:
+        print("[Admin Config] POST rejected: no key", flush=True)
         return jsonify({"success": False, "error": "Key is required"}), 400
     
     success = set_admin_config(key, value, description)
     
     if success:
+        print(f"[Admin Config] POST success: {key}", flush=True)
         return jsonify({"success": True, "message": f"Saved {key}"})
     else:
+        print(f"[Admin Config] POST failed: {key}", flush=True)
         return jsonify({"success": False, "error": "Failed to save config"}), 500
 
 @app.route('/api/debug-cookie', methods=['GET'])
