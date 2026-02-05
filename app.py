@@ -8829,14 +8829,14 @@ def get_google_sheets_config():
 
 @app.route('/api/admin/config/<key>', methods=['GET'])
 @admin_required
-def get_admin_config(key):
+def get_admin_config_by_key(key):
     """Get any configuration value from DB"""
     val = get_config_value(key)
     return jsonify({'success': True, 'value': val})
 
 @app.route('/api/admin/config/<key>', methods=['POST'])
 @admin_required
-def save_admin_config(key):
+def save_admin_config_by_key(key):
     """Save any configuration value to DB"""
     try:
         data = request.get_json()
