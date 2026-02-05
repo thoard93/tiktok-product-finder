@@ -8255,7 +8255,15 @@ def debug_cookie_status():
     """Debug endpoint to check cookie storage and retrieval."""
     from sqlalchemy import text
     
+    # Rollback any aborted transaction first
+    try:
+        db.session.rollback()
+    except:
+        pass
+    
     debug_info = {
+        "table_creation_attempted": False,
+        "table_creation_result": None,
         "admin_config_table_exists": False,
         "cookie_in_admin_config": None,
         "cookie_in_env_var": None,
@@ -8263,8 +8271,17 @@ def debug_cookie_status():
         "scrapfly_key_set": bool(os.environ.get('SCRAPFLY_API_KEY', '').strip())
     }
     
+    # First, try to ensure table exists
+    try:
+        debug_info["table_creation_attempted"] = True
+        result = _ensure_admin_config_table()
+        debug_info["table_creation_result"] = "Success" if result else "Failed"
+    except Exception as e:
+        debug_info["table_creation_result"] = f"Error: {e}"
+    
     # Check if admin_config table exists
     try:
+        db.session.rollback()  # Clear any transaction state
         result = db.session.execute(text(
             "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_config')"
         )).scalar()
@@ -8274,6 +8291,7 @@ def debug_cookie_status():
     
     # Check cookie in admin_config
     try:
+        db.session.rollback()  # Clear any transaction state
         result = db.session.execute(text(
             "SELECT value FROM admin_config WHERE key = 'TIKTOK_COPILOT_COOKIE'"
         )).fetchone()
