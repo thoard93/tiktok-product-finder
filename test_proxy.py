@@ -1,7 +1,7 @@
 """Test BrightData proxy credentials locally"""
 import requests
 
-proxy_url = "http://brd-customer-hl_ccfbe19a-zone-testkey:cgg791a7ax68@brd.superproxy.io:33335"
+proxy_url = "http://brd-customer-hl_ccfbe19a-zone-residential_proxy1:84876zt3cj0l@brd.superproxy.io:33335"
 
 proxies = {
     "http": proxy_url,
