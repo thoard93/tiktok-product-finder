@@ -7107,22 +7107,37 @@ def get_copilot_cookie():
     """Get TikTokCopilot session cookie.
     
     Priority:
-    1. Static cookie from TIKTOK_COPILOT_COOKIE env var (Recommended)
-    2. Refresh token mechanism (Legacy fallback)
+    1. admin_config table (Settings UI saves here)
+    2. Static cookie from TIKTOK_COPILOT_COOKIE env var
+    3. Legacy refresh token mechanism
     """
-    # 1. Direct cookie string (Simplified Auth)
-    static_cookie = get_config_value('TIKTOK_COPILOT_COOKIE', os.environ.get('TIKTOK_COPILOT_COOKIE', ''))
+    # 1. Check admin_config table first (Settings UI saves here)
+    try:
+        from sqlalchemy import text
+        result = db.session.execute(
+            text("SELECT value FROM admin_config WHERE key = 'TIKTOK_COPILOT_COOKIE'")
+        ).fetchone()
+        if result and result[0]:
+            print(f"[Copilot Cookie] ✅ Using cookie from admin_config (length: {len(result[0])})", flush=True)
+            return result[0]
+    except Exception as e:
+        # Table might not exist yet, continue to fallback
+        print(f"[Copilot Cookie] admin_config check error: {e}", flush=True)
+    
+    # 2. Direct env var or old config
+    static_cookie = os.environ.get('TIKTOK_COPILOT_COOKIE', '')
     if static_cookie:
-        # If it contains '__session=', it's likely a full cookie string
+        print(f"[Copilot Cookie] Using env var (length: {len(static_cookie)})", flush=True)
         return static_cookie
         
-    # 2. Legacy refresh mechanism
+    # 3. Legacy refresh mechanism
     refresh_token, session_id = get_copilot_refresh_credentials()
     if refresh_token and session_id:
         fresh_jwt = refresh_copilot_session()
         if fresh_jwt:
             return f"__session={fresh_jwt}; __session_pOM46XQh={fresh_jwt}"
     
+    print("[Copilot Cookie] ❌ No cookie found - update in Settings UI", flush=True)
     return None
 
 def fetch_v2_via_scrapfly(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
@@ -8097,6 +8112,99 @@ def copilot_sync():
         'auto_enrich_triggered': enrich_triggered,
         'errors': errors
     })
+
+# ==============================================================================
+# ADMIN CONFIG API (Settings Save)
+# ==============================================================================
+
+def _ensure_admin_config_table():
+    """Create admin_config table if it doesn't exist."""
+    try:
+        db.session.execute(db.text('''
+            CREATE TABLE IF NOT EXISTS admin_config (
+                key VARCHAR(100) PRIMARY KEY,
+                value TEXT,
+                description TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        '''))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[Admin Config] Table check error: {e}", flush=True)
+
+def get_admin_config(key, default=None):
+    """Get admin config value from database."""
+    _ensure_admin_config_table()
+    try:
+        result = db.session.execute(
+            db.text("SELECT value FROM admin_config WHERE key = :key"),
+            {"key": key}
+        ).fetchone()
+        return result[0] if result else default
+    except Exception as e:
+        print(f"[Admin Config] Get error for {key}: {e}", flush=True)
+        return default
+
+def set_admin_config(key, value, description=None):
+    """Set admin config value in database."""
+    _ensure_admin_config_table()
+    try:
+        # Use UPSERT pattern
+        db.session.execute(db.text('''
+            INSERT INTO admin_config (key, value, description, updated_at)
+            VALUES (:key, :value, :desc, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                description = COALESCE(EXCLUDED.description, admin_config.description),
+                updated_at = CURRENT_TIMESTAMP
+        '''), {"key": key, "value": value, "desc": description})
+        db.session.commit()
+        print(f"[Admin Config] ✅ Saved {key} (length: {len(value) if value else 0})", flush=True)
+        return True
+    except Exception as e:
+        db.session.rollback()
+        print(f"[Admin Config] Set error for {key}: {e}", flush=True)
+        return False
+
+@app.route('/api/admin/config', methods=['GET'])
+@login_required
+@admin_required
+def get_all_admin_config():
+    """Get all admin config values for settings page."""
+    _ensure_admin_config_table()
+    try:
+        result = db.session.execute(
+            db.text("SELECT key, value, description, updated_at FROM admin_config")
+        ).fetchall()
+        settings = [
+            {"key": row[0], "value": row[1], "description": row[2], "updated_at": str(row[3])}
+            for row in result
+        ]
+        return jsonify({"success": True, "settings": settings})
+    except Exception as e:
+        print(f"[Admin Config] GET error: {e}", flush=True)
+        return jsonify({"success": False, "error": str(e), "settings": []})
+
+@app.route('/api/admin/config', methods=['POST'])
+@login_required
+@admin_required
+def save_admin_config():
+    """Save admin config value. Expects {key, value, description}."""
+    data = request.json or {}
+    key = data.get('key', '').strip()
+    value = data.get('value', '')
+    description = data.get('description', '')
+    
+    if not key:
+        return jsonify({"success": False, "error": "Key is required"}), 400
+    
+    success = set_admin_config(key, value, description)
+    
+    if success:
+        return jsonify({"success": True, "message": f"Saved {key}"})
+    else:
+        return jsonify({"success": False, "error": "Failed to save config"}), 500
 
 @app.route('/api/test-v2', methods=['GET'])
 @login_required
