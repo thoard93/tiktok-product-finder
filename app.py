@@ -7245,6 +7245,92 @@ def fetch_v2_via_scrapfly(page_num, timeframe='7d', sort_by='revenue', limit=50,
         print(f"[V2 Scrapfly] ❌ Exception: {e}", flush=True)
         return None
 
+def refresh_clerk_session(cookie_str):
+    """
+    Refresh Clerk session JWT by calling the /client/sessions/{id}/tokens endpoint.
+    This is needed because Clerk JWTs expire in 60 seconds.
+    Returns updated cookie string with fresh __session token, or original if refresh fails.
+    """
+    import re
+    import json
+    
+    # Extract session ID from clerk_active_context cookie
+    session_id_match = re.search(r'clerk_active_context=([^:;]+)', cookie_str)
+    if not session_id_match:
+        # Try to extract from __session JWT payload
+        session_match = re.search(r'__session=([^;]+)', cookie_str)
+        if session_match:
+            try:
+                import base64
+                jwt_parts = session_match.group(1).split('.')
+                if len(jwt_parts) >= 2:
+                    # Decode JWT payload (add padding)
+                    payload = jwt_parts[1] + '=' * (4 - len(jwt_parts[1]) % 4)
+                    payload_json = json.loads(base64.urlsafe_b64decode(payload))
+                    session_id = payload_json.get('sid')
+                    if session_id:
+                        print(f"[Clerk Refresh] Found session ID from JWT: {session_id[:20]}...", flush=True)
+            except Exception as e:
+                print(f"[Clerk Refresh] Could not extract session ID from JWT: {e}", flush=True)
+                return cookie_str
+        else:
+            print("[Clerk Refresh] No session ID found in cookies", flush=True)
+            return cookie_str
+    else:
+        session_id = session_id_match.group(1)
+        print(f"[Clerk Refresh] Found session ID: {session_id[:20]}...", flush=True)
+    
+    try:
+        # Call Clerk's token refresh endpoint
+        refresh_url = f"https://clerk.tiktokcopilot.com/v1/client/sessions/{session_id}/tokens"
+        
+        cookies_dict = {}
+        for part in cookie_str.split(';'):
+            if '=' in part:
+                key, val = part.strip().split('=', 1)
+                cookies_dict[key] = val
+        
+        headers = {
+            "accept": "*/*",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://www.tiktokcopilot.com",
+            "referer": "https://www.tiktokcopilot.com/",
+            "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        }
+        
+        if requests_cffi:
+            res = requests_cffi.post(
+                refresh_url,
+                headers=headers,
+                cookies=cookies_dict,
+                impersonate="chrome124",
+                timeout=30
+            )
+        else:
+            res = requests.post(refresh_url, headers=headers, cookies=cookies_dict, timeout=30)
+        
+        if res.status_code == 200:
+            data = res.json()
+            new_jwt = data.get('jwt')
+            if new_jwt:
+                print(f"[Clerk Refresh] ✅ Got fresh JWT (expires in 60s)", flush=True)
+                # Update __session cookie with new JWT
+                cookie_str = re.sub(r'(__session)=[^;]+', f'\\1={new_jwt}', cookie_str)
+                # Also update __session_pOM46XQh if present
+                cookie_str = re.sub(r'(__session_pOM46XQh)=[^;]+', f'\\1={new_jwt}', cookie_str)
+                return cookie_str
+            else:
+                print(f"[Clerk Refresh] ⚠️ No JWT in response: {res.text[:200]}", flush=True)
+        else:
+            print(f"[Clerk Refresh] ❌ Refresh failed: {res.status_code} - {res.text[:200]}", flush=True)
+    except Exception as e:
+        print(f"[Clerk Refresh] ❌ Exception: {e}", flush=True)
+    
+    return cookie_str
+
 def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, region='US', keywords=None):
     """
     Fetch products from TikTokCopilot /api/trending/products endpoint.
@@ -7255,6 +7341,9 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     if not cookie_str:
         print("[Copilot Products] ❌ No cookie configured!")
         return None
+    
+    # Refresh the Clerk session to get fresh JWT (60-second expiration)
+    cookie_str = refresh_clerk_session(cookie_str)
     
     
     # Get configurable sentry headers from database (update via Admin UI with fresh browser values)
