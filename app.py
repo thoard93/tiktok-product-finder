@@ -7256,26 +7256,23 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         print("[Copilot Products] ❌ No cookie configured!")
         return None
     
-    # CRITICAL: Same-origin headers per Grok's analysis (no Origin/Referer/X-Requested-With)
-    # ALL sec-* headers must be lowercase to exactly match browser fingerprint
-    import uuid
-    trace_id = uuid.uuid4().hex[:32]
-    span_id = uuid.uuid4().hex[:16]
     
+    # CRITICAL: Headers must exactly match working browser cURL for Clerk fingerprint validation
+    # All header keys lowercase to match browser, include sentry-trace/baggage from fresh browser
     headers = {
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "sec-fetch-dest": "empty",           # LOWERCASE per browser
-        "sec-fetch-mode": "cors",            # LOWERCASE per browser
-        "sec-fetch-site": "same-origin",     # CRITICAL: same-origin (lowercase)
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "accept": "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "priority": "u=1, i",
         "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Windows"',
-        "priority": "u=1, i",
-        # ADDED: Sentry headers that real browsers send (Geist may validate these)
-        "baggage": f"sentry-environment=vercel-production,sentry-public_key=0718b8c1b0e1386acd40331786775abe,sentry-trace_id={trace_id},sentry-transaction=GET%20%2Fproducts,sentry-sampled=true",
-        "sentry-trace": f"{trace_id}-{span_id}-1",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        # Sentry headers from working browser (update from fresh browser Network tab if needed)
+        "baggage": "sentry-environment=vercel-production,sentry-release=2afef984cd424df8581a416ac8f8ff9d8bc3f274,sentry-public_key=0718b8c1b0e1386acd40331786775abe,sentry-trace_id=d4de60086273456b81fac34910362f67,sentry-org_id=4510467450863616,sentry-sampled=true,sentry-sample_rand=0.41877421401190396,sentry-sample_rate=1",
+        "sentry-trace": "d4de60086273456b81fac34910362f67-80e18f101afbb322-1"
     }
     
     params = {
@@ -7363,18 +7360,20 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
         print("[Copilot] ❌ No cookie configured!")
         return None
     
-    # Same-origin headers with lowercase sec-* to match browser fingerprint exactly
+    # CRITICAL: Headers must exactly match working browser cURL for Clerk fingerprint validation
     headers = {
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "sec-fetch-dest": "empty",           # LOWERCASE
-        "sec-fetch-mode": "cors",            # LOWERCASE
-        "sec-fetch-site": "same-origin",     # LOWERCASE
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "accept": "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "priority": "u=1, i",
         "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Windows"',
-        "priority": "u=1, i"
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "baggage": "sentry-environment=vercel-production,sentry-release=2afef984cd424df8581a416ac8f8ff9d8bc3f274,sentry-public_key=0718b8c1b0e1386acd40331786775abe,sentry-trace_id=d4de60086273456b81fac34910362f67,sentry-org_id=4510467450863616,sentry-sampled=true,sentry-sample_rand=0.41877421401190396,sentry-sample_rate=1",
+        "sentry-trace": "d4de60086273456b81fac34910362f67-80e18f101afbb322-1"
     }
     
     params = {
