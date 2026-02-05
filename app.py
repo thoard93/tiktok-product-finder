@@ -7313,17 +7313,47 @@ def refresh_clerk_session(cookie_str):
             res = requests.post(refresh_url, headers=headers, cookies=cookies_dict, timeout=30)
         
         if res.status_code == 200:
-            data = res.json()
-            new_jwt = data.get('jwt')
+            new_jwt = None
+            
+            # Method 1: Try to get JWT from response body
+            try:
+                data = res.json()
+                new_jwt = data.get('jwt')
+                if new_jwt:
+                    print(f"[Clerk Refresh] Got JWT from response body", flush=True)
+            except:
+                pass
+            
+            # Method 2: Try to get __session from response cookies (set-cookie header)
+            if not new_jwt and hasattr(res, 'cookies'):
+                for cookie in res.cookies:
+                    if hasattr(cookie, 'name') and cookie.name == '__session':
+                        new_jwt = cookie.value
+                        print(f"[Clerk Refresh] Got JWT from set-cookie header", flush=True)
+                        break
+                # Also try dict-style access
+                if not new_jwt and '__session' in res.cookies:
+                    new_jwt = res.cookies['__session']
+                    print(f"[Clerk Refresh] Got JWT from cookies dict", flush=True)
+            
             if new_jwt:
                 print(f"[Clerk Refresh] ✅ Got fresh JWT (expires in 60s)", flush=True)
                 # Update __session cookie with new JWT
-                cookie_str = re.sub(r'(__session)=[^;]+', f'\\1={new_jwt}', cookie_str)
+                import re as re_module
+                cookie_str = re_module.sub(r'(__session)=[^;]+', f'__session={new_jwt}', cookie_str)
                 # Also update __session_pOM46XQh if present
-                cookie_str = re.sub(r'(__session_pOM46XQh)=[^;]+', f'\\1={new_jwt}', cookie_str)
+                cookie_str = re_module.sub(r'(__session_pOM46XQh)=[^;]+', f'__session_pOM46XQh={new_jwt}', cookie_str)
+                
+                # SAVE refreshed cookie to database for next requests
+                try:
+                    set_config_value('COPILOT_COOKIE', cookie_str)
+                    print(f"[Clerk Refresh] ✅ Saved refreshed cookie to database", flush=True)
+                except Exception as save_err:
+                    print(f"[Clerk Refresh] ⚠️ Could not save to database: {save_err}", flush=True)
+                
                 return cookie_str
             else:
-                print(f"[Clerk Refresh] ⚠️ No JWT in response: {res.text[:200]}", flush=True)
+                print(f"[Clerk Refresh] ⚠️ No JWT in response body or cookies: {res.text[:200]}", flush=True)
         else:
             print(f"[Clerk Refresh] ❌ Refresh failed: {res.status_code} - {res.text[:200]}", flush=True)
     except Exception as e:
