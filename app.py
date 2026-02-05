@@ -7298,13 +7298,10 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
             
             # Use curl_cffi with Chrome 110 impersonation + residential proxy per Grok recommendation
             if requests_cffi:
-                # Get proxy from env or database (BrightData/Proxiware residential)
+                # Get proxy from env or database (BrightData residential)
                 proxy_url = os.getenv('COPILOT_PROXY') or get_config_value('COPILOT_PROXY', '')
-                proxies = None
                 if proxy_url:
                     print(f"[V2] Using proxy: {proxy_url[:30]}...", flush=True)
-                    # Use proxies dict format for better auth support
-                    proxies = {"http": proxy_url, "https": proxy_url}
                 
                 res = requests_cffi.get(
                     f"{COPILOT_API_BASE}/trending/products", 
@@ -7312,7 +7309,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                     params=params, 
                     cookies=parse_cookie_string(cookie_str),
                     impersonate="chrome124",  # Widely supported version for Clerk bypass
-                    proxies=proxies,
+                    proxy=proxy_url if proxy_url else None,  # Use proxy= (singular) for curl_cffi
                     verify=False,  # Disable SSL verification for BrightData proxy
                     timeout=60
                 )
