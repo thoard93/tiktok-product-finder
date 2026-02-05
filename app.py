@@ -7136,6 +7136,110 @@ def get_copilot_cookie():
     print("[Copilot Cookie] ❌ No cookie found - update in Settings UI", flush=True)
     return None
 
+def fetch_v2_via_web_unlocker(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
+    """Fetch products via V2 API using BrightData Web Unlocker.
+    
+    Web Unlocker handles Clerk/Geist anti-bot bypass with auto-fingerprint rotation,
+    CAPTCHA solving, and premium domain support.
+    
+    Env vars needed:
+    - BRIGHTDATA_UNLOCKER_KEY: API key for Web Unlocker zone
+    
+    Returns list of products or None on failure.
+    """
+    import json
+    
+    cookie_str = get_copilot_cookie()
+    if not cookie_str:
+        print("[V2 Web Unlocker] ❌ No cookie configured - update in Admin UI", flush=True)
+        return None
+    
+    api_key = os.environ.get('BRIGHTDATA_UNLOCKER_KEY', '').strip()
+    if not api_key:
+        print("[V2 Web Unlocker] ❌ No BRIGHTDATA_UNLOCKER_KEY env var set", flush=True)
+        return None
+    
+    # Parse cookies into dict
+    cookies_dict = {}
+    for item in cookie_str.split(';'):
+        item = item.strip()
+        if '=' in item:
+            key, value = item.split('=', 1)
+            cookies_dict[key.strip()] = value.strip()
+    
+    print(f"[V2 Web Unlocker] Page {page_num} with {len(cookies_dict)} cookies", flush=True)
+    
+    # Build TikTokCopilot V2 API URL
+    api_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
+    
+    # BrightData Web Unlocker API
+    unlocker_url = "https://api.brightdata.com/request"
+    
+    # Request payload with cookies and headers
+    payload = {
+        "zone": "unblocker",
+        "url": api_url,
+        "format": "raw",  # Get raw response content
+        "cookies": cookies_dict,
+        "headers": {
+            "accept": "*/*",
+            "accept-language": "en-US,en;q=0.9",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+            "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin"
+        }
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    
+    try:
+        print(f"[V2 Web Unlocker] Requesting {api_url[:60]}...", flush=True)
+        response = requests.post(unlocker_url, headers=headers, json=payload, timeout=90)
+        
+        print(f"[V2 Web Unlocker] Status: {response.status_code}", flush=True)
+        
+        if response.status_code != 200:
+            print(f"[V2 Web Unlocker] ❌ HTTP {response.status_code}: {response.text[:300]}", flush=True)
+            return None
+        
+        content = response.text
+        print(f"[V2 Web Unlocker] Response length: {len(content)} chars", flush=True)
+        
+        # Check for sign-in/blocking page
+        is_html = content.strip().startswith('<!DOCTYPE') or content.strip().startswith('<html')
+        has_geist = 'geistsans' in content.lower() or 'geistmono' in content.lower()
+        has_signin = 'sign-in' in content.lower() or 'clerk' in content.lower()
+        
+        if is_html:
+            print(f"[V2 Web Unlocker] ⚠️ Got HTML - IsHTML:{is_html} Geist:{has_geist} SignIn:{has_signin}", flush=True)
+            print(f"[V2 Web Unlocker] Preview: {content[:300]}", flush=True)
+            return None
+        
+        # Parse JSON response
+        try:
+            data = json.loads(content)
+            products = data.get('products', [])
+            print(f"[V2 Web Unlocker] ✅ Success - {len(products)} products on page {page_num}", flush=True)
+            return products
+        except json.JSONDecodeError as e:
+            print(f"[V2 Web Unlocker] ❌ JSON decode error: {e}", flush=True)
+            print(f"[V2 Web Unlocker] Raw content: {content[:500]}", flush=True)
+            return None
+            
+    except requests.exceptions.Timeout:
+        print("[V2 Web Unlocker] ❌ Request timeout (90s)", flush=True)
+        return None
+    except Exception as e:
+        print(f"[V2 Web Unlocker] ❌ Exception: {e}", flush=True)
+        return None
+
 def fetch_v2_via_scrapfly(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
     """Fetch products via V2 API using Scrapfly for ASP bypass.
     
@@ -10639,6 +10743,27 @@ def cleanup_zero_sales():
     except Exception as e:
         logger.error(f"Cleanup error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/test-v2-unlocker', methods=['GET'])
+@login_required
+@admin_required
+def test_v2_unlocker():
+    """Test V2 API using BrightData Web Unlocker."""
+    products = fetch_v2_via_web_unlocker(page_num=0, limit=10)
+    
+    if products is None:
+        return jsonify({
+            'success': False,
+            'error': 'Web Unlocker fetch failed - check logs for details',
+            'hint': 'Ensure BRIGHTDATA_UNLOCKER_KEY is set and cookie is fresh'
+        }), 500
+    
+    return jsonify({
+        'success': True,
+        'product_count': len(products),
+        'sample': products[0] if products else None,
+        'fields_available': list(products[0].keys()) if products else []
+    })
 
 # Run on module load (ensures it runs on Render gunicorn start)
 ensure_schema_integrity()
