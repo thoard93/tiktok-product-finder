@@ -8117,28 +8117,51 @@ def copilot_sync():
 # ADMIN CONFIG API (Settings Save)
 # ==============================================================================
 
+_admin_config_table_created = False
+
 def _ensure_admin_config_table():
     """Create admin_config table if it doesn't exist."""
+    global _admin_config_table_created
+    if _admin_config_table_created:
+        return True
+    
     try:
-        db.session.execute(db.text('''
-            CREATE TABLE IF NOT EXISTS admin_config (
-                key VARCHAR(100) PRIMARY KEY,
-                value TEXT,
-                description TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        '''))
-        db.session.commit()
+        from sqlalchemy import text
+        # Check if table exists first
+        check_result = db.session.execute(text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_config')"
+        )).scalar()
+        
+        if not check_result:
+            print("[Admin Config] Creating admin_config table...", flush=True)
+            db.session.execute(text('''
+                CREATE TABLE admin_config (
+                    key VARCHAR(100) PRIMARY KEY,
+                    value TEXT,
+                    description TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            '''))
+            db.session.commit()
+            print("[Admin Config] ✅ Table created successfully", flush=True)
+        else:
+            print("[Admin Config] Table already exists", flush=True)
+        
+        _admin_config_table_created = True
+        return True
     except Exception as e:
         db.session.rollback()
-        print(f"[Admin Config] Table check error: {e}", flush=True)
+        print(f"[Admin Config] ❌ Table creation error: {e}", flush=True)
+        return False
 
 def get_admin_config(key, default=None):
     """Get admin config value from database."""
-    _ensure_admin_config_table()
+    if not _ensure_admin_config_table():
+        return default
     try:
+        from sqlalchemy import text
         result = db.session.execute(
-            db.text("SELECT value FROM admin_config WHERE key = :key"),
+            text("SELECT value FROM admin_config WHERE key = :key"),
             {"key": key}
         ).fetchone()
         return result[0] if result else default
@@ -8148,10 +8171,13 @@ def get_admin_config(key, default=None):
 
 def set_admin_config(key, value, description=None):
     """Set admin config value in database."""
-    _ensure_admin_config_table()
+    if not _ensure_admin_config_table():
+        print(f"[Admin Config] ❌ Cannot save {key} - table creation failed", flush=True)
+        return False
     try:
+        from sqlalchemy import text
         # Use UPSERT pattern
-        db.session.execute(db.text('''
+        db.session.execute(text('''
             INSERT INTO admin_config (key, value, description, updated_at)
             VALUES (:key, :value, :desc, CURRENT_TIMESTAMP)
             ON CONFLICT (key) DO UPDATE SET
@@ -8164,7 +8190,7 @@ def set_admin_config(key, value, description=None):
         return True
     except Exception as e:
         db.session.rollback()
-        print(f"[Admin Config] Set error for {key}: {e}", flush=True)
+        print(f"[Admin Config] ❌ Set error for {key}: {e}", flush=True)
         return False
 
 @app.route('/api/admin/config', methods=['GET'])
@@ -8172,10 +8198,12 @@ def set_admin_config(key, value, description=None):
 @admin_required
 def get_all_admin_config():
     """Get all admin config values for settings page."""
-    _ensure_admin_config_table()
+    if not _ensure_admin_config_table():
+        return jsonify({"success": False, "error": "Table creation failed", "settings": []})
     try:
+        from sqlalchemy import text
         result = db.session.execute(
-            db.text("SELECT key, value, description, updated_at FROM admin_config")
+            text("SELECT key, value, description, updated_at FROM admin_config")
         ).fetchall()
         settings = [
             {"key": row[0], "value": row[1], "description": row[2], "updated_at": str(row[3])}
@@ -8205,6 +8233,55 @@ def save_admin_config():
         return jsonify({"success": True, "message": f"Saved {key}"})
     else:
         return jsonify({"success": False, "error": "Failed to save config"}), 500
+
+@app.route('/api/debug-cookie', methods=['GET'])
+@login_required
+@admin_required
+def debug_cookie_status():
+    """Debug endpoint to check cookie storage and retrieval."""
+    from sqlalchemy import text
+    
+    debug_info = {
+        "admin_config_table_exists": False,
+        "cookie_in_admin_config": None,
+        "cookie_in_env_var": None,
+        "cookie_from_get_copilot_cookie": None,
+        "scrapfly_key_set": bool(os.environ.get('SCRAPFLY_API_KEY', '').strip())
+    }
+    
+    # Check if admin_config table exists
+    try:
+        result = db.session.execute(text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_config')"
+        )).scalar()
+        debug_info["admin_config_table_exists"] = result
+    except Exception as e:
+        debug_info["admin_config_table_exists"] = f"Error: {e}"
+    
+    # Check cookie in admin_config
+    try:
+        result = db.session.execute(text(
+            "SELECT value FROM admin_config WHERE key = 'TIKTOK_COPILOT_COOKIE'"
+        )).fetchone()
+        if result and result[0]:
+            debug_info["cookie_in_admin_config"] = f"Found (length: {len(result[0])})"
+        else:
+            debug_info["cookie_in_admin_config"] = "Not found"
+    except Exception as e:
+        debug_info["cookie_in_admin_config"] = f"Error: {e}"
+    
+    # Check cookie in env var
+    env_cookie = os.environ.get('TIKTOK_COPILOT_COOKIE', '')
+    debug_info["cookie_in_env_var"] = f"Found (length: {len(env_cookie)})" if env_cookie else "Not set"
+    
+    # Check what get_copilot_cookie returns
+    try:
+        cookie = get_copilot_cookie()
+        debug_info["cookie_from_get_copilot_cookie"] = f"Found (length: {len(cookie)})" if cookie else "None"
+    except Exception as e:
+        debug_info["cookie_from_get_copilot_cookie"] = f"Error: {e}"
+    
+    return jsonify(debug_info)
 
 @app.route('/api/test-v2', methods=['GET'])
 @login_required
