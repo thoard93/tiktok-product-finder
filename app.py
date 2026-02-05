@@ -7303,7 +7303,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                     headers=headers, 
                     params=params, 
                     cookies=parse_cookie_string(cookie_str),
-                    impersonate="chrome124",  # Grok recommends chrome124 for Geist bypass
+                    impersonate="chrome110",  # More widely supported version for Render
                     timeout=60
                 )
             else:
