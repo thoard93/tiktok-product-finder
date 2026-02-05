@@ -8300,10 +8300,24 @@ def debug_cookie_status():
     env_cookie = os.environ.get('TIKTOK_COPILOT_COOKIE', '')
     debug_info["cookie_in_env_var"] = f"Found (length: {len(env_cookie)})" if env_cookie else "Not set"
     
-    # Check what get_copilot_cookie returns
+    # Check what get_copilot_cookie returns and analyze format
     try:
         cookie = get_copilot_cookie()
-        debug_info["cookie_from_get_copilot_cookie"] = f"Found (length: {len(cookie)})" if cookie else "None"
+        if cookie:
+            debug_info["cookie_from_get_copilot_cookie"] = f"Found (length: {len(cookie)})"
+            # Show first 50 chars for format verification (redacted)
+            debug_info["cookie_preview"] = cookie[:50] + "..." if len(cookie) > 50 else cookie
+            # Check for required __session token
+            has_session = "__session=" in cookie
+            debug_info["has_session_token"] = has_session
+            if not has_session:
+                debug_info["cookie_warning"] = "Cookie missing __session= token - may not authenticate properly"
+            # Count parsed cookie parts
+            cookie_parts = [p.strip() for p in cookie.split(';') if '=' in p]
+            debug_info["parsed_cookie_count"] = len(cookie_parts)
+            debug_info["cookie_keys"] = [p.split('=')[0].strip() for p in cookie_parts][:10]  # First 10 keys
+        else:
+            debug_info["cookie_from_get_copilot_cookie"] = "None"
     except Exception as e:
         debug_info["cookie_from_get_copilot_cookie"] = f"Error: {e}"
     
