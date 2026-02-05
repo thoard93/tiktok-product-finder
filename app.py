@@ -7214,9 +7214,17 @@ def fetch_v2_via_scrapfly(page_num, timeframe='7d', sort_by='revenue', limit=50,
         
         content = result.get('result', {}).get('content', '')
         
-        # Check for sign-in page (cookie expired)
-        if "sign-in" in content.lower() or "geistsans" in content.lower() or "<!DOCTYPE html>" in content[:100]:
-            print("[V2 Scrapfly] ⚠️ Got sign-in page - cookie expired, update in Admin UI", flush=True)
+        # Log first part of response for debugging
+        print(f"[V2 Scrapfly] Response preview (first 300 chars): {content[:300]}", flush=True)
+        
+        # Check for sign-in page (cookie expired) - be more specific
+        is_html_page = content.strip().startswith('<!DOCTYPE html>') or content.strip().startswith('<html')
+        has_signin_redirect = 'sign-in' in content.lower() and 'redirect' in content.lower()
+        has_clerk_signin = 'clerk' in content.lower() and ('sign' in content.lower() or 'login' in content.lower())
+        
+        if is_html_page and (has_signin_redirect or has_clerk_signin):
+            print(f"[V2 Scrapfly] ⚠️ Got sign-in page - cookie expired, update in Admin UI", flush=True)
+            print(f"[V2 Scrapfly] Detection: is_html={is_html_page}, signin_redirect={has_signin_redirect}, clerk_signin={has_clerk_signin}", flush=True)
             return None
         
         # Parse JSON response
@@ -7227,7 +7235,7 @@ def fetch_v2_via_scrapfly(page_num, timeframe='7d', sort_by='revenue', limit=50,
             return products
         except json.JSONDecodeError as e:
             print(f"[V2 Scrapfly] ❌ JSON decode error: {e}", flush=True)
-            print(f"[V2 Scrapfly] Raw content (first 200): {content[:200]}", flush=True)
+            print(f"[V2 Scrapfly] Raw content (first 500): {content[:500]}", flush=True)
             return None
             
     except requests.exceptions.Timeout:
