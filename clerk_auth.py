@@ -249,7 +249,10 @@ def verify_code(code):
                     return { error: 'Unexpected status: ' + si.status };
                 }
                 
-                // Step 2: Now attempt the 2FA with the code
+                // Step 2: Prepare second factor (this sends a new code, but we use the one user entered)
+                await si.prepareSecondFactor({ strategy: 'email_code' });
+                
+                // Step 3: Attempt the 2FA with the code
                 const result = await si.attemptSecondFactor({
                     strategy: 'email_code',
                     code: code
@@ -271,6 +274,7 @@ def verify_code(code):
                 return { error: err.message || String(err) };
             }
         }""", [email, password, code])
+
 
         
         if result.get("status") == "complete":
