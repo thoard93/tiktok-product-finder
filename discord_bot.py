@@ -601,12 +601,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No GMV Max products matching criteria today (50-120 all-time videos, 50+ 7D sales, $100+ ad spend). Try syncing more products from Copilot!")
+        await channel.send("📭 No products matching criteria today (50-120 all-time videos, 50+ 7D sales, $100+ ad spend). Try syncing more products from Copilot!")
         return
     
     # Send header message
     await channel.send(f"# 🚀 Daily GMV Max Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 50-120 all-time videos, $100+ ad spend, 50+ 7D sales\n"
+                       f"**Criteria:** 50-120 all-time videos, $100+ ad spend, 50+ 7D sales (GMV Max prioritized)\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"──────────────────────────────")
     
@@ -628,7 +628,7 @@ async def daily_hot_products():
 
 
 def get_top_brand_opportunities(limit=10):
-    """Get top opportunity products from top revenue brands (40-500 all-time videos)."""
+    """Get top opportunity products from top revenue brands (50-300 all-time videos)."""
     with app.app_context():
         from sqlalchemy import func
         
@@ -1010,7 +1010,7 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with 50-120 all-time videos, ad spend, 7D sales, AND GMV Max Ads
+        # Query: Products with 50-120 all-time videos, ad spend, 7D sales (GMV Max prioritized but not required)
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
             video_count_field >= 50,  # Min 50 all-time videos
@@ -1018,16 +1018,18 @@ def get_hot_products():
             Product.sales_7d >= 50,  # 7D sales
             Product.ad_spend >= 100,  # Ad spend ($100+)
             Product.commission_rate > 0,  # Must have regular commission
-            Product.shop_ads_commission > 0,  # REQUIRED: Must have GMV Max Ads
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date
             )
         ).order_by(
+            db.case((Product.shop_ads_commission > 0, 0), else_=1),  # Priority 0: GMV Max products first
             db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 1: High Ad Spend
             db.func.coalesce(Product.sales_7d, 0).desc(),  # Priority 2: High 7D Sales
             video_count_field.asc()  # Priority 3: Lower videos = better opportunity
         ).limit(MAX_DAILY_POSTS * 3).all()  # Fetch extra to allow deduplication
+        
+        print(f"[Hot Products] Found {len(products)} candidates matching filters (before dedup)")
         
         # Deduplicate by product_name (same product can have multiple IDs)
         seen_names = set()
@@ -1127,7 +1129,7 @@ async def force_brand_hunter(ctx):
 # =============================================================================
 
 def get_brand_products(brand_name, limit=5):
-    """Get top products for a brand with opportunity criteria (40-120 all-time videos)."""
+    """Get top products for a brand with opportunity criteria (50-120 all-time videos)."""
     with app.app_context():
         # Search by seller_name (brand name)
         # Use video_count_alltime (all-time saturation metric) with fallback to video_count

@@ -567,6 +567,7 @@
                         <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" loading="lazy" onerror="this.src='/vantage_logo.png'">
                         
                         <div class="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
+                            ${p.shop_ads_commission > 0 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-600 to-orange-500 text-white shadow-lg backdrop-blur-md border border-white/10">🚀 GMV Max</span>' : ''}
                             ${p.gmv > 10000 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-emerald-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">💰 High Volume</span>' : ''}
                             ${p.is_favorite ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">⭐ Watchlist</span>' : ''}
                             ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary/90 text-white shadow-lg backdrop-blur-md border border-white/10">💎 Opportunity</span>' : ''}
@@ -600,11 +601,11 @@
                             </div>
                             <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
                                 <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Videos</p>
-                                <p class="text-xs font-bold ${(p.video_count_alltime || p.video_count) > 100 ? 'text-slate-400' : 'text-white'} tracking-wide">${formatKMB(p.video_count_alltime || p.video_count || 0)}</p>
+                                <p class="text-xs font-bold ${(() => { const vc = p.video_count_alltime || p.video_count || 0; return vc < 50 ? 'text-emerald-400' : vc <= 120 ? 'text-amber-400' : vc > 200 ? 'text-rose-400' : 'text-slate-400'; })()} tracking-wide">${formatKMB(p.video_count_alltime || p.video_count || 0)}</p>
                             </div>
                             <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Price</p>
-                                <p class="text-xs font-bold text-amber-400 tracking-wide">$${(p.price || 0).toFixed(2)}</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Comm.</p>
+                                <p class="text-xs font-bold ${(p.commission_rate || 0) >= 0.15 ? 'text-emerald-400' : (p.commission_rate || 0) > 0 ? 'text-amber-400' : 'text-slate-500'} tracking-wide">${p.commission_rate ? Math.round(p.commission_rate * 100) + '%' : 'N/A'}</p>
                             </div>
                         </div>
                     </div>

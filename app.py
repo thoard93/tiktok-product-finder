@@ -10558,6 +10558,110 @@ def cleanup_zero_stats():
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/admin/deduplicate', methods=['POST'])
+@login_required
+@admin_required
+def deduplicate_products():
+    """Find and remove duplicate products (same product_name, different product_id).
+    Also handles shop_ prefix collisions (e.g. shop_123 vs 123).
+    Keeps the version with the most recent last_updated and highest sales_7d.
+    Supports dry_run=true query param to preview what would be deleted."""
+    try:
+        dry_run = request.args.get('dry_run', 'false').lower() == 'true'
+        
+        from sqlalchemy import func as sqla_func
+        
+        # ---- Phase 1: Name-based duplicates ----
+        dupes = db.session.query(
+            sqla_func.lower(sqla_func.trim(Product.product_name)),
+            sqla_func.count(Product.product_id)
+        ).filter(
+            Product.product_name != None,
+            Product.product_name != ''
+        ).group_by(
+            sqla_func.lower(sqla_func.trim(Product.product_name))
+        ).having(
+            sqla_func.count(Product.product_id) > 1
+        ).all()
+        
+        name_dupes_deleted = 0
+        name_dupe_details = []
+        
+        for name_lower, count in dupes:
+            products = Product.query.filter(
+                sqla_func.lower(sqla_func.trim(Product.product_name)) == name_lower
+            ).order_by(
+                Product.last_updated.desc().nullslast(),
+                db.func.coalesce(Product.sales_7d, 0).desc()
+            ).all()
+            
+            keeper = products[0]
+            for dup in products[1:]:
+                name_dupe_details.append({
+                    'deleted_id': dup.product_id,
+                    'kept_id': keeper.product_id,
+                    'name': (dup.product_name or 'N/A')[:60],
+                    'reason': 'name_duplicate'
+                })
+                if not dry_run:
+                    db.session.delete(dup)
+                name_dupes_deleted += 1
+        
+        # ---- Phase 2: shop_ prefix collisions ----
+        prefix_deleted = 0
+        prefix_details = []
+        
+        shop_products = Product.query.filter(
+            Product.product_id.like('shop_%')
+        ).all()
+        
+        for sp in shop_products:
+            bare_id = sp.product_id.replace('shop_', '', 1)
+            bare_product = Product.query.get(bare_id)
+            if bare_product:
+                if (bare_product.last_updated or datetime.min) >= (sp.last_updated or datetime.min):
+                    prefix_details.append({
+                        'deleted_id': sp.product_id,
+                        'kept_id': bare_product.product_id,
+                        'name': (sp.product_name or 'N/A')[:60],
+                        'reason': 'shop_prefix_collision'
+                    })
+                    if not dry_run:
+                        db.session.delete(sp)
+                else:
+                    prefix_details.append({
+                        'deleted_id': bare_product.product_id,
+                        'kept_id': sp.product_id,
+                        'name': (bare_product.product_name or 'N/A')[:60],
+                        'reason': 'shop_prefix_collision'
+                    })
+                    if not dry_run:
+                        db.session.delete(bare_product)
+                prefix_deleted += 1
+        
+        if not dry_run:
+            db.session.commit()
+            log_activity(session.get('user_id'), 'deduplicate_products', {
+                'name_dupes_deleted': name_dupes_deleted,
+                'prefix_dupes_deleted': prefix_deleted
+            })
+        
+        total = name_dupes_deleted + prefix_deleted
+        
+        return jsonify({
+            'success': True,
+            'dry_run': dry_run,
+            'total_duplicates': total,
+            'name_duplicates': name_dupes_deleted,
+            'prefix_duplicates': prefix_deleted,
+            'details': (name_dupe_details + prefix_details)[:50],
+            'message': f'{"[DRY RUN] Would delete" if dry_run else "Deleted"} {total} duplicate products ({name_dupes_deleted} name dupes, {prefix_deleted} prefix collisions).'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # --- Background Scheduler for Daily Refresh (Now using Copilot!) ---
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
