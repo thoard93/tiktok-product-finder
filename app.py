@@ -11144,6 +11144,28 @@ def test_v2_direct():
         'fields_available': list(products[0].keys()) if products else []
     })
 
+@app.route('/api/test-diagnose', methods=['GET'])
+@login_required
+@admin_required
+def diagnose_login():
+    """Temporary: diagnose what Clerk renders on the login page."""
+    import subprocess
+    import sys
+    
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'diagnose_login.py')
+    
+    result = subprocess.run(
+        [sys.executable, script_path],
+        capture_output=True, 
+        text=True, 
+        timeout=90
+    )
+    return jsonify({
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "returncode": result.returncode
+    })
+
 def ensure_schema_integrity():
     """Auto-heal schema for SQLite/Postgres to prevent missing column errors"""
     with app.app_context():
