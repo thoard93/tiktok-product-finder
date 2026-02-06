@@ -19,6 +19,10 @@ import sys
 import json
 import time
 import sqlite3
+import threading
+
+# Thread lock to protect Playwright operations (sync API is not thread-safe)
+_playwright_lock = threading.Lock()
 
 # Use the same DB path as the main app
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -91,108 +95,110 @@ def initiate_login(email, password):
     """Start the login flow, returns sign_in_id on 2FA requirement."""
     from playwright.sync_api import sync_playwright
     
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-        )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            viewport={"width": 1920, "height": 1080},
-        )
-        page = context.new_page()
-        
-        # Load main page
-        page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
-        
-        # Wait for Clerk to be ready
-        try:
-            page.wait_for_function("() => window.Clerk && window.Clerk.client", timeout=20000)
-        except:
-            browser.close()
-            return {"error": "Clerk SDK not ready - page may not have loaded correctly"}
-        
-        # Attempt sign-in
-        result = page.evaluate("""async ([email, password]) => {
-            try {
-                const si = await window.Clerk.client.signIn.create({
-                    identifier: email,
-                    password: password,
-                    strategy: 'password'
-                });
-                
-                if (si.status === 'complete') {
-                    await window.Clerk.setActive({ session: si.createdSessionId });
-                    return { 
-                        status: 'complete', 
-                        sessionId: si.createdSessionId 
-                    };
-                }
-                
-                if (si.status === 'needs_second_factor') {
-                    // Get available 2FA methods
-                    const methods = si.supportedSecondFactors?.map(f => f.strategy) || [];
+    # Acquire lock to prevent concurrent Playwright operations (not thread-safe)
+    with _playwright_lock:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                viewport={"width": 1920, "height": 1080},
+            )
+            page = context.new_page()
+            
+            # Load main page
+            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
+            
+            # Wait for Clerk to be ready
+            try:
+                page.wait_for_function("() => window.Clerk && window.Clerk.client", timeout=20000)
+            except:
+                browser.close()
+                return {"error": "Clerk SDK not ready - page may not have loaded correctly"}
+            
+            # Attempt sign-in
+            result = page.evaluate("""async ([email, password]) => {
+                try {
+                    const si = await window.Clerk.client.signIn.create({
+                        identifier: email,
+                        password: password,
+                        strategy: 'password'
+                    });
                     
-                    // Try to prepare email_code (this triggers sending the email)
-                    if (methods.includes('email_code')) {
-                        try {
-                            await si.prepareSecondFactor({ strategy: 'email_code' });
-                            return { 
-                                status: 'needs_2fa',
-                                signInId: si.id,
-                                methods: methods,
-                                message: 'Email code sent! Check your inbox.'
-                            };
-                        } catch (prepErr) {
-                            return { 
-                                status: 'needs_2fa',
-                                signInId: si.id,
-                                methods: methods,
-                                prepareError: prepErr.message || String(prepErr)
-                            };
-                        }
+                    if (si.status === 'complete') {
+                        await window.Clerk.setActive({ session: si.createdSessionId });
+                        return { 
+                            status: 'complete', 
+                            sessionId: si.createdSessionId 
+                        };
                     }
                     
-                    // Fallback if email_code not available
-                    return { 
-                        status: 'needs_2fa',
-                        signInId: si.id,
-                        methods: methods,
-                        message: 'Email code not available. Methods: ' + methods.join(', ')
-                    };
+                    if (si.status === 'needs_second_factor') {
+                        // Get available 2FA methods
+                        const methods = si.supportedSecondFactors?.map(f => f.strategy) || [];
+                        
+                        // Try to prepare email_code (this triggers sending the email)
+                        if (methods.includes('email_code')) {
+                            try {
+                                await si.prepareSecondFactor({ strategy: 'email_code' });
+                                return { 
+                                    status: 'needs_2fa',
+                                    signInId: si.id,
+                                    methods: methods,
+                                    message: 'Email code sent! Check your inbox.'
+                                };
+                            } catch (prepErr) {
+                                return { 
+                                    status: 'needs_2fa',
+                                    signInId: si.id,
+                                    methods: methods,
+                                    prepareError: prepErr.message || String(prepErr)
+                                };
+                            }
+                        }
+                        
+                        // Fallback if email_code not available
+                        return { 
+                            status: 'needs_2fa',
+                            signInId: si.id,
+                            methods: methods,
+                            message: 'Email code not available. Methods: ' + methods.join(', ')
+                        };
+                    }
+                    
+                    return { status: si.status };
+                } catch (err) {
+                    return { error: err.message || String(err) };
                 }
-                
-                return { status: si.status };
-            } catch (err) {
-                return { error: err.message || String(err) };
-            }
-        }""", [email, password])
+            }""", [email, password])
 
-        
-        if result.get("status") == "complete":
-            # No 2FA, save cookies immediately
-            cookies = context.cookies()
-            save_session_data("cookies", cookies)
+            
+            if result.get("status") == "complete":
+                # No 2FA, save cookies immediately
+                cookies = context.cookies()
+                save_session_data("cookies", cookies)
+                browser.close()
+                return {"status": "complete", "message": "Login successful, session saved to database"}
+            
+            if result.get("status") == "needs_2fa":
+                # Save the sign-in ID for later verification
+                save_session_data("pending_signin", {
+                    "sign_in_id": result.get("signInId"),
+                    "email": email,
+                    "timestamp": time.time()
+                })
+                browser.close()
+                return {
+                    "status": "needs_2fa",
+                    "signInId": result.get("signInId"),
+                    "methods": result.get("methods"),
+                    "message": "Check your email for the verification code, then use /api/copilot-auth/verify"
+                }
+            
             browser.close()
-            return {"status": "complete", "message": "Login successful, session saved to database"}
-        
-        if result.get("status") == "needs_2fa":
-            # Save the sign-in ID for later verification
-            save_session_data("pending_signin", {
-                "sign_in_id": result.get("signInId"),
-                "email": email,
-                "timestamp": time.time()
-            })
-            browser.close()
-            return {
-                "status": "needs_2fa",
-                "signInId": result.get("signInId"),
-                "methods": result.get("methods"),
-                "message": "Check your email for the verification code, then use /api/copilot-auth/verify"
-            }
-        
-        browser.close()
-        return result
+            return result
 
 
 def verify_code(code):
@@ -209,94 +215,95 @@ def verify_code(code):
     if not email or not password:
         return {"error": "Missing credentials. Email from state, password from env."}
     
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-        )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            viewport={"width": 1920, "height": 1080},
-        )
-        page = context.new_page()
-        
-        # Load main page to get Clerk SDK
-        page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
-        
-        try:
-            page.wait_for_function("() => window.Clerk && window.Clerk.client", timeout=20000)
-        except:
-            browser.close()
-            return {"error": "Clerk SDK not ready"}
-        
-        # Re-authenticate to restore signIn state, then verify 2FA
-        result = page.evaluate("""async ([email, password, code]) => {
-            try {
-                // Step 1: Re-login to get back to needs_second_factor state
-                const si = await window.Clerk.client.signIn.create({
-                    identifier: email,
-                    password: password,
-                    strategy: 'password'
-                });
-                
-                if (si.status === 'complete') {
-                    // No 2FA needed - already complete
-                    await window.Clerk.setActive({ session: si.createdSessionId });
-                    return { status: 'complete', sessionId: si.createdSessionId };
-                }
-                
-                if (si.status !== 'needs_second_factor') {
-                    return { error: 'Unexpected status: ' + si.status };
-                }
-                
-                // Step 2: Prepare second factor (this sends a new code, but we use the one user entered)
-                await si.prepareSecondFactor({ strategy: 'email_code' });
-                
-                // Step 3: Attempt the 2FA with the code
-                const result = await si.attemptSecondFactor({
-                    strategy: 'email_code',
-                    code: code
-                });
-                
-                if (result.status === 'complete') {
-                    await window.Clerk.setActive({ session: result.createdSessionId });
+    # Acquire lock to prevent concurrent Playwright operations (not thread-safe)
+    with _playwright_lock:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                viewport={"width": 1920, "height": 1080},
+            )
+            page = context.new_page()
+            
+            # Load main page to get Clerk SDK
+            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
+            
+            try:
+                page.wait_for_function("() => window.Clerk && window.Clerk.client", timeout=20000)
+            except:
+                browser.close()
+                return {"error": "Clerk SDK not ready"}
+            
+            # Re-authenticate to restore signIn state, then verify 2FA
+            result = page.evaluate("""async ([email, password, code]) => {
+                try {
+                    // Step 1: Re-login to get back to needs_second_factor state
+                    const si = await window.Clerk.client.signIn.create({
+                        identifier: email,
+                        password: password,
+                        strategy: 'password'
+                    });
+                    
+                    if (si.status === 'complete') {
+                        // No 2FA needed - already complete
+                        await window.Clerk.setActive({ session: si.createdSessionId });
+                        return { status: 'complete', sessionId: si.createdSessionId };
+                    }
+                    
+                    if (si.status !== 'needs_second_factor') {
+                        return { error: 'Unexpected status: ' + si.status };
+                    }
+                    
+                    // Step 2: Prepare second factor (this sends a new code, but we use the one user entered)
+                    await si.prepareSecondFactor({ strategy: 'email_code' });
+                    
+                    // Step 3: Attempt the 2FA with the code
+                    const result = await si.attemptSecondFactor({
+                        strategy: 'email_code',
+                        code: code
+                    });
+                    
+                    if (result.status === 'complete') {
+                        await window.Clerk.setActive({ session: result.createdSessionId });
+                        return { 
+                            status: 'complete', 
+                            sessionId: result.createdSessionId 
+                        };
+                    }
+                    
                     return { 
-                        status: 'complete', 
-                        sessionId: result.createdSessionId 
+                        status: result.status,
+                        error: 'Verification incomplete'
                     };
+                } catch (err) {
+                    return { error: err.message || String(err) };
                 }
+            }""", [email, password, code])
+
+            
+            if result.get("status") == "complete":
+                # Save session cookies to database
+                page.wait_for_timeout(2000)  # Let cookies settle
+                cookies = context.cookies()
+                save_session_data("cookies", cookies)
                 
-                return { 
-                    status: result.status,
-                    error: 'Verification incomplete'
-                };
-            } catch (err) {
-                return { error: err.message || String(err) };
-            }
-        }""", [email, password, code])
-
-
-        
-        if result.get("status") == "complete":
-            # Save session cookies to database
-            page.wait_for_timeout(2000)  # Let cookies settle
-            cookies = context.cookies()
-            save_session_data("cookies", cookies)
-            
-            # Clean up pending sign-in
-            delete_session_data("pending_signin")
-            
-            session_cookies = [c["name"] for c in cookies if "__session" in c["name"]]
+                # Clean up pending sign-in
+                delete_session_data("pending_signin")
+                
+                session_cookies = [c["name"] for c in cookies if "__session" in c["name"]]
+                
+                browser.close()
+                return {
+                    "status": "complete",
+                    "message": "2FA verified! Session saved to database. You can now use the API.",
+                    "sessionCookies": session_cookies
+                }
             
             browser.close()
-            return {
-                "status": "complete",
-                "message": "2FA verified! Session saved to database. You can now use the API.",
-                "sessionCookies": session_cookies
-            }
-        
-        browser.close()
-        return result
+            return result
 
 
 def get_status():
@@ -329,56 +336,58 @@ def fetch_api(api_url):
     if not cookies:
         return {"error": "No saved session. Please authenticate first via /api/copilot-auth/initiate"}
     
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--single-process"],
-        )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080}
-        )
-        
-        # Inject saved cookies
-        context.add_cookies(cookies)
-        
-        page = context.new_page()
-        
-        # Navigate to establish cookie context
-        page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(2000)
-        
-        # Verify session
-        current_cookies = context.cookies()
-        session_cookies = [c for c in current_cookies if "__session" in c["name"]]
-        
-        if not session_cookies:
+    # Acquire lock to prevent concurrent Playwright operations (not thread-safe)
+    with _playwright_lock:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--single-process"],
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                viewport={"width": 1920, "height": 1080}
+            )
+            
+            # Inject saved cookies
+            context.add_cookies(cookies)
+            
+            page = context.new_page()
+            
+            # Navigate to establish cookie context
+            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(2000)
+            
+            # Verify session
+            current_cookies = context.cookies()
+            session_cookies = [c for c in current_cookies if "__session" in c["name"]]
+            
+            if not session_cookies:
+                browser.close()
+                return {"error": "Session cookies expired. Please re-authenticate."}
+            
+            # Fetch API via JS
+            result = page.evaluate(
+                """async (url) => {
+                    try {
+                        const resp = await fetch(url, { credentials: 'include' });
+                        const body = await resp.json();
+                        return { status: resp.status, body, ok: resp.ok };
+                    } catch (err) {
+                        return { error: err.message };
+                    }
+                }""",
+                api_url
+            )
+            
             browser.close()
-            return {"error": "Session cookies expired. Please re-authenticate."}
-        
-        # Fetch API via JS
-        result = page.evaluate(
-            """async (url) => {
-                try {
-                    const resp = await fetch(url, { credentials: 'include' });
-                    const body = await resp.json();
-                    return { status: resp.status, body, ok: resp.ok };
-                } catch (err) {
-                    return { error: err.message };
-                }
-            }""",
-            api_url
-        )
-        
-        browser.close()
-        
-        if "error" in result:
-            return {"error": result["error"]}
-        
-        if not result.get("ok"):
-            return {"error": f"HTTP {result.get('status')}", "body": str(result.get('body', ''))[:500]}
-        
-        return {"success": True, "data": result.get("body", {})}
+            
+            if "error" in result:
+                return {"error": result["error"]}
+            
+            if not result.get("ok"):
+                return {"error": f"HTTP {result.get('status')}", "body": str(result.get('body', ''))[:500]}
+            
+            return {"success": True, "data": result.get("body", {})}
 
 
 def main():
