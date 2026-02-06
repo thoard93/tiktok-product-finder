@@ -10558,6 +10558,90 @@ def cleanup_zero_stats():
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/admin/hot-test')
+@login_required
+@admin_required
+def hot_products_test():
+    """Run the EXACT same query as Discord bot's get_hot_products() from web context."""
+    try:
+        from datetime import timedelta
+        cutoff_date = datetime.utcnow() - timedelta(days=3)
+        
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+        
+        # EXACT same query as discord_bot.py get_hot_products()
+        products = Product.query.filter(
+            video_count_field >= 30,
+            video_count_field <= 200,
+            Product.sales_7d >= 20,
+            Product.ad_spend >= 50,
+            Product.commission_rate > 0,
+            db.or_(
+                Product.last_shown_hot == None,
+                Product.last_shown_hot < cutoff_date
+            )
+        ).order_by(
+            db.func.coalesce(Product.ad_spend, 0).desc(),
+            db.func.coalesce(Product.sales_7d, 0).desc(),
+            video_count_field.asc()
+        ).limit(45).all()
+        
+        # Also try raw SQL for comparison
+        raw_sql = db.text("""
+            SELECT product_id, product_name, 
+                   COALESCE(video_count_alltime, video_count) as vids,
+                   sales_7d, ad_spend, commission_rate, last_shown_hot
+            FROM products
+            WHERE COALESCE(video_count_alltime, video_count) >= 30
+              AND COALESCE(video_count_alltime, video_count) <= 200
+              AND sales_7d >= 20
+              AND ad_spend >= 50
+              AND commission_rate > 0
+              AND (last_shown_hot IS NULL OR last_shown_hot < :cutoff)
+            ORDER BY COALESCE(ad_spend, 0) DESC
+            LIMIT 10
+        """)
+        raw_results = db.session.execute(raw_sql, {'cutoff': cutoff_date}).fetchall()
+        
+        # Also test: call actual get_hot_products from discord_bot
+        try:
+            from discord_bot import get_hot_products
+            bot_results = get_hot_products()
+            bot_count = len(bot_results) if bot_results else 0
+        except Exception as e:
+            bot_results = []
+            bot_count = f"ERROR: {str(e)}"
+        
+        return jsonify({
+            'orm_query_count': len(products),
+            'orm_top_5': [{
+                'id': p.product_id[:30],
+                'name': (p.product_name or '')[:40],
+                'vids_alltime': p.video_count_alltime,
+                'vids_7d': p.video_count,
+                'coalesced_vids': p.video_count_alltime if p.video_count_alltime else p.video_count,
+                'sales_7d': p.sales_7d,
+                'ad_spend': p.ad_spend,
+                'commission': p.commission_rate,
+                'last_shown': str(p.last_shown_hot)
+            } for p in products[:5]],
+            'raw_sql_count': len(raw_results),
+            'raw_sql_top_5': [{
+                'id': str(r[0])[:30],
+                'name': str(r[1] or '')[:40],
+                'vids': r[2],
+                'sales_7d': r[3],
+                'ad_spend': r[4],
+                'commission': r[5],
+                'last_shown': str(r[6])
+            } for r in raw_results[:5]],
+            'bot_function_count': bot_count,
+            'bot_function_results': bot_results[:3] if isinstance(bot_results, list) else []
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
 @app.route('/api/admin/hot-diag')
 @login_required
 @admin_required
