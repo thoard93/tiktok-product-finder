@@ -10562,82 +10562,82 @@ def cleanup_zero_stats():
 @login_required
 @admin_required
 def deduplicate_products():
-    """Find and remove duplicate products (same product_name, different product_id).
-    Also handles shop_ prefix collisions (e.g. shop_123 vs 123).
-    Keeps the version with the most recent last_updated and highest sales_7d.
+    """Find and remove duplicate products using fast raw SQL.
     Supports dry_run=true query param to preview what would be deleted."""
     try:
         dry_run = request.args.get('dry_run', 'false').lower() == 'true'
         
-        from sqlalchemy import func as sqla_func
-        
-        # ---- Phase 1: Name-based duplicates ----
-        dupes = db.session.query(
-            sqla_func.lower(sqla_func.trim(Product.product_name)),
-            sqla_func.count(Product.product_id)
-        ).filter(
-            Product.product_name != None,
-            Product.product_name != ''
-        ).group_by(
-            sqla_func.lower(sqla_func.trim(Product.product_name))
-        ).having(
-            sqla_func.count(Product.product_id) > 1
-        ).all()
+        # ---- Phase 1: Name-based duplicates (raw SQL for speed) ----
+        # Find duplicate names with a fast GROUP BY (capped at 500)
+        dupe_names_sql = db.text("""
+            SELECT lower(trim(product_name)) as norm_name, COUNT(*) as cnt
+            FROM products
+            WHERE product_name IS NOT NULL AND product_name != ''
+            GROUP BY lower(trim(product_name))
+            HAVING COUNT(*) > 1
+            LIMIT 500
+        """)
+        dupe_names = db.session.execute(dupe_names_sql).fetchall()
         
         name_dupes_deleted = 0
         name_dupe_details = []
         
-        for name_lower, count in dupes:
-            products = Product.query.filter(
-                sqla_func.lower(sqla_func.trim(Product.product_name)) == name_lower
-            ).order_by(
-                Product.last_updated.desc().nullslast(),
-                db.func.coalesce(Product.sales_7d, 0).desc()
-            ).all()
+        for row in dupe_names:
+            norm_name = row[0]
+            # Get all products with this name, best first
+            products_sql = db.text("""
+                SELECT product_id, product_name, last_updated, COALESCE(sales_7d, 0) as s7d
+                FROM products
+                WHERE lower(trim(product_name)) = :name
+                ORDER BY last_updated DESC, COALESCE(sales_7d, 0) DESC
+            """)
+            prods = db.session.execute(products_sql, {'name': norm_name}).fetchall()
             
-            keeper = products[0]
-            for dup in products[1:]:
+            if len(prods) <= 1:
+                continue
+            
+            keeper_id = prods[0][0]
+            for dup in prods[1:]:
                 name_dupe_details.append({
-                    'deleted_id': dup.product_id,
-                    'kept_id': keeper.product_id,
-                    'name': (dup.product_name or 'N/A')[:60],
+                    'deleted_id': dup[0],
+                    'kept_id': keeper_id,
+                    'name': (dup[1] or 'N/A')[:60],
                     'reason': 'name_duplicate'
                 })
                 if not dry_run:
-                    db.session.delete(dup)
+                    db.session.execute(db.text("DELETE FROM products WHERE product_id = :pid"), {'pid': dup[0]})
                 name_dupes_deleted += 1
         
         # ---- Phase 2: shop_ prefix collisions ----
         prefix_deleted = 0
         prefix_details = []
         
-        shop_products = Product.query.filter(
-            Product.product_id.like('shop_%')
-        ).all()
+        shop_sql = db.text("""
+            SELECT p1.product_id as shop_id, p1.product_name, p1.last_updated as shop_updated,
+                   p2.product_id as bare_id, p2.last_updated as bare_updated
+            FROM products p1
+            JOIN products p2 ON REPLACE(p1.product_id, 'shop_', '') = p2.product_id
+            WHERE p1.product_id LIKE 'shop_%'
+            LIMIT 200
+        """)
+        collisions = db.session.execute(shop_sql).fetchall()
         
-        for sp in shop_products:
-            bare_id = sp.product_id.replace('shop_', '', 1)
-            bare_product = Product.query.get(bare_id)
-            if bare_product:
-                if (bare_product.last_updated or datetime.min) >= (sp.last_updated or datetime.min):
-                    prefix_details.append({
-                        'deleted_id': sp.product_id,
-                        'kept_id': bare_product.product_id,
-                        'name': (sp.product_name or 'N/A')[:60],
-                        'reason': 'shop_prefix_collision'
-                    })
-                    if not dry_run:
-                        db.session.delete(sp)
-                else:
-                    prefix_details.append({
-                        'deleted_id': bare_product.product_id,
-                        'kept_id': sp.product_id,
-                        'name': (bare_product.product_name or 'N/A')[:60],
-                        'reason': 'shop_prefix_collision'
-                    })
-                    if not dry_run:
-                        db.session.delete(bare_product)
-                prefix_deleted += 1
+        for c in collisions:
+            shop_id, name, shop_upd, bare_id, bare_upd = c
+            if (bare_upd or datetime.min) >= (shop_upd or datetime.min):
+                delete_id, keep_id = shop_id, bare_id
+            else:
+                delete_id, keep_id = bare_id, shop_id
+            
+            prefix_details.append({
+                'deleted_id': delete_id,
+                'kept_id': keep_id,
+                'name': (name or 'N/A')[:60],
+                'reason': 'shop_prefix_collision'
+            })
+            if not dry_run:
+                db.session.execute(db.text("DELETE FROM products WHERE product_id = :pid"), {'pid': delete_id})
+            prefix_deleted += 1
         
         if not dry_run:
             db.session.commit()
@@ -10661,6 +10661,7 @@ def deduplicate_products():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # --- Background Scheduler for Daily Refresh (Now using Copilot!) ---
 try:
