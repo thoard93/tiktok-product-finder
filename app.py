@@ -7136,6 +7136,118 @@ def get_copilot_cookie():
     print("[Copilot Cookie] ❌ No cookie found - update in Settings UI", flush=True)
     return None
 
+def fetch_v2_via_playwright(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
+    """Fetch products via V2 API using Playwright + BrightData Scraping Browser.
+    
+    This is the reliable method for Clerk-authenticated scraping:
+    - Connects to remote browser via WebSocket CDP
+    - Injects cookies and navigates to site
+    - Clerk's frontend JS auto-refreshes the session token
+    - Then fetches the API endpoint
+    
+    Env vars needed:
+    - SCRAPING_BROWSER_URL: WebSocket URL (wss://user:pass@brd.superproxy.io:9222)
+    
+    Returns list of products or None on failure.
+    """
+    import json
+    
+    cookie_str = get_copilot_cookie()
+    if not cookie_str:
+        print("[V2 Playwright] ❌ No cookie configured - update in Admin UI", flush=True)
+        return None
+    
+    browser_url = os.environ.get('SCRAPING_BROWSER_URL', '').strip()
+    if not browser_url:
+        print("[V2 Playwright] ❌ No SCRAPING_BROWSER_URL env var set", flush=True)
+        return None
+    
+    # Parse cookies into Playwright format
+    cookies = []
+    for item in cookie_str.split(';'):
+        item = item.strip()
+        if '=' in item:
+            key, value = item.split('=', 1)
+            cookies.append({
+                "name": key.strip(),
+                "value": value.strip(),
+                "domain": ".tiktokcopilot.com",
+                "path": "/"
+            })
+    
+    print(f"[V2 Playwright] Page {page_num} with {len(cookies)} cookies", flush=True)
+    print(f"[V2 Playwright] Browser URL: {browser_url[:50]}...", flush=True)
+    
+    api_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
+    
+    try:
+        from playwright.sync_api import sync_playwright
+        
+        with sync_playwright() as p:
+            print("[V2 Playwright] Connecting to remote browser...", flush=True)
+            browser = p.chromium.connect_over_cdp(browser_url)
+            
+            # Get or create context
+            if browser.contexts:
+                context = browser.contexts[0]
+            else:
+                context = browser.new_context()
+            
+            # Inject cookies
+            context.add_cookies(cookies)
+            print("[V2 Playwright] Cookies injected", flush=True)
+            
+            page = context.new_page()
+            
+            # Navigate to main site to activate session and let Clerk JS refresh token
+            print("[V2 Playwright] Navigating to main site for session activation...", flush=True)
+            page.goto("https://www.tiktokcopilot.com/products", wait_until="networkidle", timeout=60000)
+            
+            # Small delay for Clerk to refresh token
+            page.wait_for_timeout(2000)
+            
+            # Now fetch the API
+            print(f"[V2 Playwright] Fetching API: {api_url[:60]}...", flush=True)
+            response = page.request.get(api_url)
+            
+            print(f"[V2 Playwright] Status: {response.status}", flush=True)
+            
+            if response.status != 200:
+                body = response.text()[:300] if response.text() else "No body"
+                print(f"[V2 Playwright] ❌ HTTP {response.status}: {body}", flush=True)
+                browser.close()
+                return None
+            
+            content = response.text()
+            print(f"[V2 Playwright] Response length: {len(content)} chars", flush=True)
+            
+            # Check for HTML (sign-in redirect)
+            is_html = content.strip().startswith('<!DOCTYPE') or content.strip().startswith('<html')
+            if is_html:
+                print(f"[V2 Playwright] ⚠️ Got HTML instead of JSON - session may be invalid", flush=True)
+                print(f"[V2 Playwright] Preview: {content[:300]}", flush=True)
+                browser.close()
+                return None
+            
+            # Parse JSON
+            try:
+                data = json.loads(content)
+                products = data.get('products', [])
+                print(f"[V2 Playwright] ✅ Success - {len(products)} products on page {page_num}", flush=True)
+                browser.close()
+                return products
+            except json.JSONDecodeError as e:
+                print(f"[V2 Playwright] ❌ JSON decode error: {e}", flush=True)
+                browser.close()
+                return None
+                
+    except ImportError:
+        print("[V2 Playwright] ❌ Playwright not installed - run 'pip install playwright && playwright install chromium'", flush=True)
+        return None
+    except Exception as e:
+        print(f"[V2 Playwright] ❌ Exception: {e}", flush=True)
+        return None
+
 def fetch_v2_via_scraping_browser(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
     """Fetch products via V2 API using BrightData Scraping Browser as HTTPS proxy.
     
@@ -10877,6 +10989,27 @@ def test_v2_browser():
             'success': False,
             'error': 'Scraping Browser fetch failed - check logs for details',
             'hint': 'Ensure COPILOT_PROXY is set to Scraping Browser URL (port 9515)'
+        }), 500
+    
+    return jsonify({
+        'success': True,
+        'product_count': len(products),
+        'sample': products[0] if products else None,
+        'fields_available': list(products[0].keys()) if products else []
+    })
+
+@app.route('/api/test-v2-playwright', methods=['GET'])
+@login_required
+@admin_required
+def test_v2_playwright():
+    """Test V2 API using Playwright + BrightData Scraping Browser."""
+    products = fetch_v2_via_playwright(page_num=0, limit=10)
+    
+    if products is None:
+        return jsonify({
+            'success': False,
+            'error': 'Playwright fetch failed - check logs for details',
+            'hint': 'Ensure SCRAPING_BROWSER_URL is set (wss://user:pass@brd.superproxy.io:9222)'
         }), 500
     
     return jsonify({

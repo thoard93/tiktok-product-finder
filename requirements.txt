@@ -2,6 +2,7 @@ flask
 requests
 flask_sqlalchemy
 gunicorn
+playwright
 curl_cffi
 apscheduler
 emoji
