@@ -11322,6 +11322,75 @@ if stored_cookie and '__session' in stored_cookie:
 else:
     print("[Copilot] ℹ️ No cookies stored - auto-refresh disabled (paste cookies in Admin UI first)")
 
+# =============================================================================
+# COPILOT 2FA AUTHENTICATION ENDPOINTS
+# =============================================================================
+
+@app.route('/api/copilot-auth/status', methods=['GET'])
+@login_required
+@admin_required
+def copilot_auth_status():
+    """Check current Copilot auth status."""
+    import subprocess
+    script_path = os.path.join(basedir, 'clerk_auth.py')
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, script_path, 'status'],
+            capture_output=True, text=True, timeout=30
+        )
+        return jsonify(json.loads(result.stdout))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/copilot-auth/initiate', methods=['POST'])
+@login_required
+@admin_required
+def copilot_auth_initiate():
+    """Start the Clerk login flow. Requires COPILOT_EMAIL and COPILOT_PASSWORD env vars."""
+    import subprocess
+    script_path = os.path.join(basedir, 'clerk_auth.py')
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, script_path, 'initiate'],
+            capture_output=True, text=True, timeout=90,
+            env={**os.environ}
+        )
+        return jsonify(json.loads(result.stdout))
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Login timeout - Clerk may be unreachable'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/copilot-auth/verify', methods=['POST'])
+@login_required
+@admin_required
+def copilot_auth_verify():
+    """Complete 2FA verification with the email code."""
+    import subprocess
+    script_path = os.path.join(basedir, 'clerk_auth.py')
+    
+    data = request.get_json() or {}
+    code = data.get('code', '').strip()
+    
+    if not code:
+        return jsonify({'error': 'Verification code required'}), 400
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, script_path, 'verify', code],
+            capture_output=True, text=True, timeout=90,
+            env={**os.environ}
+        )
+        return jsonify(json.loads(result.stdout))
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Verification timeout'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
