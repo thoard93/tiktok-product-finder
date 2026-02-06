@@ -1027,11 +1027,23 @@ def get_hot_products():
             db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 1: High Ad Spend
             db.func.coalesce(Product.sales_7d, 0).desc(),  # Priority 2: High 7D Sales
             video_count_field.asc()  # Priority 3: Lower videos = better opportunity
-        ).limit(MAX_DAILY_POSTS).all()
+        ).limit(MAX_DAILY_POSTS * 3).all()  # Fetch extra to allow deduplication
+        
+        # Deduplicate by product_name (same product can have multiple IDs)
+        seen_names = set()
+        unique_products = []
+        for p in products:
+            # Normalize name for comparison (lowercase, strip whitespace)
+            name_key = (p.product_name or '').lower().strip()[:50]  # First 50 chars
+            if name_key and name_key not in seen_names:
+                seen_names.add(name_key)
+                unique_products.append(p)
+                if len(unique_products) >= MAX_DAILY_POSTS:
+                    break
         
         # Convert to dicts BEFORE commit to avoid DetachedInstanceError
         product_dicts = []
-        for p in products:
+        for p in unique_products:
             video_count = p.video_count_alltime or p.video_count or 0  # All-time video count
             p_dict = {
                 'product_id': p.product_id,

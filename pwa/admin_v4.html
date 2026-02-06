@@ -211,12 +211,6 @@
                         <option value="600" selected>30,000 Products (Ultra)</option>
                     </select>
                 </div>
-                <div class="flex items-center gap-2 bg-slate-950 border border-white/10 rounded-xl px-4 py-3">
-                    <input type="checkbox" id="autoEnrich" checked class="w-4 h-4 accent-cyan-500">
-                    <label for="autoEnrich"
-                        class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Auto-Enrich After
-                        Sync</label>
-                </div>
                 <button onclick="syncCopilot()" id="btnCopilot"
                     class="btn-premium px-8 py-3 shadow-lg shadow-primary/20">
                     <i class="fas fa-bolt mr-2 text-xs"></i>
@@ -227,12 +221,6 @@
                     class="bg-slate-950 border border-white/10 px-6 py-3 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-broom text-xs"></i>
                     <span>Optimize Database</span>
-                </button>
-
-                <button onclick="enrichVideos()" id="btnEnrichVideos"
-                    class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-cyan-500/20">
-                    <i class="fas fa-video text-xs"></i>
-                    <span>📊 Manual Enrich</span>
                 </button>
             </div>
 
@@ -640,9 +628,26 @@
         // Check status on page load
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth2faStatus();
+            checkSyncStatus(); // Enable stop button if sync is running
             // Check 2FA status every 5 minutes
             setInterval(checkAuth2faStatus, 300000);
         });
+
+        // Check if sync is running (for stop button persistence across page refresh)
+        async function checkSyncStatus() {
+            try {
+                const res = await fetch('/api/copilot/sync-status');
+                const data = await res.json();
+                if (data.running) {
+                    const stopBtn = document.getElementById('btnStop');
+                    if (stopBtn) {
+                        stopBtn.disabled = false;
+                    }
+                }
+            } catch (e) {
+                console.log('Sync status check error:', e);
+            }
+        }
 
         // ============ 2FA AUTHENTICATION FUNCTIONS ============
 
@@ -780,7 +785,6 @@
             const btn = document.getElementById('btnCopilot');
             const stopBtn = document.getElementById('btnStop');
             const pageSelect = document.getElementById('syncPages');
-            const autoEnrichCheckbox = document.getElementById('autoEnrich');
             const maxPages = parseInt(pageSelect.value || 20);
             const targetProducts = maxPages * 50; // ~50 products per page
             const original = btn.innerHTML;
@@ -794,25 +798,20 @@
                 try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
 
                 // Use server-side mass-sync (runs in background - can close browser!)
-                const autoEnrichEnabled = autoEnrichCheckbox && autoEnrichCheckbox.checked;
                 const res = await fetch('/api/copilot/mass-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         target: targetProducts,
-                        timeframe: 'all',  // All-time for video/creator counts
-                        auto_enrich: autoEnrichEnabled
+                        timeframe: '7d'  // 7d for core stats, all-time enrichment is automatic now
                     })
                 });
                 const data = await res.json();
 
                 if (data.status === 'success') {
                     let msg = `🚀 SYNC STARTED (Server-Side)\n\n${data.message}\n\n`;
-                    msg += `✅ You can close this page - sync runs in background on server.\n`;
-                    msg += `📊 Check Render logs for progress.`;
-                    if (autoEnrichEnabled) {
-                        msg += `\n\n🔄 Auto-enrich will run after sync completes.`;
-                    }
+                    msg += `✅ Fetches 7D stats + all-time video/creator counts in one run.\n`;
+                    msg += `📊 Check Render logs for progress. You can close this page.`;
                     alert(msg);
                 } else {
                     alert('❌ Sync Error: ' + (data.message || data.error || 'Unknown error'));

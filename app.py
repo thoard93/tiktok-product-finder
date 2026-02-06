@@ -8424,91 +8424,125 @@ def copilot_reset_sync():
 @login_required
 @admin_required
 def copilot_sync():
-    """Manual trigger to sync latest products from Copilot with massive multi-page support"""
+    """Manual trigger to sync latest products from Copilot with COMBINED 7d + all-time enrichment"""
     global SYNC_STOP_REQUESTED
     SYNC_STOP_REQUESTED = False  # Reset on new manual trigger
+    
+    # Mark sync as running in DB for stop button persistence
+    set_config_value('sync_running', 'true', 'Sync is in progress')
+    set_config_value('SYNC_STOP_REQUESTED', 'false', 'Reset stop flag')
     
     user = get_current_user()
     data = request.json or {}
     pages = int(data.get('pages', 1))
-    start_page = int(data.get('page', 0))  # Correctly get start page from frontend
+    start_page = int(data.get('page', 0))
     limit = int(data.get('limit', 50))
-    timeframe = data.get('timeframe', '7d')  # Default to '7d' for 7-day stats; enrichment uses 'all' for all-time counts
-    auto_enrich = data.get('auto_enrich', False)  # Auto-trigger enrichment after sync
     
-    # Cap pages to prevent extreme load but allow high volume (up to 40k products)
+    # Cap pages to prevent extreme load
     if pages > 800: pages = 800 
     
     products_synced = 0
     errors = []
     
-    for page_idx in range(start_page, start_page + pages): # Use correct range based on start_page
+    # ==========================================================================
+    # PHASE 1: Fetch 7d pages (core stats: sales, revenue, ad_spend)
+    # ==========================================================================
+    print(f"[SYNC] 🚀 PHASE 1: Fetching {pages} pages of 7d stats...")
+    
+    for page_idx in range(start_page, start_page + pages):
         if SYNC_STOP_REQUESTED:
-            print("🛑 [Copilot Sync] Interrupting batch processing...")
+            print("🛑 [SYNC] Phase 1 interrupted by stop signal")
             break
             
         try:
-            print(f"[Copilot Sync] Processing page {page_idx + 1}")
-            saved, total = sync_copilot_products(timeframe=timeframe, limit=limit, page=page_idx)
+            print(f"[SYNC] Phase 1: Page {page_idx + 1}/{start_page + pages}")
+            saved, total = sync_copilot_products(timeframe='7d', limit=limit, page=page_idx)
             products_synced += saved
-            if total == 0: break # No more products
+            if total == 0: break
             if page_idx < start_page + pages - 1:
-                # Randomized delay between 1.5 and 4 seconds to bypass bot detection
                 delay = 1.5 + (secrets.randbelow(250) / 100.0)
                 time.sleep(delay)
         except Exception as e:
-            print(f"Error syncing page {page_idx}: {e}")
-            errors.append(f"Page {page_idx}: {str(e)}")
-            
-    log_activity(user.id, 'copilot_sync', {'pages': pages, 'synced': products_synced, 'auto_enrich': auto_enrich})
+            print(f"[SYNC] Phase 1 Error page {page_idx}: {e}")
+            errors.append(f"Phase 1 Page {page_idx}: {str(e)}")
     
-    # Auto-enrich after sync if enabled (runs in background with delay)
-    enrich_triggered = False
-    if auto_enrich and products_synced > 0 and not SYNC_STOP_REQUESTED:
-        import threading
-        def delayed_enrich():
-            print("[Auto-Enrich] ⏳ Waiting 30 seconds before starting enrichment...")
-            time.sleep(30)  # Delay to avoid API rate limits
-            print("[Auto-Enrich] 🚀 Starting all-time video enrichment...")
-            try:
-                # Run enrichment for a reasonable number of pages
-                enrich_pages = min(100, pages * 2)  # Enrich 2x synced pages, max 100
-                for page in range(enrich_pages):
-                    if SYNC_STOP_REQUESTED:
-                        print("[Auto-Enrich] 🛑 Stop requested, halting enrichment")
-                        break
-                    products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
-                    if not products_data or not products_data.get('videos'):
-                        print(f"[Auto-Enrich] Page {page}: No more data, stopping")
-                        break
-                    videos = products_data.get('videos', [])
-                    enriched = 0
-                    for v in videos:
-                        pid = str(v.get('productId', '')).strip()
-                        if not pid:
-                            continue
-                        if not pid.startswith('shop_'):
-                            pid = f"shop_{pid}"
-                        existing = Product.query.get(pid)
-                        if existing:
-                            v_count = safe_int(v.get('productVideoCount') or 0)
-                            c_count = safe_int(v.get('productCreatorCount') or 0)
-                            if v_count > 0 and v_count > (existing.video_count_alltime or 0):
-                                existing.video_count_alltime = v_count
-                            if c_count > 0 and c_count > (existing.influencer_count or 0):
-                                existing.influencer_count = c_count
-                            enriched += 1
-                    db.session.commit()
-                    print(f"[Auto-Enrich] Page {page}: Enriched {enriched} products")
-                    time.sleep(3)  # 3s delay between pages
-                print("[Auto-Enrich] ✅ Enrichment complete!")
-            except Exception as e:
-                print(f"[Auto-Enrich] ❌ Error: {e}")
+    # ==========================================================================
+    # PHASE 2: Fetch all-time pages (video_count, creator_count) and MERGE
+    # ==========================================================================
+    if not SYNC_STOP_REQUESTED and products_synced > 0:
+        print(f"[SYNC] 🔄 PHASE 2: Fetching all-time video/creator counts...")
         
-        thread = threading.Thread(target=delayed_enrich, daemon=True)
-        thread.start()
-        enrich_triggered = True
-        print("[Copilot Sync] 🔄 Auto-enrich scheduled (starts in 30s)")
+        # Fetch same number of pages from all-time endpoint
+        alltime_enriched = 0
+        for page_idx in range(start_page, start_page + pages):
+            if SYNC_STOP_REQUESTED:
+                print("🛑 [SYNC] Phase 2 interrupted by stop signal")
+                break
+            
+            try:
+                # Use the products endpoint with timeframe='all'
+                products_data = fetch_copilot_products(timeframe='all', limit=limit, page=page_idx)
+                if not products_data:
+                    # Fallback to trending endpoint
+                    products_data = fetch_copilot_trending(timeframe='all', limit=limit, page=page_idx)
+                
+                if not products_data:
+                    print(f"[SYNC] Phase 2: Page {page_idx} empty, stopping")
+                    break
+                
+                # Get products from response
+                products = products_data.get('products', []) or products_data.get('videos', [])
+                if not products:
+                    print(f"[SYNC] Phase 2: Page {page_idx} no products, stopping")
+                    break
+                
+                # Merge all-time counts into existing DB records
+                page_enriched = 0
+                for p in products:
+                    pid = str(p.get('productId', '')).strip()
+                    if not pid:
+                        continue
+                    if not pid.startswith('shop_'):
+                        pid = f"shop_{pid}"
+                    
+                    existing = Product.query.get(pid)
+                    if existing:
+                        v_count = safe_int(p.get('productVideoCount') or 0)
+                        c_count = safe_int(p.get('productCreatorCount') or 0)
+                        
+                        # Update all-time video count (only if higher)
+                        if v_count > 0 and v_count > (existing.video_count_alltime or 0):
+                            existing.video_count_alltime = v_count
+                            # Also update video_count for display purposes
+                            if v_count > (existing.video_count or 0):
+                                existing.video_count = v_count
+                        
+                        # Update creator count (only if higher)
+                        if c_count > 0 and c_count > (existing.influencer_count or 0):
+                            existing.influencer_count = c_count
+                        
+                        page_enriched += 1
+                
+                db.session.commit()
+                alltime_enriched += page_enriched
+                print(f"[SYNC] Phase 2: Page {page_idx + 1} - Enriched {page_enriched} products")
+                
+                # Rate limiting
+                delay = 1.5 + (secrets.randbelow(200) / 100.0)
+                time.sleep(delay)
+                
+            except Exception as e:
+                print(f"[SYNC] Phase 2 Error page {page_idx}: {e}")
+                errors.append(f"Phase 2 Page {page_idx}: {str(e)}")
+        
+        print(f"[SYNC] ✅ PHASE 2 COMPLETE: Enriched {alltime_enriched} products with all-time counts")
+    
+    # Mark sync as complete
+    set_config_value('sync_running', 'false', 'Sync complete')
+    
+    log_activity(user.id, 'copilot_sync', {'pages': pages, 'synced': products_synced})
+    
+    print(f"[SYNC] ✅ SYNC COMPLETE: {products_synced} products saved")
     
     return jsonify({
         'status': 'success',
@@ -8516,7 +8550,6 @@ def copilot_sync():
         'pages_processed': pages,
         'total_pages_requested': pages,
         'stop_requested': SYNC_STOP_REQUESTED,
-        'auto_enrich_triggered': enrich_triggered,
         'errors': errors
     })
 
@@ -10339,15 +10372,17 @@ def copilot_mass_sync():
 @app.route('/api/copilot/sync-status')
 @login_required
 def copilot_sync_status():
-    """Check current sync progress"""
+    """Check current sync progress and running state"""
     status = get_config_value('sync_status', 'idle')
     progress = int(get_config_value('sync_progress', '0'))
     target = int(get_config_value('sync_target', '0'))
+    running = get_config_value('sync_running', 'false') == 'true'
     return jsonify({
         'status': status,
         'progress': progress,
         'target': target,
-        'percent': int((progress / target * 100) if target > 0 else 0)
+        'percent': int((progress / target * 100) if target > 0 else 0),
+        'running': running  # For stop button persistence across page refresh
     })
 
 @app.route('/api/copilot/test')
