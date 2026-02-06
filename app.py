@@ -7267,9 +7267,9 @@ def _playwright_needs_reauth():
 def fetch_v2_via_direct_playwright(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
     """Fetch products via V2 API using direct Playwright authentication.
     
-    This approach runs Playwright locally on the Render server and logs in
-    with actual email/password credentials. Clerk handles JWT refresh natively
-    since we're in a real browser context.
+    This approach runs Playwright in a subprocess to avoid asyncio conflicts
+    with gunicorn. It logs in with actual email/password credentials and 
+    Clerk handles JWT refresh natively.
     
     Env vars needed:
     - COPILOT_EMAIL: TikTokCopilot email
@@ -7277,90 +7277,86 @@ def fetch_v2_via_direct_playwright(page_num, timeframe='7d', sort_by='revenue', 
     
     Returns list of products or None on failure.
     """
+    import subprocess
     import json
     
-    lock = get_pw_lock()
-    with lock:
-        try:
-            # Ensure browser is running
-            _ensure_playwright_browser()
-            
-            # Authenticate if needed
-            if _playwright_needs_reauth():
-                if not _playwright_login():
-                    return None
-            
-            # Build API URL
-            api_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
-            
-            print(f"[Direct Playwright] 📡 Fetching page {page_num}: {api_url[:60]}...", flush=True)
-            
-            # Use JavaScript fetch from the authenticated page context
-            result = _playwright_session['page'].evaluate(
-                """async (url) => {
-                    try {
-                        const resp = await fetch(url, { credentials: 'include' });
-                        const status = resp.status;
-                        let body;
-                        const ct = resp.headers.get('content-type') || '';
-                        if (ct.includes('application/json')) {
-                            body = await resp.json();
-                        } else {
-                            body = await resp.text();
-                        }
-                        return { status, body, ok: resp.ok };
-                    } catch (err) {
-                        return { error: err.message };
-                    }
-                }""",
-                api_url
-            )
-            
-            if "error" in result:
-                print(f"[Direct Playwright] ❌ Fetch error: {result['error']}", flush=True)
-                return None
-            
-            status = result.get('status', 0)
-            print(f"[Direct Playwright] Status: {status}", flush=True)
-            
-            if status in (401, 403):
-                print("[Direct Playwright] 🔄 Auth error, re-authenticating...", flush=True)
-                _playwright_session['authenticated'] = False
-                if _playwright_login():
-                    # Retry the fetch
-                    result = _playwright_session['page'].evaluate(
-                        """async (url) => {
-                            try {
-                                const resp = await fetch(url, { credentials: 'include' });
-                                return { status: resp.status, body: await resp.json(), ok: resp.ok };
-                            } catch (err) {
-                                return { error: err.message };
-                            }
-                        }""",
-                        api_url
-                    )
-                else:
-                    return None
-            
-            if not result.get('ok'):
-                body_preview = str(result.get('body', ''))[:300]
-                print(f"[Direct Playwright] ❌ HTTP {status}: {body_preview}", flush=True)
-                return None
-            
-            body = result.get('body', {})
-            if isinstance(body, dict):
-                products = body.get('products', [])
-                print(f"[Direct Playwright] ✅ Success - {len(products)} products on page {page_num}", flush=True)
-                return products
-            else:
-                print(f"[Direct Playwright] ❌ Unexpected response type: {type(body)}", flush=True)
-                return None
-                
-        except Exception as e:
-            print(f"[Direct Playwright] ❌ Exception: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
+    email = os.environ.get('COPILOT_EMAIL', '').strip()
+    password = os.environ.get('COPILOT_PASSWORD', '').strip()
+    
+    if not email or not password:
+        print("[Direct Playwright] ❌ No COPILOT_EMAIL/COPILOT_PASSWORD env vars set", flush=True)
+        return None
+    
+    # Get the path to the playwright_fetch script
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'playwright_fetch.py')
+    
+    if not os.path.exists(script_path):
+        print(f"[Direct Playwright] ❌ Script not found: {script_path}", flush=True)
+        return None
+    
+    print(f"[Direct Playwright] 📡 Running subprocess for page {page_num}...", flush=True)
+    
+    try:
+        # Run playwright_fetch.py in subprocess (avoids asyncio conflict)
+        result = subprocess.run(
+            [
+                sys.executable,
+                script_path,
+                str(page_num),
+                timeframe,
+                sort_by,
+                str(limit),
+                region
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,  # 2 minute timeout
+            env={**os.environ}  # Pass all env vars including COPILOT_EMAIL/PASSWORD
+        )
+        
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+        
+        if stderr:
+            print(f"[Direct Playwright] Subprocess stderr: {stderr[:500]}", flush=True)
+        
+        if result.returncode != 0:
+            print(f"[Direct Playwright] ❌ Subprocess failed (exit {result.returncode})", flush=True)
+            if stdout:
+                try:
+                    error_data = json.loads(stdout)
+                    print(f"[Direct Playwright] Error: {error_data.get('error', stdout[:300])}", flush=True)
+                except:
+                    print(f"[Direct Playwright] Output: {stdout[:300]}", flush=True)
             return None
+        
+        if not stdout:
+            print("[Direct Playwright] ❌ No output from subprocess", flush=True)
+            return None
+        
+        try:
+            data = json.loads(stdout)
+        except json.JSONDecodeError as e:
+            print(f"[Direct Playwright] ❌ JSON decode error: {e}", flush=True)
+            print(f"[Direct Playwright] Raw output: {stdout[:500]}", flush=True)
+            return None
+        
+        if "error" in data:
+            print(f"[Direct Playwright] ❌ Error: {data['error']}", flush=True)
+            return None
+        
+        products = data.get('products', [])
+        print(f"[Direct Playwright] ✅ Success - {len(products)} products on page {page_num}", flush=True)
+        return products
+        
+    except subprocess.TimeoutExpired:
+        print("[Direct Playwright] ❌ Subprocess timed out after 120s", flush=True)
+        return None
+    except Exception as e:
+        print(f"[Direct Playwright] ❌ Exception: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return None
 
 def fetch_v2_via_playwright(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
     """Fetch products via V2 API using Playwright + BrightData Scraping Browser.
