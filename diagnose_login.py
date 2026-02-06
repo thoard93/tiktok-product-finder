@@ -1,10 +1,15 @@
 """
-Diagnostic v2: Click "Log in" button and see what Clerk renders.
+Diagnostic v3: Full two-step Clerk login flow.
+1. Click "Log in" -> opens modal
+2. Click "Sign In" inside modal -> shows email/password
+3. Fill credentials and submit
 """
 import json
 from playwright.sync_api import sync_playwright
 
 BASE_URL = "https://www.tiktokcopilot.com"
+EMAIL = "thoard93@gmail.com"
+PASSWORD = "Mychaela7193!"
 
 def diagnose():
     with sync_playwright() as pw:
@@ -22,48 +27,56 @@ def diagnose():
         )
         page = context.new_page()
 
-        print("[1] Navigating to main page...")
+        # Step 1: Load main page
+        print("[1] Loading main page...")
         page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(5000)
-        page.screenshot(path="/tmp/diag_step1_loaded.png")
-        print(f"[1] URL: {page.url}")
 
-        # Click "Log in" using JavaScript to bypass visibility issues
-        print("\n[2] Clicking 'Log in' via JS...")
-        clicked = page.evaluate("""() => {
+        # Step 2: Click "Log in" button
+        print("[2] Clicking 'Log in'...")
+        page.evaluate("""() => {
             const elements = document.querySelectorAll('a, button, div, span');
             for (const el of elements) {
-                const text = el.textContent.trim();
-                if (text === 'Log in' || text === 'Log In') {
-                    el.click();
-                    return { clicked: true, tag: el.tagName, text: text, href: el.href || '' };
+                if (el.textContent.trim() === 'Log in') { el.click(); return true; }
+            }
+            return false;
+        }""")
+        page.wait_for_timeout(3000)
+        print(f"[2] URL: {page.url}")
+
+        # Step 3: Click "Sign In" button inside the Clerk modal
+        print("[3] Clicking 'Sign In' inside modal...")
+        clicked = page.evaluate("""() => {
+            const buttons = document.querySelectorAll('button');
+            for (const btn of buttons) {
+                const text = btn.textContent.trim();
+                if (text === 'Sign In' || text === 'Sign in') {
+                    btn.click();
+                    return { clicked: true, text: text };
                 }
             }
             return { clicked: false };
         }""")
-        print(f"[2] Click result: {json.dumps(clicked)}")
-
-        # Wait for modal / navigation
+        print(f"[3] Result: {json.dumps(clicked)}")
         page.wait_for_timeout(5000)
-        page.screenshot(path="/tmp/diag_step2_after_click.png")
-        print(f"[2] URL after click: {page.url}")
+        print(f"[3] URL: {page.url}")
 
-        # Check frames again
+        # Step 4: Check what's on screen now
         frames = page.frames
-        print(f"\n[3] Frames after click: {len(frames)}")
+        print(f"\n[4] Frames: {len(frames)}")
         for i, frame in enumerate(frames):
-            print(f"  Frame {i}: name='{frame.name}' url='{frame.url[:120]}'")
+            print(f"  Frame {i}: url='{frame.url[:120]}'")
 
-        # Check for iframes
+        # Check for iframes (Clerk might load auth in iframe now)
         iframes = page.locator("iframe").all()
-        print(f"\n[4] <iframe> elements: {len(iframes)}")
+        print(f"\n[4b] iframes: {len(iframes)}")
         for i, iframe in enumerate(iframes):
             src = iframe.get_attribute("src") or "(no src)"
             name = iframe.get_attribute("name") or "(no name)"
-            print(f"  iframe {i}: src='{src[:120]}' name='{name}'")
+            print(f"  iframe {i}: src='{src[:150]}' name='{name}'")
 
         # Search ALL frames for input elements
-        print("\n[5] Input elements in all frames:")
+        print("\n[5] Inputs in all frames:")
         for i, frame in enumerate(frames):
             try:
                 inputs = frame.locator("input").all()
@@ -74,47 +87,68 @@ def diagnose():
                         inp_name = inp.get_attribute("name") or "?"
                         inp_id = inp.get_attribute("id") or "?"
                         inp_placeholder = inp.get_attribute("placeholder") or "?"
-                        print(f"    <input type='{inp_type}' name='{inp_name}' id='{inp_id}' placeholder='{inp_placeholder}'>")
+                        inp_autocomplete = inp.get_attribute("autocomplete") or "?"
+                        visible = inp.is_visible()
+                        print(f"    <input type='{inp_type}' name='{inp_name}' id='{inp_id}' placeholder='{inp_placeholder}' autocomplete='{inp_autocomplete}' visible={visible}>")
             except Exception as e:
                 print(f"  Frame {i}: error - {e}")
 
-        # Check for Clerk modal/overlay elements
-        print("\n[6] Modal/overlay elements:")
-        modals = page.evaluate("""() => {
-            const results = [];
-            const all = document.querySelectorAll('[role="dialog"], [class*="modal"], [class*="overlay"], [class*="clerk"], [id*="clerk"]');
-            for (const el of all) {
-                results.push({
-                    tag: el.tagName.toLowerCase(),
-                    id: el.id || '',
-                    class: (el.className?.toString() || '').substring(0, 150),
-                    role: el.getAttribute('role') || '',
-                    visible: el.offsetParent !== null,
-                    children: el.children.length
-                });
-            }
-            return results;
-        }""")
-        for m in modals:
-            print(f"  {json.dumps(m)}")
-        if not modals:
-            print("  (none found)")
+        # Screenshot
+        page.screenshot(path="/tmp/diag_step3.png")
+        print("\n[5b] Screenshot saved")
 
-        # Get page HTML around any potential auth elements
-        print("\n[7] Auth-related HTML snippet:")
-        auth_html = page.evaluate("""() => {
-            const body = document.body.innerHTML;
-            const idx = body.indexOf('Sign In');
-            if (idx > -1) {
-                return body.substring(Math.max(0, idx - 500), idx + 500);
-            }
-            const idx2 = body.indexOf('sign-in');
-            if (idx2 > -1) {
-                return body.substring(Math.max(0, idx2 - 500), idx2 + 500);
-            }
-            return '(no sign-in content found)';
-        }""")
-        print(auth_html[:2000])
+        # If we found email input, try filling it
+        print("\n[6] Attempting to fill email...")
+        for i, frame in enumerate(frames):
+            try:
+                email_input = frame.locator('input[name="identifier"], input[type="email"], input[autocomplete="email"], input[autocomplete="username"]').first
+                if email_input.is_visible(timeout=3000):
+                    print(f"  Found email input in frame {i}! Filling...")
+                    email_input.fill(EMAIL)
+                    page.wait_for_timeout(1000)
+                    
+                    # Look for Continue button (Clerk often splits email/password)
+                    continue_btn = frame.locator('button:has-text("Continue")').first
+                    if continue_btn.is_visible(timeout=2000):
+                        print("  Clicking Continue...")
+                        continue_btn.click()
+                        page.wait_for_timeout(3000)
+                    
+                    # Look for password field
+                    pw_input = frame.locator('input[type="password"], input[name="password"]').first
+                    if pw_input.is_visible(timeout=5000):
+                        print("  Found password input! Filling...")
+                        pw_input.fill(PASSWORD)
+                        page.wait_for_timeout(500)
+                        
+                        # Click submit
+                        submit = frame.locator('button:has-text("Sign In"), button:has-text("Sign in"), button:has-text("Continue"), button[type="submit"]').first
+                        if submit.is_visible(timeout=3000):
+                            print("  Clicking submit...")
+                            submit.click()
+                            page.wait_for_timeout(8000)
+                            print(f"  URL after submit: {page.url}")
+                            
+                            # Check cookies
+                            cookies = context.cookies()
+                            clerk_cookies = [c["name"] for c in cookies if "__session" in c["name"] or "__client_uat" in c["name"] or "__clerk" in c["name"]]
+                            print(f"  Clerk cookies: {clerk_cookies}")
+                            
+                            page.screenshot(path="/tmp/diag_step4_loggedin.png")
+                            print("  Screenshot saved: diag_step4_loggedin.png")
+                        else:
+                            print("  No submit button found")
+                            page.screenshot(path="/tmp/diag_step4_nosubmit.png")
+                    else:
+                        print("  No password input found after email")
+                        page.screenshot(path="/tmp/diag_step4_nopw.png")
+                        
+                        # Dump what's visible
+                        html_snippet = frame.evaluate("() => document.body.innerHTML.substring(0, 3000)")
+                        print(f"  HTML: {html_snippet[:1500]}")
+                    break
+            except Exception as e:
+                print(f"  Frame {i}: {e}")
 
         browser.close()
         print("\n[DONE]")
