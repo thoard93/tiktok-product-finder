@@ -7136,6 +7136,232 @@ def get_copilot_cookie():
     print("[Copilot Cookie] ❌ No cookie found - update in Settings UI", flush=True)
     return None
 
+# ---------------------------------------------------------------------------
+# Direct Playwright Authentication (No BrightData - Local Chromium)
+# ---------------------------------------------------------------------------
+# Global browser session for persistent authentication
+_playwright_session = {
+    'pw': None,
+    'browser': None,
+    'context': None,
+    'page': None,
+    'authenticated': False,
+    'last_auth_time': 0
+}
+_pw_lock = None
+
+def get_pw_lock():
+    """Get or create the threading lock for Playwright."""
+    global _pw_lock
+    if _pw_lock is None:
+        import threading
+        _pw_lock = threading.Lock()
+    return _pw_lock
+
+def _ensure_playwright_browser():
+    """Launch Playwright browser if not already running."""
+    global _playwright_session
+    if _playwright_session['browser'] and _playwright_session['browser'].is_connected():
+        return
+    
+    print("[Direct Playwright] 🚀 Launching Chromium browser...", flush=True)
+    from playwright.sync_api import sync_playwright
+    
+    _playwright_session['pw'] = sync_playwright().start()
+    _playwright_session['browser'] = _playwright_session['pw'].chromium.launch(
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--single-process",  # Lower RAM usage on Render
+        ]
+    )
+    _playwright_session['context'] = _playwright_session['browser'].new_context(
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        viewport={"width": 1920, "height": 1080}
+    )
+    _playwright_session['page'] = _playwright_session['context'].new_page()
+    _playwright_session['authenticated'] = False
+    print("[Direct Playwright] ✅ Browser launched", flush=True)
+
+def _playwright_login():
+    """Automate Clerk email/password login."""
+    global _playwright_session
+    
+    email = os.environ.get('COPILOT_EMAIL', '').strip()
+    password = os.environ.get('COPILOT_PASSWORD', '').strip()
+    
+    if not email or not password:
+        print("[Direct Playwright] ❌ No COPILOT_EMAIL/COPILOT_PASSWORD env vars set", flush=True)
+        return False
+    
+    page = _playwright_session['page']
+    
+    print("[Direct Playwright] 🔐 Navigating to login page...", flush=True)
+    page.goto("https://www.tiktokcopilot.com/?auth=sign-in", wait_until="networkidle", timeout=30000)
+    
+    # Click "Sign in" if landing modal shows first
+    try:
+        sign_in_link = page.locator("text=Sign in").first
+        if sign_in_link.is_visible(timeout=3000):
+            sign_in_link.click()
+            page.wait_for_timeout(1500)
+    except:
+        pass  # Already on sign-in form
+    
+    # Fill email
+    print("[Direct Playwright] 📧 Filling credentials...", flush=True)
+    email_input = page.locator('input[name="identifier"], input[type="email"], input[autocomplete="email"]').first
+    email_input.wait_for(state="visible", timeout=10000)
+    email_input.fill(email)
+    
+    # Clerk sometimes splits email and password into two steps
+    continue_btn = page.locator('button:has-text("Continue"), button:has-text("continue")')
+    try:
+        if continue_btn.is_visible(timeout=2000):
+            continue_btn.click()
+            page.wait_for_timeout(2000)
+    except:
+        pass
+    
+    # Fill password
+    password_input = page.locator('input[name="password"], input[type="password"]').first
+    password_input.wait_for(state="visible", timeout=10000)
+    password_input.fill(password)
+    
+    # Submit
+    submit_btn = page.locator('button:has-text("Sign In"), button:has-text("Sign in"), button[type="submit"]').first
+    submit_btn.click()
+    print("[Direct Playwright] 📤 Submitted login form, waiting for auth...", flush=True)
+    
+    # Wait for successful auth
+    page.wait_for_url(lambda url: "auth=sign-in" not in url, timeout=20000)
+    page.wait_for_load_state("networkidle", timeout=15000)
+    
+    # Verify we got Clerk cookies
+    cookies = _playwright_session['context'].cookies()
+    session_cookies = [c for c in cookies if "__session" in c["name"] or "__client_uat" in c["name"]]
+    
+    if session_cookies:
+        print(f"[Direct Playwright] ✅ Authenticated! Got {len(session_cookies)} Clerk cookies", flush=True)
+        _playwright_session['authenticated'] = True
+        _playwright_session['last_auth_time'] = time.time()
+        return True
+    else:
+        print("[Direct Playwright] ⚠️ Login completed but no Clerk session cookies found", flush=True)
+        _playwright_session['authenticated'] = True
+        _playwright_session['last_auth_time'] = time.time()
+        return True
+
+def _playwright_needs_reauth():
+    """Check if we need to re-authenticate (every hour)."""
+    if not _playwright_session['authenticated']:
+        return True
+    if time.time() - _playwright_session['last_auth_time'] > 3600:  # 1 hour
+        print("[Direct Playwright] ⏰ Auth expired (1 hour), will re-authenticate", flush=True)
+        return True
+    return False
+
+def fetch_v2_via_direct_playwright(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
+    """Fetch products via V2 API using direct Playwright authentication.
+    
+    This approach runs Playwright locally on the Render server and logs in
+    with actual email/password credentials. Clerk handles JWT refresh natively
+    since we're in a real browser context.
+    
+    Env vars needed:
+    - COPILOT_EMAIL: TikTokCopilot email
+    - COPILOT_PASSWORD: TikTokCopilot password
+    
+    Returns list of products or None on failure.
+    """
+    import json
+    
+    lock = get_pw_lock()
+    with lock:
+        try:
+            # Ensure browser is running
+            _ensure_playwright_browser()
+            
+            # Authenticate if needed
+            if _playwright_needs_reauth():
+                if not _playwright_login():
+                    return None
+            
+            # Build API URL
+            api_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
+            
+            print(f"[Direct Playwright] 📡 Fetching page {page_num}: {api_url[:60]}...", flush=True)
+            
+            # Use JavaScript fetch from the authenticated page context
+            result = _playwright_session['page'].evaluate(
+                """async (url) => {
+                    try {
+                        const resp = await fetch(url, { credentials: 'include' });
+                        const status = resp.status;
+                        let body;
+                        const ct = resp.headers.get('content-type') || '';
+                        if (ct.includes('application/json')) {
+                            body = await resp.json();
+                        } else {
+                            body = await resp.text();
+                        }
+                        return { status, body, ok: resp.ok };
+                    } catch (err) {
+                        return { error: err.message };
+                    }
+                }""",
+                api_url
+            )
+            
+            if "error" in result:
+                print(f"[Direct Playwright] ❌ Fetch error: {result['error']}", flush=True)
+                return None
+            
+            status = result.get('status', 0)
+            print(f"[Direct Playwright] Status: {status}", flush=True)
+            
+            if status in (401, 403):
+                print("[Direct Playwright] 🔄 Auth error, re-authenticating...", flush=True)
+                _playwright_session['authenticated'] = False
+                if _playwright_login():
+                    # Retry the fetch
+                    result = _playwright_session['page'].evaluate(
+                        """async (url) => {
+                            try {
+                                const resp = await fetch(url, { credentials: 'include' });
+                                return { status: resp.status, body: await resp.json(), ok: resp.ok };
+                            } catch (err) {
+                                return { error: err.message };
+                            }
+                        }""",
+                        api_url
+                    )
+                else:
+                    return None
+            
+            if not result.get('ok'):
+                body_preview = str(result.get('body', ''))[:300]
+                print(f"[Direct Playwright] ❌ HTTP {status}: {body_preview}", flush=True)
+                return None
+            
+            body = result.get('body', {})
+            if isinstance(body, dict):
+                products = body.get('products', [])
+                print(f"[Direct Playwright] ✅ Success - {len(products)} products on page {page_num}", flush=True)
+                return products
+            else:
+                print(f"[Direct Playwright] ❌ Unexpected response type: {type(body)}", flush=True)
+                return None
+                
+        except Exception as e:
+            print(f"[Direct Playwright] ❌ Exception: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            return None
+
 def fetch_v2_via_playwright(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
     """Fetch products via V2 API using Playwright + BrightData Scraping Browser.
     
@@ -10900,6 +11126,27 @@ def api_purge_low_signal():
         return jsonify({'success': True, 'message': f'Purged {deleted} low-quality products.'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/test-v2-direct', methods=['GET'])
+@login_required
+@admin_required
+def test_v2_direct():
+    """Test V2 API using direct Playwright authentication (local Chromium, email/password login)."""
+    products = fetch_v2_via_direct_playwright(page_num=0, limit=10)
+    
+    if products is None:
+        return jsonify({
+            'success': False,
+            'error': 'Direct Playwright fetch failed - check logs for details',
+            'hint': 'Ensure COPILOT_EMAIL and COPILOT_PASSWORD are set in Render env vars'
+        }), 500
+    
+    return jsonify({
+        'success': True,
+        'product_count': len(products),
+        'sample': products[0] if products else None,
+        'fields_available': list(products[0].keys()) if products else []
+    })
 
 def ensure_schema_integrity():
     """Auto-heal schema for SQLite/Postgres to prevent missing column errors"""
