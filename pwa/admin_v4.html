@@ -1021,7 +1021,7 @@
                 const res = await fetch('/api/copilot/enrich-videos', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pages: 500 })  // 500 pages = good coverage
+                    body: JSON.stringify({ pages: 1200 })  // 1200 pages × 25 = 30K products
                 });
                 const data = await res.json();
                 if (data.status === 'success') {

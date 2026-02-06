@@ -10328,7 +10328,7 @@ def copilot_mass_sync():
             # ==========================================================================
             if products_synced > 0 and not SYNC_STOP_REQUESTED:
                 print("[SYNC] 🔄 PHASE 2: Fetching all-time video/creator counts...")
-                enrich_pages = min(pages_done, 200)  # Match pages synced, max 200
+                enrich_pages = min(max(pages_done, 1200), 1500)  # At least 1200 pages (30K products), max 1500
                 alltime_enriched = 0
                 consecutive_empty_p2 = 0  # Track consecutive empty pages
                 MAX_EMPTY_P2 = 10  # Stop after 10 consecutive empty pages
