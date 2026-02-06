@@ -10214,12 +10214,14 @@ def copilot_mass_sync():
     user_id = user.id
     data = request.json or {}
     target_products = int(data.get('target', 10000))
-    timeframe = data.get('timeframe', '7d')  # Default to '7d' for 7-day stats; enrichment uses 'all' for all-time counts
-    auto_enrich = data.get('auto_enrich', False)  # Auto-trigger enrichment after sync
     
     # 100 products per page, up to 2000 pages max (200K theoretical max)
     PRODUCTS_PER_PAGE = 100
     pages_needed = min((target_products // PRODUCTS_PER_PAGE) + 1, 2000)
+    
+    # Mark sync as running in DB for stop button persistence
+    set_config_value('sync_running', 'true', 'Sync is in progress')
+    set_config_value('SYNC_STOP_REQUESTED', 'false', 'Reset stop flag')
     
     # Store sync status in database for live tracking
     set_config_value('sync_status', 'running', 'Mass sync status')
@@ -10240,7 +10242,7 @@ def copilot_mass_sync():
                 with app.app_context():  # CRITICAL: Each thread needs its own context
                     for attempt in range(retries):
                         try:
-                            saved, total = sync_copilot_products(timeframe=timeframe, limit=PRODUCTS_PER_PAGE, page=page_num)
+                            saved, total = sync_copilot_products(timeframe='7d', limit=PRODUCTS_PER_PAGE, page=page_num)
                             return page_num, saved, total, None
                         except Exception as e:
                             if attempt < retries - 1:
@@ -10309,8 +10311,7 @@ def copilot_mass_sync():
                 time.sleep(2.0)
             
             elapsed = time.time() - start_time
-            print(f"[SYNC] ✅ COMPLETE: {products_synced:,} products from {pages_done} pages in {elapsed:.1f}s")
-            set_config_value('sync_status', 'complete')
+            print(f"[SYNC] ✅ PHASE 1 COMPLETE: {products_synced:,} products from {pages_done} pages in {elapsed:.1f}s")
             set_config_value('sync_progress', str(products_synced))
             
             try:
@@ -10318,24 +10319,36 @@ def copilot_mass_sync():
             except:
                 pass
             
-            # AUTO-ENRICH after sync if enabled
-            if auto_enrich and products_synced > 0 and not SYNC_STOP_REQUESTED:
-                print("[SYNC] 🔄 Auto-enrich enabled, starting in 30 seconds...")
-                time.sleep(30)
-                print("[SYNC] 🚀 Starting all-time video enrichment...")
+            # ==========================================================================
+            # PHASE 2: Fetch all-time video/creator counts (ALWAYS RUN)
+            # ==========================================================================
+            if products_synced > 0 and not SYNC_STOP_REQUESTED:
+                print("[SYNC] 🔄 PHASE 2: Fetching all-time video/creator counts...")
                 try:
-                    enrich_pages = min(100, pages_done * 2)  # Enrich 2x synced pages, max 100
+                    enrich_pages = min(pages_done, 200)  # Match pages synced, max 200
+                    alltime_enriched = 0
                     for page in range(enrich_pages):
                         if SYNC_STOP_REQUESTED:
-                            print("[SYNC] 🛑 Stop requested, halting enrichment")
+                            print("[SYNC] 🛑 Stop requested, halting Phase 2")
                             break
-                        products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page)
-                        if not products_data or not products_data.get('videos'):
-                            print(f"[SYNC] Enrich page {page}: No more data, stopping")
+                        
+                        # Try products endpoint first, fallback to trending
+                        products_data = fetch_copilot_products(timeframe='all', limit=25, page=page)
+                        if not products_data:
+                            products_data = fetch_copilot_trending(timeframe='all', limit=25, page=page)
+                        
+                        if not products_data:
+                            print(f"[SYNC] Phase 2: Page {page} empty, stopping")
                             break
-                        videos = products_data.get('videos', [])
-                        enriched = 0
-                        for v in videos:
+                        
+                        # Get products from response
+                        products = products_data.get('products', []) or products_data.get('videos', [])
+                        if not products:
+                            print(f"[SYNC] Phase 2: Page {page} no products, stopping")
+                            break
+                        
+                        page_enriched = 0
+                        for v in products:
                             pid = str(v.get('productId', '')).strip()
                             if not pid:
                                 continue
@@ -10347,15 +10360,26 @@ def copilot_mass_sync():
                                 c_count = safe_int(v.get('productCreatorCount') or 0)
                                 if v_count > 0 and v_count > (existing.video_count_alltime or 0):
                                     existing.video_count_alltime = v_count
+                                    if v_count > (existing.video_count or 0):
+                                        existing.video_count = v_count
                                 if c_count > 0 and c_count > (existing.influencer_count or 0):
                                     existing.influencer_count = c_count
-                                enriched += 1
+                                page_enriched += 1
                         db.session.commit()
-                        print(f"[SYNC] Enrich page {page}: {enriched} products")
-                        time.sleep(3)
-                    print("[SYNC] ✅ Auto-enrich complete!")
+                        alltime_enriched += page_enriched
+                        
+                        if page % 10 == 0:
+                            print(f"[SYNC] Phase 2: {page}/{enrich_pages} pages - {alltime_enriched} enriched")
+                        
+                        time.sleep(2.0)
+                    print(f"[SYNC] ✅ PHASE 2 COMPLETE: {alltime_enriched} products enriched with all-time counts")
                 except Exception as e:
-                    print(f"[SYNC] ❌ Enrich error: {e}")
+                    print(f"[SYNC] ❌ Phase 2 error: {e}")
+            
+            # Mark sync as complete
+            set_config_value('sync_status', 'complete')
+            set_config_value('sync_running', 'false', 'Sync complete')
+            print(f"[SYNC] ✅ FULL SYNC COMPLETE!")
     
     # Start background thread and return immediately
     sync_thread = threading.Thread(target=run_sync_in_background, daemon=True)
