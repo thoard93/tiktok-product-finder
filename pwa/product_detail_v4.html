@@ -365,12 +365,13 @@
             // Total Ad Spend
             document.getElementById('statAdSpend').textContent = (data.ad_spend_total > 0) ? ('$' + Math.round(data.ad_spend_total).toLocaleString()) : 'N/A';
 
-            // Age
+            // Discovery Date
             if (data.first_seen) {
                 const date = new Date(data.first_seen);
                 const diffTime = Math.abs(new Date() - date);
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                document.getElementById('lblAge').textContent = `• Detected ${diffDays}d ago`;
+                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                document.getElementById('lblAge').textContent = `• Discovered ${dateStr} (${diffDays}d ago)`;
             }
             document.getElementById('statRev').textContent = '$' + (data.gmv_30d || (data.sales_7d || 0) * (data.price || 20)).toLocaleString();
             document.getElementById('statInfluencers').textContent = data.influencer_count || 0;
