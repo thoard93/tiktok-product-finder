@@ -601,12 +601,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No GMV Max products matching criteria today (40-100 all-time videos, 50+ 7D sales, $100+ ad spend). Try syncing more products from Copilot!")
+        await channel.send("📭 No GMV Max products matching criteria today (50-120 all-time videos, 50+ 7D sales, $100+ ad spend). Try syncing more products from Copilot!")
         return
     
     # Send header message
     await channel.send(f"# 🚀 Daily GMV Max Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 40-100 all-time videos, $100+ ad spend, 50+ 7D sales\n"
+                       f"**Criteria:** 50-120 all-time videos, $100+ ad spend, 50+ 7D sales\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"──────────────────────────────")
     
@@ -653,7 +653,7 @@ def get_top_brand_opportunities(limit=10):
         
         products = Product.query.filter(
             Product.seller_name.in_(brand_names),
-            video_count_field >= 40,
+            video_count_field >= 50,
             video_count_field <= 300  # Max 300 all-time videos
         ).order_by(
             video_count_field.asc(),  # Priority: Lower videos = better opportunity
@@ -1010,11 +1010,11 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with 40-100 all-time videos, ad spend, 7D sales, AND GMV Max Ads
+        # Query: Products with 50-120 all-time videos, ad spend, 7D sales, AND GMV Max Ads
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
-            video_count_field >= 40,  # Min 40 all-time videos
-            video_count_field <= 100,  # Max 100 all-time videos (opportunity zone)
+            video_count_field >= 50,  # Min 50 all-time videos
+            video_count_field <= 120,  # Max 120 all-time videos (opportunity zone)
             Product.sales_7d >= 50,  # 7D sales
             Product.ad_spend >= 100,  # Ad spend ($100+)
             Product.commission_rate > 0,  # Must have regular commission
@@ -1135,7 +1135,7 @@ def get_brand_products(brand_name, limit=5):
         
         products = Product.query.filter(
             Product.seller_name.ilike(f'%{brand_name}%'),
-            video_count_field >= 40,  # Min 40 all-time videos
+            video_count_field >= 50,  # Min 50 all-time videos
             video_count_field <= 120,  # Max 120 all-time videos (opportunity zone)
         ).order_by(
             video_count_field.asc(),  # Priority 1: Lower videos = better opportunity
