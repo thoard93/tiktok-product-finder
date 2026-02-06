@@ -997,8 +997,41 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with 30-200 all-time videos, ad spend, 7D sales
+        # ===== DIAGNOSTIC: Test each filter individually =====
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+        
+        total_products = Product.query.count()
+        print(f"[Hot Products DIAG] Total products in DB: {total_products}")
+        
+        has_videos_30_200 = Product.query.filter(video_count_field >= 30, video_count_field <= 200).count()
+        print(f"[Hot Products DIAG] With 30-200 videos: {has_videos_30_200}")
+        
+        has_sales = Product.query.filter(Product.sales_7d >= 20).count()
+        print(f"[Hot Products DIAG] With 20+ 7D sales: {has_sales}")
+        
+        has_ads = Product.query.filter(Product.ad_spend >= 50).count()
+        print(f"[Hot Products DIAG] With $50+ ad spend: {has_ads}")
+        
+        has_commission = Product.query.filter(Product.commission_rate > 0).count()
+        print(f"[Hot Products DIAG] With commission > 0: {has_commission}")
+        
+        not_shown = Product.query.filter(
+            db.or_(Product.last_shown_hot == None, Product.last_shown_hot < cutoff_date)
+        ).count()
+        print(f"[Hot Products DIAG] Not shown in last {DAYS_BEFORE_REPEAT} days: {not_shown}")
+        
+        # Combined without last_shown_hot filter
+        combined_no_shown = Product.query.filter(
+            video_count_field >= 30,
+            video_count_field <= 200,
+            Product.sales_7d >= 20,
+            Product.ad_spend >= 50,
+            Product.commission_rate > 0
+        ).count()
+        print(f"[Hot Products DIAG] Combined (ignoring last_shown_hot): {combined_no_shown}")
+        # ===== END DIAGNOSTIC =====
+        
+        # Query: Products with 30-200 all-time videos, ad spend, 7D sales
         products = Product.query.filter(
             video_count_field >= 30,  # Min 30 all-time videos
             video_count_field <= 200,  # Max 200 all-time videos (opportunity zone)
