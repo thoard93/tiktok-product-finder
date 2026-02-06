@@ -4,7 +4,7 @@ services:
     name: gem-hunter
     runtime: python
     buildCommand: pip install -r requirements.txt && python -m playwright install-deps && python -m playwright install chromium
-    startCommand: gunicorn app:app --workers 3 --threads 2 --timeout 120
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 1 --threads 4 --worker-class=sync
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
