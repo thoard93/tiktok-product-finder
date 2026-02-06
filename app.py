@@ -8080,6 +8080,10 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             if not is_legacy_source and shop_ads_rate <= 0:
                 continue  # Skip products without GMV Max
             
+            # FILTER: Minimum 25 sales in last 7 days for quality products
+            if sales_7d < 25 and not is_legacy_source:
+                continue  # Skip low-sales products
+            
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
             
             # Save or Update Product
