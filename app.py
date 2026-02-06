@@ -10558,6 +10558,98 @@ def cleanup_zero_stats():
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/admin/hot-diag')
+@login_required
+@admin_required
+def hot_products_diagnostic():
+    """Diagnostic: show how many products pass each hot-product filter individually."""
+    try:
+        from sqlalchemy import func as sqla_func
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+        
+        total = Product.query.count()
+        active = Product.query.filter(Product.product_status == 'active').count()
+        
+        # Individual filter counts
+        has_videos_any = Product.query.filter(video_count_field > 0).count()
+        has_videos_30_200 = Product.query.filter(video_count_field >= 30, video_count_field <= 200).count()
+        has_videos_50_120 = Product.query.filter(video_count_field >= 50, video_count_field <= 120).count()
+        has_sales_20 = Product.query.filter(Product.sales_7d >= 20).count()
+        has_sales_50 = Product.query.filter(Product.sales_7d >= 50).count()
+        has_ads_50 = Product.query.filter(Product.ad_spend >= 50).count()
+        has_ads_100 = Product.query.filter(Product.ad_spend >= 100).count()
+        has_ads_any = Product.query.filter(Product.ad_spend > 0).count()
+        has_commission = Product.query.filter(Product.commission_rate > 0).count()
+        
+        # last_shown_hot stats
+        from datetime import timedelta
+        cutoff = datetime.utcnow() - timedelta(days=3)
+        never_shown = Product.query.filter(Product.last_shown_hot == None).count()
+        shown_before_cutoff = Product.query.filter(Product.last_shown_hot < cutoff).count()
+        shown_recently = Product.query.filter(Product.last_shown_hot >= cutoff).count()
+        
+        # Combined: original filters (50-120 videos, 50+ sales, 100+ ads, commission)
+        combined_original = Product.query.filter(
+            video_count_field >= 50, video_count_field <= 120,
+            Product.sales_7d >= 50, Product.ad_spend >= 100,
+            Product.commission_rate > 0
+        ).count()
+        
+        # Combined: loosened filters (30-200, 20+ sales, 50+ ads)
+        combined_loose = Product.query.filter(
+            video_count_field >= 30, video_count_field <= 200,
+            Product.sales_7d >= 20, Product.ad_spend >= 50,
+            Product.commission_rate > 0
+        ).count()
+        
+        # Combined with last_shown_hot
+        combined_with_shown = Product.query.filter(
+            video_count_field >= 30, video_count_field <= 200,
+            Product.sales_7d >= 20, Product.ad_spend >= 50,
+            Product.commission_rate > 0,
+            db.or_(Product.last_shown_hot == None, Product.last_shown_hot < cutoff)
+        ).count()
+        
+        # Sample of top products by ad_spend (to see what data looks like)
+        top_samples = Product.query.order_by(
+            db.func.coalesce(Product.ad_spend, 0).desc()
+        ).limit(5).all()
+        samples = [{
+            'id': p.product_id[:30], 'name': (p.product_name or '')[:40],
+            'videos_alltime': p.video_count_alltime, 'videos_7d': p.video_count,
+            'sales_7d': p.sales_7d, 'ad_spend': p.ad_spend,
+            'commission': p.commission_rate, 'last_shown': str(p.last_shown_hot)
+        } for p in top_samples]
+        
+        return jsonify({
+            'total_products': total,
+            'active_products': active,
+            'filters': {
+                'has_any_videos': has_videos_any,
+                'videos_30_200': has_videos_30_200,
+                'videos_50_120': has_videos_50_120,
+                'sales_7d_gte_20': has_sales_20,
+                'sales_7d_gte_50': has_sales_50,
+                'ad_spend_gt_0': has_ads_any,
+                'ad_spend_gte_50': has_ads_50,
+                'ad_spend_gte_100': has_ads_100,
+                'commission_gt_0': has_commission,
+            },
+            'last_shown_hot': {
+                'never_shown': never_shown,
+                'shown_before_3d_cutoff': shown_before_cutoff,
+                'shown_in_last_3d': shown_recently,
+            },
+            'combined': {
+                'original_filters_no_shown': combined_original,
+                'loose_filters_no_shown': combined_loose,
+                'loose_filters_with_shown': combined_with_shown,
+            },
+            'top_5_by_ad_spend': samples
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/admin/deduplicate', methods=['POST'])
 @login_required
 @admin_required
