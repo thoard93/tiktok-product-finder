@@ -10817,7 +10817,7 @@ try:
     scheduler.add_job(func=scheduled_google_sheets_sync, trigger="interval", hours=72)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
-    print("[SYSTEM] [CLOCK] TikTokCopilot Auto-Sync Scheduler Online (every 12 hours).")
+    print("[SYSTEM] [CLOCK] TikTokCopilot Auto-Sync Scheduler Online (every 24 hours).")
     print("[SYSTEM] [CLOCK] Google Sheets Auto-Sync Scheduled (every 3 days).")
 
 except ImportError:
