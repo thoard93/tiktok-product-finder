@@ -352,30 +352,7 @@
                     </div>
                 </div>
 
-                <!-- Auto-Refresh Section -->
-                <div class="mt-6 p-4 rounded-xl bg-slate-800/50 border border-white/5">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="flex items-center gap-3">
-                            <div id="autoRefreshIndicator" class="w-2 h-2 rounded-full bg-slate-600"></div>
-                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wide">Auto-Refresh</span>
-                        </div>
-                        <span id="autoRefreshStatus" class="text-[10px] text-slate-500">Checking...</span>
-                    </div>
-                    <div class="flex flex-wrap gap-3 items-center">
-                        <button onclick="refreshCopilotSession()" id="btnRefreshSession"
-                            class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2">
-                            <i class="fas fa-sync text-xs"></i>
-                            Refresh Session Now
-                        </button>
-                        <span id="lastRefreshTime" class="text-[10px] text-slate-600">Last refresh: Never</span>
-                    </div>
-                    <p class="text-[10px] text-slate-600 mt-2">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Set <code class="bg-slate-900 px-1 rounded">COPILOT_EMAIL</code> + <code
-                            class="bg-slate-900 px-1 rounded">COPILOT_PASSWORD</code> env vars on Render for automatic
-                        45-minute refresh.
-                    </p>
-                </div>
+                <!-- Legacy Auto-Refresh Section removed - now using Playwright 2FA below -->
             </div>
 
             <!-- 2FA Playwright Authentication Section -->
@@ -658,70 +635,13 @@
             }
         }
 
-        async function refreshCopilotSession() {
-            const btn = document.getElementById('btnRefreshSession');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/copilot/refresh-session', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert("✅ Session Refreshed! " + (data.message || ""));
-                    checkAutoRefreshStatus(); // Update status display
-                } else {
-                    alert("❌ Refresh Failed: " + (data.error || "Check server logs for details."));
-                }
-            } catch (e) {
-                alert("❌ Refresh Error: " + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function checkAutoRefreshStatus() {
-            try {
-                const res = await fetch('/api/copilot/refresh-status');
-                const data = await res.json();
-
-                const indicator = document.getElementById('autoRefreshIndicator');
-                const status = document.getElementById('autoRefreshStatus');
-                const lastRefresh = document.getElementById('lastRefreshTime');
-
-                if (data.scheduler_active) {
-                    indicator.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
-                    status.textContent = 'Active (' + (data.credentials_email || 'configured') + ')';
-                    status.className = 'text-[10px] text-emerald-500';
-                } else if (data.has_credentials) {
-                    indicator.className = 'w-2 h-2 rounded-full bg-amber-500';
-                    status.textContent = 'Configured (not running)';
-                    status.className = 'text-[10px] text-amber-500';
-                } else {
-                    indicator.className = 'w-2 h-2 rounded-full bg-slate-600';
-                    status.textContent = 'Not configured';
-                    status.className = 'text-[10px] text-slate-500';
-                }
-
-                if (data.last_refresh) {
-                    const refreshDate = new Date(data.last_refresh);
-                    const mins = Math.round((Date.now() - refreshDate) / 60000);
-                    lastRefresh.textContent = 'Last refresh: ' + (mins < 1 ? 'Just now' : mins + ' min ago');
-                } else {
-                    lastRefresh.textContent = 'Last refresh: Never';
-                }
-            } catch (e) {
-                console.log('Auto-refresh status check failed:', e);
-            }
-        }
+        // Legacy refreshCopilotSession and checkAutoRefreshStatus removed - using Playwright 2FA now
 
         // Check status on page load
         document.addEventListener('DOMContentLoaded', () => {
-            checkAutoRefreshStatus();
             checkAuth2faStatus();
-            // Check every 5 minutes
-            setInterval(checkAutoRefreshStatus, 300000);
+            // Check 2FA status every 5 minutes
+            setInterval(checkAuth2faStatus, 300000);
         });
 
         // ============ 2FA AUTHENTICATION FUNCTIONS ============
