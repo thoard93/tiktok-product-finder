@@ -74,53 +74,82 @@ def main():
             )
             page = context.new_page()
             
-            # Navigate to login
-            page.goto("https://www.tiktokcopilot.com/?auth=sign-in", wait_until="domcontentloaded", timeout=60000)
+            # Step 1: Navigate to main page
+            print(f"Navigating to main page: https://www.tiktokcopilot.com", file=sys.stderr)
+            page.goto("https://www.tiktokcopilot.com", wait_until="domcontentloaded", timeout=60000)
             
-            # Click "Sign in" if modal
-            try:
-                sign_in = page.locator("text=Sign in").first
-                if sign_in.is_visible(timeout=3000):
-                    sign_in.click()
-                    page.wait_for_timeout(1500)
-            except:
-                pass
+            # Step 2: Wait for Clerk JS to initialize and click "Log in" in top-right
+            page.wait_for_timeout(5000)
             
-            # Fill email
-            email_input = page.locator('input[name="identifier"], input[type="email"], input[autocomplete="email"]').first
+            print("Clicking 'Log in' button...", file=sys.stderr)
+            page.evaluate("""() => {
+                const elements = document.querySelectorAll('a, button, div, span');
+                for (const el of elements) {
+                    if (el.textContent.trim() === 'Log in') { el.click(); return true; }
+                }
+                return false;
+            }""")
+            page.wait_for_timeout(3000)
+            
+            # Step 3: Click "Sign In" inside the Clerk modal
+            print("Clicking 'Sign In' inside modal...", file=sys.stderr)
+            page.evaluate("""() => {
+                const buttons = document.querySelectorAll('button');
+                for (const btn of buttons) {
+                    const text = btn.textContent.trim();
+                    if (text === 'Sign In' || text === 'Sign in') {
+                        btn.click();
+                        return true;
+                    }
+                }
+                return false;
+            }""")
+            page.wait_for_timeout(3000)
+            
+            # Step 4: Fill email
+            print("Filling email...", file=sys.stderr)
+            email_input = page.locator('input[name="identifier"], input[type="email"], input[autocomplete="email"], input[autocomplete="username"]').first
             email_input.wait_for(state="visible", timeout=10000)
             email_input.fill(email)
             
             # Continue button (Clerk two-step)
             try:
-                continue_btn = page.locator('button:has-text("Continue")')
-                if continue_btn.is_visible(timeout=2000):
+                continue_btn = page.locator('button:has-text("Continue")').first
+                if continue_btn.is_visible(timeout=3000):
                     continue_btn.click()
-                    page.wait_for_timeout(2000)
+                    page.wait_for_timeout(3000)
             except:
                 pass
             
-            # Fill password
+            # Step 5: Fill password
+            print("Filling password...", file=sys.stderr)
             password_input = page.locator('input[name="password"], input[type="password"]').first
             password_input.wait_for(state="visible", timeout=10000)
             password_input.fill(password)
             
             # Submit
-            submit_btn = page.locator('button:has-text("Sign In"), button:has-text("Sign in"), button[type="submit"]').first
+            print("Submitting login...", file=sys.stderr)
+            submit_btn = page.locator('button:has-text("Sign In"), button:has-text("Sign in"), button:has-text("Continue"), button[type="submit"]').first
             submit_btn.click()
             
-            # Wait for auth
-            page.wait_for_url(lambda url: "auth=sign-in" not in url, timeout=20000)
-            page.wait_for_load_state("domcontentloaded", timeout=15000)
+            # Wait for auth completion (URL changes back or modal closes)
+            page.wait_for_timeout(8000)
+            print(f"URL after login: {page.url}", file=sys.stderr)
             
-            # Verify cookies
+            # Verify session cookies exist
             cookies = context.cookies()
             session_cookies = [c for c in cookies if "__session" in c["name"]]
             
             if not session_cookies:
-                print(json.dumps({"error": "Login completed but no session cookies found"}))
-                browser.close()
-                sys.exit(1)
+                # One last attempt to wait
+                page.wait_for_timeout(5000)
+                cookies = context.cookies()
+                session_cookies = [c for c in cookies if "__session" in c["name"]]
+                
+                if not session_cookies:
+                    print(json.dumps({"error": "Login completed but no session cookies found. Check credentials or modal state."}))
+                    browser.close()
+                    sys.exit(1)
             
             # Fetch API via JS
             result = page.evaluate(
