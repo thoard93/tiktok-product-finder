@@ -6873,15 +6873,6 @@ def get_copilot_cookie():
     except Exception as e:
         print(f"[Copilot] ⚠️ Could not load Playwright session: {e}", flush=True)
     
-    # Fallback to old SystemConfig (for migration)
-    try:
-        config_cookie = get_config_value('TIKTOK_COPILOT_COOKIE', None)
-        if config_cookie:
-            print(f"[Copilot] Using legacy SystemConfig cookie", flush=True)
-            return config_cookie
-    except:
-        pass
-    
     print("[Copilot] ❌ No session - use Admin UI to authenticate", flush=True)
     return None
 
@@ -7687,10 +7678,6 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
             if requests_cffi:
                 # Get proxy from env or database (BrightData residential)
                 proxy_url = os.getenv('COPILOT_PROXY') or get_config_value('COPILOT_PROXY', '')
-                if proxy_url:
-                    print(f"[V2] Using proxy: {proxy_url[:30]}...", flush=True)
-                else:
-                    print(f"[V2] No proxy - direct connection", flush=True)
                 
                 res = requests_cffi.get(
                     f"{COPILOT_API_BASE}/trending/products", 
@@ -7703,7 +7690,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                     timeout=60
                 )
             else:
-                print(f"[V2] curl_cffi not available - using requests", flush=True)
+                # Fallback to requests if curl_cffi not available
                 headers["Cookie"] = cookie_str
                 res = requests.get(f"{COPILOT_API_BASE}/trending/products", headers=headers, params=params, timeout=60)
             
@@ -7721,10 +7708,7 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
                 except Exception as e:
                     # DETECT GEIST ANTI-BOT: HTML response means blocked, don't retry
                     if is_html or has_geist:
-                        print(f"[V2] ⛔ Geist anti-bot detected, skipping retries", flush=True)
-                        print(f"[V2] Using sentry-trace: {sentry_trace[:30]}...", flush=True)
-                        print(f"[V2] Using baggage: {sentry_baggage[:50]}...", flush=True)
-                        return None  # Fail immediately, use legacy
+                        return None  # Fail immediately, use legacy fallback
                     
                     print(f"[Copilot Products] ❌ JSON Decode Error (Attempt {attempt+1}/{retries}): {e}")
                     
@@ -7828,7 +7812,7 @@ def fetch_copilot_trending(timeframe='7d', sort_by='revenue', limit=50, page=0, 
     retries = 3
     for attempt in range(retries):
         try:
-            print(f"[Legacy API] 📡 Calling page {page}, attempt {attempt+1}...", flush=True)
+            # Legacy API call (fallback)
             if requests_cffi:
                 res = requests_cffi.get(
                     f"{COPILOT_API_BASE}/trending", 
@@ -7905,7 +7889,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
     is_legacy_source = False
     if not result:
         # Fallback to legacy endpoint if new one fails
-        print("[Copilot Sync] V2 endpoint failed, trying legacy...")
+        # Fallback to legacy endpoint if new one fails
 
         result = fetch_copilot_trending(timeframe=timeframe, limit=limit, page=page)
         if not result:
@@ -7934,17 +7918,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             print("🛑 [Copilot Sync] Granular stop triggered!")
             break
             
-        # HYPER-VERBOSE DEBUG: Log EVERYTHING for the first product to solve the skipping mystery
-        if idx == 0:
-            p_prefix = "LEGACY" if is_legacy_source else "V2"
-            print(f"[DEBUG {p_prefix}] --- FIRST PRODUCT FULL KEYS (idx=0) ---")
-            print(f"[DEBUG {p_prefix}] Total Keys Count: {len(p.keys())}")
-            print(f"[DEBUG {p_prefix}] All Keys: {', '.join(sorted(p.keys()))}")
-            
-            # Print ALL values for critical analysis
-            full_data = {k: p.get(k) for k in p.keys()}
-            print(f"[DEBUG {p_prefix}] FULL OBJECT: {json.dumps(full_data, default=str)}")
-        
+        # DEBUG: Log first product keys (disabled for production)
+        # if idx == 0: print(f"[DEBUG] First product keys: {list(p.keys())[:10]}...")
         try:
             # FIX: Correct multi-key retrieval
             product_id = str(p.get('productId') or p.get('product_id') or p.get('id') or '')
@@ -8086,16 +8061,9 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             is_zero_stat = (sales_7d <= 0 and total_sales <= 0 and period_revenue <= 0 and total_revenue <= 0)
             
             if is_zero_stat and ad_spend_7d < 50:
-                if saved_count < 15:
-                    msg_prefix = "[LEGACY] Ingesting" if is_legacy_source else "[V2] Skipping"
-                    print(f"{msg_prefix} {product_id} - Debug Stats: sales_7d={sales_7d}, r_7d={period_revenue}, total_rev={total_revenue}, ad_7d={ad_spend_7d}")
-                    if is_legacy_source and saved_count < 3:
-                         pass  # Removed verbose product dump
-                
-                # IN LEGACY MODE: If it's a zero-stat product from the TRENDING feed, 
-                # we still want it IF it has a productId because it's highly curated!
+                # Legacy products pass through; V2 low-stats get filtered
                 if is_legacy_source and product_id:
-                     pass # Allow through to enrichment
+                    pass  # Allow legacy through
                 else:
                     continue
             
@@ -8110,9 +8078,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             # RELAX: GMV Max Ads - If legacy source, this field is MISSING (0).
             # ONLY enforce if it's a V2 response and we have some data.
             if not is_legacy_source and shop_ads_rate <= 0:
-                if saved_count < 5:
-                    print(f"[V2] Skipping {product_id} - GMV Max Required (rate=0)")
-                continue
+                continue  # Skip products without GMV Max
             
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
             
@@ -8248,8 +8214,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             continue
     
     db.session.commit()
-    p_label = "LEGACY" if is_legacy_source else "Copilot V2"
-    print(f"[{p_label}] Final Yield: {saved_count}/{len(products)} products from {timeframe} timeframe")
+    # Silent commit - detailed logging removed for production
     return saved_count, len(products)
 
 # =============================================================================
