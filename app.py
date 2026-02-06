@@ -11410,7 +11410,6 @@ def copilot_auth_initiate():
     
     try:
         page = get_auth_page()
-        app.logger.warning(f"[DEBUG INITIATE] page id: {id(page)}, url: {page.url}")
         
         # Wait for Clerk SDK
         try:
@@ -11506,20 +11505,6 @@ def copilot_auth_verify():
     
     try:
         page = get_auth_page()
-        app.logger.warning(f"[DEBUG VERIFY] page id: {id(page)}, url: {page.url}")
-        
-        # Debug: Check Clerk state before attempting verify
-        debug = page.evaluate("""() => {
-            const si = window.Clerk?.client?.signIn;
-            return {
-                clerkLoaded: !!window.Clerk,
-                signInExists: !!si,
-                signInStatus: si?.status || 'none',
-                signInId: si?.id || null,
-                pageUrl: window.location.href
-            };
-        }""")
-        app.logger.warning(f"[DEBUG VERIFY] Clerk state: {debug}")
         
         # Verify 2FA using the existing signIn state
         result = page.evaluate("""async (code) => {
