@@ -203,6 +203,12 @@ def verify_code(code):
     if not state:
         return {"error": "No pending sign-in. Please call /api/copilot-auth/initiate first."}
     
+    email = state.get("email")
+    password = os.environ.get('COPILOT_PASSWORD', '').strip()
+    
+    if not email or not password:
+        return {"error": "Missing credentials. Email from state, password from env."}
+    
     with sync_playwright() as pw:
         browser = pw.chromium.launch(
             headless=True,
@@ -223,31 +229,49 @@ def verify_code(code):
             browser.close()
             return {"error": "Clerk SDK not ready"}
         
-        # Complete 2FA
-        result = page.evaluate("""async (code) => {
+        # Re-authenticate to restore signIn state, then verify 2FA
+        result = page.evaluate("""async ([email, password, code]) => {
             try {
-                // Complete the second factor
-                const signInAttempt = await window.Clerk.client.signIn.attemptSecondFactor({
+                // Step 1: Re-login to get back to needs_second_factor state
+                const si = await window.Clerk.client.signIn.create({
+                    identifier: email,
+                    password: password,
+                    strategy: 'password'
+                });
+                
+                if (si.status === 'complete') {
+                    // No 2FA needed - already complete
+                    await window.Clerk.setActive({ session: si.createdSessionId });
+                    return { status: 'complete', sessionId: si.createdSessionId };
+                }
+                
+                if (si.status !== 'needs_second_factor') {
+                    return { error: 'Unexpected status: ' + si.status };
+                }
+                
+                // Step 2: Now attempt the 2FA with the code
+                const result = await si.attemptSecondFactor({
                     strategy: 'email_code',
                     code: code
                 });
                 
-                if (signInAttempt.status === 'complete') {
-                    await window.Clerk.setActive({ session: signInAttempt.createdSessionId });
+                if (result.status === 'complete') {
+                    await window.Clerk.setActive({ session: result.createdSessionId });
                     return { 
                         status: 'complete', 
-                        sessionId: signInAttempt.createdSessionId 
+                        sessionId: result.createdSessionId 
                     };
                 }
                 
                 return { 
-                    status: signInAttempt.status,
+                    status: result.status,
                     error: 'Verification incomplete'
                 };
             } catch (err) {
                 return { error: err.message || String(err) };
             }
-        }""", code)
+        }""", [email, password, code])
+
         
         if result.get("status") == "complete":
             # Save session cookies to database
