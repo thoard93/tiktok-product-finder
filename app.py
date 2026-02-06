@@ -7162,20 +7162,34 @@ def fetch_v2_via_playwright(page_num, timeframe='7d', sort_by='revenue', limit=5
         print("[V2 Playwright] ❌ No SCRAPING_BROWSER_URL env var set", flush=True)
         return None
     
-    # Parse cookies into Playwright format
+    # Parse cookies into Playwright format - ONLY essential Clerk auth cookies
+    # BrightData Scraping Browser blocks overriding _ga, posthog, and some Clerk internal cookies
+    ESSENTIAL_COOKIES = ['__session', '__client_uat', 'clerk_active_context']
+    BLOCKED_PREFIXES = ['_ga', 'ph_', '__refresh']  # These are blocked by BrightData
+    
     cookies = []
     for item in cookie_str.split(';'):
         item = item.strip()
         if '=' in item:
             key, value = item.split('=', 1)
-            cookies.append({
-                "name": key.strip(),
-                "value": value.strip(),
-                "domain": ".tiktokcopilot.com",
-                "path": "/"
-            })
+            key = key.strip()
+            
+            # Skip blocked cookies
+            skip = False
+            for prefix in BLOCKED_PREFIXES:
+                if key.startswith(prefix):
+                    skip = True
+                    break
+            
+            if not skip:
+                cookies.append({
+                    "name": key,
+                    "value": value.strip(),
+                    "domain": ".tiktokcopilot.com",
+                    "path": "/"
+                })
     
-    print(f"[V2 Playwright] Page {page_num} with {len(cookies)} cookies", flush=True)
+    print(f"[V2 Playwright] Page {page_num} with {len(cookies)} filtered cookies (excluded blocked)", flush=True)
     print(f"[V2 Playwright] Browser URL: {browser_url[:50]}...", flush=True)
     
     api_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
