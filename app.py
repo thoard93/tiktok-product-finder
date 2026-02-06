@@ -10328,7 +10328,7 @@ def copilot_mass_sync():
             # ==========================================================================
             if products_synced > 0 and not SYNC_STOP_REQUESTED:
                 print("[SYNC] 🔄 PHASE 2: Fetching all-time video/creator counts...")
-                enrich_pages = min(max(pages_done, 1200), 1500)  # At least 1200 pages (30K products), max 1500
+                enrich_pages = min(max(pages_done, 2000), 2500)  # At least 2000 pages (50K products), max 2500
                 alltime_enriched = 0
                 consecutive_empty_p2 = 0  # Track consecutive empty pages
                 MAX_EMPTY_P2 = 10  # Stop after 10 consecutive empty pages
@@ -10576,7 +10576,7 @@ try:
                 total_saved = 0
                 consecutive_empty = 0
                 MAX_EMPTY = 15
-                target_pages = 1200  # 1200 pages × 25 = 30K products
+                target_pages = 2000  # 2000 pages × 25 = 50K products
                 
                 print(f"[SCHEDULER] Phase 1: Fetching 7d stats for {target_pages} pages...")
                 
@@ -10616,7 +10616,7 @@ try:
                     print("[SCHEDULER] Phase 2: Enriching with all-time video/creator counts...")
                     enriched = 0
                     consecutive_empty_p2 = 0
-                    enrich_pages = 1200  # Match Phase 1
+                    enrich_pages = 2000  # Match Phase 1
                     
                     for page in range(enrich_pages):
                         if consecutive_empty_p2 >= 10:
