@@ -10324,30 +10324,44 @@ def copilot_mass_sync():
             # ==========================================================================
             if products_synced > 0 and not SYNC_STOP_REQUESTED:
                 print("[SYNC] 🔄 PHASE 2: Fetching all-time video/creator counts...")
-                try:
-                    enrich_pages = min(pages_done, 200)  # Match pages synced, max 200
-                    alltime_enriched = 0
-                    for page in range(enrich_pages):
-                        if SYNC_STOP_REQUESTED:
-                            print("[SYNC] 🛑 Stop requested, halting Phase 2")
-                            break
-                        
+                enrich_pages = min(pages_done, 200)  # Match pages synced, max 200
+                alltime_enriched = 0
+                consecutive_empty_p2 = 0  # Track consecutive empty pages
+                MAX_EMPTY_P2 = 10  # Stop after 10 consecutive empty pages
+                pages_fetched = 0
+                
+                for page in range(enrich_pages):
+                    if SYNC_STOP_REQUESTED:
+                        print("[SYNC] 🛑 Stop requested, halting Phase 2")
+                        break
+                    
+                    if consecutive_empty_p2 >= MAX_EMPTY_P2:
+                        print(f"[SYNC] Phase 2: {MAX_EMPTY_P2} consecutive empty pages - API exhausted, stopping")
+                        break
+                    
+                    try:
                         # Try products endpoint first, fallback to trending
                         products_data = fetch_copilot_products(timeframe='all', limit=25, page=page)
                         if not products_data:
                             products_data = fetch_copilot_trending(timeframe='all', limit=25, page=page)
                         
                         if not products_data:
-                            print(f"[SYNC] Phase 2: Page {page} empty, stopping")
-                            break
+                            consecutive_empty_p2 += 1
+                            print(f"[SYNC] Phase 2: Page {page} empty ({consecutive_empty_p2}/{MAX_EMPTY_P2})")
+                            continue  # Don't break, keep trying
                         
                         # Get products from response
                         products = products_data.get('products', []) or products_data.get('videos', [])
                         if not products:
-                            print(f"[SYNC] Phase 2: Page {page} no products, stopping")
-                            break
+                            consecutive_empty_p2 += 1
+                            print(f"[SYNC] Phase 2: Page {page} no products ({consecutive_empty_p2}/{MAX_EMPTY_P2})")
+                            continue  # Don't break, keep trying
                         
+                        # Reset empty counter on success
+                        consecutive_empty_p2 = 0
+                        pages_fetched += 1
                         page_enriched = 0
+                        
                         for v in products:
                             pid = str(v.get('productId', '')).strip()
                             if not pid:
@@ -10372,9 +10386,15 @@ def copilot_mass_sync():
                             print(f"[SYNC] Phase 2: {page}/{enrich_pages} pages - {alltime_enriched} enriched")
                         
                         time.sleep(2.0)
-                    print(f"[SYNC] ✅ PHASE 2 COMPLETE: {alltime_enriched} products enriched with all-time counts")
-                except Exception as e:
-                    print(f"[SYNC] ❌ Phase 2 error: {e}")
+                        
+                    except Exception as e:
+                        print(f"[SYNC] ⚠️ Phase 2 error on page {page}: {e}")
+                        db.session.rollback()  # Rollback failed commit
+                        consecutive_empty_p2 += 1  # Count errors toward empty
+                        continue  # Keep going despite error
+                
+                # ALWAYS log completion (even if we exited early)
+                print(f"[SYNC] ✅ PHASE 2 COMPLETE: {alltime_enriched} products enriched from {pages_fetched} pages")
             
             # Mark sync as complete
             set_config_value('sync_status', 'complete')
