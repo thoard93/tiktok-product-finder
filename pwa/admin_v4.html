@@ -222,6 +222,12 @@
                     <i class="fas fa-broom text-xs"></i>
                     <span>Optimize Database</span>
                 </button>
+
+                <button onclick="manualEnrich()" id="btnEnrich"
+                    class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-cyan-500/20">
+                    <i class="fas fa-video text-xs"></i>
+                    <span>📊 Manual Enrich</span>
+                </button>
             </div>
 
             <!-- Creator Products Export -->
@@ -992,6 +998,39 @@
                 }
             } catch (e) {
                 alert('System Fault: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function manualEnrich() {
+            if (!confirm("📊 MANUAL ENRICHMENT\n\nFetches ALL-TIME video/creator counts for existing products.\n\nUse this if Phase 2 didn't complete fully during sync.\n\nProceed?")) return;
+
+            const btn = document.getElementById('btnEnrich');
+            const stopBtn = document.getElementById('btnStop');
+            const original = btn.innerHTML;
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> ENRICHING...';
+            btn.disabled = true;
+            stopBtn.disabled = false;
+
+            try {
+                await fetch('/api/copilot/reset-sync', { method: 'POST' });
+
+                const res = await fetch('/api/copilot/enrich-videos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pages: 500 })  // 500 pages = good coverage
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`📊 Enrichment started!\n\n${data.message}\n\n⏳ Check Render logs for progress.`);
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Unknown'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
             } finally {
                 btn.innerHTML = original;
                 btn.disabled = false;
