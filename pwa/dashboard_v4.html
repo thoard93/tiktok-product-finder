@@ -567,7 +567,6 @@
                         <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" loading="lazy" onerror="this.src='/vantage_logo.png'">
                         
                         <div class="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-                            ${p.shop_ads_commission > 0 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-600 to-orange-500 text-white shadow-lg backdrop-blur-md border border-white/10">🚀 GMV Max</span>' : ''}
                             ${p.gmv > 10000 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-emerald-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">💰 High Volume</span>' : ''}
                             ${p.is_favorite ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">⭐ Watchlist</span>' : ''}
                             ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary/90 text-white shadow-lg backdrop-blur-md border border-white/10">💎 Opportunity</span>' : ''}

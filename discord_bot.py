@@ -464,20 +464,15 @@ def create_product_embed(p, title_prefix=""):
     influencer_count = int(get_val_multi(['influencer_count', 'total_ifl_cnt'], 0) or 0)
     video_count = int(get_val_multi(['video_count', 'total_video_cnt'], 0) or 0)
     commission = float(get_val_multi(['commission_rate', 'product_commission_rate'], 0) or 0)
-    shop_ads_commission = float(get_val_multi(['shop_ads_commission'], 0) or 0)  # GMV Max Ads commission
+    shop_ads_commission = float(get_val_multi(['shop_ads_commission'], 0) or 0)
     price = float(get_val_multi(['price', 'spu_avg_price'], 0) or 0)
     original_price = float(get_val_multi(['original_price'], 0) or 0) # New field
     stock = int(get_val_multi(['live_count', 'stock'], 0) or 0) # live_count is proxy for stock
     has_free_shipping = get_val('has_free_shipping', False)
-    has_gmv_max = shop_ads_commission > 0  # GMV Max Ads indicator
     
     # Format commission (handle 0.15 vs 15.0)
     if commission > 0 and commission < 1:
         commission = commission * 100
-    
-    # Format shop ads commission (handle 0.10 vs 10.0)
-    if shop_ads_commission > 0 and shop_ads_commission < 1:
-        shop_ads_commission = shop_ads_commission * 100
     
     # Calculate Display Price (Handle Sale)
     price_display = f"${price:.2f}"
@@ -506,9 +501,7 @@ def create_product_embed(p, title_prefix=""):
         opportunity = "⚠️ HIGH COMPETITION (61+ vids)"
     
     title = f"{title_prefix}{product_name}"
-    if has_gmv_max:
-        title = "🚀 " + title  # GMV Max Ads badge
-    elif has_free_shipping:
+    if has_free_shipping:
         title = "🎁 " + title
     
     # Strip 'shop_' prefix for the clean TikTok View URL
@@ -527,11 +520,8 @@ def create_product_embed(p, title_prefix=""):
     embed.add_field(name="💸 Ad Spend", value=f"${float(get_val('ad_spend', 0)):,.2f}", inline=True)
     embed.add_field(name="🏷️ Price", value=f"${price:,.2f}", inline=True)
     
-    # Commission display - show both regular and shop ads commission
-    if shop_ads_commission > 0:
-        commission_display = f"{commission:.1f}% + **{shop_ads_commission:.1f}% 🚀**"
-    else:
-        commission_display = f"{commission:.1f}%"
+    # Commission display
+    commission_display = f"{commission:.1f}%"
     embed.add_field(name="💵 Commission", value=commission_display, inline=True)
     
     embed.add_field(name="✨ Total Sales", value=f"{total_sales:,}", inline=True)
@@ -543,11 +533,8 @@ def create_product_embed(p, title_prefix=""):
     if seller_name and seller_name not in ['Unknown', 'Unknown Seller', '']:
         embed.add_field(name="🏷️ Brand", value=f"{seller_name}", inline=True)
     
-    # Opportunity field with GMV Max indicator
-    if has_gmv_max:
-        embed.add_field(name="🎯 Opportunity", value=f"**{opportunity}** | 🚀 GMV Max Ads", inline=False)
-    else:
-        embed.add_field(name="🎯 Opportunity", value=f"**{opportunity}**", inline=False)
+    # Opportunity field
+    embed.add_field(name="🎯 Opportunity", value=f"**{opportunity}**", inline=False)
     
     # Add image if available
     if image_url and str(image_url).startswith('http'):
@@ -601,12 +588,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No products matching criteria today (50-120 all-time videos, 50+ 7D sales, $100+ ad spend). Try syncing more products from Copilot!")
+        await channel.send("📭 No products matching criteria today (50-120 all-time videos, 50+ 7D sales, $100+ ad spend, commission > 0). Try syncing more products from Copilot!")
         return
     
     # Send header message
-    await channel.send(f"# 🚀 Daily GMV Max Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 50-120 all-time videos, $100+ ad spend, 50+ 7D sales (GMV Max prioritized)\n"
+    await channel.send(f"# 🔥 Daily Hot Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
+                       f"**Criteria:** 50-120 all-time videos, $100+ ad spend, 50+ 7D sales\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"──────────────────────────────")
     
@@ -1010,7 +997,7 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with 50-120 all-time videos, ad spend, 7D sales (GMV Max prioritized but not required)
+        # Query: Products with 50-120 all-time videos, ad spend, 7D sales
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
             video_count_field >= 50,  # Min 50 all-time videos
@@ -1023,7 +1010,6 @@ def get_hot_products():
                 Product.last_shown_hot < cutoff_date
             )
         ).order_by(
-            db.case((Product.shop_ads_commission > 0, 0), else_=1),  # Priority 0: GMV Max products first
             db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 1: High Ad Spend
             db.func.coalesce(Product.sales_7d, 0).desc(),  # Priority 2: High 7D Sales
             video_count_field.asc()  # Priority 3: Lower videos = better opportunity
