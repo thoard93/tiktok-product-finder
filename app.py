@@ -7136,6 +7136,106 @@ def get_copilot_cookie():
     print("[Copilot Cookie] ❌ No cookie found - update in Settings UI", flush=True)
     return None
 
+def fetch_v2_via_scraping_browser(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
+    """Fetch products via V2 API using BrightData Scraping Browser as HTTPS proxy.
+    
+    Scraping Browser provides full browser emulation with persistent cookies,
+    JavaScript execution, and automatic Clerk token refresh.
+    
+    Env vars needed:
+    - COPILOT_PROXY: Scraping Browser URL (https://user:pass@brd.superproxy.io:9515)
+    
+    Returns list of products or None on failure.
+    """
+    import json
+    
+    cookie_str = get_copilot_cookie()
+    if not cookie_str:
+        print("[V2 Scraping Browser] ❌ No cookie configured - update in Admin UI", flush=True)
+        return None
+    
+    proxy_url = os.environ.get('COPILOT_PROXY', '').strip()
+    if not proxy_url:
+        print("[V2 Scraping Browser] ❌ No COPILOT_PROXY env var set", flush=True)
+        return None
+    
+    # Parse cookies into dict
+    cookies_dict = {}
+    for item in cookie_str.split(';'):
+        item = item.strip()
+        if '=' in item:
+            key, value = item.split('=', 1)
+            cookies_dict[key.strip()] = value.strip()
+    
+    print(f"[V2 Scraping Browser] Page {page_num} with {len(cookies_dict)} cookies", flush=True)
+    print(f"[V2 Scraping Browser] Proxy: {proxy_url[:50]}...", flush=True)
+    
+    # Build TikTokCopilot V2 API URL
+    api_url = f"https://www.tiktokcopilot.com/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
+    
+    headers = {
+        "accept": "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin"
+    }
+    
+    try:
+        print(f"[V2 Scraping Browser] Requesting {api_url[:60]}...", flush=True)
+        
+        # Use requests (not curl_cffi) since Scraping Browser handles fingerprinting
+        proxies = {"http": proxy_url, "https": proxy_url}
+        response = requests.get(
+            api_url,
+            headers=headers,
+            cookies=cookies_dict,
+            proxies=proxies,
+            timeout=90,
+            verify=False  # Scraping Browser handles SSL
+        )
+        
+        print(f"[V2 Scraping Browser] Status: {response.status_code}", flush=True)
+        
+        if response.status_code != 200:
+            print(f"[V2 Scraping Browser] ❌ HTTP {response.status_code}: {response.text[:300]}", flush=True)
+            return None
+        
+        content = response.text
+        print(f"[V2 Scraping Browser] Response length: {len(content)} chars", flush=True)
+        
+        # Check for sign-in/blocking page
+        is_html = content.strip().startswith('<!DOCTYPE') or content.strip().startswith('<html')
+        has_geist = 'geistsans' in content.lower() or 'geistmono' in content.lower()
+        has_signin = 'sign-in' in content.lower()
+        
+        if is_html:
+            print(f"[V2 Scraping Browser] ⚠️ Got HTML - IsHTML:{is_html} Geist:{has_geist} SignIn:{has_signin}", flush=True)
+            print(f"[V2 Scraping Browser] Preview: {content[:300]}", flush=True)
+            return None
+        
+        # Parse JSON response
+        try:
+            data = json.loads(content)
+            products = data.get('products', [])
+            print(f"[V2 Scraping Browser] ✅ Success - {len(products)} products on page {page_num}", flush=True)
+            return products
+        except json.JSONDecodeError as e:
+            print(f"[V2 Scraping Browser] ❌ JSON decode error: {e}", flush=True)
+            print(f"[V2 Scraping Browser] Raw content: {content[:500]}", flush=True)
+            return None
+            
+    except requests.exceptions.Timeout:
+        print("[V2 Scraping Browser] ❌ Request timeout (90s)", flush=True)
+        return None
+    except Exception as e:
+        print(f"[V2 Scraping Browser] ❌ Exception: {e}", flush=True)
+        return None
+
 def fetch_v2_via_web_unlocker(page_num, timeframe='7d', sort_by='revenue', limit=50, region='US'):
     """Fetch products via V2 API using BrightData Web Unlocker.
     
@@ -10756,6 +10856,27 @@ def test_v2_unlocker():
             'success': False,
             'error': 'Web Unlocker fetch failed - check logs for details',
             'hint': 'Ensure BRIGHTDATA_UNLOCKER_KEY is set and cookie is fresh'
+        }), 500
+    
+    return jsonify({
+        'success': True,
+        'product_count': len(products),
+        'sample': products[0] if products else None,
+        'fields_available': list(products[0].keys()) if products else []
+    })
+
+@app.route('/api/test-v2-browser', methods=['GET'])
+@login_required
+@admin_required
+def test_v2_browser():
+    """Test V2 API using BrightData Scraping Browser proxy."""
+    products = fetch_v2_via_scraping_browser(page_num=0, limit=10)
+    
+    if products is None:
+        return jsonify({
+            'success': False,
+            'error': 'Scraping Browser fetch failed - check logs for details',
+            'hint': 'Ensure COPILOT_PROXY is set to Scraping Browser URL (port 9515)'
         }), 500
     
     return jsonify({
