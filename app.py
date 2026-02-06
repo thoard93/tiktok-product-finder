@@ -8075,7 +8075,9 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             if not is_legacy_source and ad_spend_7d <= 0 and commission_rate < 0.10 and total_revenue < 200:
                 continue
             
-            # Note: GMV Max filter removed - we accept all products regardless of shop_ads_rate
+            # GMV Max filter - Only sync products with GMV Max ads enabled
+            if not is_legacy_source and shop_ads_rate <= 0:
+                continue  # Skip products without GMV Max
             
             # FILTER: Minimum 25 sales in last 7 days for quality products
             if sales_7d < 25 and not is_legacy_source:
