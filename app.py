@@ -11323,45 +11323,166 @@ else:
     print("[Copilot] ℹ️ No cookies stored - auto-refresh disabled (paste cookies in Admin UI first)")
 
 # =============================================================================
-# COPILOT 2FA AUTHENTICATION ENDPOINTS
+# COPILOT 2FA AUTHENTICATION ENDPOINTS - PERSISTENT BROWSER
 # =============================================================================
+
+# Global browser state - lives across requests to preserve Clerk signIn state
+_auth_playwright = None
+_auth_browser = None
+_auth_page = None
+
+def get_auth_page():
+    """Get or create a persistent browser page for auth flow."""
+    global _auth_playwright, _auth_browser, _auth_page
+    
+    if _auth_page is None:
+        from playwright.sync_api import sync_playwright
+        _auth_playwright = sync_playwright().start()
+        _auth_browser = _auth_playwright.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        )
+        context = _auth_browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
+        _auth_page = context.new_page()
+        _auth_page.goto("https://www.tiktokcopilot.com", wait_until="domcontentloaded", timeout=60000)
+        _auth_page.wait_for_timeout(5000)  # Wait for Clerk SDK to load
+    
+    return _auth_page
+
+def cleanup_auth_browser():
+    """Clean up browser resources after successful auth."""
+    global _auth_playwright, _auth_browser, _auth_page
+    try:
+        if _auth_browser:
+            _auth_browser.close()
+        if _auth_playwright:
+            _auth_playwright.stop()
+    except:
+        pass
+    _auth_playwright = None
+    _auth_browser = None
+    _auth_page = None
+
 
 @app.route('/api/copilot-auth/status', methods=['GET'])
 @login_required
 @admin_required
 def copilot_auth_status():
-    """Check current Copilot auth status."""
-    import subprocess
-    script_path = os.path.join(basedir, 'clerk_auth.py')
+    """Check current Copilot auth status from database."""
+    from clerk_auth import get_session_data
     
-    try:
-        result = subprocess.run(
-            [sys.executable, script_path, 'status'],
-            capture_output=True, text=True, timeout=30
-        )
-        return jsonify(json.loads(result.stdout))
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    cookies = get_session_data("cookies")
+    pending = get_session_data("pending_signin", max_age_days=1)
+    
+    status = {
+        "hasSavedSession": cookies is not None,
+        "sessionValid": False,
+        "pendingSignIn": pending is not None
+    }
+    
+    if cookies:
+        session_cookies = [c["name"] for c in cookies if "__session" in c["name"]]
+        status["sessionCookies"] = session_cookies
+        status["sessionValid"] = len(session_cookies) > 0
+    
+    if pending:
+        status["pendingEmail"] = pending.get("email")
+    
+    return jsonify(status)
 
 
 @app.route('/api/copilot-auth/initiate', methods=['POST'])
 @login_required
 @admin_required
 def copilot_auth_initiate():
-    """Start the Clerk login flow. Requires COPILOT_EMAIL and COPILOT_PASSWORD env vars."""
-    import subprocess
-    script_path = os.path.join(basedir, 'clerk_auth.py')
+    """Start the Clerk login flow using persistent browser."""
+    from clerk_auth import save_session_data
+    import time
+    
+    email = os.environ.get('COPILOT_EMAIL', '').strip()
+    password = os.environ.get('COPILOT_PASSWORD', '').strip()
+    
+    if not email or not password:
+        return jsonify({'error': 'COPILOT_EMAIL and COPILOT_PASSWORD env vars required'}), 400
     
     try:
-        result = subprocess.run(
-            [sys.executable, script_path, 'initiate'],
-            capture_output=True, text=True, timeout=90,
-            env={**os.environ}
-        )
-        return jsonify(json.loads(result.stdout))
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Login timeout - Clerk may be unreachable'}), 504
+        page = get_auth_page()
+        
+        # Wait for Clerk SDK
+        try:
+            page.wait_for_function("() => window.Clerk && window.Clerk.client", timeout=20000)
+        except:
+            cleanup_auth_browser()
+            return jsonify({'error': 'Clerk SDK not ready - page may not have loaded'}), 500
+        
+        # Sign in and prepare 2FA
+        result = page.evaluate("""async ([email, password]) => {
+            try {
+                const si = await window.Clerk.client.signIn.create({
+                    identifier: email,
+                    password: password,
+                    strategy: 'password'
+                });
+                
+                if (si.status === 'complete') {
+                    await window.Clerk.setActive({ session: si.createdSessionId });
+                    return { status: 'complete', sessionId: si.createdSessionId };
+                }
+                
+                if (si.status === 'needs_second_factor') {
+                    const methods = si.supportedSecondFactors?.map(f => f.strategy) || [];
+                    
+                    if (methods.includes('email_code')) {
+                        await si.prepareSecondFactor({ strategy: 'email_code' });
+                        return { 
+                            status: 'needs_2fa',
+                            signInId: si.id,
+                            methods: methods,
+                            message: 'Email code sent! Check your inbox.'
+                        };
+                    }
+                    
+                    return { 
+                        status: 'needs_2fa',
+                        signInId: si.id,
+                        methods: methods,
+                        message: 'Email code not available. Methods: ' + methods.join(', ')
+                    };
+                }
+                
+                return { status: si.status };
+            } catch (err) {
+                return { error: err.message || String(err) };
+            }
+        }""", [email, password])
+        
+        if result.get("status") == "complete":
+            # No 2FA needed, save cookies
+            cookies = page.context.cookies()
+            save_session_data("cookies", cookies)
+            cleanup_auth_browser()
+            return jsonify({'status': 'complete', 'message': 'Login successful! Session saved.'})
+        
+        if result.get("status") == "needs_2fa":
+            # Save pending state
+            save_session_data("pending_signin", {
+                "sign_in_id": result.get("signInId"),
+                "email": email,
+                "timestamp": time.time()
+            })
+            return jsonify(result)
+        
+        if result.get("error"):
+            cleanup_auth_browser()
+            return jsonify({'error': result.get("error")}), 500
+        
+        return jsonify(result)
+        
     except Exception as e:
+        cleanup_auth_browser()
         return jsonify({'error': str(e)}), 500
 
 
@@ -11369,9 +11490,8 @@ def copilot_auth_initiate():
 @login_required
 @admin_required
 def copilot_auth_verify():
-    """Complete 2FA verification with the email code."""
-    import subprocess
-    script_path = os.path.join(basedir, 'clerk_auth.py')
+    """Complete 2FA verification using the same persistent browser."""
+    from clerk_auth import get_session_data, save_session_data, delete_session_data
     
     data = request.get_json() or {}
     code = data.get('code', '').strip()
@@ -11379,17 +11499,70 @@ def copilot_auth_verify():
     if not code:
         return jsonify({'error': 'Verification code required'}), 400
     
+    pending = get_session_data("pending_signin", max_age_days=1)
+    if not pending:
+        return jsonify({'error': 'No pending sign-in. Click Start Login first.'}), 400
+    
     try:
-        result = subprocess.run(
-            [sys.executable, script_path, 'verify', code],
-            capture_output=True, text=True, timeout=90,
-            env={**os.environ}
-        )
-        return jsonify(json.loads(result.stdout))
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Verification timeout'}), 504
+        page = get_auth_page()
+        
+        # Verify 2FA using the existing signIn state
+        result = page.evaluate("""async (code) => {
+            try {
+                // Get the existing sign-in from the persistent browser
+                const si = window.Clerk.client.signIn;
+                
+                if (!si || !si.id) {
+                    return { error: 'No active sign-in found. Please restart login.' };
+                }
+                
+                // Attempt the 2FA with the code
+                const result = await si.attemptSecondFactor({
+                    strategy: 'email_code',
+                    code: code
+                });
+                
+                if (result.status === 'complete') {
+                    await window.Clerk.setActive({ session: result.createdSessionId });
+                    return { 
+                        status: 'complete', 
+                        sessionId: result.createdSessionId 
+                    };
+                }
+                
+                return { 
+                    status: result.status,
+                    error: 'Verification incomplete'
+                };
+            } catch (err) {
+                return { error: err.message || String(err) };
+            }
+        }""", code)
+        
+        if result.get("status") == "complete":
+            # Save session cookies to database
+            page.wait_for_timeout(2000)  # Let cookies settle
+            cookies = page.context.cookies()
+            save_session_data("cookies", cookies)
+            delete_session_data("pending_signin")
+            
+            session_cookies = [c["name"] for c in cookies if "__session" in c["name"]]
+            
+            cleanup_auth_browser()
+            return jsonify({
+                'status': 'complete',
+                'message': '2FA verified! Session saved to database.',
+                'sessionCookies': session_cookies
+            })
+        
+        if result.get("error"):
+            return jsonify({'error': result.get("error")}), 500
+        
+        return jsonify(result)
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 
 if __name__ == '__main__':
