@@ -8084,6 +8084,10 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             if sales_7d < 25 and not is_legacy_source:
                 continue  # Skip low-sales products
             
+            # FILTER: Must have commission rate > 0 (products with 0% commission are unusable)
+            if commission_rate <= 0 and not is_legacy_source:
+                continue  # Skip products with no commission
+            
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
             
             # Save or Update Product
