@@ -130,10 +130,35 @@ def initiate_login(email, password):
                 }
                 
                 if (si.status === 'needs_second_factor') {
+                    // Get available 2FA methods
+                    const methods = si.supportedSecondFactors?.map(f => f.strategy) || [];
+                    
+                    // Try to prepare email_code (this triggers sending the email)
+                    if (methods.includes('email_code')) {
+                        try {
+                            await si.prepareSecondFactor({ strategy: 'email_code' });
+                            return { 
+                                status: 'needs_2fa',
+                                signInId: si.id,
+                                methods: methods,
+                                message: 'Email code sent! Check your inbox.'
+                            };
+                        } catch (prepErr) {
+                            return { 
+                                status: 'needs_2fa',
+                                signInId: si.id,
+                                methods: methods,
+                                prepareError: prepErr.message || String(prepErr)
+                            };
+                        }
+                    }
+                    
+                    // Fallback if email_code not available
                     return { 
                         status: 'needs_2fa',
                         signInId: si.id,
-                        methods: si.supportedSecondFactors?.map(f => f.strategy) || ['email_code']
+                        methods: methods,
+                        message: 'Email code not available. Methods: ' + methods.join(', ')
                     };
                 }
                 
@@ -142,6 +167,7 @@ def initiate_login(email, password):
                 return { error: err.message || String(err) };
             }
         }""", [email, password])
+
         
         if result.get("status") == "complete":
             # No 2FA, save cookies immediately
