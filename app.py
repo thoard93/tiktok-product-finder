@@ -8930,24 +8930,30 @@ def copilot_enrich_videos():
         lock = threading.Lock()
         
         def fetch_with_retry(page_num, attempt=1):
-            """Fetch page data with 10 retries and big backoff on 500 errors"""
-            max_retries = 10
+            """Fetch page data using V2 API first (fast), fallback to legacy"""
+            max_retries = 3  # Reduced from 10 since V2 is reliable
             try:
-                products_data = fetch_copilot_trending(timeframe='all', limit=50, page=page_num)
+                # V2 API first (uses Playwright session - fast & reliable)
+                products_data = fetch_copilot_products(timeframe='all', limit=25, page=page_num)
                 if products_data:
                     return products_data
-                else:
-                    if attempt < max_retries:
-                        backoff = 45 * attempt + random.uniform(0, 30)  # 45-75s+ growing
-                        print(f"[ENRICH] Page {page_num} empty - retry {attempt+1}/{max_retries} after {backoff:.1f}s", flush=True)
-                        time.sleep(backoff)
-                        return fetch_with_retry(page_num, attempt + 1)
-                    print(f"[ENRICH] Page {page_num} empty after {max_retries} retries", flush=True)
-                    return None
+                
+                # Fallback to legacy trending API
+                products_data = fetch_copilot_trending(timeframe='all', limit=25, page=page_num)
+                if products_data:
+                    return products_data
+                
+                if attempt < max_retries:
+                    backoff = 3 + random.uniform(0, 2)  # 3-5s max (down from 45s)
+                    print(f"[ENRICH] Page {page_num} empty - retry {attempt+1}/{max_retries} after {backoff:.1f}s", flush=True)
+                    time.sleep(backoff)
+                    return fetch_with_retry(page_num, attempt + 1)
+                print(f"[ENRICH] Page {page_num} empty after {max_retries} retries", flush=True)
+                return None
             except Exception as e:
                 if attempt < max_retries:
-                    backoff = 45 * attempt + random.uniform(0, 30)  # 45-75s+ growing
-                    print(f"[ENRICH] Page {page_num} error (try {attempt}/{max_retries}): {e} - retry after {backoff:.1f}s", flush=True)
+                    backoff = 3 + random.uniform(0, 2)  # 3-5s (down from 45s)
+                    print(f"[ENRICH] Page {page_num} error (try {attempt}/{max_retries}): {e}", flush=True)
                     time.sleep(backoff)
                     return fetch_with_retry(page_num, attempt + 1)
                 print(f"[ENRICH] Page {page_num} failed after {max_retries} retries: {e}", flush=True)
@@ -9090,11 +9096,9 @@ def copilot_enrich_videos():
                         print(f"[Video Enrich] Progress: {pages_processed}/{target_pages} pages, {enriched_total} enriched", flush=True)
                         set_config_value('enrich_progress', str(enriched_total))
                     
-                    # 30-45s random delay between pages (final ultra-safe rate limiting)
+                    # 2s delay between pages (same as Phase 2)
                     if page < target_pages - 1:
-                        delay = random.uniform(30, 45)
-                        print(f"[Video Enrich] Sleeping {delay:.1f}s...", flush=True)
-                        time.sleep(delay)
+                        time.sleep(2.0)
                 
                 gc.collect()
                 print(f"[Video Enrich] ✅ COMPLETE: Enriched {enriched_total} products across {pages_processed} pages", flush=True)
