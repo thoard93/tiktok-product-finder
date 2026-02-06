@@ -7201,28 +7201,32 @@ def fetch_v2_via_playwright(page_num, timeframe='7d', sort_by='revenue', limit=5
             print("[V2 Playwright] Connecting to remote browser...", flush=True)
             browser = p.chromium.connect_over_cdp(browser_url)
             
-            # ALWAYS create a fresh context to avoid "Overriding cookies is forbidden" error
+            # Create a fresh context
             print("[V2 Playwright] Creating fresh browser context...", flush=True)
             context = browser.new_context()
-            
-            # Clear any existing cookies first, then inject ours
-            try:
-                context.clear_cookies()
-            except Exception:
-                pass  # Ignore if clear_cookies not supported
-            
-            # Inject cookies
-            context.add_cookies(cookies)
-            print("[V2 Playwright] Cookies injected", flush=True)
-            
             page = context.new_page()
             
-            # Navigate to main site to activate session and let Clerk JS refresh token
-            print("[V2 Playwright] Navigating to main site for session activation...", flush=True)
+            # Navigate to domain FIRST (required before setting cookies via JS)
+            print("[V2 Playwright] Navigating to domain first...", flush=True)
+            page.goto("https://www.tiktokcopilot.com/", wait_until="domcontentloaded", timeout=60000)
+            
+            # Set cookies via JavaScript (bypasses CDP restriction)
+            print("[V2 Playwright] Setting cookies via JavaScript...", flush=True)
+            for cookie in cookies:
+                js_cookie = f"document.cookie = '{cookie['name']}={cookie['value']}; path=/; domain=.tiktokcopilot.com; secure';"
+                try:
+                    page.evaluate(js_cookie)
+                except Exception as e:
+                    print(f"[V2 Playwright] Cookie {cookie['name']} warning: {e}", flush=True)
+            
+            print(f"[V2 Playwright] Set {len(cookies)} cookies via JS", flush=True)
+            
+            # Reload page to apply cookies and let Clerk JS refresh token
+            print("[V2 Playwright] Reloading page with cookies...", flush=True)
             page.goto("https://www.tiktokcopilot.com/products", wait_until="networkidle", timeout=60000)
             
-            # Small delay for Clerk to refresh token
-            page.wait_for_timeout(2000)
+            # Wait for Clerk to process cookies
+            page.wait_for_timeout(3000)
             
             # Now fetch the API
             print(f"[V2 Playwright] Fetching API: {api_url[:60]}...", flush=True)
