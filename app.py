@@ -10564,23 +10564,126 @@ try:
     import atexit
 
     def scheduled_copilot_refresh():
-        """Daily background sync of 3000+ products (60 pages)"""
+        """Daily 30K product sync with Phase 2 enrichment (every 24 hours)"""
         with app.app_context():
-            print("[SCHEDULER] 🕰️ Starting Massive Daily Copilot Sync...")
+            import gc
+            print("[SCHEDULER] 🕰️ Starting FULL Daily Sync (30K products + enrichment)...")
+            
             try:
+                # ===========================================
+                # PHASE 1: Fetch 7d stats (1200 pages = 30K products)
+                # ===========================================
                 total_saved = 0
-                for page in range(60): # 60 pages = 3000 products
-                    saved, total = sync_copilot_products(timeframe='7d', limit=50, page=page)
-                    total_saved += saved
-                    if total == 0: break
-                    time.sleep(3) # Polite delay
+                consecutive_empty = 0
+                MAX_EMPTY = 15
+                target_pages = 1200  # 1200 pages × 25 = 30K products
                 
-                print(f"[SCHEDULER] ✅ Massive Sync Complete: {total_saved} products updated.")
+                print(f"[SCHEDULER] Phase 1: Fetching 7d stats for {target_pages} pages...")
+                
+                for page in range(target_pages):
+                    if consecutive_empty >= MAX_EMPTY:
+                        print(f"[SCHEDULER] {MAX_EMPTY} consecutive empty pages - stopping Phase 1")
+                        break
+                    
+                    try:
+                        saved, total = sync_copilot_products(timeframe='7d', limit=25, page=page)
+                        total_saved += saved
+                        if total == 0:
+                            consecutive_empty += 1
+                        else:
+                            consecutive_empty = 0
+                        
+                        if page % 50 == 0:
+                            print(f"[SCHEDULER] Phase 1: {page}/{target_pages} pages, {total_saved} products")
+                        
+                        time.sleep(2)  # Rate limiting
+                        
+                    except Exception as e:
+                        print(f"[SCHEDULER] Phase 1 page {page} error: {e}")
+                        consecutive_empty += 1
+                        continue
+                    
+                    # Memory cleanup every 100 pages
+                    if page % 100 == 0:
+                        gc.collect()
+                
+                print(f"[SCHEDULER] ✅ Phase 1 Complete: {total_saved} products synced")
+                
+                # ===========================================
+                # PHASE 2: Enrich with all-time video/creator counts
+                # ===========================================
+                if total_saved > 0:
+                    print("[SCHEDULER] Phase 2: Enriching with all-time video/creator counts...")
+                    enriched = 0
+                    consecutive_empty_p2 = 0
+                    enrich_pages = 1200  # Match Phase 1
+                    
+                    for page in range(enrich_pages):
+                        if consecutive_empty_p2 >= 10:
+                            print(f"[SCHEDULER] Phase 2: 10 consecutive empty - stopping")
+                            break
+                        
+                        try:
+                            products_data = fetch_copilot_products(timeframe='all', limit=25, page=page)
+                            if not products_data:
+                                products_data = fetch_copilot_trending(timeframe='all', limit=25, page=page)
+                            
+                            if not products_data:
+                                consecutive_empty_p2 += 1
+                                continue
+                            
+                            products = products_data.get('products', []) or products_data.get('videos', [])
+                            if not products:
+                                consecutive_empty_p2 += 1
+                                continue
+                            
+                            consecutive_empty_p2 = 0
+                            page_enriched = 0
+                            
+                            for v in products:
+                                pid = str(v.get('productId', '')).strip()
+                                if not pid:
+                                    continue
+                                if not pid.startswith('shop_'):
+                                    pid = f"shop_{pid}"
+                                existing = Product.query.get(pid)
+                                if existing:
+                                    v_count = safe_int(v.get('productVideoCount') or 0)
+                                    c_count = safe_int(v.get('productCreatorCount') or 0)
+                                    if v_count > 0 and v_count > (existing.video_count_alltime or 0):
+                                        existing.video_count_alltime = v_count
+                                        if v_count > (existing.video_count or 0):
+                                            existing.video_count = v_count
+                                    if c_count > 0 and c_count > (existing.influencer_count or 0):
+                                        existing.influencer_count = c_count
+                                    page_enriched += 1
+                            
+                            db.session.commit()
+                            enriched += page_enriched
+                            
+                            if page % 100 == 0:
+                                print(f"[SCHEDULER] Phase 2: {page}/{enrich_pages} pages, {enriched} enriched")
+                            
+                            time.sleep(2)
+                            
+                        except Exception as e:
+                            print(f"[SCHEDULER] Phase 2 page {page} error: {e}")
+                            db.session.rollback()
+                            consecutive_empty_p2 += 1
+                            continue
+                        
+                        if page % 100 == 0:
+                            gc.collect()
+                    
+                    print(f"[SCHEDULER] ✅ Phase 2 Complete: {enriched} products enriched")
+                
+                print(f"[SCHEDULER] ✅ FULL DAILY SYNC COMPLETE: {total_saved} synced, enrichment done!")
                 try:
-                    send_telegram_alert(f"🕵️ **Massive Sync Complete!**\n✅ Updated {total_saved} products.")
+                    send_telegram_alert(f"🕵️ **Daily Sync Complete!**\n✅ {total_saved} products synced + enriched.")
                 except: pass
+                
             except Exception as e:
-                print(f"[SCHEDULER] ❌ Massive Sync Failed: {e}")
+                print(f"[SCHEDULER] ❌ Daily Sync Failed: {e}")
 
     def scheduled_stale_refresh():
         """Refresh 200 oldest products every cycle"""
@@ -10706,8 +10809,8 @@ try:
 
     # Initialize Scheduler
     scheduler = BackgroundScheduler()
-    # Run every 12 hours (twice daily for fresh data)
-    scheduler.add_job(func=scheduled_copilot_refresh, trigger="interval", hours=12)
+    # Run once per day (24 hours) - full 30K sync with enrichment
+    scheduler.add_job(func=scheduled_copilot_refresh, trigger="interval", hours=24)
     # Run Stale Refresh every 4 hours
     scheduler.add_job(func=scheduled_stale_refresh, trigger="interval", hours=4)
     # Run Google Sheets sync every 72 hours (3 days)
