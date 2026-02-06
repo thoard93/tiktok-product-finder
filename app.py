@@ -7187,11 +7187,15 @@ def fetch_v2_via_playwright(page_num, timeframe='7d', sort_by='revenue', limit=5
             print("[V2 Playwright] Connecting to remote browser...", flush=True)
             browser = p.chromium.connect_over_cdp(browser_url)
             
-            # Get or create context
-            if browser.contexts:
-                context = browser.contexts[0]
-            else:
-                context = browser.new_context()
+            # ALWAYS create a fresh context to avoid "Overriding cookies is forbidden" error
+            print("[V2 Playwright] Creating fresh browser context...", flush=True)
+            context = browser.new_context()
+            
+            # Clear any existing cookies first, then inject ours
+            try:
+                context.clear_cookies()
+            except Exception:
+                pass  # Ignore if clear_cookies not supported
             
             # Inject cookies
             context.add_cookies(cookies)
