@@ -588,12 +588,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No products matching criteria today (30-200 all-time videos, 20+ 7D sales, $50+ ad spend). Try syncing more products from Copilot!")
+        await channel.send("📭 No products matching criteria today (50-120 all-time videos, 50+ 7D sales, $100+ ad spend, commission > 0). Try syncing more products from Copilot!")
         return
     
     # Send header message
     await channel.send(f"# 🔥 Daily Hot Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 30-200 all-time videos, $50+ ad spend, 20+ 7D sales\n"
+                       f"**Criteria:** 50-120 all-time videos, $100+ ad spend, 50+ 7D sales\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"──────────────────────────────")
     
@@ -997,47 +997,14 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # ===== DIAGNOSTIC: Test each filter individually =====
+        # Query: Products with 50-120 all-time videos, ad spend, 7D sales
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
-        
-        total_products = Product.query.count()
-        print(f"[Hot Products DIAG] Total products in DB: {total_products}")
-        
-        has_videos_30_200 = Product.query.filter(video_count_field >= 30, video_count_field <= 200).count()
-        print(f"[Hot Products DIAG] With 30-200 videos: {has_videos_30_200}")
-        
-        has_sales = Product.query.filter(Product.sales_7d >= 20).count()
-        print(f"[Hot Products DIAG] With 20+ 7D sales: {has_sales}")
-        
-        has_ads = Product.query.filter(Product.ad_spend >= 50).count()
-        print(f"[Hot Products DIAG] With $50+ ad spend: {has_ads}")
-        
-        has_commission = Product.query.filter(Product.commission_rate > 0).count()
-        print(f"[Hot Products DIAG] With commission > 0: {has_commission}")
-        
-        not_shown = Product.query.filter(
-            db.or_(Product.last_shown_hot == None, Product.last_shown_hot < cutoff_date)
-        ).count()
-        print(f"[Hot Products DIAG] Not shown in last {DAYS_BEFORE_REPEAT} days: {not_shown}")
-        
-        # Combined without last_shown_hot filter
-        combined_no_shown = Product.query.filter(
-            video_count_field >= 30,
-            video_count_field <= 200,
-            Product.sales_7d >= 20,
-            Product.ad_spend >= 50,
-            Product.commission_rate > 0
-        ).count()
-        print(f"[Hot Products DIAG] Combined (ignoring last_shown_hot): {combined_no_shown}")
-        # ===== END DIAGNOSTIC =====
-        
-        # Query: Products with 30-200 all-time videos, ad spend, 7D sales
         products = Product.query.filter(
-            video_count_field >= 30,  # Min 30 all-time videos
-            video_count_field <= 200,  # Max 200 all-time videos (opportunity zone)
-            Product.sales_7d >= 20,  # 7D sales (20+)
-            Product.ad_spend >= 50,  # Ad spend ($50+)
-            Product.commission_rate > 0,  # Must have commission
+            video_count_field >= 50,  # Min 50 all-time videos
+            video_count_field <= 120,  # Max 120 all-time videos (opportunity zone)
+            Product.sales_7d >= 50,  # 7D sales
+            Product.ad_spend >= 100,  # Ad spend ($100+)
+            Product.commission_rate > 0,  # Must have regular commission
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date

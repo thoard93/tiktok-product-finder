@@ -1225,17 +1225,21 @@
                 const dryRes = await fetch('/api/admin/deduplicate?dry_run=true', { method: 'POST' });
                 const dryData = await dryRes.json();
                 if (!dryData.success) {
-                    alert('❌ Error: ' + dryData.error);
+                    alert('❌ Error: ' + (dryData.error || 'Unknown error'));
                     return;
                 }
-                if (dryData.total_duplicates === 0) {
+                if (dryData.duplicates_to_delete === 0) {
                     alert('✅ No duplicates found! Your database is clean.');
                     return;
                 }
 
                 // Show preview and ask for confirmation
-                const details = dryData.details.slice(0, 10).map(d => `  • ${d.name} (keep ${d.kept_id}, delete ${d.deleted_id})`).join('\n');
-                if (!confirm(`Found ${dryData.total_duplicates} duplicates:\n- ${dryData.name_duplicates} name duplicates\n- ${dryData.prefix_duplicates} prefix collisions\n\nExamples:\n${details}\n\nDelete them now?`)) return;
+                const samples = (dryData.sample_deletions || []).slice(0, 8).map(d => `  • ${d.name}`).join('\n');
+                if (!confirm(`Found ${dryData.duplicates_to_delete.toLocaleString()} duplicates!\n\n` +
+                    `📊 ${dryData.total_products.toLocaleString()} total → ${dryData.products_after_dedup.toLocaleString()} unique products\n` +
+                    `(${dryData.unique_product_names.toLocaleString()} unique names)\n\n` +
+                    `Sample duplicates:\n${samples}\n\n` +
+                    `Delete all duplicates now?`)) return;
 
                 // Phase 2: Actual delete
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
@@ -1245,7 +1249,7 @@
                     alert(`✅ ${data.message}`);
                     window.location.reload();
                 } else {
-                    alert('❌ Error: ' + data.error);
+                    alert('❌ Error: ' + (data.error || 'Unknown error'));
                 }
             } catch (e) {
                 alert('System Fault: ' + e);
