@@ -75,7 +75,7 @@ def main():
             page = context.new_page()
             
             # Navigate to login
-            page.goto("https://www.tiktokcopilot.com/?auth=sign-in", wait_until="networkidle", timeout=30000)
+            page.goto("https://www.tiktokcopilot.com/?auth=sign-in", wait_until="domcontentloaded", timeout=60000)
             
             # Click "Sign in" if modal
             try:
@@ -111,7 +111,7 @@ def main():
             
             # Wait for auth
             page.wait_for_url(lambda url: "auth=sign-in" not in url, timeout=20000)
-            page.wait_for_load_state("networkidle", timeout=15000)
+            page.wait_for_load_state("domcontentloaded", timeout=15000)
             
             # Verify cookies
             cookies = context.cookies()
