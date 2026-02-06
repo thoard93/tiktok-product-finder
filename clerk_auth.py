@@ -3,10 +3,13 @@
 Clerk 2FA Authentication Flow Handler.
 Manages the semi-automated 2FA auth flow for TikTokCopilot.
 
+Uses SQLite for persistent session storage (survives deploys).
+
 Usage:
-    python clerk_auth.py initiate <email> <password>
-    python clerk_auth.py verify <sign_in_id> <code>
+    python clerk_auth.py initiate
+    python clerk_auth.py verify <code>
     python clerk_auth.py status
+    python clerk_auth.py fetch <api_url>
 
 Outputs JSON to stdout.
 """
@@ -15,51 +18,73 @@ import os
 import sys
 import json
 import time
+import sqlite3
 
-COOKIES_FILE = "/tmp/copilot_session.json"
-SIGNIN_STATE_FILE = "/tmp/copilot_signin_state.json"
+# Use the same DB path as the main app
+basedir = os.path.abspath(os.path.dirname(__file__))
+DB_PATH = os.path.join(basedir, 'products.db')
 BASE_URL = "https://www.tiktokcopilot.com"
 
 
-def save_state(sign_in_id, email):
-    """Save the sign-in state for later verification."""
-    with open(SIGNIN_STATE_FILE, 'w') as f:
-        json.dump({
-            "sign_in_id": sign_in_id,
-            "email": email,
-            "timestamp": time.time()
-        }, f)
+def get_db_connection():
+    """Get a SQLite connection."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-def load_state():
-    """Load the pending sign-in state."""
-    try:
-        with open(SIGNIN_STATE_FILE, 'r') as f:
-            return json.load(f)
-    except:
+def ensure_session_table():
+    """Create the session storage table if it doesn't exist."""
+    conn = get_db_connection()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS copilot_session (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at REAL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def save_session_data(key, value):
+    """Save a key-value pair to the session table."""
+    ensure_session_table()
+    conn = get_db_connection()
+    conn.execute("""
+        INSERT OR REPLACE INTO copilot_session (key, value, updated_at)
+        VALUES (?, ?, ?)
+    """, (key, json.dumps(value), time.time()))
+    conn.commit()
+    conn.close()
+
+
+def get_session_data(key, max_age_days=14):
+    """Get a value from the session table. Returns None if expired or missing."""
+    ensure_session_table()
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT value, updated_at FROM copilot_session WHERE key = ?", (key,)
+    ).fetchone()
+    conn.close()
+    
+    if not row:
         return None
+    
+    # Check age
+    if time.time() - row['updated_at'] > max_age_days * 24 * 60 * 60:
+        return None
+    
+    return json.loads(row['value'])
 
 
-def save_cookies(cookies):
-    """Persist session cookies to disk."""
-    with open(COOKIES_FILE, 'w') as f:
-        json.dump({
-            "cookies": cookies,
-            "timestamp": time.time()
-        }, f)
-
-
-def load_cookies():
-    """Load persisted session cookies."""
-    try:
-        with open(COOKIES_FILE, 'r') as f:
-            data = json.load(f)
-            # Check if cookies are less than 14 days old
-            if time.time() - data.get("timestamp", 0) < 14 * 24 * 60 * 60:
-                return data.get("cookies", [])
-    except:
-        pass
-    return None
+def delete_session_data(key):
+    """Delete a key from the session table."""
+    ensure_session_table()
+    conn = get_db_connection()
+    conn.execute("DELETE FROM copilot_session WHERE key = ?", (key,))
+    conn.commit()
+    conn.close()
 
 
 def initiate_login(email, password):
@@ -85,7 +110,7 @@ def initiate_login(email, password):
             page.wait_for_function("() => window.Clerk && window.Clerk.client", timeout=20000)
         except:
             browser.close()
-            return {"error": "Clerk SDK not ready"}
+            return {"error": "Clerk SDK not ready - page may not have loaded correctly"}
         
         # Attempt sign-in
         result = page.evaluate("""async ([email, password]) => {
@@ -121,19 +146,23 @@ def initiate_login(email, password):
         if result.get("status") == "complete":
             # No 2FA, save cookies immediately
             cookies = context.cookies()
-            save_cookies(cookies)
+            save_session_data("cookies", cookies)
             browser.close()
-            return {"status": "complete", "message": "Login successful, session saved"}
+            return {"status": "complete", "message": "Login successful, session saved to database"}
         
         if result.get("status") == "needs_2fa":
             # Save the sign-in ID for later verification
-            save_state(result.get("signInId"), email)
+            save_session_data("pending_signin", {
+                "sign_in_id": result.get("signInId"),
+                "email": email,
+                "timestamp": time.time()
+            })
             browser.close()
             return {
                 "status": "needs_2fa",
                 "signInId": result.get("signInId"),
                 "methods": result.get("methods"),
-                "message": "Check your email for the verification code"
+                "message": "Check your email for the verification code, then use /api/copilot-auth/verify"
             }
         
         browser.close()
@@ -144,11 +173,9 @@ def verify_code(code):
     """Complete 2FA verification with the email code."""
     from playwright.sync_api import sync_playwright
     
-    state = load_state()
+    state = get_session_data("pending_signin", max_age_days=1)  # Sign-in attempts expire in 1 day
     if not state:
-        return {"error": "No pending sign-in. Please initiate login first."}
-    
-    sign_in_id = state.get("sign_in_id")
+        return {"error": "No pending sign-in. Please call /api/copilot-auth/initiate first."}
     
     with sync_playwright() as pw:
         browser = pw.chromium.launch(
@@ -171,9 +198,9 @@ def verify_code(code):
             return {"error": "Clerk SDK not ready"}
         
         # Complete 2FA
-        result = page.evaluate("""async ([signInId, code]) => {
+        result = page.evaluate("""async (code) => {
             try {
-                // Get the pending sign-in
+                // Complete the second factor
                 const signInAttempt = await window.Clerk.client.signIn.attemptSecondFactor({
                     strategy: 'email_code',
                     code: code
@@ -194,25 +221,24 @@ def verify_code(code):
             } catch (err) {
                 return { error: err.message || String(err) };
             }
-        }""", [sign_in_id, code])
+        }""", code)
         
         if result.get("status") == "complete":
-            # Save session cookies
+            # Save session cookies to database
             page.wait_for_timeout(2000)  # Let cookies settle
             cookies = context.cookies()
-            save_cookies(cookies)
+            save_session_data("cookies", cookies)
             
-            # Clean up state file
-            try:
-                os.remove(SIGNIN_STATE_FILE)
-            except:
-                pass
+            # Clean up pending sign-in
+            delete_session_data("pending_signin")
+            
+            session_cookies = [c["name"] for c in cookies if "__session" in c["name"]]
             
             browser.close()
             return {
                 "status": "complete",
-                "message": "2FA verified! Session saved.",
-                "cookieCount": len([c for c in cookies if "__session" in c["name"]])
+                "message": "2FA verified! Session saved to database. You can now use the API.",
+                "sessionCookies": session_cookies
             }
         
         browser.close()
@@ -221,28 +247,89 @@ def verify_code(code):
 
 def get_status():
     """Check current auth status."""
-    cookies = load_cookies()
-    pending = load_state()
+    cookies = get_session_data("cookies")
+    pending = get_session_data("pending_signin", max_age_days=1)
     
     status = {
         "hasSavedSession": cookies is not None,
+        "sessionValid": False,
         "pendingSignIn": pending is not None
     }
     
     if cookies:
         session_cookies = [c["name"] for c in cookies if "__session" in c["name"]]
         status["sessionCookies"] = session_cookies
+        status["sessionValid"] = len(session_cookies) > 0
     
     if pending:
         status["pendingEmail"] = pending.get("email")
-        status["pendingSince"] = pending.get("timestamp")
     
     return status
 
 
+def fetch_api(api_url):
+    """Fetch from the TikTokCopilot API using saved session cookies."""
+    from playwright.sync_api import sync_playwright
+    
+    cookies = get_session_data("cookies")
+    if not cookies:
+        return {"error": "No saved session. Please authenticate first via /api/copilot-auth/initiate"}
+    
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--single-process"],
+        )
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
+        
+        # Inject saved cookies
+        context.add_cookies(cookies)
+        
+        page = context.new_page()
+        
+        # Navigate to establish cookie context
+        page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(2000)
+        
+        # Verify session
+        current_cookies = context.cookies()
+        session_cookies = [c for c in current_cookies if "__session" in c["name"]]
+        
+        if not session_cookies:
+            browser.close()
+            return {"error": "Session cookies expired. Please re-authenticate."}
+        
+        # Fetch API via JS
+        result = page.evaluate(
+            """async (url) => {
+                try {
+                    const resp = await fetch(url, { credentials: 'include' });
+                    const body = await resp.json();
+                    return { status: resp.status, body, ok: resp.ok };
+                } catch (err) {
+                    return { error: err.message };
+                }
+            }""",
+            api_url
+        )
+        
+        browser.close()
+        
+        if "error" in result:
+            return {"error": result["error"]}
+        
+        if not result.get("ok"):
+            return {"error": f"HTTP {result.get('status')}", "body": str(result.get('body', ''))[:500]}
+        
+        return {"success": True, "data": result.get("body", {})}
+
+
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: clerk_auth.py <initiate|verify|status> [args]"}))
+        print(json.dumps({"error": "Usage: clerk_auth.py <initiate|verify|status|fetch> [args]"}))
         sys.exit(1)
     
     command = sys.argv[1]
@@ -266,6 +353,14 @@ def main():
     
     elif command == "status":
         result = get_status()
+        print(json.dumps(result))
+    
+    elif command == "fetch":
+        if len(sys.argv) < 3:
+            print(json.dumps({"error": "Usage: clerk_auth.py fetch <api_url>"}))
+            sys.exit(1)
+        api_url = sys.argv[2]
+        result = fetch_api(api_url)
         print(json.dumps(result))
     
     else:

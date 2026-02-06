@@ -378,6 +378,67 @@
                 </div>
             </div>
 
+            <!-- 2FA Playwright Authentication Section -->
+            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
+                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-shield-alt text-primary text-xs"></i>
+                </div>
+                Playwright 2FA Authentication
+            </h3>
+            <p class="text-slate-400 text-xs mb-4">
+                Authenticate with TikTokCopilot using Playwright + 2FA. Session persists in database (survives deploys).
+            </p>
+
+            <div class="space-y-4 max-w-2xl mb-10">
+                <!-- Status -->
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="flex items-center gap-2">
+                        <div id="auth2faIndicator" class="w-2 h-2 rounded-full bg-slate-600"></div>
+                        <span id="auth2faStatus" class="text-xs text-slate-400">Checking status...</span>
+                    </div>
+                    <button onclick="checkAuth2faStatus()"
+                        class="text-[10px] text-slate-500 hover:text-white uppercase tracking-widest">
+                        <i class="fas fa-sync-alt mr-1"></i> Refresh Status
+                    </button>
+                </div>
+
+                <!-- Step 1: Initiate -->
+                <div class="p-4 rounded-xl bg-slate-800/50 border border-white/5">
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Step 1: Start Login
+                    </p>
+                    <div class="flex flex-wrap gap-3 items-center">
+                        <button onclick="initiateCopilotAuth()" id="btnInitiateAuth"
+                            class="px-5 py-2.5 rounded-xl bg-primary hover:bg-blue-600 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2">
+                            <i class="fas fa-key text-xs"></i>
+                            Start Login
+                        </button>
+                        <span class="text-[10px] text-slate-500">This will send a 2FA code to your email</span>
+                    </div>
+                </div>
+
+                <!-- Step 2: Verify -->
+                <div class="p-4 rounded-xl bg-slate-800/50 border border-white/5">
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Step 2: Enter Code
+                    </p>
+                    <div class="flex flex-wrap gap-3 items-end">
+                        <div>
+                            <label
+                                class="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">6-Digit
+                                Code from Email</label>
+                            <input type="text" id="auth2faCodeInput" placeholder="123456" maxlength="6"
+                                class="bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-lg font-mono text-emerald-400 focus:border-emerald-400/50 outline-none transition-all w-36 text-center tracking-[0.5em]">
+                        </div>
+                        <button onclick="verifyCopilotAuth()" id="btnVerifyAuth"
+                            class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+                            <i class="fas fa-check text-xs"></i>
+                            Verify Code
+                        </button>
+                    </div>
+                </div>
+
+                <p id="auth2faMessage" class="text-xs text-slate-400 hidden"></p>
+            </div>
+
             <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
                 <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
                     <i class="fas fa-robot text-violet-500 text-xs"></i>
@@ -658,9 +719,122 @@
         // Check status on page load
         document.addEventListener('DOMContentLoaded', () => {
             checkAutoRefreshStatus();
+            checkAuth2faStatus();
             // Check every 5 minutes
             setInterval(checkAutoRefreshStatus, 300000);
         });
+
+        // ============ 2FA AUTHENTICATION FUNCTIONS ============
+
+        async function checkAuth2faStatus() {
+            const indicator = document.getElementById('auth2faIndicator');
+            const status = document.getElementById('auth2faStatus');
+
+            try {
+                const res = await fetch('/api/copilot-auth/status');
+                const data = await res.json();
+
+                if (data.sessionValid) {
+                    indicator.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+                    status.textContent = '✓ Session Active - ' + (data.sessionCookies?.length || 0) + ' cookies';
+                    status.className = 'text-xs text-emerald-400';
+                } else if (data.pendingSignIn) {
+                    indicator.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+                    status.textContent = '⏳ Awaiting 2FA Code';
+                    status.className = 'text-xs text-amber-400';
+                } else {
+                    indicator.className = 'w-2 h-2 rounded-full bg-slate-600';
+                    status.textContent = 'No active session';
+                    status.className = 'text-xs text-slate-400';
+                }
+            } catch (e) {
+                indicator.className = 'w-2 h-2 rounded-full bg-rose-500';
+                status.textContent = 'Error checking status';
+                status.className = 'text-xs text-rose-400';
+            }
+        }
+
+        async function initiateCopilotAuth() {
+            const btn = document.getElementById('btnInitiateAuth');
+            const msg = document.getElementById('auth2faMessage');
+            const original = btn.innerHTML;
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+            btn.disabled = true;
+            msg.className = 'text-xs text-slate-400 hidden';
+
+            try {
+                const res = await fetch('/api/copilot-auth/initiate', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.status === 'needs_2fa') {
+                    msg.textContent = '📧 Check your email for the 6-digit code, then enter it below!';
+                    msg.className = 'text-xs text-amber-400 p-3 bg-amber-500/10 rounded-lg border border-amber-500/20';
+                    checkAuth2faStatus();
+                } else if (data.status === 'complete') {
+                    msg.textContent = '✅ Login successful! No 2FA needed. Session saved.';
+                    msg.className = 'text-xs text-emerald-400 p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20';
+                    checkAuth2faStatus();
+                } else if (data.error) {
+                    msg.textContent = '❌ Error: ' + data.error;
+                    msg.className = 'text-xs text-rose-400 p-3 bg-rose-500/10 rounded-lg border border-rose-500/20';
+                } else {
+                    msg.textContent = '⚠️ Unexpected response: ' + JSON.stringify(data);
+                    msg.className = 'text-xs text-amber-400';
+                }
+            } catch (e) {
+                msg.textContent = '❌ Connection Error: ' + e.message;
+                msg.className = 'text-xs text-rose-400 p-3 bg-rose-500/10 rounded-lg border border-rose-500/20';
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        async function verifyCopilotAuth() {
+            const btn = document.getElementById('btnVerifyAuth');
+            const codeInput = document.getElementById('auth2faCodeInput');
+            const msg = document.getElementById('auth2faMessage');
+            const code = codeInput.value.trim();
+            const original = btn.innerHTML;
+
+            if (!code || code.length !== 6) {
+                alert('Please enter the 6-digit code from your email.');
+                codeInput.focus();
+                return;
+            }
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/copilot-auth/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code })
+                });
+                const data = await res.json();
+
+                if (data.status === 'complete') {
+                    msg.textContent = '✅ ' + (data.message || '2FA Verified! Session saved to database.');
+                    msg.className = 'text-xs text-emerald-400 p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20';
+                    codeInput.value = '';
+                    checkAuth2faStatus();
+                } else if (data.error) {
+                    msg.textContent = '❌ Error: ' + data.error;
+                    msg.className = 'text-xs text-rose-400 p-3 bg-rose-500/10 rounded-lg border border-rose-500/20';
+                } else {
+                    msg.textContent = '⚠️ Unexpected: ' + JSON.stringify(data);
+                    msg.className = 'text-xs text-amber-400';
+                }
+            } catch (e) {
+                msg.textContent = '❌ Verification Error: ' + e.message;
+                msg.className = 'text-xs text-rose-400 p-3 bg-rose-500/10 rounded-lg border border-rose-500/20';
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
 
         let isStopRequested = false;
 

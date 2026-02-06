@@ -3,7 +3,7 @@
 Standalone Playwright script for TikTokCopilot V2 API fetching.
 Run in subprocess to avoid asyncio conflicts with gunicorn.
 
-Uses saved session cookies from clerk_auth.py if available.
+Uses saved session cookies from clerk_auth.py (SQLite storage).
 
 Usage:
     python playwright_fetch.py <page_num> <timeframe> <sort_by> <limit> <region>
@@ -15,22 +15,35 @@ import os
 import sys
 import json
 import time
+import sqlite3
 
-COOKIES_FILE = "/tmp/copilot_session.json"
+# Use the same DB path as the main app
+basedir = os.path.abspath(os.path.dirname(__file__))
+DB_PATH = os.path.join(basedir, 'products.db')
 BASE_URL = "https://www.tiktokcopilot.com"
 
 
-def load_saved_cookies():
-    """Load persisted session cookies from disk."""
+def get_saved_cookies():
+    """Load session cookies from SQLite database."""
     try:
-        with open(COOKIES_FILE, 'r') as f:
-            data = json.load(f)
-            # Check if cookies are less than 14 days old
-            if time.time() - data.get("timestamp", 0) < 14 * 24 * 60 * 60:
-                return data.get("cookies", [])
-    except:
-        pass
-    return None
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT value, updated_at FROM copilot_session WHERE key = ?", ("cookies",)
+        ).fetchone()
+        conn.close()
+        
+        if not row:
+            return None
+        
+        # Check if cookies are less than 14 days old
+        if time.time() - row['updated_at'] > 14 * 24 * 60 * 60:
+            return None
+        
+        return json.loads(row['value'])
+    except Exception as e:
+        print(f"Error loading cookies: {e}", file=sys.stderr)
+        return None
 
 
 def main():
@@ -53,8 +66,12 @@ def main():
     
     api_url = f"{BASE_URL}/api/trending/products?timeframe={timeframe}&sortBy={sort_by}&limit={limit}&page={page_num}&region={region}"
     
-    # Check for saved cookies first
-    saved_cookies = load_saved_cookies()
+    # Check for saved cookies
+    saved_cookies = get_saved_cookies()
+    
+    if not saved_cookies:
+        print(json.dumps({"error": "No saved session. Please authenticate via /api/copilot-auth/initiate first."}))
+        sys.exit(1)
     
     try:
         with sync_playwright() as p:
@@ -86,14 +103,9 @@ def main():
                 viewport={"width": 1920, "height": 1080}
             )
             
-            # If we have saved cookies, inject them
-            if saved_cookies:
-                print("Using saved session cookies...", file=sys.stderr)
-                context.add_cookies(saved_cookies)
-            else:
-                print(json.dumps({"error": "No saved session. Please authenticate via /api/copilot-auth/initiate first."}))
-                browser.close()
-                sys.exit(1)
+            # Inject saved cookies
+            print("Using saved session cookies from database...", file=sys.stderr)
+            context.add_cookies(saved_cookies)
             
             page = context.new_page()
             
