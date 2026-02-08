@@ -588,12 +588,12 @@ async def daily_hot_products():
     products = get_hot_products()
     
     if not products:
-        await channel.send("📭 No products matching criteria today (50-120 all-time videos, 50+ 7D sales, $100+ ad spend, commission > 0). Try syncing more products from Copilot!")
+        await channel.send("📭 No products matching criteria today (40-120 videos, 100+ 7D sales, $100+ ad spend, commission > 0). Try syncing more products from Copilot!")
         return
     
     # Send header message
     await channel.send(f"# 🔥 Daily Hot Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 50-120 all-time videos, $100+ ad spend, 50+ 7D sales\n"
+                       f"**Criteria:** 40-120 all-time videos, $100+ ad spend, 100+ 7D sales\n"
                        f"**Today's Picks:** {len(products)} products\n"
                        f"──────────────────────────────")
     
@@ -997,14 +997,14 @@ def get_hot_products():
         # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
         
-        # Query: Products with 50-120 all-time videos, ad spend, 7D sales
+        # Query: Products in opportunity zone (40-120 videos), matching v6.0 filters
         video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
-            video_count_field >= 50,  # Min 50 all-time videos
+            video_count_field >= 40,  # Min 40 all-time videos
             video_count_field <= 120,  # Max 120 all-time videos (opportunity zone)
-            Product.sales_7d >= 50,  # 7D sales
-            Product.ad_spend >= 100,  # Ad spend ($100+)
-            Product.commission_rate > 0,  # Must have regular commission
+            Product.sales_7d >= 100,  # 100+ 7D sales
+            Product.ad_spend >= 100,  # $100+ ad spend
+            Product.commission_rate > 0,  # Must have commission
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date

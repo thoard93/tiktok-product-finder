@@ -7953,13 +7953,6 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 0
             )
             
-            # FILTER: Skip products with less than 10 7D sales (no momentum)
-            MIN_7D_SALES = 10
-            if sales_7d < MIN_7D_SALES:
-                if saved_count < 3:  # Only log first few for debugging
-                    print(f"[Sync Filter] Skipping {product_id} - only {sales_7d} 7D sales (min: {MIN_7D_SALES})")
-                continue
-            
             # 2. Revenue (7d)
             period_revenue = safe_float(
                 p.get('periodRevenue') or 
@@ -7997,7 +7990,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 p.get('productTotalRevenue') or 
                 p.get('estTotalEarnings') or 
                 p.get('revenue_alltime') or 
-                p.get('videoRevenue') or # Fallback in video objects
+                p.get('videoRevenue') or
                 0
             )
             
@@ -8009,7 +8002,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             )
             
             if ad_spend_7d <= 0 and total_ad_cost > 0:
-                ad_spend_7d = total_ad_cost * 0.1 # Conservative heuristic fallback
+                ad_spend_7d = total_ad_cost * 0.1
             
             ad_spend_total = total_ad_cost or ad_spend_7d
             
@@ -8055,37 +8048,21 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             # Seller info
             seller_name = p.get('sellerName') or ''
             seller_id = p.get('sellerId') or ''
- 
-            # FILTER: Quality Control - Skip low-quality products
-            # V2: Relax sales filter - include Revenue in the checks!
-            is_zero_stat = (sales_7d <= 0 and total_sales <= 0 and period_revenue <= 0 and total_revenue <= 0)
             
-            if is_zero_stat and ad_spend_7d < 50:
-                # Legacy products pass through; V2 low-stats get filtered
-                if is_legacy_source and product_id:
-                    pass  # Allow legacy through
-                else:
-                    continue
-            
-            # V2 RELAX: Lower video count requirement for high-revenue products
-            if video_count < 2 and total_revenue < 300 and not is_legacy_source:
-                continue
-                
-            # FILTER: Active ad spend or high commission or any revenue
-            if not is_legacy_source and ad_spend_7d <= 0 and commission_rate < 0.10 and total_revenue < 200:
-                continue
-            
-            # GMV Max filter - Only sync products with GMV Max ads enabled
-            if not is_legacy_source and shop_ads_rate <= 0:
-                continue  # Skip products without GMV Max
-            
-            # FILTER: Minimum 25 sales in last 7 days for quality products
-            if sales_7d < 25 and not is_legacy_source:
-                continue  # Skip low-sales products
-            
-            # FILTER: Must have commission rate > 0 (products with 0% commission are unusable)
-            if commission_rate <= 0 and not is_legacy_source:
-                continue  # Skip products with no commission
+            # ===== STRICT QUALITY FILTERS (v6.0) =====
+            # All must pass — no exceptions, no legacy bypass
+            if video_count < 40:
+                continue  # Min 40 all-time videos
+            if creator_count < 30:
+                continue  # Min 30 all-time creators
+            if sales_7d < 100:
+                continue  # Min 100 last 7D sales
+            if ad_spend_7d < 100:
+                continue  # Min $100 last 7D ad spend
+            if commission_rate <= 0:
+                continue  # Must have commission > 0%
+            if shop_ads_rate <= 0:
+                continue  # Must have GMV Max ads
             
             winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
             
