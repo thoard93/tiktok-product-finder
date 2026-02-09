@@ -7748,7 +7748,13 @@ def fetch_copilot_products(timeframe='7d', sort_by='revenue', limit=50, page=0, 
             
             if res.status_code == 200:
                 try:
-                    return res.json()
+                    data = res.json()
+                    # Debug: Log what the API actually returned
+                    products_key = 'products' if 'products' in data else 'videos' if 'videos' in data else None
+                    product_count = len(data.get(products_key, [])) if products_key else 0
+                    if product_count == 0:
+                        print(f"[Copilot Products] ⚠️ API returned 200 but 0 products. Keys: {list(data.keys())[:10]}. Response preview: {str(data)[:300]}")
+                    return data
                 except Exception as e:
                     # DETECT GEIST ANTI-BOT: HTML response means blocked, don't retry
                     if is_html or has_geist:
