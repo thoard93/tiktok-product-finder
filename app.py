@@ -3570,7 +3570,11 @@ def refresh_product_data(product_id):
         # by dashboard filters (which often default to min_videos=1)
         # Real value is stored in p.get(), but we override for visibility
         raw_vids = int(p.get('total_video_cnt', 0) or 0)
-        product.video_count = max(1, raw_vids)
+        if raw_vids > 0:
+            # Update all-time counts (never downgrade)
+            if raw_vids > (product.video_count_alltime or 0):
+                product.video_count_alltime = raw_vids
+                product.video_count = raw_vids
         
         product.video_7d = int(p.get('total_video_7d_cnt', 0) or 0)
         product.video_30d = int(p.get('total_video_30d_cnt', 0) or 0)
@@ -4720,11 +4724,13 @@ def api_products():
         if max_inf is not None:
             query = query.filter(Product.influencer_count <= max_inf)
             
-        if min_vids is not None:
-            query = query.filter(Product.video_count >= min_vids)
-            
-        if max_vids is not None:
-            query = query.filter(Product.video_count <= max_vids)
+        # Skip generic video count filters when specialized filters handle their own video criteria
+        if not (is_gems or is_caked):
+            if min_vids is not None:
+                query = query.filter(Product.video_count >= min_vids)
+                
+            if max_vids is not None:
+                query = query.filter(Product.video_count <= max_vids)
 
         if min_commission is not None:
             try:
@@ -8045,14 +8051,9 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             ad_spend_total = total_ad_cost or ad_spend_7d
             
             # 5. Engagement Metrics
-            video_count = safe_int(
-                p.get('productVideoCount') or 
-                p.get('periodVideoCount') or 
-                p.get('video_count') or 
-                p.get('videoCount') or 
-                p.get('video_ct') or 
-                0
-            )
+            # NOTE: Video counts are NOT extracted here.
+            # They are ONLY updated in Phase 2 (all-time sync) and manual enrichments
+            # to prevent 7D period data from overwriting accurate all-time counts.
             
             creator_count = safe_int(
                 p.get('productCreatorCount') or 
@@ -8098,7 +8099,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             if shop_ads_rate <= 0:
                 continue  # Must have GMV Max ads
             
-            winner_score = calculate_winner_score(ad_spend_total, video_count, creator_count)
+            winner_score = calculate_winner_score(ad_spend_total, 0, creator_count)
             
             # Save or Update Product
             existing = Product.query.get(product_id)
@@ -8138,9 +8139,12 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 existing.sales_7d = sales_7d
                 if total_sales > 0: existing.sales = total_sales
                 
-                existing.video_count = video_count # 7D/momentum
-                # NOTE: video_count_alltime is handled below based on timeframe (lines 8174+)
-                existing.influencer_count = creator_count
+                # video_count and video_count_alltime are NOT touched during 7D sync
+                # They are only updated in Phase 2 (all-time) and manual enrichments
+                
+                # Influencer count: only upgrade, never downgrade
+                if creator_count > 0 and creator_count > (existing.influencer_count or 0):
+                    existing.influencer_count = creator_count
                 
                 existing.ad_spend = ad_spend_7d
                 existing.ad_spend_total = ad_spend_total
@@ -8171,24 +8175,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                     if sales_7d > 0: existing.sales_30d = sales_7d
                     if period_revenue > 0: existing.gmv_30d = period_revenue
                 
-                # V2 accurate video/creator counts
-                if video_count > 0:
-                    # If this is an 'all' timeframe sync, periodVideoCount IS the all-time total
-                    if timeframe == 'all':
-                        existing.video_count_alltime = video_count
-                        # For momentum (video_count), use newVideoCount (7-day growth)
-                        new_vc = int(p.get('newVideoCount') or 0)
-                        if new_vc > 0:
-                            existing.video_count = new_vc
-                        else:
-                            # Fallback: estimate 7D momentum if not provided in 'all' response
-                            existing.video_count = max(1, int(video_count * 0.05))
-                    else:
-                        # 7D sync: only update momentum field, NEVER touch alltime
-                        existing.video_count = video_count
-                         
-                if creator_count > 0:
-                    existing.influencer_count = creator_count
+                # Video counts are handled ONLY in Phase 2 (all-time sync)
+                # No video_count updates happen here during 7D sync
                 
                 if commission_rate > 0:
                     existing.commission_rate = commission_rate
@@ -8219,8 +8207,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                     sales_30d=sales_7d if timeframe == 'all' else 0,
                     sales=total_sales,
                     gmv_30d=period_revenue if timeframe == 'all' else 0,
-                    video_count=video_count,
-                    video_count_alltime=video_count if timeframe == 'all' else 0,
+                    video_count=0,  # Will be populated by Phase 2 (all-time sync)
+                    video_count_alltime=0,  # Will be populated by Phase 2 (all-time sync)
                     influencer_count=creator_count,
                     commission_rate=commission_rate,
                     shop_ads_commission=shop_ads_rate,
@@ -8538,12 +8526,10 @@ def copilot_sync():
                         v_count = safe_int(p.get('productVideoCount') or 0)
                         c_count = safe_int(p.get('productCreatorCount') or 0)
                         
-                        # Update all-time video count (only if higher)
+                        # Update all-time video count (only if higher, never downgrade)
                         if v_count > 0 and v_count > (existing.video_count_alltime or 0):
                             existing.video_count_alltime = v_count
-                            # Also update video_count for display purposes
-                            if v_count > (existing.video_count or 0):
-                                existing.video_count = v_count
+                            existing.video_count = v_count  # Keep in sync
                         
                         # Update creator count (only if higher)
                         if c_count > 0 and c_count > (existing.influencer_count or 0):
@@ -10385,8 +10371,7 @@ def copilot_mass_sync():
                                 c_count = safe_int(v.get('productCreatorCount') or 0)
                                 if v_count > 0 and v_count > (existing.video_count_alltime or 0):
                                     existing.video_count_alltime = v_count
-                                    if v_count > (existing.video_count or 0):
-                                        existing.video_count = v_count
+                                    existing.video_count = v_count  # Keep in sync
                                 if c_count > 0 and c_count > (existing.influencer_count or 0):
                                     existing.influencer_count = c_count
                                 page_enriched += 1
@@ -10944,8 +10929,7 @@ try:
                                     c_count = safe_int(v.get('productCreatorCount') or 0)
                                     if v_count > 0 and v_count > (existing.video_count_alltime or 0):
                                         existing.video_count_alltime = v_count
-                                        if v_count > (existing.video_count or 0):
-                                            existing.video_count = v_count
+                                        existing.video_count = v_count  # Keep in sync
                                     if c_count > 0 and c_count > (existing.influencer_count or 0):
                                         existing.influencer_count = c_count
                                     page_enriched += 1

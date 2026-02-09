@@ -620,7 +620,7 @@
                 // Preserve sort_by when switching tabs
                 const savedSort = curFilter.sort_by || 'sales_7d';
 
-                if (type === 'gems') curFilter = { max_videos: 30, min_videos: 1, gems_only: 'true' };
+                if (type === 'gems') curFilter = { gems_only: 'true' };
                 else if (type === 'caked') curFilter = { caked_only: 'true' };
                 else if (type === 'high_spend') curFilter = { high_ad_spend: 'true' };
                 else if (type === 'favorites') curFilter = { favorites_only: 'true' };

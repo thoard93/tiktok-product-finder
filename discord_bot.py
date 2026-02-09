@@ -1007,9 +1007,6 @@ def get_hot_products():
             Product.sales_7d >= 100,  # 100+ 7D sales
             Product.ad_spend >= 100,  # $100+ ad spend
             Product.commission_rate > 0,  # Must have commission
-            # Exclude unenriched products (alltime == period means enrichment didn't work)
-            Product.video_count_alltime != None,
-            Product.video_count_alltime != Product.video_count,
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date
