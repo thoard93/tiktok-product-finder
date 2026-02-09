@@ -8050,11 +8050,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
             seller_id = p.get('sellerId') or ''
             
             # ===== STRICT QUALITY FILTERS (v6.0) =====
-            # All must pass — no exceptions, no legacy bypass
-            if video_count < 40:
-                continue  # Min 40 all-time videos
-            if creator_count < 30:
-                continue  # Min 30 all-time creators
+            # Video/creator counts removed — not accurate until enrichment
             if sales_7d < 100:
                 continue  # Min 100 last 7D sales
             if ad_spend_7d < 100:
