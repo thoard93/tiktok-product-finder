@@ -8139,7 +8139,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                 if total_sales > 0: existing.sales = total_sales
                 
                 existing.video_count = video_count # 7D/momentum
-                existing.video_count_alltime = video_count # Sync current to all-time
+                # NOTE: video_count_alltime is handled below based on timeframe (lines 8174+)
                 existing.influencer_count = creator_count
                 
                 existing.ad_spend = ad_spend_7d
