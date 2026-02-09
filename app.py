@@ -5446,12 +5446,19 @@ def purge_low_signal():
 def purge_unenriched():
     """Delete products where video_count_alltime == video_count (enrichment never matched)."""
     try:
-        # Products where all-time == period means enrichment didn't find a better value
+        # Products where all-time == period OR all-time is NULL means enrichment didn't work
         products_to_delete = Product.query.filter(
-            Product.video_count_alltime != None,
-            Product.video_count != None,
-            Product.video_count_alltime == Product.video_count,
-            Product.video_count > 0
+            db.or_(
+                # Case 1: alltime was set to same as period (no real enrichment)
+                db.and_(
+                    Product.video_count_alltime != None,
+                    Product.video_count != None,
+                    Product.video_count_alltime == Product.video_count,
+                    Product.video_count > 0
+                ),
+                # Case 2: alltime is NULL (enrichment never ran or never matched)
+                Product.video_count_alltime == None
+            )
         )
         
         count = products_to_delete.count()
