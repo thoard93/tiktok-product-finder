@@ -476,6 +476,11 @@
                     <i class="fas fa-video-slash text-xs"></i>
                     <span>Delete &lt;20 Videos</span>
                 </button>
+                <button onclick="purgeUnenriched()" id="btnPurgeUnenriched"
+                    class="bg-purple-950/20 border border-purple-500/20 px-6 py-3 rounded-xl hover:bg-purple-500 hover:text-white text-purple-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
+                    <i class="fas fa-filter-circle-xmark text-xs"></i>
+                    <span>Purge Unenriched</span>
+                </button>
                 <button onclick="nukeProducts()"
                     class="bg-rose-950/20 border border-rose-500/20 px-6 py-3 rounded-xl hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
@@ -833,6 +838,31 @@
                 btn.innerHTML = original;
                 btn.disabled = false;
                 stopBtn.disabled = false; // Keep stop enabled for background task
+            }
+        }
+
+        async function purgeUnenriched() {
+            if (!confirm("⚠️ This will delete all products where All-Time Videos == Period Videos (enrichment didn't find a match). Proceed?")) return;
+
+            const btn = document.getElementById('btnPurgeUnenriched');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Purging...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/admin/purge-unenriched', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
             }
         }
 

@@ -5441,6 +5441,37 @@ def purge_low_signal():
         print(f"CRITICAL Error in purge: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/admin/purge-unenriched', methods=['POST'])
+@login_required
+def purge_unenriched():
+    """Delete products where video_count_alltime == video_count (enrichment never matched)."""
+    try:
+        # Products where all-time == period means enrichment didn't find a better value
+        products_to_delete = Product.query.filter(
+            Product.video_count_alltime != None,
+            Product.video_count != None,
+            Product.video_count_alltime == Product.video_count,
+            Product.video_count > 0
+        )
+        
+        count = products_to_delete.count()
+        
+        if count == 0:
+            return jsonify({'success': True, 'message': 'No unenriched products found. All products have accurate all-time data.'})
+        
+        products_to_delete.delete(synchronize_session=False)
+        db.session.commit()
+        
+        print(f"🧹 PURGE UNENRICHED: Removed {count} products with matching period/all-time video counts.")
+        return jsonify({
+            'success': True,
+            'message': f'Purged {count} unenriched products (all-time videos == period videos).'
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"CRITICAL Error in purge-unenriched: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/admin/stats', methods=['GET'])
 @login_required
 @admin_required
