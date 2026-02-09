@@ -8184,11 +8184,8 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                             # Fallback: estimate 7D momentum if not provided in 'all' response
                             existing.video_count = max(1, int(video_count * 0.05))
                     else:
-                        # If this is a '7d' sync (standard), use periodVideoCount for momentum
+                        # 7D sync: only update momentum field, NEVER touch alltime
                         existing.video_count = video_count
-                        # And update all-time if it's higher or empty
-                        if video_count > (existing.video_count_alltime or 0):
-                            existing.video_count_alltime = video_count
                          
                 if creator_count > 0:
                     existing.influencer_count = creator_count

@@ -504,12 +504,14 @@ def create_product_embed(p, title_prefix=""):
     if has_free_shipping:
         title = "🎁 " + title
     
-    # Strip 'shop_' prefix for the clean TikTok View URL
+    # Build the correct TikTok Shop link
     view_id = product_id.replace('shop_', '') if product_id else ''
+    product_url = get_val('product_url', '')
+    shop_link = product_url if product_url else f"https://shop.tiktok.com/view/product/{view_id}?region=US&locale=en-US"
 
     embed = Embed(
         title=title,
-        url=f"https://www.tiktok.com/t/{view_id}" if len(view_id) < 15 else f"https://shop.tiktok.com/view/product/{view_id}?region=US&locale=en-US",
+        url=shop_link,
         color=color
     )
     
@@ -1052,6 +1054,7 @@ def get_hot_products():
                 'image_url': p.cached_image_url or p.image_url,
                 'cached_image_url': p.cached_image_url,
                 'has_free_shipping': p.has_free_shipping,
+                'product_url': p.product_url,
                 'live_count': p.live_count,
                 'stock': p.live_count
             }
