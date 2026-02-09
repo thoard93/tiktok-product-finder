@@ -4760,7 +4760,7 @@ def api_products():
             query = query.order_by(Product.video_count_alltime.desc().nullslast())
         elif sort_by in ['vids_asc', 'video_asc']:
             # Use all-time video count for "least videos" with fallback to regular video_count
-            query = query.order_by(db.func.coalesce(Product.video_count_alltime, Product.video_count).asc().nullsfirst())
+            query = query.order_by(db.func.coalesce(Product.video_count_alltime, Product.video_count).asc().nullslast())
         elif sort_by in ['gem_score', 'efficiency']:
             # Efficiency Score: High Sales + Low Videos (using all-time count)
             video_count_field = func.coalesce(Product.video_count_alltime, Product.video_count, 0)
@@ -8494,6 +8494,15 @@ def copilot_sync():
                         pid = f"shop_{pid}"
                     
                     existing = Product.query.get(pid)
+                    
+                    # Name-based fallback (API returns different IDs across timeframes)
+                    if not existing:
+                        p_title = p.get('productTitle', '')
+                        if p_title:
+                            existing = Product.query.filter(
+                                db.func.lower(db.func.trim(Product.product_name)) == p_title.lower().strip()
+                            ).first()
+                    
                     if existing:
                         v_count = safe_int(p.get('productVideoCount') or 0)
                         c_count = safe_int(p.get('productCreatorCount') or 0)
@@ -8970,84 +8979,54 @@ def copilot_enrich_videos():
                     
                     page_enriched = 0
                     
-                    # Build PID lookup
-                    page_pids = {}
+                    # Iterate over API products and find matching DB records
                     for p in products_list:
-                        pid = str(p.get('productId', '')).strip()
-                        if pid:
-                            page_pids[pid] = p
-                    
-                    raw_pids = list(page_pids.keys())
-                    shop_pids = [f"shop_{pid}" for pid in raw_pids]
-                    
-                    if not shop_pids:
-                        return 0
-                    
-                    # Query matching DB products
-                    db_products_to_check = Product.query.filter(
-                        Product.product_id.in_(shop_pids)
-                    ).all()
-                    
-                    for db_product in db_products_to_check:
                         if SYNC_STOP_REQUESTED:
                             break
                         
-                        raw_pid = db_product.product_id.replace('shop_', '')
-                        matched_data = None
-                        match_type = None
+                        pid = str(p.get('productId', '')).strip()
+                        if not pid:
+                            continue
+                        if not pid.startswith('shop_'):
+                            pid = f"shop_{pid}"
                         
-                        # STAGE 1: Direct PID match
-                        if raw_pid in page_pids:
-                            matched_data = page_pids[raw_pid]
-                            match_type = 'direct'
+                        # Try PID match first, then name-based fallback
+                        db_product = Product.query.get(pid)
                         
-                        # STAGE 2: Fuzzy PID match (85%+)
-                        if not matched_data and FUZZY_AVAILABLE and raw_pids:
-                            try:
-                                fuzzy_result = process.extractOne(raw_pid, raw_pids, scorer=fuzz.ratio)
-                                if fuzzy_result and fuzzy_result[1] >= 85:
-                                    matched_pid = fuzzy_result[0]
-                                    matched_data = page_pids.get(matched_pid)
-                                    match_type = f'fuzzy_{fuzzy_result[1]}%'
-                            except:
-                                pass
+                        if not db_product:
+                            p_title = p.get('productTitle', '')
+                            if p_title:
+                                db_product = Product.query.filter(
+                                    db.func.lower(db.func.trim(Product.product_name)) == p_title.lower().strip()
+                                ).first()
                         
-                        # STAGE 3: Keyword fallback
-                        if not matched_data and db_product.product_name:
-                            title = db_product.product_name or ''
-                            if len(title) > 5:
-                                for p in products_list:
-                                    p_title = str(p.get('productTitle', '')).lower()
-                                    if title.lower() in p_title or p_title in title.lower():
-                                        matched_data = p
-                                        match_type = 'keyword_title'
-                                        break
+                        if not db_product:
+                            continue
                         
-                        # Apply match
-                        if matched_data:
-                            pvc = safe_int(matched_data.get('productVideoCount', 0))
-                            period_vc = safe_int(matched_data.get('periodVideoCount', 0))
-                            vc = safe_int(matched_data.get('videoCount', 0))
-                            top_videos_len = len(matched_data.get('topVideos', []))
+                        # Extract all-time counts using max-field extraction
+                        pvc = safe_int(p.get('productVideoCount', 0))
+                        period_vc = safe_int(p.get('periodVideoCount', 0))
+                        vc = safe_int(p.get('videoCount', 0))
+                        top_videos_len = len(p.get('topVideos', []))
+                        
+                        api_video_count = max(pvc, period_vc, vc, top_videos_len)
+                        db_video_count = db_product.video_count_alltime or 0
+                        
+                        alltime_creator_count = safe_int(
+                            p.get('productCreatorCount') or 
+                            p.get('periodCreatorCount') or 0
+                        )
+                        
+                        # Update if API > DB
+                        if api_video_count > 0 and api_video_count > db_video_count:
+                            db_product.video_count_alltime = api_video_count
+                            page_enriched += 1
                             
-                            api_video_count = max(pvc, period_vc, vc, top_videos_len)
-                            db_video_count = db_product.video_count_alltime or 0
-                            
-                            alltime_creator_count = safe_int(
-                                matched_data.get('productCreatorCount') or 
-                                matched_data.get('periodCreatorCount')
-                            )
-                            
-                            # Update if API > DB
-                            if api_video_count > 0 and api_video_count > db_video_count:
-                                db_product.video_count_alltime = api_video_count
-                                page_enriched += 1
-                                
-                                if page_enriched <= 3:
-                                    print(f"[ENRICH] {match_type}: {db_product.product_id} | {db_video_count} → {api_video_count}", flush=True)
-                            
-                            if alltime_creator_count > 0 and alltime_creator_count > (db_product.influencer_count or 0):
-                                db_product.influencer_count = alltime_creator_count
+                            if page_enriched <= 3:
+                                print(f"[ENRICH] matched: {db_product.product_id[:30]} | {db_video_count} → {api_video_count}", flush=True)
+                        
+                        if alltime_creator_count > 0 and alltime_creator_count > (db_product.influencer_count or 0):
+                            db_product.influencer_count = alltime_creator_count
                     
                     db.session.commit()
                     return page_enriched
@@ -10361,6 +10340,15 @@ def copilot_mass_sync():
                             if not pid.startswith('shop_'):
                                 pid = f"shop_{pid}"
                             existing = Product.query.get(pid)
+                            
+                            # Name-based fallback (API returns different IDs across timeframes)
+                            if not existing:
+                                p_title = v.get('productTitle', '')
+                                if p_title:
+                                    existing = Product.query.filter(
+                                        db.func.lower(db.func.trim(Product.product_name)) == p_title.lower().strip()
+                                    ).first()
+                            
                             if existing:
                                 v_count = safe_int(v.get('productVideoCount') or 0)
                                 c_count = safe_int(v.get('productCreatorCount') or 0)
