@@ -10355,6 +10355,13 @@ def copilot_mass_sync():
                         consecutive_empty_p2 = 0
                         pages_fetched += 1
                         page_enriched = 0
+                        page_video_updated = 0
+                        
+                        # Debug: Log sample data from first page to verify API response format
+                        if page == 0 and products:
+                            sample = products[0]
+                            print(f"[SYNC] Phase 2 DEBUG - Sample product keys: {list(sample.keys())[:15]}")
+                            print(f"[SYNC] Phase 2 DEBUG - productVideoCount={sample.get('productVideoCount')}, productCreatorCount={sample.get('productCreatorCount')}")
                         
                         for v in products:
                             pid = str(v.get('productId', '')).strip()
@@ -10378,6 +10385,7 @@ def copilot_mass_sync():
                                 if v_count > 0 and v_count > (existing.video_count_alltime or 0):
                                     existing.video_count_alltime = v_count
                                     existing.video_count = v_count  # Keep in sync
+                                    page_video_updated += 1
                                 if c_count > 0 and c_count > (existing.influencer_count or 0):
                                     existing.influencer_count = c_count
                                 page_enriched += 1
@@ -10385,7 +10393,7 @@ def copilot_mass_sync():
                         alltime_enriched += page_enriched
                         
                         if page % 10 == 0:
-                            print(f"[SYNC] Phase 2: {page}/{enrich_pages} pages - {alltime_enriched} enriched")
+                            print(f"[SYNC] Phase 2: {page}/{enrich_pages} pages - {alltime_enriched} enriched, {page_video_updated} video counts updated this page")
                         
                         time.sleep(2.0)
                         
