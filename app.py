@@ -9002,6 +9002,9 @@ def copilot_enrich_videos():
                     
                     page_enriched = 0
                     
+                    # Debug: Log sample data from first matched product
+                    debug_logged = False
+                    
                     # Iterate over API products and find matching DB records
                     for p in products_list:
                         if SYNC_STOP_REQUESTED:
@@ -9026,6 +9029,13 @@ def copilot_enrich_videos():
                         if not db_product:
                             continue
                         
+                        # Debug: Log first product's raw API fields
+                        if not debug_logged:
+                            print(f"[ENRICH] DEBUG - Sample product keys: {list(p.keys())[:15]}", flush=True)
+                            print(f"[ENRICH] DEBUG - productVideoCount={p.get('productVideoCount')}, periodVideoCount={p.get('periodVideoCount')}, videoCount={p.get('videoCount')}", flush=True)
+                            print(f"[ENRICH] DEBUG - productCreatorCount={p.get('productCreatorCount')}, periodCreatorCount={p.get('periodCreatorCount')}", flush=True)
+                            debug_logged = True
+                        
                         # Extract all-time counts using max-field extraction
                         pvc = safe_int(p.get('productVideoCount', 0))
                         period_vc = safe_int(p.get('periodVideoCount', 0))
@@ -9043,6 +9053,7 @@ def copilot_enrich_videos():
                         # Update if API > DB
                         if api_video_count > 0 and api_video_count > db_video_count:
                             db_product.video_count_alltime = api_video_count
+                            db_product.video_count = api_video_count  # Keep video_count in sync
                             page_enriched += 1
                             
                             if page_enriched <= 3:
