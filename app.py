@@ -4630,7 +4630,7 @@ def api_products():
         min_inf = request.args.get('min_inf', type=int)
         
         # Default to 2 videos unless searching specifically for lower
-        min_vids = request.args.get('min_vids', 2, type=int)
+        min_vids = request.args.get('min_vids', 0, type=int)  # Default 0: show all products even before Phase 2 enriches video counts
         max_vids = request.args.get('max_vids', type=int)
         
         scan_type = request.args.get('scan_type')
@@ -8213,7 +8213,7 @@ def sync_copilot_products(timeframe='7d', limit=50, page=0):
                     sales_30d=sales_7d if timeframe == 'all' else 0,
                     sales=total_sales,
                     gmv_30d=period_revenue if timeframe == 'all' else 0,
-                    video_count=0,  # Will be populated by Phase 2 (all-time sync)
+                    video_count=1,  # Minimum for dashboard visibility; Phase 2 updates with real all-time count
                     video_count_alltime=0,  # Will be populated by Phase 2 (all-time sync)
                     influencer_count=creator_count,
                     commission_rate=commission_rate,
