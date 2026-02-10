@@ -8529,8 +8529,17 @@ def copilot_sync():
                             ).first()
                     
                     if existing:
-                        v_count = safe_int(p.get('productVideoCount') or 0)
-                        c_count = safe_int(p.get('productCreatorCount') or 0)
+                        # Use max across all possible video count fields (API uses periodVideoCount for 'all' timeframe)
+                        v_count = max(
+                            safe_int(p.get('productVideoCount') or 0),
+                            safe_int(p.get('periodVideoCount') or 0),
+                            safe_int(p.get('videoCount') or 0),
+                            len(p.get('topVideos', []))
+                        )
+                        c_count = max(
+                            safe_int(p.get('productCreatorCount') or 0),
+                            safe_int(p.get('periodCreatorCount') or 0)
+                        )
                         
                         # Update all-time video count (only if higher, never downgrade)
                         if v_count > 0 and v_count > (existing.video_count_alltime or 0):
@@ -10391,8 +10400,17 @@ def copilot_mass_sync():
                                     ).first()
                             
                             if existing:
-                                v_count = safe_int(v.get('productVideoCount') or 0)
-                                c_count = safe_int(v.get('productCreatorCount') or 0)
+                                # Use max across all possible video count fields (API uses periodVideoCount for 'all' timeframe)
+                                v_count = max(
+                                    safe_int(v.get('productVideoCount') or 0),
+                                    safe_int(v.get('periodVideoCount') or 0),
+                                    safe_int(v.get('videoCount') or 0),
+                                    len(v.get('topVideos', []))
+                                )
+                                c_count = max(
+                                    safe_int(v.get('productCreatorCount') or 0),
+                                    safe_int(v.get('periodCreatorCount') or 0)
+                                )
                                 if v_count > 0 and v_count > (existing.video_count_alltime or 0):
                                     existing.video_count_alltime = v_count
                                     existing.video_count = v_count  # Keep in sync
@@ -10950,8 +10968,17 @@ try:
                                     pid = f"shop_{pid}"
                                 existing = Product.query.get(pid)
                                 if existing:
-                                    v_count = safe_int(v.get('productVideoCount') or 0)
-                                    c_count = safe_int(v.get('productCreatorCount') or 0)
+                                    # Use max across all possible video count fields (API uses periodVideoCount for 'all' timeframe)
+                                    v_count = max(
+                                        safe_int(v.get('productVideoCount') or 0),
+                                        safe_int(v.get('periodVideoCount') or 0),
+                                        safe_int(v.get('videoCount') or 0),
+                                        len(v.get('topVideos', []))
+                                    )
+                                    c_count = max(
+                                        safe_int(v.get('productCreatorCount') or 0),
+                                        safe_int(v.get('periodCreatorCount') or 0)
+                                    )
                                     if v_count > 0 and v_count > (existing.video_count_alltime or 0):
                                         existing.video_count_alltime = v_count
                                         existing.video_count = v_count  # Keep in sync
