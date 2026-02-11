@@ -474,7 +474,7 @@
                 <button onclick="deleteLowVideos()" id="btnDeleteLowVideos"
                     class="bg-orange-950/20 border border-orange-500/20 px-6 py-3 rounded-xl hover:bg-orange-500 hover:text-white text-orange-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
                     <i class="fas fa-video-slash text-xs"></i>
-                    <span>Delete &lt;20 Videos</span>
+                    <span>Delete ≤1 Video</span>
                 </button>
                 <button onclick="purgeUnenriched()" id="btnPurgeUnenriched"
                     class="bg-purple-950/20 border border-purple-500/20 px-6 py-3 rounded-xl hover:bg-purple-500 hover:text-white text-purple-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
@@ -1290,7 +1290,7 @@
         }
 
         async function deleteLowVideos() {
-            if (!confirm("🗑️ Delete products with <20 total videos?\n\nThis will remove placeholder products with few videos.\n\n(Favorites are NOT protected)")) return;
+            if (!confirm("🗑️ Delete products with ≤1 total video?\n\nThis will remove placeholder products from Copilot that have no real video traction.\n\n(Favorites are NOT protected)")) return;
 
             const btn = document.getElementById('btnDeleteLowVideos');
             const original = btn.innerHTML;

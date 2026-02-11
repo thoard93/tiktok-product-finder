@@ -1691,14 +1691,13 @@ def admin_migrate():
 @login_required
 @admin_required
 def admin_delete_low_videos():
-    """Delete products with less than 20 total videos (placeholder data)."""
+    """Delete products with 0-1 total videos (placeholder/junk data from Copilot)."""
     try:
-        # Use video_count_alltime if available, otherwise fall back to video_count
-        # Delete products where BOTH all-time and regular video_count are below 20
+        # Delete products where all-time video count is 0 or 1 (placeholders)
         count = Product.query.filter(
             db.or_(
-                db.and_(Product.video_count_alltime != None, Product.video_count_alltime < 20),
-                db.and_(Product.video_count_alltime == None, Product.video_count < 20)
+                db.and_(Product.video_count_alltime != None, Product.video_count_alltime <= 1),
+                db.and_(Product.video_count_alltime == None, Product.video_count <= 1)
             )
         ).delete(synchronize_session=False)
         
@@ -1709,7 +1708,7 @@ def admin_delete_low_videos():
         
         return jsonify({
             'success': True,
-            'message': f'Deleted {count} products with <20 total videos',
+            'message': f'Deleted {count} placeholder products with ≤1 video',
             'deleted': count
         })
     except Exception as e:
@@ -8541,8 +8540,8 @@ def copilot_sync():
                             safe_int(p.get('periodCreatorCount') or 0)
                         )
                         
-                        # Update all-time video count (only if higher, never downgrade)
-                        if v_count > 0 and v_count > (existing.video_count_alltime or 0):
+                        # Update all-time video count (only if higher, never downgrade; skip ≤1 placeholders)
+                        if v_count > 1 and v_count > (existing.video_count_alltime or 0):
                             existing.video_count_alltime = v_count
                             existing.video_count = v_count  # Keep in sync
                         
@@ -9059,8 +9058,8 @@ def copilot_enrich_videos():
                             p.get('periodCreatorCount') or 0
                         )
                         
-                        # Update if API > DB
-                        if api_video_count > 0 and api_video_count > db_video_count:
+                        # Update if API > DB (skip ≤1 placeholders)
+                        if api_video_count > 1 and api_video_count > db_video_count:
                             db_product.video_count_alltime = api_video_count
                             db_product.video_count = api_video_count  # Keep video_count in sync
                             page_enriched += 1
@@ -10411,7 +10410,7 @@ def copilot_mass_sync():
                                     safe_int(v.get('productCreatorCount') or 0),
                                     safe_int(v.get('periodCreatorCount') or 0)
                                 )
-                                if v_count > 0 and v_count > (existing.video_count_alltime or 0):
+                                if v_count > 1 and v_count > (existing.video_count_alltime or 0):
                                     existing.video_count_alltime = v_count
                                     existing.video_count = v_count  # Keep in sync
                                     page_video_updated += 1
@@ -10979,7 +10978,7 @@ try:
                                         safe_int(v.get('productCreatorCount') or 0),
                                         safe_int(v.get('periodCreatorCount') or 0)
                                     )
-                                    if v_count > 0 and v_count > (existing.video_count_alltime or 0):
+                                    if v_count > 1 and v_count > (existing.video_count_alltime or 0):
                                         existing.video_count_alltime = v_count
                                         existing.video_count = v_count  # Keep in sync
                                     if c_count > 0 and c_count > (existing.influencer_count or 0):
