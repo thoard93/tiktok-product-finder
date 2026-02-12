@@ -8564,6 +8564,21 @@ def copilot_sync():
                 errors.append(f"Phase 2 Page {page_idx}: {str(e)}")
         
         print(f"[SYNC] ✅ PHASE 2 COMPLETE: Enriched {alltime_enriched} products with all-time counts")
+        
+        # Auto-purge placeholder products (≤1 video) introduced by this sync
+        try:
+            purge_count = Product.query.filter(
+                db.or_(
+                    db.and_(Product.video_count_alltime != None, Product.video_count_alltime <= 1),
+                    db.and_(Product.video_count_alltime == None, Product.video_count <= 1)
+                )
+            ).delete(synchronize_session=False)
+            db.session.commit()
+            if purge_count > 0:
+                print(f"[SYNC] 🧹 Auto-purged {purge_count} placeholder products (≤1 video)")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[SYNC] ⚠️ Auto-purge error: {e}")
     
     # Mark sync as complete
     set_config_value('sync_running', 'false', 'Sync complete')
@@ -10433,6 +10448,21 @@ def copilot_mass_sync():
                 
                 # ALWAYS log completion (even if we exited early)
                 print(f"[SYNC] ✅ PHASE 2 COMPLETE: {alltime_enriched} products enriched from {pages_fetched} pages")
+                
+                # Auto-purge placeholder products (≤1 video) introduced by this sync
+                try:
+                    purge_count = Product.query.filter(
+                        db.or_(
+                            db.and_(Product.video_count_alltime != None, Product.video_count_alltime <= 1),
+                            db.and_(Product.video_count_alltime == None, Product.video_count <= 1)
+                        )
+                    ).delete(synchronize_session=False)
+                    db.session.commit()
+                    if purge_count > 0:
+                        print(f"[SYNC] 🧹 Auto-purged {purge_count} placeholder products (≤1 video)")
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"[SYNC] ⚠️ Auto-purge error: {e}")
             
             # Mark sync as complete
             set_config_value('sync_status', 'complete')
@@ -11003,6 +11033,21 @@ try:
                             gc.collect()
                     
                     print(f"[SCHEDULER] ✅ Phase 2 Complete: {enriched} products enriched")
+                    
+                    # Auto-purge placeholder products (≤1 video) introduced by this sync
+                    try:
+                        purge_count = Product.query.filter(
+                            db.or_(
+                                db.and_(Product.video_count_alltime != None, Product.video_count_alltime <= 1),
+                                db.and_(Product.video_count_alltime == None, Product.video_count <= 1)
+                            )
+                        ).delete(synchronize_session=False)
+                        db.session.commit()
+                        if purge_count > 0:
+                            print(f"[SCHEDULER] 🧹 Auto-purged {purge_count} placeholder products (≤1 video)")
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"[SCHEDULER] ⚠️ Auto-purge error: {e}")
                 
                 print(f"[SCHEDULER] ✅ FULL DAILY SYNC COMPLETE: {total_saved} synced, enrichment done!")
                 try:
