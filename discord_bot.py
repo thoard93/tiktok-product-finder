@@ -718,6 +718,43 @@ async def daily_brand_hunter():
         await channel.send(f"❌ Error fetching brand opportunities: {str(e)[:200]}")
 
 @bot.event
+async def on_ready():
+    """Bot startup - join inspo-chat forum threads so we can receive messages."""
+    print(f"🤖 Bot logged in as {bot.user}")
+    # Auto-join inspo-chat forum threads
+    joined = 0
+    for thread_id in INSPO_THREAD_IDS:
+        thread = bot.get_channel(thread_id)
+        if thread:
+            try:
+                await thread.join()
+                joined += 1
+                print(f"[Creator Lists] Joined thread: {thread.name} ({thread_id})")
+            except Exception as e:
+                print(f"[Creator Lists] Failed to join thread {thread_id}: {e}")
+        else:
+            print(f"[Creator Lists] Thread {thread_id} not found in cache, trying fetch...")
+            try:
+                thread = await bot.fetch_channel(thread_id)
+                if thread:
+                    await thread.join()
+                    joined += 1
+                    print(f"[Creator Lists] Fetched and joined thread: {thread.name} ({thread_id})")
+            except Exception as e:
+                print(f"[Creator Lists] Could not fetch thread {thread_id}: {e}")
+    print(f"[Creator Lists] Joined {joined}/{len(INSPO_THREAD_IDS)} inspo-chat threads")
+
+@bot.event
+async def on_thread_create(thread):
+    """Auto-join new threads in the inspo-chat forum channel."""
+    if thread.parent_id == INSPO_CHAT_CHANNEL_ID:
+        try:
+            await thread.join()
+            print(f"[Creator Lists] Auto-joined new thread: {thread.name} ({thread.id})")
+        except Exception as e:
+            print(f"[Creator Lists] Failed to auto-join new thread {thread.id}: {e}")
+
+@bot.event
 async def on_message(message):
     # Ignore bot messages
     if message.author.bot:
