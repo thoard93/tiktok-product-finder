@@ -1219,7 +1219,29 @@ def is_brand_blacklisted(seller_name=None, seller_id=None):
 # =============================================================================
 
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+    except Exception as e:
+        # Handle orphaned sequences from partial table creation (e.g. creator_lists_id_seq)
+        if 'UniqueViolation' in str(type(e).__name__) or 'duplicate key' in str(e):
+            print(f">> Handling orphaned sequence: {e}")
+            db.session.rollback()
+            # Extract table name from error and drop orphaned sequence
+            import re as re_init
+            seq_match = re_init.search(r'\(relname, relnamespace\)=\((\w+),', str(e))
+            if seq_match:
+                seq_name = seq_match.group(1)
+                try:
+                    db.session.execute(db.text(f'DROP SEQUENCE IF EXISTS {seq_name} CASCADE'))
+                    db.session.commit()
+                    print(f">> Dropped orphaned sequence: {seq_name}")
+                except:
+                    db.session.rollback()
+            # Retry create_all
+            db.create_all()
+            print(">> Tables created successfully on retry")
+        else:
+            raise
     # Cleanup corrupted records (legacy bug)
     try:
         corrupted = Product.query.filter(Product.product_id.ilike('%None%')).delete(synchronize_session=False)
