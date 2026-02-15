@@ -41,6 +41,7 @@ DAYS_BEFORE_REPEAT = 3  # Don't show same product for 3 days
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)  # Disable default help
+print("[DISCORD BOT] ====== CODE VERSION: 2026-02-15-v3 (with creator lists + thread join) ======")
 
 def extract_product_id(text):
     """Extract TikTok product ID from URL or text"""
@@ -759,6 +760,10 @@ async def on_message(message):
     # Ignore bot messages
     if message.author.bot:
         return
+    
+    # Debug: log ALL messages from inspo-chat threads
+    if hasattr(message.channel, 'parent_id') and message.channel.parent_id == INSPO_CHAT_CHANNEL_ID:
+        print(f"[Creator Lists] 📨 Message in thread {message.channel.id} ({getattr(message.channel, 'name', '?')}): {message.content[:50]}")
     
     # Check if message is in the product lookup channel
     if message.channel.id == PRODUCT_LOOKUP_CHANNEL_ID:
