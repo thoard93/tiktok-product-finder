@@ -1268,7 +1268,9 @@ INSPO_THREAD_IDS = {
 
 def is_inspo_thread(ctx):
     """Check if message is in one of the inspo-chat forum threads."""
-    return ctx.channel.id in INSPO_THREAD_IDS
+    result = ctx.channel.id in INSPO_THREAD_IDS
+    print(f"[Creator Lists] is_inspo_thread check: channel_id={ctx.channel.id}, result={result}")
+    return result
 
 def parse_creator_name(text):
     """Parse creator name - requires @ prefix. Returns cleaned name or None.
@@ -1289,95 +1291,110 @@ def parse_creator_name(text):
 @bot.command(name='add')
 async def creator_add(ctx, *, input_text: str = None):
     """Add a TikTok creator to this thread's list: !add @creatorname"""
+    print(f"[Creator Lists] !add command triggered in channel {ctx.channel.id} ({getattr(ctx.channel, 'name', 'unknown')})")
     if not is_inspo_thread(ctx):
         return  # Silently ignore if not in an inspo thread
     
-    if not input_text:
-        await ctx.reply("Usage: `!add @creatorname`\nExample: `!add @shopwithsarah`", mention_author=False)
-        return
-    
-    creator = parse_creator_name(input_text)
-    if not creator:
-        await ctx.reply("⚠️ Please use the @ symbol before the account name.\nExample: `!add @shopwithsarah`", mention_author=False)
-        return
-    
-    thread_id = str(ctx.channel.id)
-    thread_name = INSPO_THREAD_IDS.get(ctx.channel.id, 'Unknown')
-    
-    from app import CreatorList
-    with app.app_context():
-        existing = CreatorList.query.filter_by(thread_id=thread_id, creator_name=creator).first()
-        if existing:
-            await ctx.reply(f"⚠️ **@{creator}** is already on the **{thread_name}** list.", mention_author=False)
+    try:
+        if not input_text:
+            await ctx.reply("Usage: `!add @creatorname`\nExample: `!add @shopwithsarah`", mention_author=False)
             return
         
-        new_entry = CreatorList(
-            thread_id=thread_id,
-            creator_name=creator,
-            added_by=str(ctx.author)
-        )
-        db.session.add(new_entry)
-        db.session.commit()
-    
-    await ctx.reply(f"✅ Added **@{creator}** to the **{thread_name}** list.", mention_author=False)
+        creator = parse_creator_name(input_text)
+        if not creator:
+            await ctx.reply("⚠️ Please use the @ symbol before the account name.\nExample: `!add @shopwithsarah`", mention_author=False)
+            return
+        
+        thread_id = str(ctx.channel.id)
+        thread_name = INSPO_THREAD_IDS.get(ctx.channel.id, 'Unknown')
+        
+        from app import CreatorList
+        with app.app_context():
+            existing = CreatorList.query.filter_by(thread_id=thread_id, creator_name=creator).first()
+            if existing:
+                await ctx.reply(f"⚠️ **@{creator}** is already on the **{thread_name}** list.", mention_author=False)
+                return
+            
+            new_entry = CreatorList(
+                thread_id=thread_id,
+                creator_name=creator,
+                added_by=str(ctx.author)
+            )
+            db.session.add(new_entry)
+            db.session.commit()
+        
+        await ctx.reply(f"✅ Added **@{creator}** to the **{thread_name}** list.", mention_author=False)
+    except Exception as e:
+        print(f"[Creator Lists] Error in !add: {type(e).__name__}: {e}")
+        await ctx.reply(f"❌ Error: {e}", mention_author=False)
 
 @bot.command(name='remove')
 async def creator_remove(ctx, *, input_text: str = None):
     """Remove a TikTok creator from this thread's list: !remove @creatorname"""
+    print(f"[Creator Lists] !remove command triggered in channel {ctx.channel.id}")
     if not is_inspo_thread(ctx):
         return  # Silently ignore if not in an inspo thread
     
-    if not input_text:
-        await ctx.reply("Usage: `!remove @creatorname`", mention_author=False)
-        return
-    
-    creator = parse_creator_name(input_text)
-    if not creator:
-        await ctx.reply("⚠️ Please use the @ symbol before the account name.\nExample: `!remove @shopwithsarah`", mention_author=False)
-        return
-    
-    thread_id = str(ctx.channel.id)
-    thread_name = INSPO_THREAD_IDS.get(ctx.channel.id, 'Unknown')
-    
-    from app import CreatorList
-    with app.app_context():
-        existing = CreatorList.query.filter_by(thread_id=thread_id, creator_name=creator).first()
-        if not existing:
-            await ctx.reply(f"⚠️ **@{creator}** not found on the **{thread_name}** list.", mention_author=False)
+    try:
+        if not input_text:
+            await ctx.reply("Usage: `!remove @creatorname`", mention_author=False)
             return
         
-        db.session.delete(existing)
-        db.session.commit()
-    
-    await ctx.reply(f"✅ Removed **@{creator}** from the **{thread_name}** list.", mention_author=False)
+        creator = parse_creator_name(input_text)
+        if not creator:
+            await ctx.reply("⚠️ Please use the @ symbol before the account name.\nExample: `!remove @shopwithsarah`", mention_author=False)
+            return
+        
+        thread_id = str(ctx.channel.id)
+        thread_name = INSPO_THREAD_IDS.get(ctx.channel.id, 'Unknown')
+        
+        from app import CreatorList
+        with app.app_context():
+            existing = CreatorList.query.filter_by(thread_id=thread_id, creator_name=creator).first()
+            if not existing:
+                await ctx.reply(f"⚠️ **@{creator}** not found on the **{thread_name}** list.", mention_author=False)
+                return
+            
+            db.session.delete(existing)
+            db.session.commit()
+        
+        await ctx.reply(f"✅ Removed **@{creator}** from the **{thread_name}** list.", mention_author=False)
+    except Exception as e:
+        print(f"[Creator Lists] Error in !remove: {type(e).__name__}: {e}")
+        await ctx.reply(f"❌ Error: {e}", mention_author=False)
 
 @bot.command(name='list')
 async def creator_list(ctx):
     """List all TikTok creators in this thread's list."""
+    print(f"[Creator Lists] !list command triggered in channel {ctx.channel.id} ({getattr(ctx.channel, 'name', 'unknown')})")
     if not is_inspo_thread(ctx):
         return  # Silently ignore if not in an inspo thread
     
-    thread_id = str(ctx.channel.id)
-    thread_name = INSPO_THREAD_IDS.get(ctx.channel.id, 'Unknown')
-    
-    from app import CreatorList
-    with app.app_context():
-        creators = CreatorList.query.filter_by(thread_id=thread_id).order_by(CreatorList.added_at).all()
-    
-    if not creators:
-        await ctx.reply(f"📭 The **{thread_name}** list is empty.\nUse `!add @creatorname` to add creators.", mention_author=False)
-        return
-    
-    text = f"**📋 {thread_name} - Creator List**\n"
-    for i, c in enumerate(creators, 1):
-        date_str = c.added_at.strftime('%Y-%m-%d') if c.added_at else 'N/A'
-        text += f"{i}. **@{c.creator_name}** (Added: {date_str})\n"
-        if len(text) > 1800:
+    try:
+        thread_id = str(ctx.channel.id)
+        thread_name = INSPO_THREAD_IDS.get(ctx.channel.id, 'Unknown')
+        
+        from app import CreatorList
+        with app.app_context():
+            creators = CreatorList.query.filter_by(thread_id=thread_id).order_by(CreatorList.added_at).all()
+        
+        if not creators:
+            await ctx.reply(f"📭 The **{thread_name}** list is empty.\nUse `!add @creatorname` to add creators.", mention_author=False)
+            return
+        
+        text = f"**📋 {thread_name} - Creator List**\n"
+        for i, c in enumerate(creators, 1):
+            date_str = c.added_at.strftime('%Y-%m-%d') if c.added_at else 'N/A'
+            text += f"{i}. **@{c.creator_name}** (Added: {date_str})\n"
+            if len(text) > 1800:
+                await ctx.send(text)
+                text = ""
+        
+        if text:
             await ctx.send(text)
-            text = ""
-    
-    if text:
-        await ctx.send(text)
+    except Exception as e:
+        print(f"[Creator Lists] Error in !list: {type(e).__name__}: {e}")
+        await ctx.reply(f"❌ Error: {e}", mention_author=False)
 
 
 @bot.command(name='help')
