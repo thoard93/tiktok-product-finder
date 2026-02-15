@@ -1375,8 +1375,13 @@ async def creator_add(ctx, *, input_text: str = None):
         
         await ctx.reply(f"✅ Added **@{creator}** to the **{thread_name}** list.", mention_author=False)
     except Exception as e:
-        print(f"[Creator Lists] Error in !add: {type(e).__name__}: {e}")
-        await ctx.reply(f"❌ Error: {e}", mention_author=False)
+        db.session.rollback()
+        error_str = str(e)
+        if 'UniqueViolation' in type(e).__name__ or 'duplicate key' in error_str or 'unique constraint' in error_str.lower():
+            await ctx.reply(f"⚠️ **@{creator}** is already on the **{thread_name}** list.", mention_author=False)
+        else:
+            log.error(f"Error in !add: {type(e).__name__}: {e}")
+            await ctx.reply(f"❌ Error: {e}", mention_author=False)
 
 @bot.command(name='remove')
 async def creator_remove(ctx, *, input_text: str = None):
