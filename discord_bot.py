@@ -7,13 +7,21 @@ Brand Hunter Discord Bot
 
 import os
 import re
+import sys
 import json
+import logging
 import discord
 from discord.ext import commands, tasks
 from discord import Embed
 from datetime import datetime, time, timezone
 import requests
 import asyncio
+
+# Force unbuffered output for Render
+sys.stdout.reconfigure(line_buffering=True)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(name)s] %(message)s')
+log = logging.getLogger('BrandHunterBot')
+
 
 # Database setup - Import from main application to ensure model consistency
 # Database setup - Import from main application to ensure model consistency
@@ -41,7 +49,7 @@ DAYS_BEFORE_REPEAT = 3  # Don't show same product for 3 days
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)  # Disable default help
-print("[DISCORD BOT] ====== CODE VERSION: 2026-02-15-v3 (with creator lists + thread join) ======")
+log.info("====== CODE VERSION: 2026-02-15-v3 (with creator lists + thread join) ======")
 
 def extract_product_id(text):
     """Extract TikTok product ID from URL or text"""
@@ -721,7 +729,7 @@ async def daily_brand_hunter():
 @bot.event
 async def on_ready():
     """Bot startup - join inspo-chat forum threads so we can receive messages."""
-    print(f"🤖 Bot logged in as {bot.user}")
+    log.info(f"🤖 Bot logged in as {bot.user}")
     # Auto-join inspo-chat forum threads
     joined = 0
     for thread_id in INSPO_THREAD_IDS:
@@ -730,20 +738,20 @@ async def on_ready():
             try:
                 await thread.join()
                 joined += 1
-                print(f"[Creator Lists] Joined thread: {thread.name} ({thread_id})")
+                log.info(f"Joined thread: {thread.name} ({thread_id})")
             except Exception as e:
-                print(f"[Creator Lists] Failed to join thread {thread_id}: {e}")
+                log.error(f"Failed to join thread {thread_id}: {e}")
         else:
-            print(f"[Creator Lists] Thread {thread_id} not found in cache, trying fetch...")
+            log.info(f"Thread {thread_id} not found in cache, trying fetch...")
             try:
                 thread = await bot.fetch_channel(thread_id)
                 if thread:
                     await thread.join()
                     joined += 1
-                    print(f"[Creator Lists] Fetched and joined thread: {thread.name} ({thread_id})")
+                    log.info(f"Fetched and joined thread: {thread.name} ({thread_id})")
             except Exception as e:
-                print(f"[Creator Lists] Could not fetch thread {thread_id}: {e}")
-    print(f"[Creator Lists] Joined {joined}/{len(INSPO_THREAD_IDS)} inspo-chat threads")
+                log.error(f"Could not fetch thread {thread_id}: {e}")
+    log.info(f"Joined {joined}/{len(INSPO_THREAD_IDS)} inspo-chat threads")
 
 @bot.event
 async def on_thread_create(thread):
@@ -751,9 +759,9 @@ async def on_thread_create(thread):
     if thread.parent_id == INSPO_CHAT_CHANNEL_ID:
         try:
             await thread.join()
-            print(f"[Creator Lists] Auto-joined new thread: {thread.name} ({thread.id})")
+            log.info(f"Auto-joined new thread: {thread.name} ({thread.id})")
         except Exception as e:
-            print(f"[Creator Lists] Failed to auto-join new thread {thread.id}: {e}")
+            log.error(f"Failed to auto-join new thread {thread.id}: {e}")
 
 @bot.event
 async def on_message(message):
@@ -763,7 +771,7 @@ async def on_message(message):
     
     # Debug: log ALL messages from inspo-chat threads
     if hasattr(message.channel, 'parent_id') and message.channel.parent_id == INSPO_CHAT_CHANNEL_ID:
-        print(f"[Creator Lists] 📨 Message in thread {message.channel.id} ({getattr(message.channel, 'name', '?')}): {message.content[:50]}")
+        log.info(f"📨 Message in thread {message.channel.id} ({getattr(message.channel, 'name', '?')}): {message.content[:50]}")
     
     # Check if message is in the product lookup channel
     if message.channel.id == PRODUCT_LOOKUP_CHANNEL_ID:
