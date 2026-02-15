@@ -1132,6 +1132,20 @@ class BlacklistedBrand(db.Model):
             'added_at': self.added_at.isoformat() if self.added_at else None
         }
 
+class CreatorList(db.Model):
+    """Per-thread TikTok creator lists for inspo-chat forum threads"""
+    __tablename__ = 'creator_lists'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    thread_id = db.Column(db.String(50), index=True, nullable=False)
+    creator_name = db.Column(db.String(255), nullable=False)
+    added_by = db.Column(db.String(255))
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        db.UniqueConstraint('thread_id', 'creator_name', name='uq_thread_creator'),
+    )
+
 class WatchedBrand(db.Model):
     """Brands being tracked in Brand Hunter"""
     __tablename__ = 'watched_brands'
