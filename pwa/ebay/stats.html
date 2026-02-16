@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Stats — eBay QuickList</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg-card: #13131a;
+            --bg-input: #1a1a24;
+            --border: #2a2a3a;
+            --text: #f0f0f5;
+            --text-dim: #8888aa;
+            --accent: #00c9a7;
+            --purple: #7c5cff;
+            --red: #ff4d6a;
+            --green: #00e676;
+            --yellow: #ffc107;
+            --radius: 12px;
+            --accent-glow: rgba(0, 201, 167, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .period-bar {
+            display: flex;
+            gap: 6px;
+            padding: 12px 20px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .period-tab {
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            background: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .period-tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #000;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        @media(min-width:600px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+        }
+
+        .stat-card .label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .value {
+            font-size: 22px;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+
+        .stat-card .value.green {
+            color: var(--green);
+        }
+
+        .stat-card .value.accent {
+            color: var(--accent);
+        }
+
+        .stat-card .value.yellow {
+            color: var(--yellow);
+        }
+
+        .stat-card .value.purple {
+            color: var(--purple);
+        }
+
+        .stat-card .value.red {
+            color: var(--red);
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .card h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .profit-breakdown {
+            margin-bottom: 20px;
+        }
+
+        .profit-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .profit-row:last-child {
+            border: none;
+        }
+
+        .profit-row.total {
+            font-weight: 700;
+            font-size: 16px;
+            border-top: 2px solid var(--accent);
+            padding-top: 12px;
+            margin-top: 8px;
+        }
+
+        /* Simple bar chart */
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 120px;
+            padding-top: 8px;
+        }
+
+        .bar-chart .bar {
+            flex: 1;
+            background: linear-gradient(to top, var(--accent), var(--purple));
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            position: relative;
+            transition: height 0.3s;
+        }
+
+        .bar-chart .bar .val {
+            position: absolute;
+            top: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: var(--text-dim);
+            white-space: nowrap;
+        }
+
+        .bar-labels {
+            display: flex;
+            gap: 4px;
+            margin-top: 6px;
+        }
+
+        .bar-labels span {
+            flex: 1;
+            text-align: center;
+            font-size: 10px;
+            color: var(--text-dim);
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            z-index: 100;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px 0;
+            gap: 4px;
+            text-decoration: none;
+            color: var(--text-dim);
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .nav-item.active {
+            color: var(--accent);
+        }
+
+        .nav-item .icon {
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="history.back()">←</button>
+        <h1>📊 Stats & Profit</h1>
+    </div>
+
+    <div class="period-bar">
+        <button class="period-tab" onclick="loadStats(7,this)">7D</button>
+        <button class="period-tab active" onclick="loadStats(30,this)">30D</button>
+        <button class="period-tab" onclick="loadStats(90,this)">90D</button>
+        <button class="period-tab" onclick="loadStats(365,this)">1Y</button>
+    </div>
+
+    <div class="content">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Revenue</div>
+                <div class="value green" id="sRevenue">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Net Profit</div>
+                <div class="value purple" id="sProfit">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Items Sold</div>
+                <div class="value accent" id="sSold">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Active</div>
+                <div class="value yellow" id="sActive">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">eBay Fees</div>
+                <div class="value red" id="sFees">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Avg Profit/Item</div>
+                <div class="value green" id="sAvgProfit">—</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>💰 Profit Breakdown</h3>
+            <div class="profit-breakdown">
+                <div class="profit-row"><span>Gross Revenue</span><span id="pRevenue"
+                        style="color:var(--green);">$0</span></div>
+                <div class="profit-row"><span>Cost of Goods</span><span id="pCost">$0</span></div>
+                <div class="profit-row"><span>eBay Fees</span><span id="pFees" style="color:var(--red);">-$0</span>
+                </div>
+                <div class="profit-row"><span>Shipping Costs</span><span id="pShip" style="color:var(--red);">-$0</span>
+                </div>
+                <div class="profit-row"><span>Ad Spend</span><span id="pAds" style="color:var(--red);">-$0</span></div>
+                <div class="profit-row total"><span>Net Profit</span><span id="pNet"
+                        style="color:var(--green);">$0</span></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📈 Sales (Last 7 Days)</h3>
+            <div class="bar-chart" id="barChart"></div>
+            <div class="bar-labels" id="barLabels"></div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <a class="nav-item" href="/ebay"><span class="icon">🏠</span>Home</a>
+        <a class="nav-item" href="/ebay/new"><span class="icon">➕</span>New</a>
+        <a class="nav-item" href="/ebay/listings"><span class="icon">📋</span>Listings</a>
+        <a class="nav-item active" href="/ebay/stats"><span class="icon">📊</span>Stats</a>
+        <a class="nav-item" href="/ebay/settings"><span class="icon">⚙️</span>Settings</a>
+    </div>
+
+    <script>
+        fetch('/ebay/api/me').then(r => r.json()).then(d => {
+            if (!d.authenticated) window.location.href = '/ebay/login';
+            else loadStats(30);
+        }).catch(() => window.location.href = '/ebay/login');
+
+        async function loadStats(days, btn) {
+            if (btn) {
+                document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            try {
+                const resp = await fetch(`/ebay/api/stats?period=${days}`);
+                const data = await resp.json();
+                const s = data.summary;
+
+                document.getElementById('sRevenue').textContent = `$${s.total_revenue.toFixed(0)}`;
+                document.getElementById('sProfit').textContent = `$${s.total_profit.toFixed(0)}`;
+                document.getElementById('sSold').textContent = s.sold;
+                document.getElementById('sActive').textContent = s.active;
+                document.getElementById('sFees').textContent = `-$${s.total_fees.toFixed(0)}`;
+                const avgProfit = s.sold > 0 ? (s.total_profit / s.sold) : 0;
+                document.getElementById('sAvgProfit').textContent = `$${avgProfit.toFixed(2)}`;
+
+                // Profit breakdown
+                document.getElementById('pRevenue').textContent = `$${s.total_revenue.toFixed(2)}`;
+                document.getElementById('pCost').textContent = `-$${s.total_cost.toFixed(2)}`;
+                document.getElementById('pFees').textContent = `-$${s.total_fees.toFixed(2)}`;
+                document.getElementById('pShip').textContent = `-$${s.total_shipping.toFixed(2)}`;
+                document.getElementById('pAds').textContent = `-$${s.total_ad_spend.toFixed(2)}`;
+                document.getElementById('pNet').textContent = `$${s.total_profit.toFixed(2)}`;
+                document.getElementById('pNet').style.color = s.total_profit >= 0 ? 'var(--green)' : 'var(--red)';
+
+                // Bar chart (group sold items by day)
+                renderBarChart(data.recent_sold || []);
+            } catch (e) {
+                console.error('Stats error:', e);
+            }
+        }
+
+        function renderBarChart(soldItems) {
+            const chart = document.getElementById('barChart');
+            const labels = document.getElementById('barLabels');
+            const days = [];
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const key = d.toISOString().split('T')[0];
+                const count = soldItems.filter(s => s.sold_at && s.sold_at.startsWith(key)).length;
+                const rev = soldItems.filter(s => s.sold_at && s.sold_at.startsWith(key))
+                    .reduce((sum, s) => sum + (s.sale_price || 0), 0);
+                days.push({ name: dayNames[d.getDay()], count, rev });
+            }
+
+            const maxRev = Math.max(...days.map(d => d.rev), 1);
+            chart.innerHTML = days.map(d => {
+                const h = Math.max((d.rev / maxRev) * 100, 4);
+                return `<div class="bar" style="height:${h}%"><div class="val">${d.count ? '$' + d.rev.toFixed(0) : ''}</div></div>`;
+            }).join('');
+            labels.innerHTML = days.map(d => `<span>${d.name}</span>`).join('');
+        }
+    </script>
+</body>
+
+</html>

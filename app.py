@@ -11770,7 +11770,14 @@ def copilot_auth_verify():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
+# =============================================================================
+# EBAY AUTO-LISTER MODULE
+# =============================================================================
+try:
+    import ebay_lister
+    print("✅ eBay Auto-Lister module loaded")
+except Exception as e:
+    print(f"⚠️ eBay Auto-Lister module not loaded: {e}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)

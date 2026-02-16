@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Listings — eBay QuickList</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg-card: #13131a;
+            --bg-input: #1a1a24;
+            --border: #2a2a3a;
+            --text: #f0f0f5;
+            --text-dim: #8888aa;
+            --accent: #00c9a7;
+            --purple: #7c5cff;
+            --red: #ff4d6a;
+            --green: #00e676;
+            --yellow: #ffc107;
+            --radius: 12px;
+            --accent-glow: rgba(0, 201, 167, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .header .count {
+            margin-left: auto;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        /* Filter Tabs */
+        .filter-bar {
+            display: flex;
+            gap: 6px;
+            padding: 12px 20px;
+            overflow-x: auto;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            background: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .filter-tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #000;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .listing-card {
+            display: flex;
+            gap: 12px;
+            padding: 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+
+        .listing-card:hover {
+            border-color: var(--accent);
+        }
+
+        .listing-card .thumb {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            background: var(--bg-input);
+            overflow: hidden;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .listing-card .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .listing-card .info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .listing-card .title {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .listing-card .meta {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 4px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .listing-card .price {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--green);
+            flex-shrink: 0;
+            align-self: center;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.draft {
+            background: rgba(136, 136, 170, 0.2);
+            color: var(--text-dim);
+        }
+
+        .status-badge.active {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--green);
+        }
+
+        .status-badge.sold {
+            background: rgba(0, 201, 167, 0.15);
+            color: var(--accent);
+        }
+
+        .status-badge.ended {
+            background: rgba(255, 77, 106, 0.15);
+            color: var(--red);
+        }
+
+        .status-badge.error {
+            background: rgba(255, 77, 106, 0.15);
+            color: var(--red);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-dim);
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .actions-bar {
+            display: flex;
+            gap: 8px;
+            padding: 0 20px 12px;
+        }
+
+        .action-btn {
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--bg-input);
+            color: var(--text-dim);
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .action-btn.danger:hover {
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        /* Detail modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 10, 15, 0.9);
+            z-index: 200;
+            display: none;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .modal-overlay.show {
+            display: block;
+        }
+
+        .modal {
+            max-width: 500px;
+            margin: 20px auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .modal-header h2 {
+            font-size: 16px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .modal .field {
+            margin-bottom: 12px;
+        }
+
+        .modal .field label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .modal .field-value {
+            font-size: 14px;
+        }
+
+        .modal .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+            margin-top: 8px;
+        }
+
+        .modal .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            color: #000;
+        }
+
+        .modal .btn-danger {
+            background: var(--bg-input);
+            border: 1px solid var(--red);
+            color: var(--red);
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            z-index: 100;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px 0;
+            gap: 4px;
+            text-decoration: none;
+            color: var(--text-dim);
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .nav-item.active {
+            color: var(--accent);
+        }
+
+        .nav-item .icon {
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="history.back()">←</button>
+        <h1>📋 Listings</h1>
+        <span class="count" id="listCount">—</span>
+    </div>
+
+    <div class="filter-bar">
+        <button class="filter-tab active" onclick="filterBy('all',this)">All</button>
+        <button class="filter-tab" onclick="filterBy('draft',this)">Drafts</button>
+        <button class="filter-tab" onclick="filterBy('active',this)">Active</button>
+        <button class="filter-tab" onclick="filterBy('sold',this)">Sold</button>
+        <button class="filter-tab" onclick="filterBy('ended',this)">Ended</button>
+    </div>
+
+    <div class="content" id="listingsContainer">
+        <div class="loading">
+            <div class="spinner"></div>Loading...
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">Listing Details</h2>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <a class="nav-item" href="/ebay"><span class="icon">🏠</span>Home</a>
+        <a class="nav-item" href="/ebay/new"><span class="icon">➕</span>New</a>
+        <a class="nav-item active" href="/ebay/listings"><span class="icon">📋</span>Listings</a>
+        <a class="nav-item" href="/ebay/stats"><span class="icon">📊</span>Stats</a>
+        <a class="nav-item" href="/ebay/settings"><span class="icon">⚙️</span>Settings</a>
+    </div>
+
+    <script>
+        let currentFilter = 'all';
+        let listings = [];
+
+        fetch('/ebay/api/me').then(r => r.json()).then(d => {
+            if (!d.authenticated) window.location.href = '/ebay/login';
+            else loadListings();
+        }).catch(() => window.location.href = '/ebay/login');
+
+        function filterBy(status, btn) {
+            currentFilter = status;
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            loadListings();
+        }
+
+        async function loadListings() {
+            document.getElementById('listingsContainer').innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+            try {
+                const resp = await fetch(`/ebay/api/listings?status=${currentFilter}&per_page=100`);
+                const data = await resp.json();
+                listings = data.listings || [];
+                document.getElementById('listCount').textContent = `${data.total} total`;
+                renderListings(listings);
+            } catch (e) {
+                document.getElementById('listingsContainer').innerHTML = '<div class="empty-state"><p>Error loading listings</p></div>';
+            }
+        }
+
+        function renderListings(items) {
+            const container = document.getElementById('listingsContainer');
+            if (!items.length) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No ${currentFilter === 'all' ? '' : currentFilter} listings</p></div>`;
+                return;
+            }
+            container.innerHTML = items.map(l => `
+                <div class="listing-card" onclick="showDetail(${l.id})">
+                    <div class="thumb">${l.images && l.images.length ? `<img src="data:image/jpeg;base64,${l.images[0]}" alt="">` : '📦'}</div>
+                    <div class="info">
+                        <div class="title">${l.title || 'Untitled'}</div>
+                        <div class="meta">
+                            <span class="status-badge ${l.status}">${l.status}</span>
+                            <span>SKU: ${l.sku || '—'}</span>
+                            <span>${l.created_at ? new Date(l.created_at).toLocaleDateString() : ''}</span>
+                        </div>
+                    </div>
+                    <div class="price">$${(l.price || 0).toFixed(2)}</div>
+                </div>
+            `).join('');
+        }
+
+        function showDetail(id) {
+            const l = listings.find(x => x.id === id);
+            if (!l) return;
+            document.getElementById('modalTitle').textContent = l.title || 'Listing';
+            document.getElementById('modalBody').innerHTML = `
+                <div class="field"><label>Status</label><div class="field-value"><span class="status-badge ${l.status}">${l.status}</span></div></div>
+                <div class="field"><label>Price</label><div class="field-value" style="color:var(--green);font-weight:700;">$${(l.price || 0).toFixed(2)}</div></div>
+                <div class="field"><label>Quantity</label><div class="field-value">${l.quantity}</div></div>
+                <div class="field"><label>SKU</label><div class="field-value">${l.sku || '—'}</div></div>
+                <div class="field"><label>Category</label><div class="field-value">${l.category_name || '—'}</div></div>
+                <div class="field"><label>Condition</label><div class="field-value">${l.condition}</div></div>
+                ${l.ebay_item_url ? `<div class="field"><label>eBay URL</label><div class="field-value"><a href="${l.ebay_item_url}" target="_blank" style="color:var(--accent);">${l.ebay_item_url}</a></div></div>` : ''}
+                ${l.status === 'sold' ? `
+                    <div class="field"><label>Sale Price</label><div class="field-value">$${(l.sale_price || 0).toFixed(2)}</div></div>
+                    <div class="field"><label>Net Profit</label><div class="field-value" style="color:${(l.net_profit || 0) >= 0 ? 'var(--green)' : 'var(--red)'};">$${(l.net_profit || 0).toFixed(2)}</div></div>
+                ` : ''}
+                ${l.status === 'draft' ? `<button class="btn btn-primary" onclick="postListing(${l.id})">🚀 Post to eBay</button>` : ''}
+                <button class="btn btn-danger" onclick="deleteListing(${l.id})">🗑 Delete</button>
+            `;
+            document.getElementById('detailModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('show');
+        }
+
+        async function postListing(id) {
+            if (!confirm('Post this listing to eBay?')) return;
+            const resp = await fetch(`/ebay/api/listings/${id}/post`, { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                alert('✅ Posted to eBay!');
+                closeModal();
+                loadListings();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown'));
+            }
+        }
+
+        async function deleteListing(id) {
+            if (!confirm('Delete this listing?')) return;
+            await fetch(`/ebay/api/listings/${id}`, { method: 'DELETE' });
+            closeModal();
+            loadListings();
+        }
+    </script>
+</body>
+
+</html>

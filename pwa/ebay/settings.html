@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Settings — eBay QuickList</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg-card: #13131a;
+            --bg-input: #1a1a24;
+            --border: #2a2a3a;
+            --text: #f0f0f5;
+            --text-dim: #8888aa;
+            --accent: #00c9a7;
+            --purple: #7c5cff;
+            --red: #ff4d6a;
+            --green: #00e676;
+            --yellow: #ffc107;
+            --radius: 12px;
+            --accent-glow: rgba(0, 201, 167, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .content {
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .card h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .field {
+            margin-bottom: 16px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .field input,
+        .field select {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .field input:focus {
+            border-color: var(--accent);
+        }
+
+        .field .hint {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        .field-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .toggle-row:last-child {
+            border: none;
+        }
+
+        .toggle-row .label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .toggle-row .sub {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        .toggle {
+            width: 48px;
+            height: 26px;
+            background: var(--border);
+            border-radius: 13px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .toggle.on {
+            background: var(--accent);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: #fff;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s;
+        }
+
+        .toggle.on::after {
+            transform: translateX(22px);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            color: #000;
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-danger {
+            background: var(--bg-input);
+            border: 1px solid var(--red);
+            color: var(--red);
+        }
+
+        .btn+.btn {
+            margin-top: 8px;
+        }
+
+        .status-banner {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-banner.success {
+            background: rgba(0, 230, 118, 0.1);
+            border: 1px solid var(--green);
+            color: var(--green);
+        }
+
+        .status-banner.error {
+            background: rgba(255, 77, 106, 0.1);
+            border: 1px solid var(--red);
+            color: var(--red);
+        }
+
+        .status-banner.warning {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid var(--yellow);
+            color: var(--yellow);
+        }
+
+        /* Wizard Steps */
+        .wizard {
+            counter-reset: steps;
+        }
+
+        .wizard-step {
+            position: relative;
+            padding-left: 40px;
+            padding-bottom: 24px;
+            border-left: 2px solid var(--border);
+            margin-left: 12px;
+        }
+
+        .wizard-step:last-child {
+            border-left: none;
+        }
+
+        .wizard-step::before {
+            counter-increment: steps;
+            content: counter(steps);
+            position: absolute;
+            left: -13px;
+            top: 0;
+            width: 24px;
+            height: 24px;
+            background: var(--bg-card);
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .wizard-step h4 {
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .wizard-step p {
+            font-size: 13px;
+            color: var(--text-dim);
+            line-height: 1.5;
+        }
+
+        .wizard-step a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .wizard-step code {
+            background: var(--bg-input);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--yellow);
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            z-index: 100;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px 0;
+            gap: 4px;
+            text-decoration: none;
+            color: var(--text-dim);
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .nav-item.active {
+            color: var(--accent);
+        }
+
+        .nav-item .icon {
+            font-size: 20px;
+        }
+
+        .msg {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .msg.show {
+            display: block;
+        }
+
+        .msg.ok {
+            background: rgba(0, 230, 118, 0.1);
+            color: var(--green);
+        }
+
+        .msg.err {
+            background: rgba(255, 77, 106, 0.1);
+            color: var(--red);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="history.back()">←</button>
+        <h1>⚙️ Settings</h1>
+    </div>
+
+    <div class="content">
+        <div id="statusBanner"></div>
+        <div class="msg" id="saveMsg"></div>
+
+        <!-- eBay Connection Status -->
+        <div class="card" id="ebayStatusCard">
+            <h3>🔗 eBay Connection</h3>
+            <div id="ebayStatus">
+                <div class="status-banner warning">⚠️ eBay not connected yet. Follow the setup guide below.</div>
+            </div>
+        </div>
+
+        <!-- eBay Setup Wizard -->
+        <div class="card" id="setupWizard">
+            <h3>📖 eBay Setup Guide</h3>
+            <div class="wizard">
+                <div class="wizard-step">
+                    <h4>Create eBay Developer Account</h4>
+                    <p>Go to <a href="https://developer.ebay.com" target="_blank">developer.ebay.com</a> and sign up
+                        (free). Click <strong>"My Account"</strong> → <strong>"Application Access Keys"</strong> →
+                        <strong>"Create a keyset"</strong>.</p>
+                </div>
+                <div class="wizard-step">
+                    <h4>Get Your API Keys</h4>
+                    <p>You'll receive a <code>Client ID (App ID)</code> and <code>Client Secret (Cert ID)</code>. Copy
+                        these and paste them below. Start with <strong>Sandbox</strong> for testing.</p>
+                </div>
+                <div class="wizard-step">
+                    <h4>Set Up Business Policies</h4>
+                    <p>Go to <a
+                            href="https://www.ebay.com/help/selling/listings/creating-managing-listings/business-policies?id=4212"
+                            target="_blank">eBay Business Policies</a> and enable: Payment, Return (30-day), and
+                        Shipping policies. Note their IDs.</p>
+                </div>
+                <div class="wizard-step">
+                    <h4>Set Redirect URI</h4>
+                    <p>In your eBay developer dashboard, add this as an accepted redirect URI for your app:<br><code
+                            id="redirectUri">Loading...</code></p>
+                </div>
+                <div class="wizard-step">
+                    <h4>Connect Below!</h4>
+                    <p>Enter your Client ID and Secret below, then click <strong>"Connect eBay Account"</strong>. You'll
+                        be redirected to eBay to authorize.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- eBay API Keys -->
+        <div class="card">
+            <h3>🔑 eBay API Credentials</h3>
+            <div class="field">
+                <label>Environment</label>
+                <select id="ebayEnv">
+                    <option value="sandbox">Sandbox (Testing)</option>
+                    <option value="production">Production (Live)</option>
+                </select>
+                <div class="hint">Start with Sandbox, switch to Production when ready</div>
+            </div>
+            <div class="field">
+                <label>Client ID (App ID)</label>
+                <input type="text" id="ebayAppId" placeholder="Your-App-PRODID-xxxxx">
+            </div>
+            <div class="field">
+                <label>Client Secret (Cert ID)</label>
+                <input type="password" id="ebayCertId" placeholder="PRD-xxxxxxxx-xxxx">
+            </div>
+            <div class="field">
+                <label>Dev ID (optional)</label>
+                <input type="text" id="ebayDevId" placeholder="xxxxxxx-xxxx-xxxx">
+            </div>
+            <button class="btn btn-primary" onclick="saveEbayKeys()">💾 Save & Connect eBay Account</button>
+        </div>
+
+        <!-- Business Policies -->
+        <div class="card">
+            <h3>📋 Business Policy IDs</h3>
+            <div class="field">
+                <label>Payment Policy ID</label>
+                <input type="text" id="paymentPolicyId" placeholder="Enter after setup">
+            </div>
+            <div class="field">
+                <label>Return Policy ID</label>
+                <input type="text" id="returnPolicyId" placeholder="Enter after setup">
+            </div>
+            <div class="field">
+                <label>Fulfillment (Shipping) Policy ID</label>
+                <input type="text" id="fulfillmentPolicyId" placeholder="Enter after setup">
+            </div>
+            <div class="field">
+                <label>Inventory Location Key</label>
+                <input type="text" id="locationKey" placeholder="e.g., default">
+                <div class="hint">Create via eBay Sell → Inventory Locations</div>
+            </div>
+            <button class="btn btn-secondary" onclick="savePolicies()">Save Policy IDs</button>
+        </div>
+
+        <!-- Shipping -->
+        <div class="card">
+            <h3>📦 Shipping Address</h3>
+            <div class="field-row">
+                <div class="field">
+                    <label>ZIP Code</label>
+                    <input type="text" id="shipZip" placeholder="30253">
+                </div>
+                <div class="field">
+                    <label>State</label>
+                    <input type="text" id="shipState" placeholder="GA">
+                </div>
+            </div>
+            <div class="field">
+                <label>City</label>
+                <input type="text" id="shipCity" placeholder="McDonough">
+            </div>
+            <button class="btn btn-secondary" onclick="saveShipping()">Save Shipping</button>
+        </div>
+
+        <!-- Pricing Defaults -->
+        <div class="card">
+            <h3>💰 Pricing Defaults</h3>
+            <div class="field-row">
+                <div class="field">
+                    <label>Undercut %</label>
+                    <input type="number" id="undercutPct" min="5" max="50" value="30">
+                    <div class="hint">% below competitor average</div>
+                </div>
+                <div class="field">
+                    <label>Min Price Floor ($)</label>
+                    <input type="number" id="minPriceFloor" step="0.01" value="5">
+                    <div class="hint">Never price below this</div>
+                </div>
+            </div>
+            <div class="field">
+                <label>Default Condition</label>
+                <select id="defCondition">
+                    <option value="NEW">New</option>
+                    <option value="NEW_OTHER">New (Other)</option>
+                    <option value="LIKE_NEW">Like New</option>
+                </select>
+            </div>
+            <button class="btn btn-secondary" onclick="savePricingDefaults()">Save Pricing</button>
+        </div>
+
+        <!-- Automation -->
+        <div class="card">
+            <h3>🤖 Automation</h3>
+            <div class="toggle-row">
+                <div>
+                    <div class="label">Auto Send Offers</div>
+                    <div class="sub">Send discount offers to watchers</div>
+                </div>
+                <div class="toggle on" id="toggleOffer" onclick="toggleSwitch(this)"></div>
+            </div>
+            <div class="toggle-row">
+                <div>
+                    <div class="label">Auto Promote</div>
+                    <div class="sub">Promote unsold listings after 14 days</div>
+                </div>
+                <div class="toggle on" id="togglePromo" onclick="toggleSwitch(this)"></div>
+            </div>
+            <div class="toggle-row">
+                <div>
+                    <div class="label">Auto Relist</div>
+                    <div class="sub">Automatically relist ended listings</div>
+                </div>
+                <div class="toggle on" id="toggleRelist" onclick="toggleSwitch(this)"></div>
+            </div>
+            <div class="field-row" style="margin-top:16px;">
+                <div class="field">
+                    <label>Offer % (7 days)</label>
+                    <input type="number" id="offer7" value="10" min="5" max="30">
+                </div>
+                <div class="field">
+                    <label>Offer % (14 days)</label>
+                    <input type="number" id="offer14" value="15" min="5" max="40">
+                </div>
+            </div>
+            <div class="field-row">
+                <div class="field">
+                    <label>Offer % (30 days)</label>
+                    <input type="number" id="offer30" value="20" min="5" max="50">
+                </div>
+                <div class="field">
+                    <label>Promo Ad Rate %</label>
+                    <input type="number" id="promoRate" step="0.5" value="3" min="1" max="20">
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="saveAutomation()">Save Automation</button>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <a class="nav-item" href="/ebay"><span class="icon">🏠</span>Home</a>
+        <a class="nav-item" href="/ebay/new"><span class="icon">➕</span>New</a>
+        <a class="nav-item" href="/ebay/listings"><span class="icon">📋</span>Listings</a>
+        <a class="nav-item" href="/ebay/stats"><span class="icon">📊</span>Stats</a>
+        <a class="nav-item active" href="/ebay/settings"><span class="icon">⚙️</span>Settings</a>
+    </div>
+
+    <script>
+        let teamData = {};
+
+        // Check URL params for success/error
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('success') === 'ebay_connected') {
+            showBanner('✅ eBay account connected successfully!', 'success');
+        }
+        if (params.get('error')) {
+            showBanner('❌ Error: ' + params.get('error'), 'error');
+        }
+
+        function showBanner(msg, type) {
+            const el = document.getElementById('statusBanner');
+            el.innerHTML = `<div class="status-banner ${type}">${msg}</div>`;
+        }
+
+        function showMsg(msg, ok) {
+            const el = document.getElementById('saveMsg');
+            el.textContent = msg;
+            el.className = `msg show ${ok ? 'ok' : 'err'}`;
+            setTimeout(() => el.classList.remove('show'), 3000);
+        }
+
+        function toggleSwitch(el) {
+            el.classList.toggle('on');
+        }
+
+        // Auth check and load settings
+        fetch('/ebay/api/me').then(r => r.json()).then(d => {
+            if (!d.authenticated) { window.location.href = '/ebay/login'; return; }
+            loadSettings();
+        }).catch(() => window.location.href = '/ebay/login');
+
+        async function loadSettings() {
+            const resp = await fetch('/ebay/api/team/settings');
+            const data = await resp.json();
+            teamData = data.team || {};
+
+            // Populate fields
+            document.getElementById('ebayEnv').value = teamData.ebay_environment || 'sandbox';
+            document.getElementById('shipZip').value = teamData.ship_from_zip || '';
+            document.getElementById('shipCity').value = teamData.ship_from_city || '';
+            document.getElementById('shipState').value = teamData.ship_from_state || '';
+            document.getElementById('undercutPct').value = teamData.default_undercut_pct || 30;
+            document.getElementById('minPriceFloor').value = teamData.min_price_floor || 5;
+            document.getElementById('defCondition').value = teamData.default_condition || 'NEW';
+
+            // Automation
+            setToggle('toggleOffer', teamData.auto_offer_enabled);
+            setToggle('togglePromo', teamData.auto_promote_enabled);
+            setToggle('toggleRelist', teamData.auto_relist_enabled);
+            document.getElementById('offer7').value = teamData.auto_offer_days_7 || 10;
+            document.getElementById('offer14').value = teamData.auto_offer_days_14 || 15;
+            document.getElementById('offer30').value = teamData.auto_offer_days_30 || 20;
+            document.getElementById('promoRate').value = teamData.auto_promote_rate || 3;
+
+            // eBay status
+            if (teamData.ebay_connected) {
+                document.getElementById('ebayStatus').innerHTML =
+                    `<div class="status-banner success">✅ eBay connected (${teamData.ebay_environment}). App ID: ${teamData.ebay_app_id}</div>`;
+                document.getElementById('setupWizard').style.display = 'none';
+            }
+
+            // Set redirect URI
+            document.getElementById('redirectUri').textContent = window.location.origin + '/ebay/api/ebay-callback';
+        }
+
+        function setToggle(id, val) {
+            const el = document.getElementById(id);
+            if (val) el.classList.add('on'); else el.classList.remove('on');
+        }
+
+        async function saveSettings(payload) {
+            const resp = await fetch('/ebay/api/team/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            return resp.json();
+        }
+
+        async function saveEbayKeys() {
+            const payload = {
+                ebay_app_id: document.getElementById('ebayAppId').value.trim(),
+                ebay_cert_id: document.getElementById('ebayCertId').value.trim(),
+                ebay_dev_id: document.getElementById('ebayDevId').value.trim(),
+                ebay_environment: document.getElementById('ebayEnv').value,
+            };
+            if (!payload.ebay_app_id || !payload.ebay_cert_id) {
+                showMsg('Client ID and Secret are required', false);
+                return;
+            }
+            const data = await saveSettings(payload);
+            if (data.success) {
+                // Now redirect to eBay OAuth
+                const authResp = await fetch('/ebay/api/team/ebay-auth-url');
+                const authData = await authResp.json();
+                if (authData.url) {
+                    window.location.href = authData.url;
+                } else {
+                    showMsg('Keys saved. ' + (authData.error || ''), false);
+                }
+            } else {
+                showMsg(data.error || 'Save failed', false);
+            }
+        }
+
+        async function savePolicies() {
+            const data = await saveSettings({
+                ebay_payment_policy_id: document.getElementById('paymentPolicyId').value.trim(),
+                ebay_return_policy_id: document.getElementById('returnPolicyId').value.trim(),
+                ebay_fulfillment_policy_id: document.getElementById('fulfillmentPolicyId').value.trim(),
+                ebay_location_key: document.getElementById('locationKey').value.trim(),
+            });
+            showMsg(data.success ? '✅ Policies saved' : (data.error || 'Error'), data.success);
+        }
+
+        async function saveShipping() {
+            const data = await saveSettings({
+                ship_from_zip: document.getElementById('shipZip').value.trim(),
+                ship_from_city: document.getElementById('shipCity').value.trim(),
+                ship_from_state: document.getElementById('shipState').value.trim(),
+            });
+            showMsg(data.success ? '✅ Shipping saved' : (data.error || 'Error'), data.success);
+        }
+
+        async function savePricingDefaults() {
+            const data = await saveSettings({
+                default_undercut_pct: parseInt(document.getElementById('undercutPct').value),
+                min_price_floor: parseFloat(document.getElementById('minPriceFloor').value),
+                default_condition: document.getElementById('defCondition').value,
+            });
+            showMsg(data.success ? '✅ Pricing saved' : (data.error || 'Error'), data.success);
+        }
+
+        async function saveAutomation() {
+            const data = await saveSettings({
+                auto_offer_enabled: document.getElementById('toggleOffer').classList.contains('on'),
+                auto_promote_enabled: document.getElementById('togglePromo').classList.contains('on'),
+                auto_relist_enabled: document.getElementById('toggleRelist').classList.contains('on'),
+                auto_offer_days_7: parseInt(document.getElementById('offer7').value),
+                auto_offer_days_14: parseInt(document.getElementById('offer14').value),
+                auto_offer_days_30: parseInt(document.getElementById('offer30').value),
+                auto_promote_rate: parseFloat(document.getElementById('promoRate').value),
+            });
+            showMsg(data.success ? '✅ Automation saved' : (data.error || 'Error'), data.success);
+        }
+    </script>
+</body>
+
+</html>

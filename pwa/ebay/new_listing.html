@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>New Listing — eBay QuickList</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg-card: #13131a;
+            --bg-input: #1a1a24;
+            --border: #2a2a3a;
+            --text: #f0f0f5;
+            --text-dim: #8888aa;
+            --accent: #00c9a7;
+            --purple: #7c5cff;
+            --red: #ff4d6a;
+            --green: #00e676;
+            --yellow: #ffc107;
+            --radius: 12px;
+            --accent-glow: rgba(0, 201, 167, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+
+        /* ─── Header ─── */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .header .step-badge {
+            margin-left: auto;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--accent-glow);
+            color: var(--accent);
+        }
+
+        /* ─── Upload Area ─── */
+        .upload-section {
+            padding: 20px;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        .upload-zone .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .upload-zone p {
+            color: var(--text-dim);
+            font-size: 14px;
+        }
+
+        .upload-zone input {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .image-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .image-preview .img-wrap {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--bg-input);
+        }
+
+        .image-preview .img-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .image-preview .img-wrap .remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: var(--red);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ─── Notes Input ─── */
+        .notes-section {
+            padding: 0 20px 20px;
+        }
+
+        .notes-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .notes-input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        .notes-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            display: block;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        /* ─── Generate Button ─── */
+        .generate-section {
+            padding: 0 20px 20px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--green), var(--accent));
+            color: #000;
+        }
+
+        .btn-danger {
+            background: var(--bg-input);
+            border: 1px solid var(--red);
+            color: var(--red);
+        }
+
+        /* ─── Result / Preview ─── */
+        .result-section {
+            padding: 0 20px 20px;
+            display: none;
+        }
+
+        .result-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+        }
+
+        .result-card h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .field-group {
+            margin-bottom: 16px;
+        }
+
+        .field-group label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .field-group input,
+        .field-group textarea,
+        .field-group select {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .field-group input:focus,
+        .field-group textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .field-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .char-count {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-align: right;
+            margin-top: 4px;
+        }
+
+        .price-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .dims-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+        }
+
+        /* ─── Profit Preview ─── */
+        .profit-card {
+            background: linear-gradient(135deg, rgba(0, 201, 167, 0.08), rgba(124, 92, 255, 0.08));
+            border: 1px solid var(--accent);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+        }
+
+        .profit-card h3 {
+            color: var(--accent);
+            margin-bottom: 16px;
+        }
+
+        .profit-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 14px;
+        }
+
+        .profit-row.total {
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+            margin-top: 8px;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .profit-row .neg {
+            color: var(--red);
+        }
+
+        .profit-row .pos {
+            color: var(--green);
+        }
+
+        /* ─── Duplicate Warning ─── */
+        .dupe-warning {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid var(--yellow);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .dupe-warning h4 {
+            color: var(--yellow);
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .dupe-warning p {
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        .dupe-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .dupe-actions button {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+        }
+
+        /* ─── Pricing Research ─── */
+        .pricing-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .pricing-card .price-compare {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .pricing-card .comp-item {
+            flex: 1;
+            min-width: 100px;
+            text-align: center;
+            padding: 10px;
+            background: var(--bg-input);
+            border-radius: 8px;
+        }
+
+        .pricing-card .comp-item .val {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--yellow);
+        }
+
+        .pricing-card .comp-item .lbl {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        /* ─── Post Actions ─── */
+        .post-actions {
+            padding: 0 20px 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* ─── Loading Overlay ─── */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 10, 15, 0.9);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-overlay .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        .loading-overlay .status {
+            color: var(--text);
+            font-size: 16px;
+            margin-top: 20px;
+            font-weight: 600;
+        }
+
+        .loading-overlay .sub {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ─── Bottom Nav ─── */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            z-index: 100;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px 0;
+            gap: 4px;
+            text-decoration: none;
+            color: var(--text-dim);
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+
+        .nav-item.active {
+            color: var(--accent);
+        }
+
+        .nav-item .icon {
+            font-size: 20px;
+        }
+
+        /* Shipping toggle */
+        .ship-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 3px;
+            margin-bottom: 12px;
+        }
+
+        .ship-toggle button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            background: none;
+            color: var(--text-dim);
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .ship-toggle button.active {
+            background: var(--accent);
+            color: #000;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <div class="header">
+        <button class="back-btn" onclick="history.back()">←</button>
+        <h1>New Listing</h1>
+        <span class="step-badge" id="stepBadge">Step 1: Upload</span>
+    </div>
+
+    <!-- Step 1: Upload Images -->
+    <div id="step1">
+        <div class="upload-section">
+            <div class="upload-zone" id="uploadZone">
+                <div class="icon">📸</div>
+                <p><strong>Tap to upload</strong> or drag & drop photos</p>
+                <p style="margin-top:8px;font-size:12px;">2-10 product images • JPG or PNG</p>
+                <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFiles(this.files)">
+            </div>
+            <div class="image-preview" id="imagePreview"></div>
+        </div>
+
+        <div class="notes-section">
+            <label class="notes-label">Notes (optional)</label>
+            <textarea class="notes-input" id="userNotes"
+                placeholder="e.g., Cost $0 (sample), quantity 3, color: pink, size: regular..."></textarea>
+        </div>
+
+        <div class="generate-section">
+            <button class="btn btn-primary" id="generateBtn" onclick="generateListing()" disabled>
+                🤖 Generate eBay Listing with AI
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 2: Review & Edit -->
+    <div class="result-section" id="step2">
+        <!-- Duplicate Warning -->
+        <div class="dupe-warning" id="dupeWarning" style="display:none;">
+            <h4>⚠️ Possible Duplicate Detected</h4>
+            <p id="dupeText">Similar listing found in your active inventory.</p>
+            <div class="dupe-actions">
+                <button class="btn-danger" onclick="cancelDupe()"
+                    style="background:var(--bg-input);border:1px solid var(--red);color:var(--red);">Cancel</button>
+                <button style="background:var(--yellow);color:#000;" onclick="dismissDupe()">Post Anyway</button>
+            </div>
+        </div>
+
+        <!-- Pricing Research -->
+        <div class="pricing-card" id="pricingCard">
+            <h3 style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:12px;">💰 Pricing Research</h3>
+            <div class="price-compare">
+                <div class="comp-item">
+                    <div class="val" id="priceAvg">—</div>
+                    <div class="lbl">Avg Sold</div>
+                </div>
+                <div class="comp-item">
+                    <div class="val" id="priceLow">—</div>
+                    <div class="lbl">Lowest</div>
+                </div>
+                <div class="comp-item">
+                    <div class="val" id="priceOpt">—</div>
+                    <div class="lbl">Suggested</div>
+                </div>
+            </div>
+            <p id="priceReason" style="font-size:12px;color:var(--text-dim);margin-top:10px;"></p>
+        </div>
+
+        <!-- Title & Description -->
+        <div class="result-card">
+            <h3>📝 Listing Details</h3>
+            <div class="field-group">
+                <label>Title</label>
+                <input type="text" id="editTitle" maxlength="80" oninput="updateCharCount()">
+                <div class="char-count"><span id="charCount">0</span>/80</div>
+            </div>
+            <div class="field-group">
+                <label>Description</label>
+                <textarea id="editDesc" rows="6"></textarea>
+            </div>
+            <div class="field-group">
+                <label>Category</label>
+                <input type="text" id="editCategory" readonly style="color:var(--text-dim);">
+            </div>
+            <div class="price-row">
+                <div class="field-group">
+                    <label>Price ($)</label>
+                    <input type="number" id="editPrice" step="0.01" min="0" oninput="updateProfit()">
+                </div>
+                <div class="field-group">
+                    <label>Quantity</label>
+                    <input type="number" id="editQty" min="1" value="1">
+                </div>
+            </div>
+            <div class="field-group">
+                <label>Condition</label>
+                <select id="editCondition">
+                    <option value="NEW">New</option>
+                    <option value="NEW_OTHER">New (Other)</option>
+                    <option value="LIKE_NEW">Like New</option>
+                    <option value="USED_EXCELLENT">Used - Excellent</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Shipping -->
+        <div class="result-card">
+            <h3>📦 Shipping</h3>
+            <div class="ship-toggle">
+                <button class="active" onclick="setShipType('CALCULATED',this)">Calculated</button>
+                <button onclick="setShipType('FLAT_RATE',this)">Flat Rate</button>
+            </div>
+            <div id="flatRateField" style="display:none;">
+                <div class="field-group">
+                    <label>Flat Rate ($)</label>
+                    <input type="number" id="editShipCost" step="0.01" value="0" oninput="updateProfit()">
+                </div>
+            </div>
+            <div class="field-group">
+                <label>Weight (oz)</label>
+                <input type="number" id="editWeightOz" step="0.1" min="0">
+            </div>
+            <div class="dims-row">
+                <div class="field-group">
+                    <label>L (in)</label>
+                    <input type="number" id="editLength" step="0.1">
+                </div>
+                <div class="field-group">
+                    <label>W (in)</label>
+                    <input type="number" id="editWidth" step="0.1">
+                </div>
+                <div class="field-group">
+                    <label>H (in)</label>
+                    <input type="number" id="editHeight" step="0.1">
+                </div>
+            </div>
+        </div>
+
+        <!-- Profit Preview -->
+        <div class="profit-card" id="profitCard">
+            <h3>📊 Profit Estimate</h3>
+            <div class="profit-row"><span>Sale Price</span><span id="profPrice" class="pos">$0</span></div>
+            <div class="profit-row"><span>Cost</span><span id="profCost">$0</span></div>
+            <div class="profit-row"><span>eBay Fees (~13.25%)</span><span id="profFees" class="neg">-$0</span></div>
+            <div class="profit-row"><span>Est. Shipping</span><span id="profShip" class="neg">-$10</span></div>
+            <div class="profit-row total"><span>Est. Net Profit</span><span id="profNet" class="pos">$0</span></div>
+        </div>
+
+        <!-- Actions -->
+        <div class="post-actions">
+            <button class="btn btn-success" onclick="saveListing('draft')">💾 Save as Draft</button>
+            <button class="btn btn-primary" onclick="saveListing('ready')">🚀 Post to eBay</button>
+            <button class="btn btn-secondary" onclick="resetForm()">↩️ Start Over</button>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="status" id="loadingStatus">Analyzing images with AI...</div>
+        <div class="sub" id="loadingSub">This usually takes 10-20 seconds</div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+        <a class="nav-item" href="/ebay"><span class="icon">🏠</span>Home</a>
+        <a class="nav-item active" href="/ebay/new"><span class="icon">➕</span>New</a>
+        <a class="nav-item" href="/ebay/listings"><span class="icon">📋</span>Listings</a>
+        <a class="nav-item" href="/ebay/stats"><span class="icon">📊</span>Stats</a>
+        <a class="nav-item" href="/ebay/settings"><span class="icon">⚙️</span>Settings</a>
+    </div>
+
+    <script>
+        let uploadedImages = []; // base64 strings
+        let currentListingData = null;
+        let shippingType = 'CALCULATED';
+
+        // Auth check
+        fetch('/ebay/api/me').then(r => r.json()).then(d => {
+            if (!d.authenticated) window.location.href = '/ebay/login';
+        }).catch(() => window.location.href = '/ebay/login');
+
+        // ─── Drag & Drop ────────────────────────────────────
+        const zone = document.getElementById('uploadZone');
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', e => {
+            e.preventDefault(); zone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFiles(files) {
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                if (uploadedImages.length >= 10) return;
+                const reader = new FileReader();
+                reader.onload = e => {
+                    uploadedImages.push(e.target.result);
+                    renderPreviews();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderPreviews() {
+            const container = document.getElementById('imagePreview');
+            container.innerHTML = uploadedImages.map((img, i) => `
+                <div class="img-wrap">
+                    <img src="${img}" alt="Product ${i + 1}">
+                    <button class="remove" onclick="removeImage(${i})">✕</button>
+                </div>
+            `).join('');
+            document.getElementById('generateBtn').disabled = uploadedImages.length === 0;
+        }
+
+        function removeImage(idx) {
+            uploadedImages.splice(idx, 1);
+            renderPreviews();
+        }
+
+        // ─── Generate Listing ───────────────────────────────
+        async function generateListing() {
+            if (uploadedImages.length === 0) return;
+            showLoading('🤖 Analyzing images with AI...', 'Grok 4.1 is identifying your product');
+
+            try {
+                const resp = await fetch('/ebay/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        images: uploadedImages,
+                        notes: document.getElementById('userNotes').value,
+                    }),
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Generation failed');
+
+                currentListingData = data;
+                populateForm(data);
+                hideLoading();
+
+                // Show result section
+                document.getElementById('step1').style.display = 'none';
+                document.getElementById('step2').style.display = 'block';
+                document.getElementById('stepBadge').textContent = 'Step 2: Review';
+                window.scrollTo(0, 0);
+
+            } catch (err) {
+                hideLoading();
+                alert('Error: ' + err.message);
+            }
+        }
+
+        function populateForm(data) {
+            const l = data.listing;
+            const p = data.pricing;
+
+            document.getElementById('editTitle').value = l.title || '';
+            document.getElementById('editDesc').value = l.description || '';
+            document.getElementById('editCategory').value = l.category_name || '';
+            document.getElementById('editPrice').value = l.price || 0;
+            document.getElementById('editCondition').value = l.condition || 'NEW';
+            document.getElementById('editWeightOz').value = l.weight_oz || 0;
+            document.getElementById('editLength').value = l.length_in || 0;
+            document.getElementById('editWidth').value = l.width_in || 0;
+            document.getElementById('editHeight').value = l.height_in || 0;
+
+            updateCharCount();
+            updateProfit();
+
+            // Pricing research
+            if (p) {
+                document.getElementById('priceAvg').textContent = p.avg_sold_price ? `$${p.avg_sold_price}` : '—';
+                document.getElementById('priceLow').textContent = p.lowest_current ? `$${p.lowest_current}` : '—';
+                document.getElementById('priceOpt').textContent = p.optimal_price ? `$${p.optimal_price}` : '—';
+                document.getElementById('priceReason').textContent = p.price_reasoning || '';
+            }
+
+            // Duplicate warning
+            if (data.duplicates && data.duplicates.length > 0) {
+                document.getElementById('dupeWarning').style.display = 'block';
+                document.getElementById('dupeText').textContent =
+                    `Similar listing found: "${data.duplicates[0].title}" (${data.duplicates[0].status})`;
+            }
+        }
+
+        function updateCharCount() {
+            const len = document.getElementById('editTitle').value.length;
+            document.getElementById('charCount').textContent = len;
+        }
+
+        function updateProfit() {
+            const price = parseFloat(document.getElementById('editPrice').value) || 0;
+            const fees = (price * 0.1325) + 0.30;
+            const shipping = shippingType === 'FLAT_RATE'
+                ? parseFloat(document.getElementById('editShipCost').value) || 0 : 10;
+            const profit = price - fees - shipping;
+
+            document.getElementById('profPrice').textContent = `$${price.toFixed(2)}`;
+            document.getElementById('profFees').textContent = `-$${fees.toFixed(2)}`;
+            document.getElementById('profShip').textContent = `-$${shipping.toFixed(2)}`;
+            document.getElementById('profNet').textContent = `$${profit.toFixed(2)}`;
+            document.getElementById('profNet').className = profit >= 0 ? 'pos' : 'neg';
+        }
+
+        function setShipType(type, btn) {
+            shippingType = type;
+            document.querySelectorAll('.ship-toggle button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('flatRateField').style.display = type === 'FLAT_RATE' ? 'block' : 'none';
+            updateProfit();
+        }
+
+        function cancelDupe() {
+            resetForm();
+        }
+
+        function dismissDupe() {
+            document.getElementById('dupeWarning').style.display = 'none';
+        }
+
+        // ─── Save / Post Listing ────────────────────────────
+        async function saveListing(action) {
+            showLoading(
+                action === 'ready' ? '🚀 Posting to eBay...' : '💾 Saving draft...',
+                'Please wait...'
+            );
+
+            try {
+                const listing = {
+                    title: document.getElementById('editTitle').value,
+                    description: document.getElementById('editDesc').value,
+                    category_id: currentListingData?.listing?.category_id || '',
+                    category_name: document.getElementById('editCategory').value,
+                    condition: document.getElementById('editCondition').value,
+                    price: parseFloat(document.getElementById('editPrice').value) || 0,
+                    quantity: parseInt(document.getElementById('editQty').value) || 1,
+                    cost_price: 0,
+                    weight_oz: parseFloat(document.getElementById('editWeightOz').value) || 0,
+                    length_in: parseFloat(document.getElementById('editLength').value) || 0,
+                    width_in: parseFloat(document.getElementById('editWidth').value) || 0,
+                    height_in: parseFloat(document.getElementById('editHeight').value) || 0,
+                    shipping_type: shippingType,
+                    shipping_cost: shippingType === 'FLAT_RATE' ? parseFloat(document.getElementById('editShipCost').value) || 0 : 0,
+                    images: uploadedImages,
+                    sku: currentListingData?.listing?.sku || '',
+                    status: 'draft',
+                    comp_avg_price: currentListingData?.pricing?.avg_sold_price,
+                    comp_low_price: currentListingData?.pricing?.lowest_current,
+                };
+
+                // Save to database
+                const saveResp = await fetch('/ebay/api/listings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(listing),
+                });
+                const saveData = await saveResp.json();
+                if (!saveData.success) throw new Error(saveData.error || 'Save failed');
+
+                // If posting to eBay, call the post endpoint
+                if (action === 'ready') {
+                    const postResp = await fetch(`/ebay/api/listings/${saveData.listing.id}/post`, {
+                        method: 'POST',
+                    });
+                    const postData = await postResp.json();
+                    if (!postData.success) {
+                        hideLoading();
+                        alert('Saved as draft. eBay posting error: ' + (postData.error || 'Unknown error'));
+                        window.location.href = '/ebay/listings';
+                        return;
+                    }
+                    hideLoading();
+                    alert(`✅ Listed on eBay!\n${postData.ebay_url || ''}`);
+                } else {
+                    hideLoading();
+                    alert('✅ Draft saved!');
+                }
+
+                window.location.href = '/ebay';
+
+            } catch (err) {
+                hideLoading();
+                alert('Error: ' + err.message);
+            }
+        }
+
+        function resetForm() {
+            uploadedImages = [];
+            currentListingData = null;
+            renderPreviews();
+            document.getElementById('step1').style.display = 'block';
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('stepBadge').textContent = 'Step 1: Upload';
+            document.getElementById('dupeWarning').style.display = 'none';
+            document.getElementById('userNotes').value = '';
+            window.scrollTo(0, 0);
+        }
+
+        // ─── Loading ────────────────────────────────────────
+        function showLoading(status, sub) {
+            document.getElementById('loadingStatus').textContent = status;
+            document.getElementById('loadingSub').textContent = sub;
+            document.getElementById('loadingOverlay').classList.add('show');
+        }
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('show');
+        }
+    </script>
+</body>
+
+</html>
