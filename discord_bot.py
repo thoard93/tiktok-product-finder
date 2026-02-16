@@ -584,10 +584,35 @@ async def on_ready():
     # Start the daily hot products task
     if not daily_hot_products.is_running():
         daily_hot_products.start()
+        print("   ✅ Daily hot products task started")
     
     # Start the daily brand hunter task
     if BRAND_HUNTER_CHANNEL_ID and not daily_brand_hunter.is_running():
         daily_brand_hunter.start()
+        print("   ✅ Daily brand hunter task started")
+    
+    # Auto-join inspo-chat forum threads so we can receive messages
+    joined = 0
+    for thread_id in INSPO_THREAD_IDS:
+        thread = bot.get_channel(thread_id)
+        if thread:
+            try:
+                await thread.join()
+                joined += 1
+                log.info(f"Joined thread: {thread.name} ({thread_id})")
+            except Exception as e:
+                log.error(f"Failed to join thread {thread_id}: {e}")
+        else:
+            log.info(f"Thread {thread_id} not found in cache, trying fetch...")
+            try:
+                thread = await bot.fetch_channel(thread_id)
+                if thread:
+                    await thread.join()
+                    joined += 1
+                    log.info(f"Fetched and joined thread: {thread.name} ({thread_id})")
+            except Exception as e:
+                log.error(f"Could not fetch thread {thread_id}: {e}")
+    log.info(f"Joined {joined}/{len(INSPO_THREAD_IDS)} inspo-chat threads")
 
 @tasks.loop(time=time(hour=17, minute=0))  # 12:00 PM EST = 17:00 UTC
 async def daily_hot_products():
@@ -732,32 +757,6 @@ async def daily_brand_hunter():
         traceback.print_exc()
         await channel.send(f"❌ Error fetching brand opportunities: {str(e)[:200]}")
 
-@bot.event
-async def on_ready():
-    """Bot startup - join inspo-chat forum threads so we can receive messages."""
-    log.info(f"🤖 Bot logged in as {bot.user}")
-    # Auto-join inspo-chat forum threads
-    joined = 0
-    for thread_id in INSPO_THREAD_IDS:
-        thread = bot.get_channel(thread_id)
-        if thread:
-            try:
-                await thread.join()
-                joined += 1
-                log.info(f"Joined thread: {thread.name} ({thread_id})")
-            except Exception as e:
-                log.error(f"Failed to join thread {thread_id}: {e}")
-        else:
-            log.info(f"Thread {thread_id} not found in cache, trying fetch...")
-            try:
-                thread = await bot.fetch_channel(thread_id)
-                if thread:
-                    await thread.join()
-                    joined += 1
-                    log.info(f"Fetched and joined thread: {thread.name} ({thread_id})")
-            except Exception as e:
-                log.error(f"Could not fetch thread {thread_id}: {e}")
-    log.info(f"Joined {joined}/{len(INSPO_THREAD_IDS)} inspo-chat threads")
 
 @bot.event
 async def on_thread_create(thread):
