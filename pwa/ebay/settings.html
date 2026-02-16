@@ -384,7 +384,8 @@
                     <h4>Create eBay Developer Account</h4>
                     <p>Go to <a href="https://developer.ebay.com" target="_blank">developer.ebay.com</a> and sign up
                         (free). Click <strong>"My Account"</strong> → <strong>"Application Access Keys"</strong> →
-                        <strong>"Create a keyset"</strong>.</p>
+                        <strong>"Create a keyset"</strong>.
+                    </p>
                 </div>
                 <div class="wizard-step">
                     <h4>Get Your API Keys</h4>
@@ -609,6 +610,12 @@
             document.getElementById('undercutPct').value = teamData.default_undercut_pct || 30;
             document.getElementById('minPriceFloor').value = teamData.min_price_floor || 5;
             document.getElementById('defCondition').value = teamData.default_condition || 'NEW';
+
+            // Policy IDs
+            document.getElementById('paymentPolicyId').value = teamData.ebay_payment_policy_id || '';
+            document.getElementById('returnPolicyId').value = teamData.ebay_return_policy_id || '';
+            document.getElementById('fulfillmentPolicyId').value = teamData.ebay_fulfillment_policy_id || '';
+            document.getElementById('locationKey').value = teamData.ebay_location_key || '';
 
             // Automation
             setToggle('toggleOffer', teamData.auto_offer_enabled);

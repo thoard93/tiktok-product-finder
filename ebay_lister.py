@@ -29,6 +29,13 @@ logging.basicConfig(level=logging.INFO)
 # These are imported at module load time; app.py must be imported first.
 from app import app, db
 
+# ─── Ensure SECRET_KEY is set (required for sessions + remember-me tokens) ───
+if not app.config.get('SECRET_KEY'):
+    app.config['SECRET_KEY'] = os.environ.get(
+        'SECRET_KEY',
+        hashlib.sha256(os.environ.get('DATABASE_URL', 'ebay-quicklist-dev-key').encode()).hexdigest()
+    )
+
 # ─── Configuration ───────────────────────────────────────────────────────────
 XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 XAI_API_URL = 'https://api.x.ai/v1/chat/completions'
@@ -108,7 +115,11 @@ class EbayTeam(db.Model):
             'ship_from_state': self.ship_from_state,
             'ebay_connected': bool(self.ebay_oauth_token),
             'ebay_environment': self.ebay_environment,
-            'ebay_app_id': self.ebay_app_id[:8] + '...' if self.ebay_app_id else '',
+            'ebay_app_id': (self.ebay_app_id[:8] + '...') if self.ebay_app_id and len(self.ebay_app_id) > 8 else (self.ebay_app_id or ''),
+            'ebay_payment_policy_id': self.ebay_payment_policy_id or '',
+            'ebay_return_policy_id': self.ebay_return_policy_id or '',
+            'ebay_fulfillment_policy_id': self.ebay_fulfillment_policy_id or '',
+            'ebay_location_key': self.ebay_location_key or '',
             'auto_offer_enabled': self.auto_offer_enabled,
             'auto_offer_days_7': self.auto_offer_days_7,
             'auto_offer_days_14': self.auto_offer_days_14,
@@ -178,7 +189,7 @@ class EbayListing(db.Model):
     images_json = db.Column(db.Text, default='[]')
 
     # eBay API references
-    sku = db.Column(db.String(100), unique=True, index=True)
+    sku = db.Column(db.String(100), index=True)
     ebay_listing_id = db.Column(db.String(50), index=True)
     ebay_offer_id = db.Column(db.String(50))
     ebay_item_url = db.Column(db.Text, default='')
@@ -445,11 +456,11 @@ def ebay_me():
                     session['ebay_user_id'] = user.id
                     session['ebay_team_id'] = user.team_id
                     return jsonify({'authenticated': True, 'user': user.to_dict()})
-        return jsonify({'authenticated': False}), 401
+        return jsonify({'authenticated': False})
 
     user = EbayUser.query.get(user_id)
     if not user:
-        return jsonify({'authenticated': False}), 401
+        return jsonify({'authenticated': False})
     return jsonify({'authenticated': True, 'user': user.to_dict()})
 
 
@@ -1143,24 +1154,29 @@ def ebay_stats():
 
     cutoff = datetime.utcnow() - timedelta(days=int(period))
 
-    listings = EbayListing.query.filter_by(team_id=view_team_id).all()
+    all_listings = EbayListing.query.filter_by(team_id=view_team_id).all()
 
-    # Calculate stats
-    total_listed = len([l for l in listings if l.status in ['active', 'sold']])
-    active = len([l for l in listings if l.status == 'active'])
-    sold = len([l for l in listings if l.status == 'sold'])
-    drafts = len([l for l in listings if l.status == 'draft'])
+    # Filter by period for financial stats
+    period_listings = [l for l in all_listings if l.created_at and l.created_at > cutoff]
 
-    total_revenue = sum(l.sale_price or 0 for l in listings if l.status == 'sold')
-    total_fees = sum(l.ebay_fees or 0 for l in listings if l.status == 'sold')
-    total_shipping = sum(l.shipping_actual or 0 for l in listings if l.status == 'sold')
-    total_ad_spend = sum(l.ad_spend or 0 for l in listings if l.status == 'sold')
-    total_cost = sum(l.cost_price or 0 for l in listings if l.status == 'sold')
+    # Counts use current state (active/drafts are always current)
+    active = len([l for l in all_listings if l.status == 'active'])
+    drafts = len([l for l in all_listings if l.status == 'draft'])
+
+    # Financial stats filtered by period
+    sold_in_period = [l for l in all_listings if l.status == 'sold' and l.sold_at and l.sold_at > cutoff]
+    sold = len(sold_in_period)
+    total_listed = active + sold
+
+    total_revenue = sum(l.sale_price or 0 for l in sold_in_period)
+    total_fees = sum(l.ebay_fees or 0 for l in sold_in_period)
+    total_shipping = sum(l.shipping_actual or 0 for l in sold_in_period)
+    total_ad_spend = sum(l.ad_spend or 0 for l in sold_in_period)
+    total_cost = sum(l.cost_price or 0 for l in sold_in_period)
     total_profit = total_revenue - total_fees - total_shipping - total_ad_spend - total_cost
 
     # Recent sold (for chart)
-    recent_sold = [l.to_dict() for l in listings
-                   if l.status == 'sold' and l.sold_at and l.sold_at > cutoff]
+    recent_sold = [l.to_dict() for l in sold_in_period]
 
     return jsonify({
         'team_id': view_team_id,
