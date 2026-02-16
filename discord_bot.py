@@ -1038,7 +1038,13 @@ RESPONSE RULES:
 6. Keep responses under 1800 characters (Discord limit is 2000).
 7. If asked for gems or opportunities, sort by efficiency ratio (ad_spend / videos).
 8. Refer to the platform as 'Vantage'. You are Vantage AI.
-9. Don't use markdown headers (# or ##). Use **bold** and bullet points instead."""
+9. Don't use markdown headers (# or ##). Use **bold** and bullet points instead.
+10. ALWAYS include these when listing products:
+    - **Product name** (bold)
+    - Seller/Shop name
+    - Clickable TikTok link using the tiktok_link field from the data
+    - Key stats (ad spend, videos, sales, commission)
+    Example format: **Product Name** by Seller Name — $X ad spend, Y videos, Z% commission\n[View on TikTok](link)"""
         
         loop = asyncio.get_event_loop()
         ai_response = await loop.run_in_executor(None, lambda: _call_grok_discord(system_prompt, user_msg))
@@ -1117,9 +1123,11 @@ def _build_discord_product_context(user_message):
     
     def _psummary(p):
         efficiency = round(p.ad_spend / max(p.video_count or 1, 1), 1) if p.ad_spend else 0
+        pid = p.product_id or ''
         return {
-            "name": (p.product_name or "Unknown")[:60],
+            "name": (p.product_name or "Unknown")[:80],
             "seller": p.seller_name or "Unknown",
+            "tiktok_link": p.product_url or f"https://shop.tiktok.com/view/product/{pid}?region=US&locale=en-US" if pid else "",
             "price": round(p.price or 0, 2),
             "ad_spend_7d": round(p.ad_spend or 0, 2),
             "videos": p.video_count_alltime or p.video_count or 0,

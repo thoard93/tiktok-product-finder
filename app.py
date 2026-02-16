@@ -147,9 +147,14 @@ RESPONSE RULES:
 3. Never make up data — only reference products from the context above.
 4. If the user asks about something not in your data, say so honestly.
 5. Format important numbers clearly (e.g., "$12.5K" not "12500").
-6. When listing products, include: Product Name, Seller, 7D Ad Spend, Video Count, and why it's interesting.
-7. If asked for "gems" or opportunities, sort by efficiency ratio (ad_spend / videos).
-8. Refer to the platform as 'Vantage'. You are Vantage AI."""
+6. If asked for "gems" or opportunities, sort by efficiency ratio (ad_spend / videos).
+7. Refer to the platform as 'Vantage'. You are Vantage AI.
+8. ALWAYS include these when listing products:
+   - **Product name** (bold)
+   - Seller/Shop name
+   - TikTok link from the tiktok_link field
+   - Key stats (ad spend, videos, sales, commission)
+   Example: **Product Name** by Seller — $X ad spend, Y videos, Z% commission | [View on TikTok](link)"""
 
         if xai_key:
             # Use Grok 4.1 Fast-Reasoning (preferred)
@@ -215,9 +220,11 @@ def _build_product_context(user_message):
     
     def _product_summary(p):
         efficiency = round(p.ad_spend / max(p.video_count or 1, 1), 1) if p.ad_spend else 0
+        pid = p.product_id or ''
         return {
             "name": p.product_name[:80] if p.product_name else "Unknown",
             "seller": p.seller_name or "Unknown",
+            "tiktok_link": p.product_url or (f"https://shop.tiktok.com/view/product/{pid}?region=US&locale=en-US" if pid else ""),
             "price": round(p.price or 0, 2),
             "ad_spend_7d": round(p.ad_spend or 0, 2),
             "videos_alltime": p.video_count_alltime or p.video_count or 0,
