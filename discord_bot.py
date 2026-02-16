@@ -33,6 +33,12 @@ HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
 BRAND_HUNTER_CHANNEL_ID = int(os.environ.get('BRAND_HUNTER_CHANNEL_ID', 0))  # For daily brand hunter posts
 PRODUCT_LOOKUP_CHANNEL_ID = 1461053839800139959
 BLACKLIST_CHANNEL_ID = 1440369747467174019
+AI_CHAT_CHANNEL_ID = 1473031651599847631  # Vantage AI insights channel
+AI_CHAT_CATEGORY_ID = 1444029219951874129  # Category for private AI chat channels
+XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
+
+# Track active private AI channels: {user_id: channel_id}
+active_ai_channels = {}
 
 # Hot Product Criteria - Free Shipping Deals
 MIN_SALES_7D = 50  # Lower threshold since we're filtering by free shipping
@@ -769,6 +775,22 @@ async def on_message(message):
     if message.author.bot:
         return
     
+    # ── Vantage AI Chat Channel ──────────────────────────────────────────
+    if message.channel.id == AI_CHAT_CHANNEL_ID:
+        await handle_ai_chat_redirect(message)
+        return
+    
+    # ── Private AI Chat Channels ───────────────────────────────────────
+    if message.channel.id in active_ai_channels.values():
+        await handle_ai_chat(message)
+        return
+    # Also check by channel name pattern (survives bot restart)
+    if hasattr(message.channel, 'category_id') and message.channel.category_id == AI_CHAT_CATEGORY_ID:
+        if message.channel.name.startswith('ai-'):
+            active_ai_channels[message.author.id] = message.channel.id
+            await handle_ai_chat(message)
+            return
+    
     # Debug: log ALL messages from inspo-chat threads
     if hasattr(message.channel, 'parent_id') and message.channel.parent_id == INSPO_CHAT_CHANNEL_ID:
         log.info(f"📨 Message in thread {message.channel.id} ({getattr(message.channel, 'name', '?')}): {message.content[:50]}")
@@ -854,6 +876,318 @@ async def on_message(message):
     
     # Process other commands
     await bot.process_commands(message)
+
+
+# =============================================================================
+# VANTAGE AI CHAT (Discord Integration)
+# =============================================================================
+
+async def handle_ai_chat_redirect(message):
+    """When someone messages in the main AI channel, create/find their private channel and redirect."""
+    if not XAI_API_KEY:
+        await message.reply("⚠️ Vantage AI is not configured yet. Ask an admin to set the `XAI_API_KEY` environment variable.", mention_author=False)
+        return
+    
+    user_msg = message.content.strip()
+    if not user_msg or len(user_msg) < 2:
+        return
+    
+    guild = message.guild
+    user = message.author
+    
+    # Find or create private channel for this user
+    private_channel = None
+    
+    # Check if user already has an active private channel
+    if user.id in active_ai_channels:
+        private_channel = guild.get_channel(active_ai_channels[user.id])
+        if private_channel is None:
+            del active_ai_channels[user.id]  # Channel was deleted
+    
+    # Search for existing channel by name if not in cache
+    if not private_channel:
+        category = guild.get_channel(AI_CHAT_CATEGORY_ID)
+        if category:
+            clean_name = re.sub(r'[^a-z0-9]', '', user.name.lower())[:20] or 'user'
+            channel_name = f"ai-{clean_name}"
+            for ch in category.text_channels:
+                if ch.name == channel_name:
+                    private_channel = ch
+                    active_ai_channels[user.id] = ch.id
+                    break
+    
+    # Create new private channel if none exists
+    if not private_channel:
+        category = guild.get_channel(AI_CHAT_CATEGORY_ID)
+        if not category:
+            await message.reply("❌ AI chat category not found. Ask an admin to check the category ID.", mention_author=False)
+            return
+        
+        clean_name = re.sub(r'[^a-z0-9]', '', user.name.lower())[:20] or 'user'
+        channel_name = f"ai-{clean_name}"
+        
+        # Permissions: only the user + bot can see it
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_messages=True),
+        }
+        
+        try:
+            private_channel = await guild.create_text_channel(
+                name=channel_name,
+                category=category,
+                overwrites=overwrites,
+                topic=f"🧠 Private Vantage AI chat for {user.display_name}. Ask anything about products, gems, trends, and insights."
+            )
+            active_ai_channels[user.id] = private_channel.id
+            
+            # Send welcome message in private channel
+            welcome_embed = discord.Embed(
+                title="🧠 Vantage AI — Private Session",
+                description=(
+                    f"Hey {user.mention}! This is your **private Vantage AI** channel.\n\n"
+                    "Ask me anything about TikTok Shop products:\n"
+                    "• *\"Find me gems with high ad spend\"*\n"
+                    "• *\"What products have the best commissions?\"*\n"
+                    "• *\"Show me trending products under $30\"*\n"
+                    "• *\"Which brands are scaling the hardest?\"*\n\n"
+                    "Every message you send here goes directly to the AI. 🚀"
+                ),
+                color=0x00C9A7
+            )
+            welcome_embed.set_footer(text="Powered by Grok 4.1 • Data from Vantage")
+            await private_channel.send(embed=welcome_embed)
+            
+        except discord.Forbidden:
+            await message.reply("❌ I don't have permission to create channels. Ask an admin to give me `Manage Channels` permission.", mention_author=False)
+            return
+        except Exception as e:
+            log.error(f"Failed to create AI channel: {e}")
+            await message.reply(f"❌ Couldn't create your private AI channel: {str(e)[:100]}", mention_author=False)
+            return
+    
+    # Redirect user in the main channel
+    redirect_embed = discord.Embed(
+        description=f"🧠 {user.mention}, I've set up your private AI channel: {private_channel.mention}\nYour question is being answered there!",
+        color=0x00C9A7
+    )
+    redirect_msg = await message.reply(embed=redirect_embed, mention_author=False)
+    
+    # Forward the original message to the private channel and answer there
+    # Create a fake-ish context by sending the question in the private channel
+    fwd_embed = discord.Embed(
+        description=f"**{user.display_name} asked:**\n{user_msg}",
+        color=0x2B2D31
+    )
+    await private_channel.send(embed=fwd_embed)
+    
+    # Now generate the AI response in the private channel
+    await _generate_ai_response(private_channel, user, user_msg)
+    
+    # Auto-delete the redirect after 15 seconds to keep main channel clean
+    try:
+        await asyncio.sleep(15)
+        await redirect_msg.delete()
+        await message.delete()
+    except:
+        pass
+
+
+async def handle_ai_chat(message):
+    """Handle messages in a private AI chat channel — direct conversation."""
+    if not XAI_API_KEY:
+        await message.reply("⚠️ Vantage AI is not configured yet.", mention_author=False)
+        return
+    
+    user_msg = message.content.strip()
+    if not user_msg or len(user_msg) < 2:
+        return
+    
+    await _generate_ai_response(message.channel, message.author, user_msg, reply_to=message)
+
+
+async def _generate_ai_response(channel, user, user_msg, reply_to=None):
+    """Generate and send an AI response in a channel."""
+    # Show thinking
+    thinking_msg = await channel.send("🧠 Thinking...")
+    
+    try:
+        product_context = _build_discord_product_context(user_msg)
+        
+        system_prompt = f"""You are 'Vantage AI', the expert intelligence engine of the Vantage platform — a TikTok Shop product research tool.
+
+You are responding in a private Discord channel for a TikTok Shop affiliate marketer/content creator.
+
+YOUR CAPABILITIES:
+- Analyze TikTok Shop product data (sales, ad spend, video counts, pricing, commission rates, GMV)
+- Find "Gems" — products with high ad spend but few affiliate videos (opportunity for creators)
+- Find "Caked Picks" — products with $50K-$200K GMV and ≤50 influencers
+- Identify trending products, scaling brands, and best affiliate opportunities
+- Provide market insights and recommendations
+
+CURRENT DATABASE SNAPSHOT:
+{json.dumps(product_context, default=str)}
+
+RESPONSE RULES:
+1. Be concise and data-driven. Discord messages should be scannable.
+2. Use bullet points and numbers, not long paragraphs.
+3. When recommending products, explain WHY with specific data.
+4. Never make up data — only reference products from the context above.
+5. Format numbers clearly: "$12.5K" not "12500".
+6. Keep responses under 1800 characters (Discord limit is 2000).
+7. If asked for gems or opportunities, sort by efficiency ratio (ad_spend / videos).
+8. Refer to the platform as 'Vantage'. You are Vantage AI.
+9. Don't use markdown headers (# or ##). Use **bold** and bullet points instead."""
+        
+        loop = asyncio.get_event_loop()
+        ai_response = await loop.run_in_executor(None, lambda: _call_grok_discord(system_prompt, user_msg))
+        
+        # Delete thinking message
+        try:
+            await thinking_msg.delete()
+        except:
+            pass
+        
+        if not ai_response:
+            await channel.send("❌ Couldn't get a response. Try again in a moment.")
+            return
+        
+        embed = discord.Embed(
+            description=ai_response[:4000],
+            color=0x00C9A7,
+            timestamp=datetime.utcnow()
+        )
+        embed.set_author(
+            name="Vantage AI",
+            icon_url="https://cdn-icons-png.flaticon.com/512/4712/4712109.png"
+        )
+        embed.set_footer(text=f"Asked by {user.display_name} • Powered by Grok 4.1", icon_url=user.display_avatar.url if user.display_avatar else None)
+        
+        if reply_to:
+            await reply_to.reply(embed=embed, mention_author=False)
+        else:
+            await channel.send(embed=embed)
+        
+    except Exception as e:
+        log.error(f"AI Chat error: {e}")
+        try:
+            await thinking_msg.delete()
+        except:
+            pass
+        await channel.send(f"❌ Vantage AI Error: {str(e)[:200]}")
+
+
+def _call_grok_discord(system_prompt, user_message):
+    """Call Grok 4.1 API (synchronous, called from executor)."""
+    try:
+        resp = requests.post(
+            "https://api.x.ai/v1/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {XAI_API_KEY}",
+            },
+            json={
+                "model": "grok-4-1-fast-reasoning",
+                "max_tokens": 1200,
+                "temperature": 0.4,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ]
+            },
+            timeout=60
+        )
+        
+        if resp.status_code == 200:
+            return resp.json()['choices'][0]['message']['content']
+        else:
+            log.error(f"Grok API error {resp.status_code}: {resp.text[:200]}")
+            return None
+    except Exception as e:
+        log.error(f"Grok API exception: {e}")
+        return None
+
+
+def _build_discord_product_context(user_message):
+    """Build product context for AI — same segments as website bot."""
+    from sqlalchemy import desc
+    
+    msg_lower = user_message.lower()
+    
+    def _psummary(p):
+        efficiency = round(p.ad_spend / max(p.video_count or 1, 1), 1) if p.ad_spend else 0
+        return {
+            "name": (p.product_name or "Unknown")[:60],
+            "seller": p.seller_name or "Unknown",
+            "price": round(p.price or 0, 2),
+            "ad_spend_7d": round(p.ad_spend or 0, 2),
+            "videos": p.video_count_alltime or p.video_count or 0,
+            "sales_7d": p.sales_7d or 0,
+            "gmv_30d": round(p.gmv_30d or 0, 2),
+            "commission_pct": round((p.commission_rate or 0) * 100, 1),
+            "influencers": p.influencer_count or 0,
+            "efficiency": efficiency,
+        }
+    
+    with app.app_context():
+        context = {}
+        
+        # Summary stats
+        total = Product.query.filter(Product.product_status == 'active').count()
+        context["database_summary"] = {"total_active_products": total}
+        
+        # Top by ad spend (always)
+        top_ad = Product.query.filter(
+            Product.ad_spend > 0, Product.product_status == 'active'
+        ).order_by(desc(Product.ad_spend)).limit(12).all()
+        context["top_by_ad_spend"] = [_psummary(p) for p in top_ad]
+        
+        # Gems
+        gems = Product.query.filter(
+            Product.ad_spend > 2000, Product.video_count < 50,
+            Product.product_status == 'active'
+        ).order_by(desc(Product.ad_spend)).limit(12).all()
+        context["gems"] = [_psummary(p) for p in gems]
+        
+        # Top sales
+        top_sales = Product.query.filter(
+            Product.sales_7d > 0, Product.product_status == 'active'
+        ).order_by(desc(Product.sales_7d)).limit(8).all()
+        context["top_sellers"] = [_psummary(p) for p in top_sales]
+        
+        # Commission (if relevant)
+        if any(w in msg_lower for w in ['commission', 'affiliate', 'earn', 'profit', 'margin']):
+            high_comm = Product.query.filter(
+                Product.commission_rate > 0.10, Product.sales_7d > 10,
+                Product.product_status == 'active'
+            ).order_by(desc(Product.commission_rate)).limit(8).all()
+            context["best_commissions"] = [_psummary(p) for p in high_comm]
+        
+        # New products (if relevant)
+        if any(w in msg_lower for w in ['new', 'recent', 'latest', 'trending', 'fresh']):
+            newest = Product.query.filter(
+                Product.product_status == 'active'
+            ).order_by(desc(Product.first_seen)).limit(8).all()
+            context["newest"] = [_psummary(p) for p in newest]
+        
+        # Caked picks (if relevant)
+        if any(w in msg_lower for w in ['caked', 'cake', 'pick', 'niche']):
+            caked = Product.query.filter(
+                Product.gmv_30d >= 50000, Product.gmv_30d <= 200000,
+                Product.influencer_count <= 50, Product.product_status == 'active'
+            ).order_by(desc(Product.gmv_30d)).limit(8).all()
+            context["caked_picks"] = [_psummary(p) for p in caked]
+        
+        # Budget (if relevant)
+        if any(w in msg_lower for w in ['cheap', 'budget', 'affordable', 'low price', 'under']):
+            cheap = Product.query.filter(
+                Product.price > 0, Product.sales_7d > 5,
+                Product.product_status == 'active'
+            ).order_by(Product.price.asc()).limit(8).all()
+            context["budget_friendly"] = [_psummary(p) for p in cheap]
+    
+    return context
 
 @bot.command(name='lookup')
 async def lookup_command(ctx, *, query: str = None):
