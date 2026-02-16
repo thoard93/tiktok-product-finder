@@ -11216,6 +11216,32 @@ try:
                     except Exception as e:
                         db.session.rollback()
                         print(f"[SCHEDULER] ⚠️ Auto-purge error: {e}")
+                    
+                    # Auto-deduplicate products (same product name = keep most recent)
+                    try:
+                        dedup_sql = db.text("""
+                            DELETE FROM products
+                            WHERE product_id IN (
+                                SELECT product_id FROM (
+                                    SELECT product_id,
+                                           ROW_NUMBER() OVER (
+                                               PARTITION BY lower(trim(product_name))
+                                               ORDER BY last_updated DESC, COALESCE(sales_7d, 0) DESC
+                                           ) as rn
+                                    FROM products
+                                    WHERE product_name IS NOT NULL AND product_name != ''
+                                ) ranked
+                                WHERE rn > 1
+                            )
+                        """)
+                        dedup_result = db.session.execute(dedup_sql)
+                        dedup_count = dedup_result.rowcount
+                        db.session.commit()
+                        if dedup_count > 0:
+                            print(f"[SCHEDULER] 🧹 Auto-deduped {dedup_count} duplicate products")
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"[SCHEDULER] ⚠️ Auto-dedup error: {e}")
                 
                 print(f"[SCHEDULER] ✅ FULL DAILY SYNC COMPLETE: {total_saved} synced, enrichment done!")
                 try:
