@@ -543,6 +543,127 @@
             background: var(--accent);
             color: #000;
         }
+
+        /* ─── TikTok Cross-Reference ─── */
+        .tiktok-card {
+            background: linear-gradient(135deg, rgba(255, 0, 80, 0.06), rgba(0, 242, 234, 0.06));
+            border: 1px solid rgba(255, 0, 80, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+        }
+
+        .tiktok-card h3 {
+            color: #ff0050;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .tiktok-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .tiktok-stats .stat {
+            text-align: center;
+            padding: 8px;
+            background: var(--bg-input);
+            border-radius: 8px;
+        }
+
+        .tiktok-stats .stat .val {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .tiktok-stats .stat .lbl {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        .tiktok-insight {
+            font-size: 13px;
+            color: var(--green);
+            padding: 10px;
+            background: rgba(0, 230, 118, 0.08);
+            border-radius: 8px;
+        }
+
+        /* ─── Item Specifics ─── */
+        .specifics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .specifics-grid .field-group {
+            margin-bottom: 8px;
+        }
+
+        /* ─── Return Policy Toggle ─── */
+        .return-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-input);
+            border-radius: 8px;
+        }
+
+        .return-toggle input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--accent);
+        }
+
+        .return-toggle label {
+            font-size: 14px;
+            color: var(--text);
+        }
+
+        .return-toggle .tip {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-left: auto;
+        }
+
+        /* ─── Clipboard Toast ─── */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--green);
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            z-index: 2000;
+            opacity: 0;
+            transition: all 0.3s;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .btn-ebay-disabled {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            position: relative;
+        }
     </style>
 </head>
 
@@ -628,6 +749,11 @@
                 <label>Category</label>
                 <input type="text" id="editCategory" readonly style="color:var(--text-dim);">
             </div>
+            <div class="field-group">
+                <label>UPC / Barcode <span style="font-weight:400;color:var(--text-dim);">(boosts eBay
+                        visibility)</span></label>
+                <input type="text" id="editUpc" placeholder="Auto-detected from images or enter manually">
+            </div>
             <div class="price-row">
                 <div class="field-group">
                     <label>Price ($)</label>
@@ -638,20 +764,57 @@
                     <input type="number" id="editQty" min="1" value="1">
                 </div>
             </div>
-            <div class="field-group">
-                <label>Condition</label>
-                <select id="editCondition">
-                    <option value="NEW">New</option>
-                    <option value="NEW_OTHER">New (Other)</option>
-                    <option value="LIKE_NEW">Like New</option>
-                    <option value="USED_EXCELLENT">Used - Excellent</option>
-                </select>
+            <div class="price-row">
+                <div class="field-group">
+                    <label>Condition</label>
+                    <select id="editCondition">
+                        <option value="NEW">New</option>
+                        <option value="NEW_OTHER">New (Other)</option>
+                        <option value="LIKE_NEW">Like New</option>
+                        <option value="USED_EXCELLENT">Used - Excellent</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label>Condition Detail</label>
+                    <select id="editConditionDetail">
+                        <option value="Factory sealed">Factory sealed</option>
+                        <option value="New in box">New in box</option>
+                        <option value="Open box - never used">Open box - never used</option>
+                        <option value="New without tags">New without tags</option>
+                    </select>
+                </div>
             </div>
+        </div>
+
+        <!-- Item Specifics -->
+        <div class="result-card" id="itemSpecificsCard" style="display:none;">
+            <h3>🏷️ Item Specifics</h3>
+            <div class="specifics-grid" id="specificsGrid"></div>
+        </div>
+
+        <!-- TikTok Cross-Reference -->
+        <div class="tiktok-card" id="tiktokCard" style="display:none;">
+            <h3>🎵 TikTok Intelligence</h3>
+            <div class="tiktok-stats">
+                <div class="stat">
+                    <div class="val" id="ttPrice">—</div>
+                    <div class="lbl">TikTok Price</div>
+                </div>
+                <div class="stat">
+                    <div class="val" id="ttCommission">—</div>
+                    <div class="lbl">Commission</div>
+                </div>
+                <div class="stat">
+                    <div class="val" id="ttSales">—</div>
+                    <div class="lbl">7D Sales</div>
+                </div>
+            </div>
+            <div class="tiktok-insight" id="ttInsight"></div>
         </div>
 
         <!-- Shipping -->
         <div class="result-card">
-            <h3>📦 Shipping</h3>
+            <h3>📦 Shipping & Returns</h3>
             <div class="ship-toggle">
                 <button class="active" onclick="setShipType('CALCULATED',this)">Calculated</button>
                 <button onclick="setShipType('FLAT_RATE',this)">Flat Rate</button>
@@ -680,6 +843,13 @@
                     <input type="number" id="editHeight" step="0.1">
                 </div>
             </div>
+            <div style="margin-top:12px;">
+                <div class="return-toggle">
+                    <input type="checkbox" id="editReturns" checked>
+                    <label for="editReturns">30-Day Free Returns</label>
+                    <span class="tip">Boosts eBay ranking ✨</span>
+                </div>
+            </div>
         </div>
 
         <!-- Profit Preview -->
@@ -694,8 +864,12 @@
 
         <!-- Actions -->
         <div class="post-actions">
-            <button class="btn btn-success" onclick="saveListing('draft')">💾 Save as Draft</button>
-            <button class="btn btn-primary" onclick="saveListing('ready')">🚀 Post to eBay</button>
+            <button class="btn btn-success" id="clipboardBtn" onclick="copyToClipboard()">📋 Copy All to
+                Clipboard</button>
+            <button class="btn btn-primary" onclick="saveListing('draft')">💾 Save as Draft</button>
+            <button class="btn btn-ebay-disabled" id="postEbayBtn" onclick="saveListing('ready')"
+                title="Requires eBay Developer account approval">🚀 Post to eBay <span
+                    style="font-size:10px;opacity:0.6;">(API pending)</span></button>
             <button class="btn btn-secondary" onclick="resetForm()">↩️ Start Over</button>
         </div>
     </div>
@@ -706,6 +880,8 @@
         <div class="status" id="loadingStatus">Analyzing images with AI...</div>
         <div class="sub" id="loadingSub">This usually takes 10-20 seconds</div>
     </div>
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">✅ Copied to clipboard!</div>
 
     <!-- Bottom Nav -->
     <div class="bottom-nav">
@@ -767,7 +943,7 @@
         // ─── Generate Listing ───────────────────────────────
         async function generateListing() {
             if (uploadedImages.length === 0) return;
-            showLoading('🤖 Analyzing images with AI...', 'Grok 4.1 is identifying your product');
+            showLoading('🤖 Analyzing images with AI...', 'Identifying brand, condition, UPC & specs...');
 
             try {
                 const resp = await fetch('/ebay/api/generate', {
@@ -811,6 +987,30 @@
             document.getElementById('editWidth').value = l.width_in || 0;
             document.getElementById('editHeight').value = l.height_in || 0;
 
+            // New fields
+            document.getElementById('editUpc').value = l.upc || '';
+            if (l.condition_detail) {
+                const detailSel = document.getElementById('editConditionDetail');
+                for (let opt of detailSel.options) {
+                    if (l.condition_detail.toLowerCase().includes(opt.value.toLowerCase())) {
+                        detailSel.value = opt.value;
+                        break;
+                    }
+                }
+            }
+
+            // Item Specifics
+            if (l.item_specifics && Object.keys(l.item_specifics).length > 0) {
+                const grid = document.getElementById('specificsGrid');
+                grid.innerHTML = Object.entries(l.item_specifics).map(([key, val]) => `
+                    <div class="field-group">
+                        <label>${key}</label>
+                        <input type="text" value="${val}" data-specific="${key}">
+                    </div>
+                `).join('');
+                document.getElementById('itemSpecificsCard').style.display = 'block';
+            }
+
             updateCharCount();
             updateProfit();
 
@@ -820,6 +1020,29 @@
                 document.getElementById('priceLow').textContent = p.lowest_current ? `$${p.lowest_current}` : '—';
                 document.getElementById('priceOpt').textContent = p.optimal_price ? `$${p.optimal_price}` : '—';
                 document.getElementById('priceReason').textContent = p.price_reasoning || '';
+            }
+
+            // TikTok Cross-Reference
+            const tt = data.tiktok_match;
+            if (tt) {
+                document.getElementById('tiktokCard').style.display = 'block';
+                document.getElementById('ttPrice').textContent = tt.tiktok_price ? `$${tt.tiktok_price}` : '—';
+                document.getElementById('ttCommission').textContent = tt.commission_rate ? `${tt.commission_rate}%` : '—';
+                document.getElementById('ttSales').textContent = tt.sales_7d ? tt.sales_7d.toLocaleString() : '—';
+
+                // Generate insight
+                const ebayPrice = parseFloat(document.getElementById('editPrice').value) || 0;
+                const ttPrice = tt.tiktok_price || 0;
+                if (ebayPrice > 0 && ttPrice > 0) {
+                    const priceDiff = ((ttPrice - ebayPrice) / ttPrice * 100).toFixed(0);
+                    const commProfit = (ttPrice * (tt.commission_rate / 100)).toFixed(2);
+                    const ebayProfit = (ebayPrice * 0.8675 - 10.30).toFixed(2); // after fees + shipping
+                    document.getElementById('ttInsight').textContent =
+                        `📊 eBay at $${ebayPrice.toFixed(2)} = ~$${ebayProfit} profit | TikTok affiliate = ~$${commProfit}/sale | ${tt.sales_7d} sales/week on TikTok`;
+                } else {
+                    document.getElementById('ttInsight').textContent =
+                        `Found in TikTok DB: ${tt.product_name} • ${tt.video_count} videos • ${tt.influencer_count} influencers`;
+                }
             }
 
             // Duplicate warning
@@ -863,6 +1086,75 @@
 
         function dismissDupe() {
             document.getElementById('dupeWarning').style.display = 'none';
+        }
+
+        // ─── Copy to Clipboard ───────────────────────────────
+        async function copyToClipboard() {
+            const title = document.getElementById('editTitle').value;
+            const desc = document.getElementById('editDesc').value;
+            const price = document.getElementById('editPrice').value;
+            const condition = document.getElementById('editCondition').value;
+            const condDetail = document.getElementById('editConditionDetail').value;
+            const category = document.getElementById('editCategory').value;
+            const upc = document.getElementById('editUpc').value;
+            const weightOz = document.getElementById('editWeightOz').value;
+            const qty = document.getElementById('editQty').value;
+            const sku = currentListingData?.listing?.sku || '';
+            const returns = document.getElementById('editReturns').checked ? '30-day free returns' : 'No returns';
+
+            // Strip HTML for plain text description
+            const plainDesc = desc.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+            // Collect item specifics
+            const specifics = [];
+            document.querySelectorAll('#specificsGrid input[data-specific]').forEach(input => {
+                if (input.value) specifics.push(`  ${input.dataset.specific}: ${input.value}`);
+            });
+
+            const lines = [
+                `=== eBay Listing ===`,
+                ``,
+                `TITLE: ${title}`,
+                `PRICE: $${parseFloat(price).toFixed(2)}`,
+                `CONDITION: ${condition} (${condDetail})`,
+                `QUANTITY: ${qty}`,
+                `CATEGORY: ${category}`,
+                upc ? `UPC: ${upc}` : '',
+                `SKU: ${sku}`,
+                ``,
+                `DESCRIPTION:`,
+                plainDesc,
+                ``,
+                specifics.length ? `ITEM SPECIFICS:` : '',
+                ...specifics,
+                specifics.length ? '' : '',
+                `SHIPPING: ${shippingType} | Weight: ${weightOz}oz`,
+                `RETURNS: ${returns}`,
+                ``,
+                `--- HTML DESCRIPTION (paste into eBay editor) ---`,
+                desc,
+            ].filter(l => l !== undefined);
+
+            try {
+                await navigator.clipboard.writeText(lines.join('\n'));
+                showToast('✅ Copied to clipboard!');
+            } catch {
+                // Fallback for older browsers
+                const ta = document.createElement('textarea');
+                ta.value = lines.join('\n');
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+                showToast('✅ Copied to clipboard!');
+            }
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2500);
         }
 
         // ─── Save / Post Listing ────────────────────────────

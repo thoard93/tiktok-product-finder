@@ -1,7 +1,8 @@
 """
 eBay Auto-Lister — Backend Module
 AI-powered eBay listing generator with multi-team support.
-Uses Grok 4.1 Fast-Reasoning (xAI) for image analysis & listing generation.
+Uses Grok vision (xAI) for image analysis & listing generation.
+Model configurable via XAI_MODEL env var (default: grok-4-1-fast-reasoning).
 """
 
 import os
@@ -39,7 +40,7 @@ if not app.config.get('SECRET_KEY'):
 # ─── Configuration ───────────────────────────────────────────────────────────
 XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 XAI_API_URL = 'https://api.x.ai/v1/chat/completions'
-XAI_MODEL = 'grok-4-1-fast-reasoning'
+XAI_MODEL = os.environ.get('XAI_MODEL', 'grok-4-1-fast-reasoning')  # Switch to grok-4-20 when available
 
 EBAY_SANDBOX_API = 'https://api.sandbox.ebay.com'
 EBAY_PRODUCTION_API = 'https://api.ebay.com'
@@ -679,7 +680,9 @@ def _call_grok(messages, max_tokens=2000):
 
 def generate_listing_from_images(image_data_list, user_notes='', team=None):
     """
-    Use Grok 4.1 Vision to analyze product images and generate eBay listing.
+    Use Grok Vision to analyze product images and generate eBay listing.
+    Enhanced prompt detects condition, UPC/barcodes, item specifics, and
+    generates optimized titles/descriptions with return policy recommendation.
 
     Args:
         image_data_list: List of base64 image strings
@@ -687,7 +690,8 @@ def generate_listing_from_images(image_data_list, user_notes='', team=None):
         team: EbayTeam for pricing/shipping config
 
     Returns:
-        dict with title, description, category, price, weight, dimensions, etc.
+        dict with title, description, category, price, weight, dimensions,
+        condition_detail, upc, item_specifics, return_policy, etc.
     """
     # Build image content blocks
     image_blocks = []
@@ -703,37 +707,59 @@ def generate_listing_from_images(image_data_list, user_notes='', team=None):
     undercut_pct = team.default_undercut_pct if team else 30
     condition = team.default_condition if team else 'NEW'
 
-    prompt = f"""You are an eBay listing optimization expert. Analyze the product images and generate a complete eBay listing.
+    prompt = f"""You are an expert eBay listing optimizer with deep product identification skills. Analyze ALL uploaded product images carefully and generate a complete, high-converting eBay listing.
 
-RULES:
-- Title: Maximum 80 characters, SEO-optimized with relevant keywords buyers would search for. Include brand name, product name, key features, and condition.
-- Description: Professional HTML-formatted description with bullet points. Include features, benefits, and "Brand new condition - TikTok Shop sample". Make it compelling.
-- Price: Suggest a competitive price. The product cost is $0 (free sample), so aim {undercut_pct}% below typical retail/eBay prices for fast sales while maximizing profit.
-- Category: Suggest the most appropriate eBay category name and ID.
-- Condition: {condition}
-- Weight: Estimate package weight in ounces (product + packaging).
-- Dimensions: Estimate package dimensions in inches (L x W x H).
+PRODUCT ANALYSIS RULES:
+1. **Brand & Product ID**: Identify the exact brand name, model name/number from packaging, labels, or the product itself.
+2. **Condition Detection**: Examine packaging state carefully:
+   - "Factory sealed" = shrink-wrapped, security seals intact
+   - "New in box" = box unopened but no shrink wrap
+   - "Open box - never used" = box opened but product untouched
+   - "New without tags" = no original packaging but clearly unused
+3. **UPC/Barcode**: If ANY barcode or UPC is visible in the images, read and extract the numbers. This dramatically boosts eBay search visibility.
+4. **Item Specifics**: Extract color, size, material, scent, volume/weight, etc. from labels and packaging.
+
+LISTING RULES:
+- Title: Maximum 80 characters, SEO-optimized. Include brand, product name, key specs (size/color/qty), and "NEW" if applicable. Use keywords buyers actually search for.
+- Description: Professional HTML with bullet points. Include all features, specs from packaging. End with: "Brand new condition — received as TikTok Shop sample. Authentic product, limited availability!"
+- Price: Suggest competitive price. Cost to us = $0 (free TikTok sample). Aim {undercut_pct}% below typical retail/eBay sold prices for fast sale while maximizing profit.
+- Category: Most specific eBay category name + numeric ID.
+- Weight: Estimate SHIPPED weight in ounces (product + box + packing material).
+- Dimensions: Estimate SHIPPED package dimensions in inches.
+- Return policy: Recommend 30-day free returns (cost is $0, so returns are risk-free and boost eBay ranking).
 
 {f'User notes: {user_notes}' if user_notes else ''}
 
 Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 {{
-    "title": "80 char max SEO title",
-    "description": "<h3>Product Name</h3><ul><li>Feature 1</li><li>Feature 2</li></ul><p>Brand new condition - TikTok Shop sample, limited stock!</p>",
+    "title": "80 char max SEO title with brand + product + key specs",
+    "description": "<h3>Product Name</h3><ul><li>Feature 1</li><li>Feature 2</li><li>Size/Volume</li></ul><p>Brand new condition — received as TikTok Shop sample. Authentic product, limited availability!</p>",
     "category_name": "Health & Beauty > Skin Care > Facial Cleansers",
     "category_id": "67391",
     "price": 24.99,
+    "condition": "{condition}",
+    "condition_detail": "Factory sealed | New in box | Open box - never used | New without tags",
+    "upc": "012345678901 or empty string if not visible",
+    "brand": "Exact Brand Name",
+    "item_specifics": {{
+        "Color": "if visible",
+        "Size": "if visible",
+        "Type": "product type",
+        "Material": "if visible",
+        "Scent": "if applicable",
+        "Volume": "if applicable"
+    }},
     "weight_oz": 12,
     "length_in": 8,
     "width_in": 6,
     "height_in": 4,
-    "brand": "Brand Name",
     "product_type": "skincare",
-    "keywords": ["keyword1", "keyword2", "keyword3"]
+    "keywords": ["keyword1", "keyword2", "keyword3"],
+    "return_policy": "30-day free returns recommended"
 }}"""
 
     messages = [
-        {'role': 'system', 'content': 'You are an eBay listing expert. Always respond with valid JSON only.'},
+        {'role': 'system', 'content': 'You are an eBay listing expert with product identification skills. Always respond with valid JSON only. For item_specifics, only include fields you can actually determine from the images — omit any you cannot confirm.'},
         {'role': 'user', 'content': [
             {'type': 'text', 'text': prompt},
             *image_blocks
@@ -757,6 +783,13 @@ Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
             result = json.loads(match.group())
         else:
             raise ValueError(f"Could not parse AI response as JSON: {json_text[:200]}")
+
+    # Clean up item_specifics — remove empty/placeholder values
+    if 'item_specifics' in result:
+        result['item_specifics'] = {
+            k: v for k, v in result['item_specifics'].items()
+            if v and v.lower() not in ('if visible', 'if applicable', 'n/a', 'unknown', '')
+        }
 
     return result
 
@@ -812,7 +845,8 @@ Respond in JSON format only:
 @app.route('/ebay/api/generate', methods=['POST'])
 @ebay_login_required
 def ebay_generate_listing():
-    """Generate an eBay listing from uploaded images using AI."""
+    """Generate an eBay listing from uploaded images using AI.
+    Includes TikTok DB cross-reference for pricing intelligence."""
     try:
         data = request.json or {}
         images = data.get('images', [])  # Base64 encoded images
@@ -824,11 +858,43 @@ def ebay_generate_listing():
         team = get_current_team()
         user = get_current_ebay_user()
 
-        # Generate listing with Grok
+        # Generate listing with Grok Vision
         listing_data = generate_listing_from_images(images, notes, team)
 
         # Research pricing
         pricing = research_pricing(listing_data.get('title', ''), listing_data.get('category_name', ''))
+
+        # ─── TikTok DB Cross-Reference ───────────────────────────────────
+        tiktok_match = None
+        try:
+            from app import Product
+            ai_title = listing_data.get('title', '')
+            ai_brand = listing_data.get('brand', '')
+            search_term = ai_brand if ai_brand and len(ai_brand) > 2 else ai_title[:40]
+
+            # Try fuzzy match against TikTok product database
+            matches = Product.query.filter(
+                Product.product_name.ilike(f'%{search_term}%'),
+                Product.product_status == 'active'
+            ).order_by(Product.sales_7d.desc()).limit(3).all()
+
+            if matches:
+                best = matches[0]
+                tiktok_match = {
+                    'product_name': best.product_name[:80] if best.product_name else '',
+                    'tiktok_price': round(best.price or 0, 2),
+                    'commission_rate': round((best.commission_rate or 0) * 100, 1),
+                    'sales_7d': best.sales_7d or 0,
+                    'sales_30d': best.sales_30d or 0,
+                    'video_count': best.video_count_alltime or best.video_count or 0,
+                    'influencer_count': best.influencer_count or 0,
+                    'ad_spend': round(best.ad_spend or 0, 2),
+                    'product_url': best.product_url or '',
+                    'match_confidence': 'high' if ai_brand.lower() in (best.product_name or '').lower() else 'medium',
+                }
+                log.info(f"TikTok cross-ref matched: {best.product_name[:40]} (${best.price})")
+        except Exception as e:
+            log.warning(f"TikTok cross-reference failed (non-fatal): {e}")
 
         # Calculate profit estimate
         suggested_price = pricing.get('optimal_price', listing_data.get('price', 0))
@@ -856,9 +922,10 @@ def ebay_generate_listing():
                 **listing_data,
                 'sku': sku,
                 'price': suggested_price,
-                'condition': team.default_condition if team else 'NEW',
+                'condition': listing_data.get('condition', team.default_condition if team else 'NEW'),
             },
             'pricing': pricing,
+            'tiktok_match': tiktok_match,
             'profit_estimate': {
                 'price': suggested_price,
                 'ebay_fees': round(ebay_fee, 2),
@@ -875,6 +942,60 @@ def ebay_generate_listing():
     except Exception as e:
         log.error(f"Generate listing error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/ebay/api/listings/<int:listing_id>/clipboard', methods=['GET'])
+@ebay_login_required
+def ebay_clipboard_data(listing_id):
+    """Return formatted text for manual eBay listing (Copy to Clipboard).
+    Works without eBay API approval — user pastes into eBay's listing form."""
+    listing = EbayListing.query.get(listing_id)
+    if not listing:
+        return jsonify({'error': 'Listing not found'}), 404
+
+    team = EbayTeam.query.get(listing.team_id)
+    origin_zip = team.origin_zip if team else '30253'
+
+    # Strip HTML tags from description for plain text version
+    plain_desc = re.sub(r'<[^>]+>', '', listing.description or '')
+    plain_desc = re.sub(r'\s+', ' ', plain_desc).strip()
+
+    # Build clipboard text block
+    lines = [
+        f"=== eBay Listing: {listing.title} ===",
+        f"",
+        f"TITLE: {listing.title}",
+        f"PRICE: ${listing.price:.2f}",
+        f"CONDITION: {listing.condition}",
+        f"QUANTITY: {listing.quantity}",
+        f"CATEGORY: {listing.category_name}",
+        f"SKU: {listing.sku}",
+        f"",
+        f"DESCRIPTION:",
+        f"{plain_desc}",
+        f"",
+        f"SHIPPING:",
+        f"  Type: {listing.shipping_type}",
+        f"  Origin ZIP: {origin_zip}",
+        f"  Weight: {listing.weight_oz:.1f} oz",
+        f"  Dimensions: {listing.length_in:.1f} x {listing.width_in:.1f} x {listing.height_in:.1f} in",
+        f"",
+        f"RETURN POLICY: 30-day free returns",
+        f"",
+        f"EST. PROFIT: ${listing.estimated_profit:.2f} (after eBay fees + shipping)",
+    ]
+
+    return jsonify({
+        'success': True,
+        'clipboard_text': '\n'.join(lines),
+        'title': listing.title,
+        'description_html': listing.description,
+        'price': listing.price,
+        'condition': listing.condition,
+        'category': listing.category_name,
+        'weight_oz': listing.weight_oz,
+        'sku': listing.sku,
+    })
 
 
 @app.route('/ebay/api/listings', methods=['GET', 'POST'])
