@@ -707,36 +707,40 @@ def generate_listing_from_images(image_data_list, user_notes='', team=None):
     undercut_pct = team.default_undercut_pct if team else 30
     condition = team.default_condition if team else 'NEW'
 
-    prompt = f"""You are an expert eBay listing optimizer with deep product identification skills. Analyze ALL uploaded product images carefully and generate a complete, high-converting eBay listing.
+    prompt = f"""You are an expert eBay power seller. Analyze ALL uploaded product images carefully and generate a complete, high-converting eBay listing.
 
-PRODUCT ANALYSIS RULES:
-1. **Brand & Product ID**: Identify the exact brand name, model name/number from packaging, labels, or the product itself.
-2. **Condition Detection**: Examine packaging state carefully:
+CRITICAL RULES:
+- NEVER mention TikTok, TikTok Shop, free sample, gifted, promotional, or how you acquired the product.
+- Present this as a regular new retail product.
+- All descriptions must use clean, ready-to-paste HTML only. Use <h3>, <ul><li>, <p> tags. Never use markdown. Never escape HTML tags. Never use &lt; or &gt; entities.
+
+PRODUCT ANALYSIS:
+1. Identify exact brand name, model name/number from packaging, labels, or product.
+2. Condition Detection — examine packaging:
    - "Factory sealed" = shrink-wrapped, security seals intact
    - "New in box" = box unopened but no shrink wrap
    - "Open box - never used" = box opened but product untouched
    - "New without tags" = no original packaging but clearly unused
-3. **UPC/Barcode**: If ANY barcode or UPC is visible in the images, read and extract the numbers. This dramatically boosts eBay search visibility.
-4. **Item Specifics**: Extract color, size, material, scent, volume/weight, etc. from labels and packaging.
+3. If ANY barcode or UPC is visible, read and extract the numbers.
+4. Extract item specifics: color, size, material, scent, volume/weight from labels.
 
 LISTING RULES:
-- Title: Maximum 80 characters, SEO-optimized. Include brand, product name, key specs (size/color/qty), and "NEW" if applicable. Use keywords buyers actually search for.
-- Description: Professional HTML with bullet points. Include all features, specs from packaging. End with: "Brand new condition — received as TikTok Shop sample. Authentic product, limited availability!"
-- Price: Suggest competitive price. Cost to us = $0 (free TikTok sample). Aim {undercut_pct}% below typical retail/eBay sold prices for fast sale while maximizing profit.
-- Category: Most specific eBay category name + numeric ID.
+- Title: Max 80 chars, SEO-optimized. Brand + product name + key specs + "NEW" if applicable.
+- Description: Clean HTML with bullet points. Include features, specs from packaging. End with: "Brand new, sealed product. Authentic, limited stock available!"
+- Price: FREE SHIPPING model. Your suggested price must INCLUDE shipping cost (~$12 USPS Ground). Make total cost to buyer {undercut_pct}% below competitor total (their price + their shipping). Since our cost is $0, optimize for fast sales.
+- Category: Most specific eBay category + numeric ID.
 - Weight: Estimate SHIPPED weight in ounces (product + box + packing material).
 - Dimensions: Estimate SHIPPED package dimensions in inches.
-- Return policy: Recommend 30-day free returns (cost is $0, so returns are risk-free and boost eBay ranking).
 
 {f'User notes: {user_notes}' if user_notes else ''}
 
 Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 {{
     "title": "80 char max SEO title with brand + product + key specs",
-    "description": "<h3>Product Name</h3><ul><li>Feature 1</li><li>Feature 2</li><li>Size/Volume</li></ul><p>Brand new condition — received as TikTok Shop sample. Authentic product, limited availability!</p>",
+    "description": "<h3>Product Name</h3><ul><li>Feature 1</li><li>Feature 2</li><li>Size/Volume</li></ul><p>Brand new, sealed product. Authentic, limited stock available!</p>",
     "category_name": "Health & Beauty > Skin Care > Facial Cleansers",
     "category_id": "67391",
-    "price": 24.99,
+    "price": 19.99,
     "condition": "{condition}",
     "condition_detail": "Factory sealed | New in box | Open box - never used | New without tags",
     "upc": "012345678901 or empty string if not visible",
@@ -755,11 +759,12 @@ Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
     "height_in": 4,
     "product_type": "skincare",
     "keywords": ["keyword1", "keyword2", "keyword3"],
-    "return_policy": "30-day free returns recommended"
+    "return_policy": "30-day free returns recommended",
+    "free_shipping": true
 }}"""
 
     messages = [
-        {'role': 'system', 'content': 'You are an eBay listing expert with product identification skills. Always respond with valid JSON only. For item_specifics, only include fields you can actually determine from the images — omit any you cannot confirm.'},
+        {'role': 'system', 'content': 'You are an eBay listing expert. Always respond with valid JSON only. Output clean HTML in the description field — never markdown, never escaped entities. For item_specifics, only include fields you can determine from the images.'},
         {'role': 'user', 'content': [
             {'type': 'text', 'text': prompt},
             *image_blocks
@@ -797,29 +802,32 @@ Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 def research_pricing(title, category=''):
     """
     Research competitive pricing using Grok to analyze market data.
-    Returns price suggestions.
+    Uses TOTAL COST TO BUYER (price + shipping) strategy.
+    Returns price suggestions with free shipping baked in.
     """
     prompt = f"""Research the typical eBay selling price for this product:
 Title: {title}
 Category: {category}
 
-Based on your knowledge of eBay sold listings and typical prices:
-1. What is the average sold price on eBay for this exact or very similar product?
-2. What is the lowest "Buy It Now" price currently?
-3. What price would sell quickly (fast sale)?
-4. What price maximizes profit while still selling within 7 days?
+IMPORTANT: We offer FREE SHIPPING. Our cost for the product is $0. Estimated shipping cost we pay is ~$12 (USPS Ground Advantage).
+
+Based on your knowledge of eBay sold listings and competitor prices:
+1. What is the average TOTAL cost to buyer (price + shipping) on eBay and other platforms (Amazon, TikTok Shop)?
+2. What is the lowest competitor total cost to buyer currently?
+3. What FREE SHIPPING price would undercut competitors by 25-35% on total cost and sell within 3-5 days?
+4. What FREE SHIPPING price maximizes our profit while still selling within 7 days? Remember we pay ~$12 shipping + ~13.25% eBay fees.
 
 Respond in JSON format only:
 {{
     "avg_sold_price": 29.99,
-    "lowest_current": 24.99,
-    "quick_sale_price": 19.99,
-    "optimal_price": 22.99,
-    "price_reasoning": "Brief explanation"
+    "lowest_competitor_total": 24.99,
+    "quick_sale_price": 17.99,
+    "optimal_price": 19.99,
+    "price_reasoning": "Competitor total $24.99 w/ free ship. At $19.99 free ship you're 20% cheaper. After $12 shipping + $2.95 fees = $5.04 profit."
 }}"""
 
     messages = [
-        {'role': 'system', 'content': 'You are an eBay pricing expert. Respond with JSON only.'},
+        {'role': 'system', 'content': 'You are an eBay pricing strategist. Always factor in total cost to buyer (price + shipping). Respond with JSON only.'},
         {'role': 'user', 'content': prompt}
     ]
 
@@ -896,14 +904,14 @@ def ebay_generate_listing():
         except Exception as e:
             log.warning(f"TikTok cross-reference failed (non-fatal): {e}")
 
-        # Calculate profit estimate
+        # Calculate profit estimate (FREE SHIPPING model: seller pays shipping)
         suggested_price = pricing.get('optimal_price', listing_data.get('price', 0))
         if team and team.min_price_floor and suggested_price < team.min_price_floor:
             suggested_price = team.min_price_floor
 
         ebay_fee = (suggested_price * 0.1325) + 0.30
-        est_shipping = 10.0  # Default USPS Ground estimate
-        est_profit = round(suggested_price - ebay_fee - est_shipping, 2)
+        actual_ship_cost = 12.0  # USPS Ground Advantage avg cost (seller pays)
+        est_profit = round(suggested_price - ebay_fee - actual_ship_cost, 2)
 
         # Generate SKU
         sku = f"EBAY-{team.name[:3].upper()}-{secrets.token_hex(4).upper()}"
@@ -929,7 +937,8 @@ def ebay_generate_listing():
             'profit_estimate': {
                 'price': suggested_price,
                 'ebay_fees': round(ebay_fee, 2),
-                'est_shipping': est_shipping,
+                'actual_shipping_cost': actual_ship_cost,
+                'free_shipping': True,
                 'est_profit': est_profit,
                 'cost_price': 0,
             },

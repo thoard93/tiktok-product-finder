@@ -544,6 +544,58 @@
             color: #000;
         }
 
+        /* ─── Description Preview ─── */
+        .desc-preview {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            color: var(--text);
+            font-size: 14px;
+            line-height: 1.6;
+            min-height: 100px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .desc-preview h3 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: var(--accent);
+        }
+
+        .desc-preview ul {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+
+        .desc-preview li {
+            margin-bottom: 4px;
+        }
+
+        .desc-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .desc-toggle button {
+            padding: 4px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: none;
+            color: var(--text-dim);
+            font-size: 11px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .desc-toggle button.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
         /* ─── TikTok Cross-Reference ─── */
         .tiktok-card {
             background: linear-gradient(135deg, rgba(255, 0, 80, 0.06), rgba(0, 242, 234, 0.06));
@@ -723,155 +775,162 @@
                 </div>
                 <div class="comp-item">
                     <div class="val" id="priceLow">—</div>
-                    <div class="lbl">Lowest</div>
-                </div>
-                <div class="comp-item">
-                    <div class="val" id="priceOpt">—</div>
-                    <div class="lbl">Suggested</div>
+                    <div class="lbl">Lowest Total</div>
                 </div>
             </div>
-            <p id="priceReason" style="font-size:12px;color:var(--text-dim);margin-top:10px;"></p>
-        </div>
-
-        <!-- Title & Description -->
-        <div class="result-card">
-            <h3>📝 Listing Details</h3>
-            <div class="field-group">
-                <label>Title</label>
-                <input type="text" id="editTitle" maxlength="80" oninput="updateCharCount()">
-                <div class="char-count"><span id="charCount">0</span>/80</div>
-            </div>
-            <div class="field-group">
-                <label>Description</label>
-                <textarea id="editDesc" rows="6"></textarea>
-            </div>
-            <div class="field-group">
-                <label>Category</label>
-                <input type="text" id="editCategory" readonly style="color:var(--text-dim);">
-            </div>
-            <div class="field-group">
-                <label>UPC / Barcode <span style="font-weight:400;color:var(--text-dim);">(boosts eBay
-                        visibility)</span></label>
-                <input type="text" id="editUpc" placeholder="Auto-detected from images or enter manually">
-            </div>
-            <div class="price-row">
-                <div class="field-group">
-                    <label>Price ($)</label>
-                    <input type="number" id="editPrice" step="0.01" min="0" oninput="updateProfit()">
-                </div>
-                <div class="field-group">
-                    <label>Quantity</label>
-                    <input type="number" id="editQty" min="1" value="1">
-                </div>
-            </div>
-            <div class="price-row">
-                <div class="field-group">
-                    <label>Condition</label>
-                    <select id="editCondition">
-                        <option value="NEW">New</option>
-                        <option value="NEW_OTHER">New (Other)</option>
-                        <option value="LIKE_NEW">Like New</option>
-                        <option value="USED_EXCELLENT">Used - Excellent</option>
-                    </select>
-                </div>
-                <div class="field-group">
-                    <label>Condition Detail</label>
-                    <select id="editConditionDetail">
-                        <option value="Factory sealed">Factory sealed</option>
-                        <option value="New in box">New in box</option>
-                        <option value="Open box - never used">Open box - never used</option>
-                        <option value="New without tags">New without tags</option>
-                    </select>
-                </div>
+            <div class="comp-item">
+                <div class="val" id="priceOpt">—</div>
+                <div class="lbl">Suggested</div>
             </div>
         </div>
+        <p id="priceReason" style="font-size:12px;color:var(--text-dim);margin-top:10px;"></p>
+    </div>
 
-        <!-- Item Specifics -->
-        <div class="result-card" id="itemSpecificsCard" style="display:none;">
-            <h3>🏷️ Item Specifics</h3>
-            <div class="specifics-grid" id="specificsGrid"></div>
+    <!-- Title & Description -->
+    <div class="result-card">
+        <h3>📝 Listing Details</h3>
+        <div class="field-group">
+            <label>Title</label>
+            <input type="text" id="editTitle" maxlength="80" oninput="updateCharCount()">
+            <div class="char-count"><span id="charCount">0</span>/80</div>
         </div>
-
-        <!-- TikTok Cross-Reference -->
-        <div class="tiktok-card" id="tiktokCard" style="display:none;">
-            <h3>🎵 TikTok Intelligence</h3>
-            <div class="tiktok-stats">
-                <div class="stat">
-                    <div class="val" id="ttPrice">—</div>
-                    <div class="lbl">TikTok Price</div>
-                </div>
-                <div class="stat">
-                    <div class="val" id="ttCommission">—</div>
-                    <div class="lbl">Commission</div>
-                </div>
-                <div class="stat">
-                    <div class="val" id="ttSales">—</div>
-                    <div class="lbl">7D Sales</div>
-                </div>
+        <div class="field-group">
+            <label>Description</label>
+            <div class="desc-toggle">
+                <button class="active" onclick="toggleDescView('preview', this)">Preview</button>
+                <button onclick="toggleDescView('html', this)">Edit HTML</button>
             </div>
-            <div class="tiktok-insight" id="ttInsight"></div>
+            <div class="desc-preview" id="descPreview"></div>
+            <textarea id="editDesc" rows="6" style="display:none;"></textarea>
         </div>
-
-        <!-- Shipping -->
-        <div class="result-card">
-            <h3>📦 Shipping & Returns</h3>
-            <div class="ship-toggle">
-                <button class="active" onclick="setShipType('CALCULATED',this)">Calculated</button>
-                <button onclick="setShipType('FLAT_RATE',this)">Flat Rate</button>
-            </div>
-            <div id="flatRateField" style="display:none;">
-                <div class="field-group">
-                    <label>Flat Rate ($)</label>
-                    <input type="number" id="editShipCost" step="0.01" value="0" oninput="updateProfit()">
-                </div>
+        <div class="field-group">
+            <label>Category</label>
+            <input type="text" id="editCategory" readonly style="color:var(--text-dim);">
+        </div>
+        <div class="field-group">
+            <label>UPC / Barcode <span style="font-weight:400;color:var(--text-dim);">(boosts eBay
+                    visibility)</span></label>
+            <input type="text" id="editUpc" placeholder="Auto-detected from images or enter manually">
+        </div>
+        <div class="price-row">
+            <div class="field-group">
+                <label>Price ($)</label>
+                <input type="number" id="editPrice" step="0.01" min="0" oninput="updateProfit()">
             </div>
             <div class="field-group">
-                <label>Weight (oz)</label>
-                <input type="number" id="editWeightOz" step="0.1" min="0">
-            </div>
-            <div class="dims-row">
-                <div class="field-group">
-                    <label>L (in)</label>
-                    <input type="number" id="editLength" step="0.1">
-                </div>
-                <div class="field-group">
-                    <label>W (in)</label>
-                    <input type="number" id="editWidth" step="0.1">
-                </div>
-                <div class="field-group">
-                    <label>H (in)</label>
-                    <input type="number" id="editHeight" step="0.1">
-                </div>
-            </div>
-            <div style="margin-top:12px;">
-                <div class="return-toggle">
-                    <input type="checkbox" id="editReturns" checked>
-                    <label for="editReturns">30-Day Free Returns</label>
-                    <span class="tip">Boosts eBay ranking ✨</span>
-                </div>
+                <label>Quantity</label>
+                <input type="number" id="editQty" min="1" value="1">
             </div>
         </div>
+        <div class="price-row">
+            <div class="field-group">
+                <label>Condition</label>
+                <select id="editCondition">
+                    <option value="NEW">New</option>
+                    <option value="NEW_OTHER">New (Other)</option>
+                    <option value="LIKE_NEW">Like New</option>
+                    <option value="USED_EXCELLENT">Used - Excellent</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label>Condition Detail</label>
+                <select id="editConditionDetail">
+                    <option value="Factory sealed">Factory sealed</option>
+                    <option value="New in box">New in box</option>
+                    <option value="Open box - never used">Open box - never used</option>
+                    <option value="New without tags">New without tags</option>
+                </select>
+            </div>
+        </div>
+    </div>
 
-        <!-- Profit Preview -->
-        <div class="profit-card" id="profitCard">
-            <h3>📊 Profit Estimate</h3>
-            <div class="profit-row"><span>Sale Price</span><span id="profPrice" class="pos">$0</span></div>
-            <div class="profit-row"><span>Cost</span><span id="profCost">$0</span></div>
-            <div class="profit-row"><span>eBay Fees (~13.25%)</span><span id="profFees" class="neg">-$0</span></div>
-            <div class="profit-row"><span>Est. Shipping</span><span id="profShip" class="neg">-$10</span></div>
-            <div class="profit-row total"><span>Est. Net Profit</span><span id="profNet" class="pos">$0</span></div>
-        </div>
+    <!-- Item Specifics -->
+    <div class="result-card" id="itemSpecificsCard" style="display:none;">
+        <h3>🏷️ Item Specifics</h3>
+        <div class="specifics-grid" id="specificsGrid"></div>
+    </div>
 
-        <!-- Actions -->
-        <div class="post-actions">
-            <button class="btn btn-success" id="clipboardBtn" onclick="copyToClipboard()">📋 Copy All to
-                Clipboard</button>
-            <button class="btn btn-primary" onclick="saveListing('draft')">💾 Save as Draft</button>
-            <button class="btn btn-ebay-disabled" id="postEbayBtn" onclick="saveListing('ready')"
-                title="Requires eBay Developer account approval">🚀 Post to eBay <span
-                    style="font-size:10px;opacity:0.6;">(API pending)</span></button>
-            <button class="btn btn-secondary" onclick="resetForm()">↩️ Start Over</button>
+    <!-- TikTok Cross-Reference -->
+    <div class="tiktok-card" id="tiktokCard" style="display:none;">
+        <h3>🎵 TikTok Intelligence</h3>
+        <div class="tiktok-stats">
+            <div class="stat">
+                <div class="val" id="ttPrice">—</div>
+                <div class="lbl">TikTok Price</div>
+            </div>
+            <div class="stat">
+                <div class="val" id="ttCommission">—</div>
+                <div class="lbl">Commission</div>
+            </div>
+            <div class="stat">
+                <div class="val" id="ttSales">—</div>
+                <div class="lbl">7D Sales</div>
+            </div>
         </div>
+        <div class="tiktok-insight" id="ttInsight"></div>
+    </div>
+
+    <!-- Shipping -->
+    <div class="result-card">
+        <h3>📦 Shipping & Returns</h3>
+        <div class="ship-toggle">
+            <button class="active" onclick="setShipType('FREE',this)">Free Shipping</button>
+            <button onclick="setShipType('CALCULATED',this)">Calculated</button>
+            <button onclick="setShipType('FLAT_RATE',this)">Flat Rate</button>
+        </div>
+        <div id="flatRateField" style="display:none;">
+            <div class="field-group">
+                <label>Flat Rate ($)</label>
+                <input type="number" id="editShipCost" step="0.01" value="0" oninput="updateProfit()">
+            </div>
+        </div>
+        <div class="field-group">
+            <label>Weight (oz)</label>
+            <input type="number" id="editWeightOz" step="0.1" min="0">
+        </div>
+        <div class="dims-row">
+            <div class="field-group">
+                <label>L (in)</label>
+                <input type="number" id="editLength" step="0.1">
+            </div>
+            <div class="field-group">
+                <label>W (in)</label>
+                <input type="number" id="editWidth" step="0.1">
+            </div>
+            <div class="field-group">
+                <label>H (in)</label>
+                <input type="number" id="editHeight" step="0.1">
+            </div>
+        </div>
+        <div style="margin-top:12px;">
+            <div class="return-toggle">
+                <input type="checkbox" id="editReturns" checked>
+                <label for="editReturns">30-Day Free Returns</label>
+                <span class="tip">Boosts eBay ranking ✨</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profit Preview -->
+    <div class="profit-card" id="profitCard">
+        <h3>📊 Profit Estimate</h3>
+        <div class="profit-row"><span>Sale Price (free shipping)</span><span id="profPrice" class="pos">$0</span></div>
+        <div class="profit-row"><span>Cost</span><span id="profCost">$0</span></div>
+        <div class="profit-row"><span>eBay Fees (~13.25%)</span><span id="profFees" class="neg">-$0</span></div>
+        <div class="profit-row"><span>Shipping (you pay)</span><span id="profShip" class="neg">-$12</span></div>
+        <div class="profit-row total"><span>Net Profit per Sale</span><span id="profNet" class="pos">$0</span></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="post-actions">
+        <button class="btn btn-success" id="clipboardBtn" onclick="copyToClipboard()">📋 Copy All to
+            Clipboard</button>
+        <button class="btn btn-primary" onclick="saveListing('draft')">💾 Save as Draft</button>
+        <button class="btn btn-ebay-disabled" id="postEbayBtn" onclick="saveListing('ready')"
+            title="Requires eBay Developer account approval">🚀 Post to eBay <span
+                style="font-size:10px;opacity:0.6;">(API pending)</span></button>
+        <button class="btn btn-secondary" onclick="resetForm()">↩️ Start Over</button>
+    </div>
     </div>
 
     <!-- Loading Overlay -->
@@ -895,7 +954,7 @@
     <script>
         let uploadedImages = []; // base64 strings
         let currentListingData = null;
-        let shippingType = 'CALCULATED';
+        let shippingType = 'FREE';
 
         // Auth check
         fetch('/ebay/api/me').then(r => r.json()).then(d => {
@@ -979,6 +1038,7 @@
 
             document.getElementById('editTitle').value = l.title || '';
             document.getElementById('editDesc').value = l.description || '';
+            document.getElementById('descPreview').innerHTML = l.description || '';
             document.getElementById('editCategory').value = l.category_name || '';
             document.getElementById('editPrice').value = l.price || 0;
             document.getElementById('editCondition').value = l.condition || 'NEW';
@@ -1017,7 +1077,7 @@
             // Pricing research
             if (p) {
                 document.getElementById('priceAvg').textContent = p.avg_sold_price ? `$${p.avg_sold_price}` : '—';
-                document.getElementById('priceLow').textContent = p.lowest_current ? `$${p.lowest_current}` : '—';
+                document.getElementById('priceLow').textContent = (p.lowest_competitor_total || p.lowest_current) ? `$${p.lowest_competitor_total || p.lowest_current}` : '—';
                 document.getElementById('priceOpt').textContent = p.optimal_price ? `$${p.optimal_price}` : '—';
                 document.getElementById('priceReason').textContent = p.price_reasoning || '';
             }
@@ -1036,7 +1096,7 @@
                 if (ebayPrice > 0 && ttPrice > 0) {
                     const priceDiff = ((ttPrice - ebayPrice) / ttPrice * 100).toFixed(0);
                     const commProfit = (ttPrice * (tt.commission_rate / 100)).toFixed(2);
-                    const ebayProfit = (ebayPrice * 0.8675 - 10.30).toFixed(2); // after fees + shipping
+                    const ebayProfit = (ebayPrice * 0.8675 - 12.0).toFixed(2); // after fees + shipping you pay
                     document.getElementById('ttInsight').textContent =
                         `📊 eBay at $${ebayPrice.toFixed(2)} = ~$${ebayProfit} profit | TikTok affiliate = ~$${commProfit}/sale | ${tt.sales_7d} sales/week on TikTok`;
                 } else {
@@ -1061,13 +1121,14 @@
         function updateProfit() {
             const price = parseFloat(document.getElementById('editPrice').value) || 0;
             const fees = (price * 0.1325) + 0.30;
-            const shipping = shippingType === 'FLAT_RATE'
-                ? parseFloat(document.getElementById('editShipCost').value) || 0 : 10;
+            // FREE shipping = seller pays ~$12, FLAT_RATE = buyer pays, CALCULATED = buyer pays
+            const shipping = shippingType === 'FREE' ? 12 :
+                shippingType === 'FLAT_RATE' ? parseFloat(document.getElementById('editShipCost').value) || 0 : 0;
             const profit = price - fees - shipping;
 
             document.getElementById('profPrice').textContent = `$${price.toFixed(2)}`;
             document.getElementById('profFees').textContent = `-$${fees.toFixed(2)}`;
-            document.getElementById('profShip').textContent = `-$${shipping.toFixed(2)}`;
+            document.getElementById('profShip').textContent = shippingType === 'FREE' ? `-$${shipping.toFixed(2)}` : `$0 (buyer pays)`;
             document.getElementById('profNet').textContent = `$${profit.toFixed(2)}`;
             document.getElementById('profNet').className = profit >= 0 ? 'pos' : 'neg';
         }
@@ -1086,6 +1147,21 @@
 
         function dismissDupe() {
             document.getElementById('dupeWarning').style.display = 'none';
+        }
+
+        // ─── Description Preview/Edit Toggle ─────────────
+        function toggleDescView(mode, btn) {
+            document.querySelectorAll('.desc-toggle button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (mode === 'preview') {
+                // Sync any edits from textarea back to preview
+                document.getElementById('descPreview').innerHTML = document.getElementById('editDesc').value;
+                document.getElementById('descPreview').style.display = 'block';
+                document.getElementById('editDesc').style.display = 'none';
+            } else {
+                document.getElementById('descPreview').style.display = 'none';
+                document.getElementById('editDesc').style.display = 'block';
+            }
         }
 
         // ─── Copy to Clipboard ───────────────────────────────
@@ -1128,7 +1204,7 @@
                 specifics.length ? `ITEM SPECIFICS:` : '',
                 ...specifics,
                 specifics.length ? '' : '',
-                `SHIPPING: ${shippingType} | Weight: ${weightOz}oz`,
+                `SHIPPING: ${shippingType === 'FREE' ? 'FREE SHIPPING (included in price)' : shippingType} | Weight: ${weightOz}oz`,
                 `RETURNS: ${returns}`,
                 ``,
                 `--- HTML DESCRIPTION (paste into eBay editor) ---`,
