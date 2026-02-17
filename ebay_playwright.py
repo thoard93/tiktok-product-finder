@@ -27,7 +27,10 @@ from datetime import datetime
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(basedir, 'products.db')
-PROFILE_DIR = os.path.join(basedir, 'ebay_browser_profile')
+
+# Use Render persistent disk if available, otherwise local paths
+PERSISTENT_DATA = '/var/data' if os.path.isdir('/var/data') else basedir
+PROFILE_DIR = os.path.join(PERSISTENT_DATA, 'ebay_browser_profile')
 SCREENSHOTS_DIR = os.path.join(basedir, 'pwa', 'ebay', 'screenshots')
 
 # Ensure dirs exist
@@ -714,28 +717,51 @@ def main():
         }))
         sys.exit(0 if logged_in else 1)
 
-    # Normal mode: read listing_id from stdin JSON or args
+    # Fill mode: read listing data from stdin JSON (passed by backend)
+    if '--fill' in sys.argv:
+        try:
+            raw = sys.stdin.read().strip()
+            if not raw:
+                print(json.dumps({"error": "No listing data provided on stdin"}))
+                sys.exit(1)
+            listing = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(json.dumps({"error": f"Invalid listing JSON: {e}"}))
+            sys.exit(1)
+
+        log(f"Listing loaded from stdin: {listing.get('title', '')[:50]}")
+
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            print(json.dumps({"error": "Playwright not installed. Run: pip install playwright && playwright install chromium"}))
+            sys.exit(1)
+
+        # Save images to temp files
+        image_paths = save_images_to_temp(listing.get('images', []))
+        log(f"Prepared {len(image_paths)} images for upload")
+
+        try:
+            result = fill_listing_on_ebay(listing, image_paths)
+            print(json.dumps(result))
+        finally:
+            cleanup_temp_images(image_paths)
+
+        sys.exit(0 if result.get('success') else 1)
+
+    # Legacy mode: read listing_id from args (for manual CLI testing)
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         listing_id = int(sys.argv[1])
     else:
-        try:
-            input_data = json.loads(sys.stdin.read())
-            listing_id = input_data.get('listing_id')
-        except:
-            print(json.dumps({"error": "Usage: python ebay_playwright.py <listing_id> OR --login OR --check-session"}))
-            sys.exit(1)
-
-    if not listing_id:
-        print(json.dumps({"error": "No listing_id provided"}))
+        print(json.dumps({"error": "Usage: python ebay_playwright.py --fill (with JSON stdin) | --login | --check-session | --inject-cookies"}))
         sys.exit(1)
 
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print(json.dumps({"error": "Playwright not installed. Run: pip install playwright && playwright install chromium"}))
+        print(json.dumps({"error": "Playwright not installed"}))
         sys.exit(1)
 
-    # Load listing from DB
     log(f"Loading listing #{listing_id} from database...")
     listing = load_listing_from_db(listing_id)
     if not listing:
@@ -744,16 +770,13 @@ def main():
 
     log(f"Listing loaded: {listing.get('title', '')[:50]}")
 
-    # Save images to temp files
     image_paths = save_images_to_temp(listing.get('images', []))
     log(f"Prepared {len(image_paths)} images for upload")
 
     try:
-        # Fill listing on eBay
         result = fill_listing_on_ebay(listing, image_paths)
         print(json.dumps(result))
     finally:
-        # Cleanup temp images
         cleanup_temp_images(image_paths)
 
     sys.exit(0 if result.get('success') else 1)

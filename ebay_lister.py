@@ -1055,15 +1055,38 @@ def ebay_autofill_listing(listing_id):
         db.session.commit()
         log.info(f"Created draft listing #{listing.id} for auto-fill")
 
-    # Run Playwright subprocess
+    # Run Playwright subprocess — pass listing data via stdin (avoids DB path issues)
     script = os.path.join(os.path.dirname(__file__), 'ebay_playwright.py')
     if not os.path.exists(script):
         return jsonify({'error': 'ebay_playwright.py not found'}), 500
 
+    # Serialize listing data for Playwright
+    listing_data = {
+        'id': listing.id,
+        'title': listing.title,
+        'description': listing.description,
+        'category_id': listing.category_id,
+        'category_name': listing.category_name,
+        'condition': listing.condition,
+        'price': listing.price,
+        'quantity': listing.quantity,
+        'cost_price': listing.cost_price,
+        'weight_oz': listing.weight_oz,
+        'length_in': listing.length_in,
+        'width_in': listing.width_in,
+        'height_in': listing.height_in,
+        'shipping_type': listing.shipping_type,
+        'shipping_cost': listing.shipping_cost,
+        'images': json.loads(listing.images_json) if listing.images_json else [],
+        'sku': listing.sku,
+        'upc': '',
+    }
+
     try:
         log.info(f"Starting Playwright auto-fill for listing #{listing.id}")
         proc = subprocess.run(
-            [sys.executable, script, str(listing.id)],
+            [sys.executable, script, '--fill'],
+            input=json.dumps(listing_data),
             capture_output=True, text=True,
             timeout=180,  # 3 minutes max
             cwd=os.path.dirname(__file__),
