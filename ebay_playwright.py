@@ -142,18 +142,60 @@ def launch_browser(playwright, headless=True):
 
 
 def check_login(page):
-    """Check if we're logged into eBay by looking for the user menu."""
+    """Check if we're logged into eBay using multiple methods."""
     try:
         page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=30000)
-        page.wait_for_timeout(2000)
+        page.wait_for_timeout(3000)
 
-        # Check for sign-in indicator — if "Sign in" link visible, not logged in
-        sign_in = page.locator('text=Sign in').first
-        if sign_in.is_visible():
-            return False
-        # Check for user greeting or account icon
+        # Method 1: Check cookies for login indicators (most reliable)
+        try:
+            cookies = page.context.cookies()
+            for c in cookies:
+                # ebay cookie with sin=in means signed in
+                if c.get('name') == 'ebay' and 'sin%3Din' in c.get('value', ''):
+                    log("Login confirmed via ebay cookie (sin=in)")
+                    return True
+                # dp1 cookie with u1f/ contains username = logged in
+                if c.get('name') == 'dp1' and 'u1f/' in c.get('value', ''):
+                    log("Login confirmed via dp1 cookie (user data present)")
+                    return True
+        except Exception as e:
+            log(f"Cookie check error: {e}")
+
+        # Method 2: Look for "Hi <name>" greeting on page
+        try:
+            hi_el = page.locator('[id*="gh-ug"]').first  # eBay greeting element
+            if hi_el.is_visible(timeout=3000):
+                log(f"Login confirmed via greeting element")
+                return True
+        except:
+            pass
+
+        try:
+            # Also try text matching for "Hi " greeting
+            greeting = page.locator('text=/^Hi /').first
+            if greeting.is_visible(timeout=2000):
+                log("Login confirmed via 'Hi' greeting text")
+                return True
+        except:
+            pass
+
+        # Method 3: Check if sign-in link is prominent (least reliable)
+        try:
+            sign_in = page.locator('a[href*="signin"]').first
+            if sign_in.is_visible(timeout=2000):
+                text = sign_in.text_content()
+                if text and 'sign in' in text.lower():
+                    log("Not logged in — sign-in link visible")
+                    return False
+        except:
+            pass
+
+        # If we got here and didn't find sign-in, assume logged in
+        log("Login status uncertain — assuming logged in (no sign-in link found)")
         return True
-    except:
+    except Exception as e:
+        log(f"Login check error: {e}")
         return False
 
 
