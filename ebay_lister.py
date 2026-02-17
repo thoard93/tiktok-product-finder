@@ -6,6 +6,7 @@ Model configurable via XAI_MODEL env var (default: grok-4-1-fast-reasoning).
 """
 
 import os
+import sys
 import re
 import json
 import hashlib
