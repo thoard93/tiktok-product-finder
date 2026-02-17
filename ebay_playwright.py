@@ -258,9 +258,54 @@ def fill_listing_on_ebay(listing_data, image_paths):
             # ─── Step 2: Navigate to sell page ───────────────────
             result['step'] = 'navigate_sell'
             log("Navigating to eBay sell page...")
-            page.goto("https://www.ebay.com/sl/sell", wait_until="domcontentloaded", timeout=60000)
-            page.wait_for_timeout(3000)
-            log(f"On page: {page.url}")
+
+            # Try direct listing creation URLs first
+            listing_urls = [
+                "https://www.ebay.com/sell/create",
+                "https://www.ebay.com/sl/sell",
+            ]
+
+            for url in listing_urls:
+                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                page.wait_for_timeout(3000)
+                log(f"On page: {page.url}")
+
+                # Check if we're on the hub page — need to click through
+                for btn_text in ['List an item', 'Sell an item', 'Create listing',
+                                 'Start listing', 'List it', 'Sell it']:
+                    try:
+                        btn = page.get_by_role("link", name=btn_text)
+                        if btn.first.is_visible(timeout=2000):
+                            btn.first.click()
+                            log(f"Clicked '{btn_text}' link on hub page")
+                            page.wait_for_timeout(4000)
+                            break
+                    except:
+                        continue
+                else:
+                    # Also try buttons (not just links)
+                    for btn_text in ['List an item', 'Sell an item', 'Start listing']:
+                        try:
+                            btn = page.get_by_role("button", name=btn_text)
+                            if btn.first.is_visible(timeout=2000):
+                                btn.first.click()
+                                log(f"Clicked '{btn_text}' button on hub page")
+                                page.wait_for_timeout(4000)
+                                break
+                        except:
+                            continue
+
+                # Check if we now have a title input
+                try:
+                    any_input = page.locator('input[type="text"]').first
+                    if any_input.is_visible(timeout=3000):
+                        log(f"Found text input on page: {page.url}")
+                        break
+                except:
+                    pass
+            
+            log(f"After navigation, on page: {page.url}")
+            take_screenshot(page, 'sell_page')
 
             # ─── Step 3: Fill title ──────────────────────────────
             result['step'] = 'fill_title'

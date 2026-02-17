@@ -260,6 +260,65 @@
             align-self: center;
         }
 
+        .listing-card .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex-shrink: 0;
+            align-self: center;
+        }
+
+        .listing-card .actions button {
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .listing-card .actions .btn-fill {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            color: #000;
+        }
+
+        .listing-card .actions .btn-fill:hover {
+            transform: scale(1.05);
+        }
+
+        .listing-card .actions .btn-del {
+            background: rgba(255, 77, 106, 0.12);
+            color: var(--red);
+        }
+
+        .listing-card .actions .btn-del:hover {
+            background: rgba(255, 77, 106, 0.3);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 9999;
+            opacity: 0;
+            transition: all 0.3s;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
         .status-badge {
             display: inline-block;
             padding: 2px 8px;
@@ -531,12 +590,17 @@
             }
 
             container.innerHTML = listings.map(l => {
-                const thumb = l.images && l.images.length > 0
-                    ? `<img src="data:image/jpeg;base64,${l.images[0].substring(0, 100)}..." alt="">`
-                    : '📦';
                 const thumbHtml = l.images && l.images.length > 0
                     ? `<img src="data:image/jpeg;base64,${l.images[0]}" alt="${l.title}">`
                     : '📦';
+
+                const isDraft = l.status === 'draft';
+                const actionsHtml = isDraft ? `
+                    <div class="actions" onclick="event.stopPropagation()">
+                        <button class="btn-fill" onclick="autoFillDraft(${l.id})">🚀 eBay</button>
+                        <button class="btn-del" onclick="deleteListing(${l.id})">🗑️</button>
+                    </div>
+                ` : '';
 
                 return `
                     <div class="listing-card" onclick="window.location='/ebay/listings?id=${l.id}'">
@@ -550,9 +614,58 @@
                             </div>
                         </div>
                         <div class="price">$${(l.price || 0).toFixed(2)}</div>
+                        ${actionsHtml}
                     </div>
                 `;
             }).join('');
+        }
+
+        async function deleteListing(id) {
+            if (!confirm('Delete this draft? This cannot be undone.')) return;
+            try {
+                const resp = await fetch(`/ebay/api/listings/${id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('✅ Draft deleted');
+                    loadDashboard();
+                } else {
+                    showToast('❌ ' + (data.error || 'Delete failed'));
+                }
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
+            }
+        }
+
+        async function autoFillDraft(id) {
+            showToast('🚀 Auto-filling eBay... (30-60 sec)');
+            try {
+                const resp = await fetch(`/ebay/api/listings/${id}/autofill`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                const data = await resp.json();
+                if (data.success && data.screenshot) {
+                    showToast('✅ eBay listing filled!');
+                    window.open(data.ebay_url || 'https://www.ebay.com', '_blank');
+                } else {
+                    showToast('❌ ' + (data.error || 'Auto-fill failed'));
+                }
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
+            }
+        }
+
+        function showToast(msg) {
+            let t = document.getElementById('toast');
+            if (!t) {
+                t = document.createElement('div');
+                t.id = 'toast';
+                t.className = 'toast';
+                document.body.appendChild(t);
+            }
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3000);
         }
 
         async function logout() {
