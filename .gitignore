@@ -1,0 +1,16 @@
+# Playwright browser profile (contains eBay session cookies)
+ebay_browser_profile/
+
+# Playwright screenshots
+pwa/ebay/screenshots/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Database
+*.db
+
+# Environment
+.env

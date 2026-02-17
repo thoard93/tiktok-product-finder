@@ -596,6 +596,86 @@
             border-color: var(--accent);
         }
 
+        /* ─── Screenshot Modal ─── */
+        .screenshot-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .screenshot-modal.show {
+            display: flex;
+        }
+
+        .screenshot-modal h2 {
+            color: var(--accent);
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+
+        .screenshot-modal .status-msg {
+            color: var(--text);
+            margin-bottom: 16px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .screenshot-modal img {
+            max-width: 90vw;
+            max-height: 50vh;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .screenshot-modal .modal-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .screenshot-modal .btn-looks-good {
+            padding: 14px 28px;
+            background: linear-gradient(135deg, var(--green), var(--accent));
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .screenshot-modal .btn-try-again {
+            padding: 14px 28px;
+            background: var(--bg-input);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .screenshot-modal .btn-close-modal {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
         /* ─── TikTok Cross-Reference ─── */
         .tiktok-card {
             background: linear-gradient(135deg, rgba(255, 0, 80, 0.06), rgba(0, 242, 234, 0.06));
@@ -925,10 +1005,10 @@
     <div class="post-actions">
         <button class="btn btn-success" id="clipboardBtn" onclick="copyToClipboard()">📋 Copy All to
             Clipboard</button>
+        <button class="btn btn-primary"
+            style="background:linear-gradient(135deg, var(--green), var(--accent)); color:#000; font-weight:700;"
+            onclick="autoFillEbay()">🚀 Auto-Fill eBay</button>
         <button class="btn btn-primary" onclick="saveListing('draft')">💾 Save as Draft</button>
-        <button class="btn btn-ebay-disabled" id="postEbayBtn" onclick="saveListing('ready')"
-            title="Requires eBay Developer account approval">🚀 Post to eBay <span
-                style="font-size:10px;opacity:0.6;">(API pending)</span></button>
         <button class="btn btn-secondary" onclick="resetForm()">↩️ Start Over</button>
     </div>
     </div>
@@ -941,6 +1021,20 @@
     </div>
     <!-- Toast Notification -->
     <div class="toast" id="toast">✅ Copied to clipboard!</div>
+
+    <!-- Screenshot Preview Modal -->
+    <div class="screenshot-modal" id="screenshotModal">
+        <button class="btn-close-modal" onclick="closeScreenshotModal()">✕</button>
+        <h2 id="modalTitle">✅ eBay Form Filled!</h2>
+        <div class="status-msg" id="modalMsg">Review the screenshot below to verify all fields look correct.</div>
+        <img id="modalScreenshot" src="" alt="eBay form screenshot" style="display:none;">
+        <div class="modal-actions">
+            <button class="btn-looks-good" id="modalOpenEbay" onclick="openEbayFromModal()">✅ Looks Good → Open eBay
+                Now</button>
+            <button class="btn-try-again" onclick="autoFillEbay()">🔄 Something's Wrong → Try Again</button>
+            <button class="btn-try-again" onclick="closeScreenshotModal()">✕ Close</button>
+        </div>
+    </div>
 
     <!-- Bottom Nav -->
     <div class="bottom-nav">
@@ -1297,6 +1391,113 @@
                 hideLoading();
                 alert('Error: ' + err.message);
             }
+        }
+
+        // ─── Auto-Fill eBay via Playwright ───────────────────
+        let lastAutofillUrl = '';
+
+        async function autoFillEbay() {
+            closeScreenshotModal();
+            showLoading(
+                '🚀 Auto-filling eBay listing...',
+                'Playwright is opening eBay and filling your listing. This takes 30-60 seconds...'
+            );
+
+            try {
+                // Build listing data from form
+                const listing = {
+                    title: document.getElementById('editTitle').value,
+                    description: document.getElementById('editDesc').value,
+                    category_id: currentListingData?.listing?.category_id || '',
+                    category_name: document.getElementById('editCategory').value,
+                    condition: document.getElementById('editCondition').value,
+                    price: parseFloat(document.getElementById('editPrice').value) || 0,
+                    quantity: parseInt(document.getElementById('editQty').value) || 1,
+                    cost_price: 0,
+                    weight_oz: parseFloat(document.getElementById('editWeightOz').value) || 0,
+                    length_in: parseFloat(document.getElementById('editLength').value) || 0,
+                    width_in: parseFloat(document.getElementById('editWidth').value) || 0,
+                    height_in: parseFloat(document.getElementById('editHeight').value) || 0,
+                    shipping_type: shippingType,
+                    shipping_cost: 0,
+                    images: uploadedImages,
+                    sku: currentListingData?.listing?.sku || '',
+                    upc: document.getElementById('editUpc')?.value || '',
+                };
+
+                // Save as draft first
+                const saveResp = await fetch('/ebay/api/listings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...listing, status: 'draft' }),
+                });
+                const saveData = await saveResp.json();
+                if (!saveData.success) throw new Error(saveData.error || 'Failed to save draft');
+
+                const listingId = saveData.listing.id;
+
+                // Update loading message
+                document.getElementById('loadingSub').textContent =
+                    `Draft saved (#${listingId}). Now filling eBay form...`;
+
+                // Trigger Playwright auto-fill
+                const fillResp = await fetch(`/ebay/api/listings/${listingId}/autofill`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(listing),
+                });
+                const fillData = await fillResp.json();
+                hideLoading();
+
+                if (fillData.success) {
+                    // Show screenshot modal
+                    lastAutofillUrl = fillData.ebay_url || 'https://www.ebay.com/sl/sell';
+                    document.getElementById('modalTitle').textContent = '✅ eBay Form Filled!';
+                    document.getElementById('modalMsg').textContent =
+                        'Review the screenshot below. When ready, click "Open eBay Now" to review and submit.';
+
+                    if (fillData.screenshot) {
+                        const img = document.getElementById('modalScreenshot');
+                        img.src = fillData.screenshot;
+                        img.style.display = 'block';
+                    }
+
+                    document.getElementById('screenshotModal').classList.add('show');
+                } else {
+                    // Show error with screenshot if available
+                    const errStep = fillData.step ? ` (at step: ${fillData.step})` : '';
+                    document.getElementById('modalTitle').textContent = '⚠️ Auto-Fill Issue';
+                    document.getElementById('modalMsg').textContent =
+                        (fillData.error || 'Unknown error') + errStep;
+
+                    if (fillData.screenshot) {
+                        const img = document.getElementById('modalScreenshot');
+                        img.src = fillData.screenshot;
+                        img.style.display = 'block';
+                    } else {
+                        document.getElementById('modalScreenshot').style.display = 'none';
+                    }
+
+                    document.getElementById('modalOpenEbay').textContent = '📋 Copy & List Manually Instead';
+                    lastAutofillUrl = 'https://www.ebay.com/sl/sell';
+                    document.getElementById('screenshotModal').classList.add('show');
+                }
+
+            } catch (err) {
+                hideLoading();
+                alert('Auto-fill error: ' + err.message);
+            }
+        }
+
+        function openEbayFromModal() {
+            window.open(lastAutofillUrl || 'https://www.ebay.com/sl/sell', '_blank');
+            closeScreenshotModal();
+        }
+
+        function closeScreenshotModal() {
+            document.getElementById('screenshotModal').classList.remove('show');
+            document.getElementById('modalScreenshot').style.display = 'none';
+            document.getElementById('modalOpenEbay').textContent = '✅ Looks Good → Open eBay Now';
         }
 
         function resetForm() {

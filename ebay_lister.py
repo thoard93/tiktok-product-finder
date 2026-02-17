@@ -1007,6 +1007,150 @@ def ebay_clipboard_data(listing_id):
     })
 
 
+# =============================================================================
+# PLAYWRIGHT AUTO-FILL
+# =============================================================================
+
+@app.route('/ebay/api/listings/<int:listing_id>/autofill', methods=['POST'])
+@ebay_login_required
+def ebay_autofill_listing(listing_id):
+    """Run Playwright to auto-fill eBay listing form.
+    Saves listing as draft first, then launches ebay_playwright.py subprocess."""
+    import subprocess
+
+    team = get_current_team()
+    listing = EbayListing.query.filter_by(id=listing_id, team_id=team.id).first()
+
+    if not listing:
+        # If listing_id is 0 or not found, create from posted data
+        data = request.json or {}
+        if not data.get('title'):
+            return jsonify({'error': 'No listing found and no data provided'}), 400
+
+        user = get_current_ebay_user()
+        listing = EbayListing(
+            team_id=team.id,
+            created_by=user.id if user else None,
+            title=data.get('title', '')[:80],
+            description=data.get('description', ''),
+            category_id=data.get('category_id', ''),
+            category_name=data.get('category_name', ''),
+            condition=data.get('condition', 'NEW'),
+            price=float(data.get('price', 0)),
+            quantity=int(data.get('quantity', 1)),
+            cost_price=float(data.get('cost_price', 0)),
+            weight_oz=float(data.get('weight_oz', 0)),
+            length_in=float(data.get('length_in', 0)),
+            width_in=float(data.get('width_in', 0)),
+            height_in=float(data.get('height_in', 0)),
+            shipping_type=data.get('shipping_type', 'FREE'),
+            shipping_cost=0,
+            images_json=json.dumps(data.get('images', [])),
+            sku=data.get('sku', f"EBAY-{team.name[:3].upper()}-{secrets.token_hex(4).upper()}"),
+            status='draft',
+            title_hash=hashlib.md5(data.get('title', '').lower().encode()).hexdigest(),
+        )
+        db.session.add(listing)
+        db.session.commit()
+        log.info(f"Created draft listing #{listing.id} for auto-fill")
+
+    # Run Playwright subprocess
+    script = os.path.join(os.path.dirname(__file__), 'ebay_playwright.py')
+    if not os.path.exists(script):
+        return jsonify({'error': 'ebay_playwright.py not found'}), 500
+
+    try:
+        log.info(f"Starting Playwright auto-fill for listing #{listing.id}")
+        proc = subprocess.run(
+            [sys.executable, script, str(listing.id)],
+            capture_output=True, text=True,
+            timeout=180,  # 3 minutes max
+            cwd=os.path.dirname(__file__),
+        )
+
+        log.info(f"Playwright stderr: {proc.stderr[-500:] if proc.stderr else 'none'}")
+
+        try:
+            result = json.loads(proc.stdout)
+        except:
+            return jsonify({
+                'error': f'Playwright output parse error: {proc.stdout[:200]}',
+                'stderr': proc.stderr[-300:] if proc.stderr else '',
+            }), 500
+
+        if result.get('success'):
+            listing.status = 'draft'  # Keep as draft until user confirms
+            db.session.commit()
+
+        return jsonify({
+            'success': result.get('success', False),
+            'screenshot': result.get('screenshot'),
+            'ebay_url': result.get('ebay_url'),
+            'error': result.get('error'),
+            'step': result.get('step'),
+            'listing_id': listing.id,
+        })
+
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Playwright timed out after 3 minutes'}), 504
+    except Exception as e:
+        log.error(f"Auto-fill error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/ebay/api/ebay-session', methods=['GET', 'POST'])
+@ebay_login_required
+def ebay_session_manage():
+    """Check or manage eBay browser session.
+    GET: Check if session exists and is valid.
+    POST: Trigger login flow (headless=False for local, or check existing)."""
+    import subprocess
+
+    script = os.path.join(os.path.dirname(__file__), 'ebay_playwright.py')
+
+    if request.method == 'GET':
+        # Check if session exists
+        try:
+            proc = subprocess.run(
+                [sys.executable, script, '--check-session'],
+                capture_output=True, text=True,
+                timeout=60,
+                cwd=os.path.dirname(__file__),
+            )
+            result = json.loads(proc.stdout)
+            return jsonify(result)
+        except subprocess.TimeoutExpired:
+            return jsonify({'error': 'Session check timed out'}), 504
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    # POST: trigger login flow
+    # Note: --login with headless=False only works locally, not on Render
+    try:
+        proc = subprocess.run(
+            [sys.executable, script, '--login'],
+            capture_output=True, text=True,
+            timeout=180,
+            cwd=os.path.dirname(__file__),
+        )
+        try:
+            result = json.loads(proc.stdout)
+        except:
+            result = {'error': proc.stdout[:200], 'stderr': proc.stderr[-300:]}
+        return jsonify(result)
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Login timed out'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/ebay/screenshots/<path:filename>')
+@ebay_login_required
+def ebay_screenshots(filename):
+    """Serve Playwright screenshots."""
+    return send_from_directory('pwa/ebay/screenshots', filename)
+
+
 @app.route('/ebay/api/listings', methods=['GET', 'POST'])
 @ebay_login_required
 def ebay_listings():

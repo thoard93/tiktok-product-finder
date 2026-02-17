@@ -376,6 +376,26 @@
             </div>
         </div>
 
+        <!-- eBay Browser Session (for Playwright auto-fill) -->
+        <div class="card" id="ebaySessionCard">
+            <h3>🌐 eBay Browser Session</h3>
+            <div id="sessionStatus">
+                <div class="status-banner warning">⏳ Checking session...</div>
+            </div>
+            <p style="font-size:12px; color:var(--text-dim); margin:12px 0;">
+                Required for the "Auto-Fill eBay" feature. Playwright uses a persistent browser profile to stay logged
+                into your eBay account.
+            </p>
+            <button class="btn btn-primary" onclick="checkEbaySession()" id="checkSessionBtn">🔍 Check Session
+                Status</button>
+            <button class="btn btn-secondary" onclick="refreshEbaySession()" id="refreshSessionBtn"
+                style="margin-top:8px;">🔄 Refresh eBay Login</button>
+            <div id="sessionScreenshot" style="margin-top:12px; display:none;">
+                <img id="sessionImg" style="width:100%; border-radius:8px; border:1px solid var(--border);"
+                    alt="eBay session screenshot">
+            </div>
+        </div>
+
         <!-- eBay Setup Wizard -->
         <div class="card" id="setupWizard">
             <h3>📖 eBay Setup Guide</h3>
@@ -717,6 +737,65 @@
             });
             showMsg(data.success ? '✅ Automation saved' : (data.error || 'Error'), data.success);
         }
+
+        // ─── eBay Browser Session Management ────────────────
+        async function checkEbaySession() {
+            const statusEl = document.getElementById('sessionStatus');
+            const btn = document.getElementById('checkSessionBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Checking...';
+            statusEl.innerHTML = '<div class="status-banner warning">⏳ Checking eBay session...</div>';
+
+            try {
+                const resp = await fetch('/ebay/api/ebay-session');
+                const data = await resp.json();
+
+                if (data.logged_in) {
+                    statusEl.innerHTML = '<div class="status-banner success">✅ eBay session active! Auto-Fill is ready to use.</div>';
+                } else {
+                    statusEl.innerHTML = '<div class="status-banner error">❌ Not logged into eBay. Click "Refresh eBay Login" below.</div>';
+                }
+
+                // Show screenshot if available
+                if (data.screenshot) {
+                    document.getElementById('sessionImg').src = data.screenshot;
+                    document.getElementById('sessionScreenshot').style.display = 'block';
+                }
+            } catch (err) {
+                statusEl.innerHTML = `<div class="status-banner error">❌ Error: ${err.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 Check Session Status';
+            }
+        }
+
+        async function refreshEbaySession() {
+            const btn = document.getElementById('refreshSessionBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Logging in... (up to 2 min)';
+
+            const statusEl = document.getElementById('sessionStatus');
+            statusEl.innerHTML = '<div class="status-banner warning">⏳ Opening eBay login... If running locally, a browser window will appear. On Render, this uses the existing saved session.</div>';
+
+            try {
+                const resp = await fetch('/ebay/api/ebay-session', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success) {
+                    statusEl.innerHTML = '<div class="status-banner success">✅ eBay session saved! Auto-Fill is ready.</div>';
+                } else {
+                    statusEl.innerHTML = `<div class="status-banner error">❌ Login issue: ${data.error || data.message || 'Unknown error'}. Try logging in to eBay manually first, then check session again.</div>`;
+                }
+            } catch (err) {
+                statusEl.innerHTML = `<div class="status-banner error">❌ Error: ${err.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 Refresh eBay Login';
+            }
+        }
+
+        // Auto-check session on page load
+        setTimeout(checkEbaySession, 1500);
     </script>
 </body>
 
