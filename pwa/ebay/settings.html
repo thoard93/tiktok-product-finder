@@ -383,13 +383,39 @@
                 <div class="status-banner warning">⏳ Checking session...</div>
             </div>
             <p style="font-size:12px; color:var(--text-dim); margin:12px 0;">
-                Required for the "Auto-Fill eBay" feature. Playwright uses a persistent browser profile to stay logged
-                into your eBay account.
+                Required for the "Auto-Fill eBay" feature. Paste your eBay cookies below to establish a session.
             </p>
+
             <button class="btn btn-primary" onclick="checkEbaySession()" id="checkSessionBtn">🔍 Check Session
                 Status</button>
-            <button class="btn btn-secondary" onclick="refreshEbaySession()" id="refreshSessionBtn"
-                style="margin-top:8px;">🔄 Refresh eBay Login</button>
+
+            <div
+                style="margin-top:16px; padding:14px; background:var(--bg-input); border-radius:10px; border:1px solid var(--border);">
+                <h4 style="font-size:14px; margin-bottom:10px;">📋 How to Get Your eBay Cookies</h4>
+                <ol style="font-size:12px; color:var(--text-dim); padding-left:20px; line-height:1.8;">
+                    <li>Log into <a href="https://www.ebay.com" target="_blank"
+                            style="color:var(--accent);">ebay.com</a> in your browser</li>
+                    <li>Press <strong>F12</strong> to open DevTools → go to <strong>Console</strong> tab</li>
+                    <li>Paste this command and press Enter:</li>
+                </ol>
+                <div style="margin:10px 0; position:relative;">
+                    <pre
+                        style="background:#1a1a2e; padding:10px; border-radius:6px; font-size:11px; color:#00e676; overflow-x:auto; white-space:pre-wrap; word-break:break-all;">JSON.stringify(document.cookie.split('; ').map(c=>{const[n,...v]=c.split('=');return{name:n,value:v.join('='),domain:'.ebay.com',path:'/'}}))</pre>
+                    <button
+                        onclick="navigator.clipboard.writeText(`JSON.stringify(document.cookie.split('; ').map(c=>{const[n,...v]=c.split('=');return{name:n,value:v.join('='),domain:'.ebay.com',path:'/'}}))`);this.textContent='✅ Copied!';setTimeout(()=>this.textContent='📋',1500)"
+                        style="position:absolute;top:6px;right:6px;background:var(--border);border:none;border-radius:4px;padding:4px 8px;color:var(--text);cursor:pointer;font-size:12px;">📋</button>
+                </div>
+                <ol start="4" style="font-size:12px; color:var(--text-dim); padding-left:20px; line-height:1.8;">
+                    <li>Copy the output and paste it below:</li>
+                </ol>
+
+                <textarea id="cookieInput" rows="4" placeholder='Paste the JSON cookie string here...'
+                    style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px; font-size:12px; font-family:monospace; resize:vertical; margin-top:8px;"></textarea>
+
+                <button class="btn btn-primary" onclick="injectEbayCookies()" id="injectCookiesBtn"
+                    style="margin-top:10px;">🔐 Save eBay Cookies</button>
+            </div>
+
             <div id="sessionScreenshot" style="margin-top:12px; display:none;">
                 <img id="sessionImg" style="width:100%; border-radius:8px; border:1px solid var(--border);"
                     alt="eBay session screenshot">
@@ -769,28 +795,52 @@
             }
         }
 
-        async function refreshEbaySession() {
-            const btn = document.getElementById('refreshSessionBtn');
+        async function injectEbayCookies() {
+            const cookieText = document.getElementById('cookieInput').value.trim();
+            if (!cookieText) {
+                showMsg('Please paste your eBay cookies first!', false);
+                return;
+            }
+
+            let cookies;
+            try {
+                cookies = JSON.parse(cookieText);
+            } catch (e) {
+                showMsg('Invalid JSON. Make sure you copied the full output from the console command.', false);
+                return;
+            }
+
+            const btn = document.getElementById('injectCookiesBtn');
             btn.disabled = true;
-            btn.textContent = '⏳ Logging in... (up to 2 min)';
+            btn.textContent = '⏳ Saving cookies... (30-60 sec)';
 
             const statusEl = document.getElementById('sessionStatus');
-            statusEl.innerHTML = '<div class="status-banner warning">⏳ Opening eBay login... If running locally, a browser window will appear. On Render, this uses the existing saved session.</div>';
+            statusEl.innerHTML = '<div class="status-banner warning">⏳ Injecting cookies and verifying eBay login...</div>';
 
             try {
-                const resp = await fetch('/ebay/api/ebay-session', { method: 'POST' });
+                const resp = await fetch('/ebay/api/ebay-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cookies }),
+                });
                 const data = await resp.json();
 
-                if (data.success) {
-                    statusEl.innerHTML = '<div class="status-banner success">✅ eBay session saved! Auto-Fill is ready.</div>';
+                if (data.logged_in) {
+                    statusEl.innerHTML = '<div class="status-banner success">✅ eBay session established! Auto-Fill is ready to use.</div>';
+                    document.getElementById('cookieInput').value = '';
                 } else {
-                    statusEl.innerHTML = `<div class="status-banner error">❌ Login issue: ${data.error || data.message || 'Unknown error'}. Try logging in to eBay manually first, then check session again.</div>`;
+                    statusEl.innerHTML = `<div class="status-banner error">❌ ${data.message || data.error || 'Cookies did not establish a session. Try getting fresh cookies.'}</div>`;
+                }
+
+                if (data.screenshot) {
+                    document.getElementById('sessionImg').src = data.screenshot;
+                    document.getElementById('sessionScreenshot').style.display = 'block';
                 }
             } catch (err) {
                 statusEl.innerHTML = `<div class="status-banner error">❌ Error: ${err.message}</div>`;
             } finally {
                 btn.disabled = false;
-                btn.textContent = '🔄 Refresh eBay Login';
+                btn.textContent = '🔐 Save eBay Cookies';
             }
         }
 

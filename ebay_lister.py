@@ -1125,24 +1125,49 @@ def ebay_session_manage():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
-    # POST: trigger login flow
-    # Note: --login with headless=False only works locally, not on Render
-    try:
-        proc = subprocess.run(
-            [sys.executable, script, '--login'],
-            capture_output=True, text=True,
-            timeout=180,
-            cwd=os.path.dirname(__file__),
-        )
+    # POST: inject cookies or trigger login
+    data = request.json or {}
+    cookies = data.get('cookies')
+
+    if cookies:
+        # Cookie injection mode — works on headless servers like Render
         try:
-            result = json.loads(proc.stdout)
-        except:
-            result = {'error': proc.stdout[:200], 'stderr': proc.stderr[-300:]}
-        return jsonify(result)
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Login timed out'}), 504
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+            cookie_json = json.dumps(cookies)
+            proc = subprocess.run(
+                [sys.executable, script, '--inject-cookies'],
+                input=cookie_json,
+                capture_output=True, text=True,
+                timeout=120,
+                cwd=os.path.dirname(__file__),
+            )
+            log.info(f"Cookie inject stderr: {proc.stderr[-300:] if proc.stderr else 'none'}")
+            try:
+                result = json.loads(proc.stdout)
+            except:
+                result = {'error': f'Parse error: {proc.stdout[:200]}', 'stderr': proc.stderr[-300:] if proc.stderr else ''}
+            return jsonify(result)
+        except subprocess.TimeoutExpired:
+            return jsonify({'error': 'Cookie injection timed out'}), 504
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    else:
+        # No cookies provided — try --login (only works locally with display)
+        try:
+            proc = subprocess.run(
+                [sys.executable, script, '--login'],
+                capture_output=True, text=True,
+                timeout=180,
+                cwd=os.path.dirname(__file__),
+            )
+            try:
+                result = json.loads(proc.stdout)
+            except:
+                result = {'error': proc.stdout[:200], 'stderr': proc.stderr[-300:] if proc.stderr else ''}
+            return jsonify(result)
+        except subprocess.TimeoutExpired:
+            return jsonify({'error': 'Login timed out'}), 504
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 
 @app.route('/ebay/screenshots/<path:filename>')

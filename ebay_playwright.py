@@ -592,6 +592,86 @@ def main():
         }))
         sys.exit(0)
 
+    # Check for --inject-cookies flag (headless session setup via cookie paste)
+    if '--inject-cookies' in sys.argv:
+        log("Injecting eBay cookies into browser profile...")
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            print(json.dumps({"error": "Playwright not installed"}))
+            sys.exit(1)
+
+        # Read cookie JSON from stdin
+        try:
+            raw = sys.stdin.read().strip()
+            if not raw:
+                print(json.dumps({"error": "No cookie data provided on stdin"}))
+                sys.exit(1)
+            cookies_input = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(json.dumps({"error": f"Invalid JSON: {e}"}))
+            sys.exit(1)
+
+        # Normalize cookies — support multiple formats
+        cookies = []
+        if isinstance(cookies_input, list):
+            for c in cookies_input:
+                cookie = {
+                    "name": c.get("name", ""),
+                    "value": c.get("value", ""),
+                    "domain": c.get("domain", ".ebay.com"),
+                    "path": c.get("path", "/"),
+                }
+                # Only include non-empty cookies
+                if cookie["name"] and cookie["value"]:
+                    cookies.append(cookie)
+        elif isinstance(cookies_input, dict):
+            # Simple {name: value} format
+            for name, value in cookies_input.items():
+                if name and value:
+                    cookies.append({
+                        "name": name,
+                        "value": str(value),
+                        "domain": ".ebay.com",
+                        "path": "/",
+                    })
+
+        if not cookies:
+            print(json.dumps({"error": "No valid cookies found in input"}))
+            sys.exit(1)
+
+        log(f"Parsed {len(cookies)} cookies to inject")
+
+        with sync_playwright() as p:
+            context = launch_browser(p, headless=True)
+            page = context.pages[0] if context.pages else context.new_page()
+
+            # Navigate to eBay first (required for cookie domain)
+            page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1000)
+
+            # Inject cookies
+            context.add_cookies(cookies)
+            log(f"Injected {len(cookies)} cookies")
+
+            # Reload to apply cookies
+            page.reload(wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(3000)
+
+            # Verify login
+            logged_in = check_login(page)
+            screenshot_path = take_screenshot(page, 'cookie_inject')
+            context.close()
+
+        print(json.dumps({
+            "success": logged_in,
+            "logged_in": logged_in,
+            "screenshot": screenshot_path,
+            "cookies_injected": len(cookies),
+            "message": "eBay session established!" if logged_in else "Cookies injected but login not confirmed. Try fresh cookies.",
+        }))
+        sys.exit(0 if logged_in else 1)
+
     # Normal mode: read listing_id from stdin JSON or args
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         listing_id = int(sys.argv[1])
