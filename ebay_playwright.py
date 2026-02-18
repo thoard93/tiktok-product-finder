@@ -401,6 +401,17 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 page_text = page.evaluate('() => document.body.innerText.substring(0, 2000)')
                 log(f"PAGE TEXT: {page_text[:600]}")
                 
+                # Dump HTML around radio inputs specifically
+                radio_html = page.evaluate('''() => {
+                    const radio = document.querySelector('input[type="radio"]');
+                    if (!radio) return "NO RADIO FOUND";
+                    // Walk up 3 levels to get context
+                    let el = radio;
+                    for (let i = 0; i < 3 && el.parentElement; i++) el = el.parentElement;
+                    return el.outerHTML.substring(0, 1000);
+                }''')
+                log(f"RADIO HTML: {radio_html}")
+                
                 # Find all interactive elements and their text
                 elems = page.evaluate('''() => {
                     const results = [];
@@ -423,7 +434,8 @@ def fill_listing_on_ebay(listing_data, image_paths):
             except Exception as e:
                 log(f"Page dump error: {e}")
 
-            # Select condition
+            # Select condition — MUST use Playwright native clicks (not JS evaluate)
+            # because eBay uses React and JS DOM events don't trigger React state
             condition = listing_data.get('condition', 'NEW')
             cond_map = {
                 'NEW': ['New', 'New with tags', 'New with box', 'Brand New'],
@@ -437,99 +449,92 @@ def fill_listing_on_ebay(listing_data, image_paths):
             
             condition_selected = False
             
-            # Method 1: Force-click radio inputs via JS + dispatch events
-            # eBay uses custom styled radios — the <input> is often hidden
-            try:
-                clicked = page.evaluate('''(targets) => {
-                    // Find all radio inputs
-                    const radios = document.querySelectorAll('input[type="radio"]');
-                    for (const radio of radios) {
-                        // Check if the radio's label or parent contains our target text
-                        const parent = radio.closest('label, div, li, span, [class*="condition"], [class*="Condition"]') || radio.parentElement;
-                        const parentText = (parent?.textContent || "").trim();
-                        
-                        for (const target of targets) {
-                            if (parentText === target || parentText.startsWith(target)) {
-                                // Programmatically select the radio
-                                radio.checked = true;
-                                radio.dispatchEvent(new Event('change', {bubbles: true}));
-                                radio.dispatchEvent(new Event('input', {bubbles: true}));
-                                radio.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-                                // Also click the parent/label for React
-                                if (parent && parent !== radio) parent.click();
-                                return "selected: " + parentText.substring(0, 50);
-                            }
-                        }
-                    }
-                    
-                    // Fallback: just click the first radio
-                    if (radios.length > 0) {
-                        const radio = radios[0];
-                        radio.checked = true;
-                        radio.dispatchEvent(new Event('change', {bubbles: true}));
-                        radio.dispatchEvent(new Event('input', {bubbles: true}));
-                        radio.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-                        const p = radio.parentElement;
-                        if (p) p.click();
-                        return "fallback first radio: " + (p?.textContent || "").substring(0, 50);
-                    }
-                    
-                    return false;
-                }''', cond_texts)
-                if clicked:
-                    condition_selected = True
-                    log(f"Condition via JS radio: {clicked}")
-            except Exception as e:
-                log(f"JS radio error: {e}")
+            # Method 1: Playwright get_by_role("radio") — best for React
+            for cond_text in cond_texts:
+                if condition_selected:
+                    break
+                try:
+                    radio = page.get_by_role("radio", name=cond_text)
+                    if radio.first.is_visible(timeout=2000):
+                        radio.first.click()
+                        condition_selected = True
+                        log(f"Clicked radio role '{cond_text}'")
+                except:
+                    pass
+            
+            # Method 2: Playwright get_by_label
+            if not condition_selected:
+                for cond_text in cond_texts:
+                    try:
+                        el = page.get_by_label(cond_text)
+                        if el.first.is_visible(timeout=1500):
+                            el.first.click()
+                            condition_selected = True
+                            log(f"Clicked get_by_label '{cond_text}'")
+                            break
+                    except:
+                        pass
 
-            # Method 2: Playwright force-click on radio (bypasses visibility)
+            # Method 3: Force-click on radio input via Playwright (real mouse event)
             if not condition_selected:
                 try:
                     radios = page.locator('input[type="radio"]')
                     count = radios.count()
-                    log(f"Found {count} radio inputs via Playwright")
+                    log(f"Found {count} radio inputs")
                     if count > 0:
-                        radios.first.click(force=True)
-                        condition_selected = True
-                        log("Force-clicked first radio via Playwright")
+                        # Get bounding box and click at exact center
+                        box = radios.first.bounding_box()
+                        if box:
+                            center_x = box['x'] + box['width'] / 2
+                            center_y = box['y'] + box['height'] / 2
+                            page.mouse.click(center_x, center_y)
+                            condition_selected = True
+                            log(f"Mouse-clicked radio at ({center_x}, {center_y})")
+                        else:
+                            # Radio has no bounding box (hidden), click its parent
+                            radios.first.click(force=True)
+                            condition_selected = True
+                            log("Force-clicked hidden radio")
                 except Exception as e:
-                    log(f"Playwright radio force-click error: {e}")
+                    log(f"Radio click error: {e}")
 
-            # Method 3: Click the label containing condition text
+            # Method 4: Click the text "New" directly via get_by_text
             if not condition_selected:
                 for cond_text in cond_texts:
                     try:
-                        label = page.locator(f'label:has-text("{cond_text}")').first
-                        if label.is_visible(timeout=1500):
-                            label.click()
+                        el = page.get_by_text(cond_text, exact=True)
+                        if el.first.is_visible(timeout=1500):
+                            el.first.click()
                             condition_selected = True
-                            log(f"Clicked label: {cond_text}")
+                            log(f"Clicked text '{cond_text}'")
                             break
                     except:
                         pass
-            
-            # Method 4: Click any container with the condition text
+
+            # Method 5: Click the label parent of the radio by coordinates
             if not condition_selected:
                 try:
-                    clicked = page.evaluate('''(targets) => {
-                        const all = document.querySelectorAll('*');
-                        for (const el of all) {
-                            const txt = (el.textContent || "").trim();
-                            if (txt.length > 50) continue; // Skip large containers
-                            for (const target of targets) {
-                                if (txt === target) {
-                                    el.click();
-                                    return "clicked: " + el.tagName + " " + txt;
-                                }
+                    # Find the radio's label using JS, get its bounds, click via Playwright
+                    bounds = page.evaluate('''() => {
+                        const radio = document.querySelector('input[type="radio"]');
+                        if (!radio) return null;
+                        // Walk up to find the clickable container (label, li, div)
+                        let target = radio.parentElement;
+                        for (let i = 0; i < 5 && target; i++) {
+                            const rect = target.getBoundingClientRect();
+                            if (rect.width > 20 && rect.height > 20) {
+                                return {x: rect.x + rect.width/2, y: rect.y + rect.height/2, tag: target.tagName};
                             }
+                            target = target.parentElement;
                         }
-                        return false;
-                    }''', cond_texts)
-                    if clicked:
+                        return null;
+                    }''')
+                    if bounds:
+                        page.mouse.click(bounds['x'], bounds['y'])
                         condition_selected = True
-                        log(f"Condition via element click: {clicked}")
+                        log(f"Mouse-clicked radio parent <{bounds['tag']}> at ({bounds['x']}, {bounds['y']})")
                 except Exception as e:
-                    log(f"Element click error: {e}")
+                    log(f"Parent coordinate click error: {e}")
 
             if not condition_selected:
                 log("WARNING: Could not select condition — trying Continue anyway")
