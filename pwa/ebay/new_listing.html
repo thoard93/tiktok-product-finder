@@ -1503,18 +1503,20 @@
                     document.getElementById('modalScreenshot').style.display = 'none';
 
                     if (listingUrl) {
-                        // We have the direct listing URL — user can open in Safari!
-                        lastAutofillUrl = listingUrl;
+                        // Append price and free shipping to the listing URL
+                        const priceVal = listing.price || 0;
+                        const fullUrl = listingUrl + '&startPrice=' + priceVal.toFixed(2) + '&freeShipping=true&shippingType=Free';
+                        lastAutofillUrl = fullUrl;
                         document.getElementById('modalTitle').textContent = '✅ Listing Ready!';
                         document.getElementById('modalMsg').textContent =
-                            'Open the link below in Safari to get a pre-filled eBay form (title + category + condition set). Then add the details below:';
+                            'Title, category, condition & price are pre-filled. Just upload images and paste the description below:';
 
                         document.getElementById('modalSolveCaptcha').style.display = 'block';
                         document.getElementById('modalSolveCaptcha').textContent = '🌐 Open Pre-Filled Form in Safari';
                         document.getElementById('modalSolveCaptcha').style.background = '#4ade80';
                         document.getElementById('modalSolveCaptcha').onclick = function () {
                             copyAllListingData();
-                            window.open(listingUrl, '_blank');
+                            window.open(fullUrl, '_blank');
                         };
                     } else {
                         // No listing URL extracted — fallback to copy mode
@@ -1574,6 +1576,21 @@
             }
         }
 
+        function htmlToPlainText(html) {
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            // Replace <br>, </p>, </div>, </h1-6>, </li> with newlines
+            div.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+            div.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li').forEach(el => {
+                el.prepend('\n');
+            });
+            div.querySelectorAll('li').forEach(el => {
+                el.prepend('• ');
+            });
+            // Get text and clean up multiple newlines
+            return div.textContent.replace(/\n{3,}/g, '\n\n').trim();
+        }
+
         function decodeHtmlEntities(text) {
             const ta = document.createElement('textarea');
             ta.innerHTML = text;
@@ -1582,7 +1599,7 @@
 
         function showListingDataInModal(listing) {
             document.getElementById('dataTitle').textContent = decodeHtmlEntities(listing.title || '');
-            document.getElementById('dataDesc').textContent = decodeHtmlEntities(listing.description || '');
+            document.getElementById('dataDesc').textContent = htmlToPlainText(listing.description || '');
             document.getElementById('dataPrice').textContent = '$' + (listing.price || 0).toFixed(2);
             document.getElementById('dataCondition').textContent = listing.condition || 'NEW';
             document.getElementById('modalListingData').style.display = 'block';
