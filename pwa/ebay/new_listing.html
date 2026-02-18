@@ -1076,6 +1076,8 @@
         <div class="modal-actions">
             <button class="btn-looks-good" id="modalOpenEbay" onclick="openEbayFromModal()">✅ Looks Good → Open eBay
                 Now</button>
+            <button class="btn-looks-good" id="modalSolveCaptcha" onclick="solveCaptchaAndRetry()"
+                style="display:none; background:#f59e0b;">🔓 Solve in eBay & Try Again</button>
             <button class="btn-try-again" onclick="autoFillEbay()">🔄 Something's Wrong → Try Again</button>
             <button class="btn-try-again" onclick="closeScreenshotModal()">✕ Close</button>
         </div>
@@ -1495,12 +1497,14 @@
                 hideLoading();
 
                 if (fillData.login_required) {
-                    // Login required — show listing data for manual copy
+                    // Login required — show listing data + solve option
                     lastAutofillUrl = 'https://www.ebay.com/sl/sell';
                     document.getElementById('modalTitle').textContent = '🔑 Session Expired';
                     document.getElementById('modalMsg').textContent =
-                        'eBay needs you to log in. Your listing data is below — tap "Copy All & Open eBay" to paste into eBay on your phone.';
+                        'eBay needs you to log in. Solve below then retry, or copy your data and list manually.';
                     showListingDataInModal(listing);
+                    document.getElementById('modalSolveCaptcha').style.display = 'block';
+                    document.getElementById('modalSolveCaptcha').textContent = '🔑 Log In to eBay & Retry';
 
                     if (fillData.screenshot) {
                         const img = document.getElementById('modalScreenshot');
@@ -1511,12 +1515,14 @@
                     document.getElementById('modalOpenEbay').textContent = '📋 Copy All & Open eBay';
                     document.getElementById('screenshotModal').classList.add('show');
                 } else if (fillData.captcha_detected) {
-                    // CAPTCHA detected — show listing data for manual copy
+                    // CAPTCHA detected — show listing data + solve option
                     lastAutofillUrl = 'https://www.ebay.com/sl/sell';
                     document.getElementById('modalTitle').textContent = '🔒 CAPTCHA Detected';
                     document.getElementById('modalMsg').textContent =
-                        'eBay needs verification. Your listing data is below — tap "Copy All & Open eBay" to paste into eBay on your phone.';
+                        'eBay needs verification. Solve below then retry, or copy your data and list manually.';
                     showListingDataInModal(listing);
+                    document.getElementById('modalSolveCaptcha').style.display = 'block';
+                    document.getElementById('modalSolveCaptcha').textContent = '🔓 Solve CAPTCHA & Retry';
 
                     if (fillData.screenshot) {
                         const img = document.getElementById('modalScreenshot');
@@ -1566,12 +1572,27 @@
             }
         }
 
+        function decodeHtmlEntities(text) {
+            const ta = document.createElement('textarea');
+            ta.innerHTML = text;
+            return ta.value;
+        }
+
         function showListingDataInModal(listing) {
-            document.getElementById('dataTitle').textContent = listing.title || '';
-            document.getElementById('dataDesc').textContent = listing.description || '';
+            document.getElementById('dataTitle').textContent = decodeHtmlEntities(listing.title || '');
+            document.getElementById('dataDesc').textContent = decodeHtmlEntities(listing.description || '');
             document.getElementById('dataPrice').textContent = '$' + (listing.price || 0).toFixed(2);
             document.getElementById('dataCondition').textContent = listing.condition || 'NEW';
             document.getElementById('modalListingData').style.display = 'block';
+        }
+
+        function solveCaptchaAndRetry() {
+            // Open eBay in a new tab so user can solve CAPTCHA/login
+            window.open('https://www.ebay.com/sl/sell', '_blank');
+            // Change button text to indicate they should come back and retry
+            document.getElementById('modalSolveCaptcha').textContent = '✅ Done? Click Try Again ↓';
+            document.getElementById('modalSolveCaptcha').style.background = '#22c55e';
+            document.getElementById('modalSolveCaptcha').onclick = null;
         }
 
         function copyField(elementId) {
@@ -1618,6 +1639,7 @@
             document.getElementById('screenshotModal').classList.remove('show');
             document.getElementById('modalScreenshot').style.display = 'none';
             document.getElementById('modalListingData').style.display = 'none';
+            document.getElementById('modalSolveCaptcha').style.display = 'none';
             document.getElementById('modalOpenEbay').textContent = '✅ Looks Good → Open eBay Now';
         }
 
