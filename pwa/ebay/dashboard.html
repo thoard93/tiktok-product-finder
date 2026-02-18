@@ -646,7 +646,13 @@
                 const data = await resp.json();
                 if (data.success && data.screenshot) {
                     showToast('✅ eBay listing filled!');
-                    window.open(data.ebay_url || 'https://www.ebay.com', '_blank');
+                    // Try eBay app deep link first (iOS), fallback to web
+                    const ebayUrl = data.ebay_url || 'https://www.ebay.com/sl/sell';
+                    window.location.href = 'ebay://sell';
+                    setTimeout(() => {
+                        // If app didn't open, fallback to web
+                        window.open(ebayUrl, '_blank');
+                    }, 1500);
                 } else {
                     showToast('❌ ' + (data.error || 'Auto-fill failed'));
                 }

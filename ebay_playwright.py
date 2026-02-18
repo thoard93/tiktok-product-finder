@@ -378,10 +378,52 @@ def fill_listing_on_ebay(listing_data, image_paths):
             # ─── Step 4: Handle "Confirm details" page ──────────
             result['step'] = 'confirm_details'
             log("Handling confirm details / condition page...")
+            
+            # Wait for page to fully stabilize (React hydration)
+            try:
+                page.wait_for_load_state('networkidle', timeout=15000)
+                log("Network idle reached")
+            except:
+                log("Network idle timeout — continuing anyway")
+            
+            # Wait for condition-related content to appear
+            try:
+                page.locator('text=/[Cc]ondition/').first.wait_for(state='visible', timeout=8000)
+                log("Condition text visible on page")
+            except:
+                log("Condition text not found — page may have different layout")
+            
+            page.wait_for_timeout(3000)  # Extra settle time for React
             take_screenshot(page, 'confirm_details')
 
-            # This intermediate page asks to select condition and click "Continue to listing"
-            # Select condition first
+            # Dump page structure for debugging
+            try:
+                page_text = page.evaluate('() => document.body.innerText.substring(0, 2000)')
+                log(f"PAGE TEXT: {page_text[:600]}")
+                
+                # Find all interactive elements and their text
+                elems = page.evaluate('''() => {
+                    const results = [];
+                    const all = document.querySelectorAll('button, [role="button"], [role="option"], [role="radio"], [role="listbox"] *, input[type="radio"], label, a, [class*="ondition"], [data-testid]');
+                    for (const el of all) {
+                        const text = (el.textContent || "").trim().substring(0, 80);
+                        if (!text) continue;
+                        results.push({
+                            tag: el.tagName,
+                            text: text,
+                            role: el.getAttribute("role") || "",
+                            testId: el.getAttribute("data-testid") || "",
+                            cls: (el.className?.toString() || "").substring(0, 80)
+                        });
+                    }
+                    return results.slice(0, 30);
+                }''')
+                for e in elems[:15]:
+                    log(f"  ELEM: <{e['tag']}> role={e['role']} testId={e['testId']} text=\"{e['text'][:50]}\" cls=\"{e['cls'][:40]}\"")
+            except Exception as e:
+                log(f"Page dump error: {e}")
+
+            # Select condition
             condition = listing_data.get('condition', 'NEW')
             cond_map = {
                 'NEW': ['New', 'New with tags', 'New with box', 'Brand New'],
@@ -394,104 +436,137 @@ def fill_listing_on_ebay(listing_data, image_paths):
             cond_texts = cond_map.get(condition, ['New'])
             
             condition_selected = False
-            # Try clicking condition options on the confirm page
+            
+            # Method 1: JS evaluate — click any element whose text matches
             for cond_text in cond_texts:
+                if condition_selected:
+                    break
                 try:
-                    # Try as button first
-                    cond_el = page.get_by_role("button", name=cond_text)
-                    if cond_el.first.is_visible(timeout=2000):
-                        cond_el.first.click()
+                    clicked = page.evaluate('''(target) => {
+                        const all = document.querySelectorAll('button, [role="button"], [role="option"], [role="radio"], label, span, div, a, li, input');
+                        for (const el of all) {
+                            const txt = (el.textContent || "").trim();
+                            if (txt === target || txt.startsWith(target + "\\n") || txt.startsWith(target + " ")) {
+                                el.click();
+                                return "clicked: " + el.tagName + " " + txt.substring(0, 40);
+                            }
+                        }
+                        return false;
+                    }''', cond_text)
+                    if clicked:
                         condition_selected = True
-                        log(f"Selected condition button: {cond_text}")
-                        break
-                except:
-                    pass
-                
-                try:
-                    # Try as radio/label
-                    cond_el = page.locator(f'text="{cond_text}"').first
-                    if cond_el.is_visible(timeout=1500):
-                        cond_el.click()
-                        condition_selected = True
-                        log(f"Selected condition text: {cond_text}")
-                        break
-                except:
-                    pass
+                        log(f"Condition selected via JS: {clicked}")
+                except Exception as e:
+                    log(f"JS click error for '{cond_text}': {e}")
 
+            # Method 2: Playwright text locator
             if not condition_selected:
-                # Try selecting first available option
-                try:
-                    # Look for any radio buttons or selectable options
-                    radio = page.locator('input[type="radio"]').first
-                    if radio.is_visible(timeout=2000):
-                        radio.click()
-                        log("Selected first condition radio")
-                        condition_selected = True
-                except:
-                    pass
-                    
-                if not condition_selected:
-                    # Try clicking any button that looks like a condition
+                for cond_text in cond_texts:
                     try:
-                        any_option = page.locator('[role="option"], [role="radio"], .condition-option, [data-testid*="condition"]').first
-                        if any_option.is_visible(timeout=2000):
-                            any_option.click()
-                            log("Selected condition via generic selector")
+                        el = page.locator(f'text="{cond_text}"').first
+                        if el.is_visible(timeout=1500):
+                            el.click()
                             condition_selected = True
+                            log(f"Condition selected via text locator: {cond_text}")
+                            break
                     except:
                         pass
+            
+            # Method 3: Radio inputs
+            if not condition_selected:
+                try:
+                    count = page.locator('input[type="radio"]').count()
+                    if count > 0:
+                        page.locator('input[type="radio"]').first.click()
+                        condition_selected = True
+                        log(f"Selected first of {count} radio inputs")
+                except:
+                    pass
+
+            # Method 4: role=option
+            if not condition_selected:
+                try:
+                    opt = page.locator('[role="option"]').first
+                    if opt.is_visible(timeout=1500):
+                        opt.click()
+                        condition_selected = True
+                        log("Selected first role=option")
+                except:
+                    pass
 
             if not condition_selected:
-                log("WARNING: Could not select condition — trying to continue anyway")
+                log("WARNING: Could not select condition — trying Continue anyway")
 
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(2000)
             take_screenshot(page, 'after_condition')
 
             # ─── Step 5: Click "Continue to listing" ──────────────
             result['step'] = 'continue_to_listing'
-            log("Looking for 'Continue to listing' button...")
+            log("Clicking 'Continue to listing'...")
             
             continue_clicked = False
+            
+            # Method 1: Role-based
             for btn_text in ['Continue to listing', 'Continue', 'Next', 'Start listing']:
                 try:
                     btn = page.get_by_role("button", name=btn_text)
-                    if btn.first.is_visible(timeout=3000):
+                    if btn.first.is_visible(timeout=2000):
                         btn.first.click()
                         continue_clicked = True
-                        log(f"Clicked '{btn_text}'")
+                        log(f"Clicked '{btn_text}' via role")
                         break
                 except:
                     continue
 
+            # Method 2: Text locator
             if not continue_clicked:
-                # Try finding by text content
                 try:
-                    btn = page.locator('button:has-text("Continue")').first
+                    btn = page.locator('button:has-text("Continue"), button:has-text("continue")').first
                     if btn.is_visible(timeout=2000):
                         btn.click()
                         continue_clicked = True
-                        log("Clicked Continue button via locator")
+                        log("Clicked Continue via text locator")
                 except:
                     pass
 
+            # Method 3: JS click any button with "continue" in text
             if not continue_clicked:
-                # Try clicking any primary/submit button
+                try:
+                    clicked = page.evaluate('''() => {
+                        const btns = document.querySelectorAll('button, [role="button"], a.btn, a.button, [class*="btn"]');
+                        for (const btn of btns) {
+                            const txt = (btn.textContent || "").toLowerCase().trim();
+                            if (txt.includes("continue") || txt.includes("next")) {
+                                btn.click();
+                                return txt.substring(0, 50);
+                            }
+                        }
+                        return false;
+                    }''')
+                    if clicked:
+                        continue_clicked = True
+                        log(f"Clicked via JS: '{clicked}'")
+                except Exception as e:
+                    log(f"JS continue error: {e}")
+
+            # Method 4: Submit / primary button
+            if not continue_clicked:
                 try:
                     btn = page.locator('button[type="submit"], .btn--primary, .btn-primary').first
                     if btn.is_visible(timeout=2000):
                         btn.click()
                         continue_clicked = True
-                        log("Clicked primary submit button")
+                        log("Clicked submit/primary button")
                 except:
                     pass
 
             if continue_clicked:
-                # Wait for the full listing form to load
-                page.wait_for_timeout(5000)
+                page.wait_for_timeout(6000)
                 log(f"After continue, on page: {page.url}")
                 take_screenshot(page, 'listing_form')
             else:
-                log("WARNING: Could not click Continue — attempting to fill form anyway")
+                log("WARNING: Could not click Continue")
+                take_screenshot(page, 'stuck_on_confirm')
                 page.wait_for_timeout(2000)
 
             # ─── Step 5: Upload images ───────────────────────────
