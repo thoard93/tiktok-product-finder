@@ -1497,20 +1497,40 @@
                 hideLoading();
 
                 if (fillData.login_required || fillData.captcha_detected) {
-                    // Draft was started during prelist — user can complete in eBay app
-                    lastAutofillUrl = 'ebay://sell';
-                    document.getElementById('modalTitle').textContent = '📝 Draft Started in eBay!';
-                    document.getElementById('modalMsg').textContent =
-                        'Title, category & condition are saved in your eBay drafts. Open the eBay app → Drafts to add the details below:';
+                    // Extract the pre-filled listing URL from the redirect chain
+                    const listingUrl = fillData.listing_url;
                     showListingDataInModal(listing);
                     document.getElementById('modalScreenshot').style.display = 'none';
 
-                    document.getElementById('modalSolveCaptcha').style.display = 'block';
-                    document.getElementById('modalSolveCaptcha').textContent = '📱 Open eBay App → Drafts';
-                    document.getElementById('modalSolveCaptcha').style.background = '#4ade80';
-                    document.getElementById('modalSolveCaptcha').onclick = function () {
-                        window.location.href = 'ebay://sell';
-                    };
+                    if (listingUrl) {
+                        // We have the direct listing URL — user can open in Safari!
+                        lastAutofillUrl = listingUrl;
+                        document.getElementById('modalTitle').textContent = '✅ Listing Ready!';
+                        document.getElementById('modalMsg').textContent =
+                            'Open the link below in Safari to get a pre-filled eBay form (title + category + condition set). Then add the details below:';
+
+                        document.getElementById('modalSolveCaptcha').style.display = 'block';
+                        document.getElementById('modalSolveCaptcha').textContent = '🌐 Open Pre-Filled Form in Safari';
+                        document.getElementById('modalSolveCaptcha').style.background = '#4ade80';
+                        document.getElementById('modalSolveCaptcha').onclick = function () {
+                            copyAllListingData();
+                            window.open(listingUrl, '_blank');
+                        };
+                    } else {
+                        // No listing URL extracted — fallback to copy mode
+                        lastAutofillUrl = 'https://www.ebay.com/sl/sell';
+                        document.getElementById('modalTitle').textContent = '📋 Copy & List Manually';
+                        document.getElementById('modalMsg').textContent =
+                            'Could not reach eBay form. Copy your data below and open eBay to list:';
+
+                        document.getElementById('modalSolveCaptcha').style.display = 'block';
+                        document.getElementById('modalSolveCaptcha').textContent = '🌐 Open eBay in Safari';
+                        document.getElementById('modalSolveCaptcha').style.background = '#f59e0b';
+                        document.getElementById('modalSolveCaptcha').onclick = function () {
+                            copyAllListingData();
+                            window.open('https://www.ebay.com/sl/sell', '_blank');
+                        };
+                    }
 
                     document.getElementById('modalOpenEbay').textContent = '📋 Copy All to Clipboard';
                     document.getElementById('screenshotModal').classList.add('show');

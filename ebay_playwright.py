@@ -24,6 +24,7 @@ import sqlite3
 import tempfile
 import traceback
 from datetime import datetime
+from urllib.parse import unquote, urlparse, parse_qs
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(basedir, 'products.db')
@@ -97,10 +98,40 @@ def take_screenshot(page, name):
     """Save screenshot and return relative path."""
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"{name}_{ts}.png"
-    filepath = os.path.join(SCREENSHOTS_DIR, filename)
-    page.screenshot(path=filepath, full_page=False)
-    log(f"Screenshot saved: {filepath}")
+    screenshot_path = os.path.join(SCREENSHOTS_DIR, filename)
+    page.screenshot(path=screenshot_path, full_page=False)
+    log(f"Screenshot saved: {screenshot_path}")
     return f"/ebay/screenshots/{filename}"
+
+
+def extract_listing_url(redirect_url):
+    """Extract the actual eBay listing URL from a CAPTCHA/signin redirect chain.
+    The URL is typically nested 2-3 levels deep in 'ru' parameters."""
+    try:
+        # Decode the full URL repeatedly to un-nest it
+        decoded = redirect_url
+        for _ in range(5):  # Max decode depth
+            decoded = unquote(decoded)
+        
+        # Find the ebay.com/sl/list URL in the decoded string
+        import re
+        match = re.search(r'(https://www\.ebay\.com/sl/list\?[^&\s"]*(?:&[^&\s"]*)*)', decoded)
+        if match:
+            listing_url = match.group(1)
+            log(f"Extracted listing URL: {listing_url[:100]}...")
+            return listing_url
+        
+        # Try to find any ebay.com/sl/ URL
+        match = re.search(r'(https://www\.ebay\.com/sl/[^&\s"]*(?:&[^&\s"]*)*)', decoded)
+        if match:
+            listing_url = match.group(1)
+            log(f"Extracted sell URL: {listing_url[:100]}...")
+            return listing_url
+            
+    except Exception as e:
+        log(f"URL extraction failed: {e}")
+    
+    return None
 
 
 def launch_browser(playwright, headless=True):
@@ -714,11 +745,16 @@ def fill_listing_on_ebay(listing_data, image_paths):
                     pass
             
             if is_captcha:
-                log("⚠️ CAPTCHA page detected — returning captcha status")
+                log("⚠️ CAPTCHA page detected — extracting listing URL")
                 result['captcha_detected'] = True
-                result['error'] = 'CAPTCHA detected — please solve manually'
+                result['error'] = 'CAPTCHA detected'
                 result['screenshot'] = take_screenshot(page, 'captcha_page')
                 result['ebay_url'] = current_url
+                # Extract the actual listing URL from the redirect chain
+                listing_url = extract_listing_url(current_url)
+                if listing_url:
+                    result['listing_url'] = listing_url
+                    log(f"Listing URL for user: {listing_url[:80]}...")
                 context.close()
                 return result
             
@@ -743,11 +779,16 @@ def fill_listing_on_ebay(listing_data, image_paths):
                     pass
             
             if is_login:
-                log("⚠️ Login page detected — session expired")
+                log("⚠️ Login page detected — extracting listing URL")
                 result['login_required'] = True
-                result['error'] = 'eBay session expired — please log in again'
+                result['error'] = 'eBay session expired'
                 result['screenshot'] = take_screenshot(page, 'login_page')
                 result['ebay_url'] = current_url
+                # Extract the actual listing URL from the redirect chain
+                listing_url = extract_listing_url(current_url)
+                if listing_url:
+                    result['listing_url'] = listing_url
+                    log(f"Listing URL for user: {listing_url[:80]}...")
                 context.close()
                 return result
             
