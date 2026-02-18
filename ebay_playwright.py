@@ -375,67 +375,98 @@ def fill_listing_on_ebay(listing_data, image_paths):
             page.wait_for_timeout(4000)
             log(f"After title submit, on page: {page.url}")
 
-            # ─── Step 4: Handle "Confirm details" page ──────────
+            # ─── Step 4: Handle eBay "Confirm details" prelist page ──
+            # This page has TWO stages:
+            #   Stage A: Product catalog matching (select a product or skip)
+            #   Stage B: Condition selection (New, Used, etc.)
+            # Both must be completed before clicking "Continue to listing"
             result['step'] = 'confirm_details'
-            log("Handling confirm details / condition page...")
+            log("Handling prelist page...")
             
-            # Wait for page to fully stabilize (React hydration)
+            # Wait for page to stabilize
             try:
                 page.wait_for_load_state('networkidle', timeout=15000)
-                log("Network idle reached")
             except:
-                log("Network idle timeout — continuing anyway")
+                pass
+            page.wait_for_timeout(3000)
             
-            # Wait for condition-related content to appear
+            # Save page HTML for debugging
             try:
-                page.locator('text=/[Cc]ondition/').first.wait_for(state='visible', timeout=8000)
-                log("Condition text visible on page")
-            except:
-                log("Condition text not found — page may have different layout")
-            
-            page.wait_for_timeout(3000)  # Extra settle time for React
-            take_screenshot(page, 'confirm_details')
-
-            # Dump page structure for debugging
-            try:
-                page_text = page.evaluate('() => document.body.innerText.substring(0, 2000)')
-                log(f"PAGE TEXT: {page_text[:600]}")
-                
-                # Dump HTML around radio inputs specifically
-                radio_html = page.evaluate('''() => {
-                    const radio = document.querySelector('input[type="radio"]');
-                    if (!radio) return "NO RADIO FOUND";
-                    // Walk up 3 levels to get context
-                    let el = radio;
-                    for (let i = 0; i < 3 && el.parentElement; i++) el = el.parentElement;
-                    return el.outerHTML.substring(0, 1000);
-                }''')
-                log(f"RADIO HTML: {radio_html}")
-                
-                # Find all interactive elements and their text
-                elems = page.evaluate('''() => {
-                    const results = [];
-                    const all = document.querySelectorAll('button, [role="button"], [role="option"], [role="radio"], [role="listbox"] *, input[type="radio"], label, a, [class*="ondition"], [data-testid]');
-                    for (const el of all) {
-                        const text = (el.textContent || "").trim().substring(0, 80);
-                        if (!text) continue;
-                        results.push({
-                            tag: el.tagName,
-                            text: text,
-                            role: el.getAttribute("role") || "",
-                            testId: el.getAttribute("data-testid") || "",
-                            cls: (el.className?.toString() || "").substring(0, 80)
-                        });
-                    }
-                    return results.slice(0, 30);
-                }''')
-                for e in elems[:15]:
-                    log(f"  ELEM: <{e['tag']}> role={e['role']} testId={e['testId']} text=\"{e['text'][:50]}\" cls=\"{e['cls'][:40]}\"")
+                html = page.content()
+                html_path = os.path.join(SCREENSHOTS_DIR, 'prelist_page.html')
+                with open(html_path, 'w', encoding='utf-8') as f:
+                    f.write(html)
+                log(f"Page HTML saved ({len(html)} bytes)")
             except Exception as e:
-                log(f"Page dump error: {e}")
-
-            # Select condition — MUST use Playwright native clicks (not JS evaluate)
-            # because eBay uses React and JS DOM events don't trigger React state
+                log(f"HTML save error: {e}")
+            
+            take_screenshot(page, 'prelist_before')
+            current_url = page.url
+            log(f"Prelist URL: {current_url}")
+            
+            # ─── Stage A: Product Catalog Matching ────────────────
+            # eBay shows product matches with class "product-button"
+            # We need to either click the first matching product OR skip
+            log("Stage A: Product catalog matching...")
+            
+            product_selected = False
+            
+            # Check if product buttons exist on the page
+            try:
+                product_btns = page.locator('button[class*="product-button"]')
+                btn_count = product_btns.count()
+                log(f"Found {btn_count} product-button elements")
+                
+                if btn_count > 0:
+                    # Click the FIRST product match
+                    product_btns.first.click()
+                    product_selected = True
+                    log("Clicked first product match")
+                    page.wait_for_timeout(3000)
+                    take_screenshot(page, 'after_product_select')
+            except Exception as e:
+                log(f"Product button click error: {e}")
+            
+            # Fallback: try "Continue without match" / "I can't find it" / skip buttons
+            if not product_selected:
+                skip_texts = [
+                    "Continue without match", "continue without match",
+                    "Continue without product match",
+                    "I can't find", "Can't find",
+                    "List it yourself", "Skip",
+                    "Continue without selecting",
+                ]
+                for skip_text in skip_texts:
+                    try:
+                        skip_btn = page.get_by_text(skip_text)
+                        if skip_btn.count() > 0 and skip_btn.first.is_visible(timeout=1500):
+                            skip_btn.first.click()
+                            product_selected = True
+                            log(f"Clicked skip: '{skip_text}'")
+                            page.wait_for_timeout(3000)
+                            break
+                    except:
+                        pass
+            
+            # If product buttons weren't found, the page might already be on condition step
+            if not product_selected:
+                log("No product buttons found — may already be on condition step")
+            
+            # ─── Stage B: Condition Selection ─────────────────────
+            # After product match, eBay shows condition options (New, Used, etc.)
+            # Wait for condition step to appear
+            log("Stage B: Condition selection...")
+            
+            page.wait_for_timeout(2000)
+            take_screenshot(page, 'condition_step')
+            
+            # Log what we see now
+            try:
+                page_text = page.evaluate('() => document.body.innerText.substring(0, 1500)')
+                log(f"PAGE TEXT (first 400): {page_text[:400]}")
+            except:
+                pass
+            
             condition = listing_data.get('condition', 'NEW')
             cond_map = {
                 'NEW': ['New', 'New with tags', 'New with box', 'Brand New'],
@@ -446,141 +477,143 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 'USED': ['Used', 'Pre-owned'],
             }
             cond_texts = cond_map.get(condition, ['New'])
-            
             condition_selected = False
             
-            # Save full page HTML to disk for debugging
+            # Wait for "condition" text to appear (indicates condition step loaded)
             try:
-                html = page.content()
-                html_path = os.path.join(SCREENSHOT_DIR, 'condition_page.html')
-                with open(html_path, 'w', encoding='utf-8') as f:
-                    f.write(html)
-                log(f"Full page HTML saved to {html_path} ({len(html)} bytes)")
-            except Exception as e:
-                log(f"HTML save error: {e}")
+                page.get_by_text("condition", exact=False).first.wait_for(state='visible', timeout=8000)
+                log("Condition text visible")
+            except:
+                log("Condition text not found — checking if already past this step")
+                # If URL is no longer prelist, we might have skipped past it
+                if 'prelist' not in page.url:
+                    log(f"Already past prelist! URL: {page.url}")
+                    condition_selected = True  # Skip condition selection
             
-            # Method 1: Playwright get_by_role("radio") — works with aria role
-            for cond_text in cond_texts:
-                if condition_selected:
-                    break
+            if not condition_selected:
+                # Dump interactive elements for debugging
                 try:
-                    radio = page.get_by_role("radio", name=cond_text)
-                    if radio.count() > 0:
-                        radio.first.click(force=True)
-                        condition_selected = True
-                        log(f"Clicked radio role '{cond_text}'")
-                except Exception as e:
-                    log(f"get_by_role radio '{cond_text}': {e}")
-            
-            # Method 2: ARIA selectors for custom React radio components  
-            if not condition_selected:
-                aria_selectors = [
-                    '[aria-checked="false"]',
-                    '[role="radio"]',
-                    '[role="option"]',
-                    '[data-testid*="condition"]',
-                    '[data-testid*="Condition"]',
-                ]
-                for sel in aria_selectors:
-                    try:
-                        el = page.locator(sel).first
-                        if el.is_visible(timeout=1500):
-                            el.click()
-                            condition_selected = True
-                            log(f"Clicked ARIA selector: {sel}")
-                            break
-                    except:
-                        pass
-            
-            # Method 3: Playwright get_by_label
-            if not condition_selected:
+                    elems = page.evaluate('''() => {
+                        const results = [];
+                        const all = document.querySelectorAll('button, [role="button"], [role="radio"], [role="option"], input[type="radio"], label, [aria-checked], [class*="condition"], [class*="Condition"]');
+                        for (const el of all) {
+                            const text = (el.textContent || "").trim().substring(0, 80);
+                            if (!text) continue;
+                            results.push({
+                                tag: el.tagName,
+                                text: text,
+                                role: el.getAttribute("role") || "",
+                                cls: (el.className?.toString() || "").substring(0, 60),
+                                checked: el.getAttribute("aria-checked") || ""
+                            });
+                        }
+                        return results.slice(0, 20);
+                    }''')
+                    for e in elems[:10]:
+                        log(f"  COND_ELEM: <{e['tag']}> role={e['role']} checked={e['checked']} text=\"{e['text'][:40]}\" cls=\"{e['cls'][:40]}\"")
+                except:
+                    pass
+                
+                # Method 1: get_by_role("radio") 
                 for cond_text in cond_texts:
+                    if condition_selected:
+                        break
                     try:
-                        el = page.get_by_label(cond_text, exact=True)
-                        if el.count() > 0:
-                            el.first.click(force=True)
+                        radio = page.get_by_role("radio", name=cond_text)
+                        if radio.count() > 0:
+                            radio.first.click(force=True)
                             condition_selected = True
-                            log(f"Clicked get_by_label '{cond_text}'")
-                            break
+                            log(f"M1: Clicked radio role '{cond_text}'")
                     except:
                         pass
-
-            # Method 4: Force-click radio inputs
-            if not condition_selected:
-                try:
-                    radios = page.locator('input[type="radio"]')
-                    count = radios.count()
-                    log(f"Found {count} input[type=radio] elements")
-                    if count > 0:
-                        box = radios.first.bounding_box()
-                        if box:
-                            page.mouse.click(box['x'] + box['width']/2, box['y'] + box['height']/2)
-                            condition_selected = True
-                            log(f"Mouse-clicked radio at ({box['x']}, {box['y']})")
-                        else:
+                
+                # Method 2: ARIA selectors
+                if not condition_selected:
+                    for sel in ['[aria-checked="false"]', '[role="radio"]', '[role="option"]']:
+                        try:
+                            el = page.locator(sel).first
+                            if el.is_visible(timeout=1500):
+                                el.click()
+                                condition_selected = True
+                                log(f"M2: Clicked {sel}")
+                                break
+                        except:
+                            pass
+                
+                # Method 3: get_by_label
+                if not condition_selected:
+                    for cond_text in cond_texts:
+                        try:
+                            el = page.get_by_label(cond_text, exact=True)
+                            if el.count() > 0:
+                                el.first.click(force=True)
+                                condition_selected = True
+                                log(f"M3: Clicked label '{cond_text}'")
+                                break
+                        except:
+                            pass
+                
+                # Method 4: input[type=radio]
+                if not condition_selected:
+                    try:
+                        radios = page.locator('input[type="radio"]')
+                        count = radios.count()
+                        log(f"M4: Found {count} radio inputs")
+                        if count > 0:
                             radios.first.click(force=True)
                             condition_selected = True
-                            log("Force-clicked hidden radio")
-                    else:
-                        log("No input[type=radio] found — eBay likely uses custom components")
-                except Exception as e:
-                    log(f"Radio click error: {e}")
-
-            # Method 5: Click the visible text "New" via get_by_text
-            if not condition_selected:
-                for cond_text in cond_texts:
-                    try:
-                        el = page.get_by_text(cond_text, exact=True)
-                        if el.count() > 0:
-                            el.first.click()
-                            condition_selected = True
-                            log(f"Clicked get_by_text '{cond_text}'")
-                            break
+                            log("M4: Clicked first radio")
                     except:
                         pass
-
-            # Method 6: Find "New" text via JS, get coordinates, click via Playwright mouse
-            if not condition_selected:
-                try:
-                    coords = page.evaluate('''(targets) => {
-                        // Find all elements and look for exact condition text
-                        const walker = document.createTreeWalker(
-                            document.body, NodeFilter.SHOW_TEXT, null, false
-                        );
-                        while (walker.nextNode()) {
-                            const text = walker.currentNode.textContent.trim();
-                            for (const target of targets) {
-                                if (text === target) {
-                                    const el = walker.currentNode.parentElement;
-                                    const rect = el.getBoundingClientRect();
-                                    if (rect.width > 0 && rect.height > 0) {
-                                        return {
-                                            x: rect.x + rect.width / 2,
-                                            y: rect.y + rect.height / 2,
-                                            tag: el.tagName,
-                                            text: text
-                                        };
+                
+                # Method 5: Click visible text matching condition
+                if not condition_selected:
+                    for cond_text in cond_texts:
+                        try:
+                            el = page.get_by_text(cond_text, exact=True)
+                            if el.count() > 0:
+                                el.first.click()
+                                condition_selected = True
+                                log(f"M5: Clicked text '{cond_text}'")
+                                break
+                        except:
+                            pass
+                
+                # Method 6: Coordinate-based click on text node
+                if not condition_selected:
+                    try:
+                        coords = page.evaluate('''(targets) => {
+                            const walker = document.createTreeWalker(
+                                document.body, NodeFilter.SHOW_TEXT, null, false
+                            );
+                            while (walker.nextNode()) {
+                                const text = walker.currentNode.textContent.trim();
+                                for (const target of targets) {
+                                    if (text === target) {
+                                        const el = walker.currentNode.parentElement;
+                                        const rect = el.getBoundingClientRect();
+                                        if (rect.width > 0 && rect.height > 0) {
+                                            return {x: rect.x + rect.width/2, y: rect.y + rect.height/2, tag: el.tagName, text: text};
+                                        }
                                     }
                                 }
                             }
-                        }
-                        return null;
-                    }''', cond_texts)
-                    if coords:
-                        log(f"Found text node '{coords['text']}' in <{coords['tag']}> at ({coords['x']}, {coords['y']})")
-                        page.mouse.click(coords['x'], coords['y'])
-                        condition_selected = True
-                        log(f"Mouse-clicked text element")
-                except Exception as e:
-                    log(f"Text node coordinate click error: {e}")
-
-            if not condition_selected:
-                log("WARNING: All 6 condition methods failed — trying Continue anyway")
-
-            page.wait_for_timeout(3000)
+                            return null;
+                        }''', cond_texts)
+                        if coords:
+                            page.mouse.click(coords['x'], coords['y'])
+                            condition_selected = True
+                            log(f"M6: Mouse-clicked '{coords['text']}' in <{coords['tag']}> at ({coords['x']:.0f}, {coords['y']:.0f})")
+                    except Exception as e:
+                        log(f"M6 error: {e}")
+                
+                if not condition_selected:
+                    log("WARNING: All condition methods failed")
+            
+            page.wait_for_timeout(2000)
             take_screenshot(page, 'after_condition')
-
-            # ─── Step 5: Click "Continue to listing" ──────────────
+            
+            # ─── Stage C: Click "Continue to listing" ─────────────
             result['step'] = 'continue_to_listing'
             log("Clicking 'Continue to listing'...")
             
@@ -609,11 +642,11 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 except:
                     pass
 
-            # Method 3: JS click any button with "continue" in text
+            # Method 3: JS click any button with "continue"
             if not continue_clicked:
                 try:
                     clicked = page.evaluate('''() => {
-                        const btns = document.querySelectorAll('button, [role="button"], a.btn, a.button, [class*="btn"]');
+                        const btns = document.querySelectorAll('button, [role="button"]');
                         for (const btn of btns) {
                             const txt = (btn.textContent || "").toLowerCase().trim();
                             if (txt.includes("continue") || txt.includes("next")) {
@@ -642,17 +675,15 @@ def fill_listing_on_ebay(listing_data, image_paths):
 
             if continue_clicked:
                 page.wait_for_timeout(6000)
-                log(f"After continue, on page: {page.url}")
+                log(f"After continue, URL: {page.url}")
                 take_screenshot(page, 'listing_form')
             else:
                 log("WARNING: Could not click Continue")
                 take_screenshot(page, 'stuck_on_confirm')
-                page.wait_for_timeout(2000)
             
-            # Check if we're still stuck on the confirm/prelist page
-            current_url = page.url
-            if 'prelist' in current_url or 'confirm' in current_url:
-                result['error'] = 'Stuck on condition/confirm page — condition may not have been selected'
+            # Check if we're still stuck on prelist
+            if 'prelist' in page.url:
+                result['error'] = 'Stuck on prelist page — product or condition selection failed'
                 result['screenshot'] = take_screenshot(page, 'stuck_condition')
                 context.close()
                 return result
