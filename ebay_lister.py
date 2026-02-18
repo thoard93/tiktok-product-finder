@@ -1092,7 +1092,13 @@ def ebay_autofill_listing(listing_id):
             cwd=os.path.dirname(__file__),
         )
 
-        log.info(f"Playwright stderr: {proc.stderr[-500:] if proc.stderr else 'none'}")
+        # Log stderr in chunks so diagnostic output is visible in Render
+        if proc.stderr:
+            stderr_text = proc.stderr[-3000:]
+            for i in range(0, len(stderr_text), 500):
+                log.info(f"Playwright stderr [{i}]: {stderr_text[i:i+500]}")
+        else:
+            log.info("Playwright stderr: none")
 
         try:
             result = json.loads(proc.stdout)

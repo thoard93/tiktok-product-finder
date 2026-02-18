@@ -449,97 +449,135 @@ def fill_listing_on_ebay(listing_data, image_paths):
             
             condition_selected = False
             
-            # Method 1: Playwright get_by_role("radio") — best for React
+            # Save full page HTML to disk for debugging
+            try:
+                html = page.content()
+                html_path = os.path.join(SCREENSHOT_DIR, 'condition_page.html')
+                with open(html_path, 'w', encoding='utf-8') as f:
+                    f.write(html)
+                log(f"Full page HTML saved to {html_path} ({len(html)} bytes)")
+            except Exception as e:
+                log(f"HTML save error: {e}")
+            
+            # Method 1: Playwright get_by_role("radio") — works with aria role
             for cond_text in cond_texts:
                 if condition_selected:
                     break
                 try:
                     radio = page.get_by_role("radio", name=cond_text)
-                    if radio.first.is_visible(timeout=2000):
-                        radio.first.click()
+                    if radio.count() > 0:
+                        radio.first.click(force=True)
                         condition_selected = True
                         log(f"Clicked radio role '{cond_text}'")
-                except:
-                    pass
+                except Exception as e:
+                    log(f"get_by_role radio '{cond_text}': {e}")
             
-            # Method 2: Playwright get_by_label
+            # Method 2: ARIA selectors for custom React radio components  
+            if not condition_selected:
+                aria_selectors = [
+                    '[aria-checked="false"]',
+                    '[role="radio"]',
+                    '[role="option"]',
+                    '[data-testid*="condition"]',
+                    '[data-testid*="Condition"]',
+                ]
+                for sel in aria_selectors:
+                    try:
+                        el = page.locator(sel).first
+                        if el.is_visible(timeout=1500):
+                            el.click()
+                            condition_selected = True
+                            log(f"Clicked ARIA selector: {sel}")
+                            break
+                    except:
+                        pass
+            
+            # Method 3: Playwright get_by_label
             if not condition_selected:
                 for cond_text in cond_texts:
                     try:
-                        el = page.get_by_label(cond_text)
-                        if el.first.is_visible(timeout=1500):
-                            el.first.click()
+                        el = page.get_by_label(cond_text, exact=True)
+                        if el.count() > 0:
+                            el.first.click(force=True)
                             condition_selected = True
                             log(f"Clicked get_by_label '{cond_text}'")
                             break
                     except:
                         pass
 
-            # Method 3: Force-click on radio input via Playwright (real mouse event)
+            # Method 4: Force-click radio inputs
             if not condition_selected:
                 try:
                     radios = page.locator('input[type="radio"]')
                     count = radios.count()
-                    log(f"Found {count} radio inputs")
+                    log(f"Found {count} input[type=radio] elements")
                     if count > 0:
-                        # Get bounding box and click at exact center
                         box = radios.first.bounding_box()
                         if box:
-                            center_x = box['x'] + box['width'] / 2
-                            center_y = box['y'] + box['height'] / 2
-                            page.mouse.click(center_x, center_y)
+                            page.mouse.click(box['x'] + box['width']/2, box['y'] + box['height']/2)
                             condition_selected = True
-                            log(f"Mouse-clicked radio at ({center_x}, {center_y})")
+                            log(f"Mouse-clicked radio at ({box['x']}, {box['y']})")
                         else:
-                            # Radio has no bounding box (hidden), click its parent
                             radios.first.click(force=True)
                             condition_selected = True
                             log("Force-clicked hidden radio")
+                    else:
+                        log("No input[type=radio] found — eBay likely uses custom components")
                 except Exception as e:
                     log(f"Radio click error: {e}")
 
-            # Method 4: Click the text "New" directly via get_by_text
+            # Method 5: Click the visible text "New" via get_by_text
             if not condition_selected:
                 for cond_text in cond_texts:
                     try:
                         el = page.get_by_text(cond_text, exact=True)
-                        if el.first.is_visible(timeout=1500):
+                        if el.count() > 0:
                             el.first.click()
                             condition_selected = True
-                            log(f"Clicked text '{cond_text}'")
+                            log(f"Clicked get_by_text '{cond_text}'")
                             break
                     except:
                         pass
 
-            # Method 5: Click the label parent of the radio by coordinates
+            # Method 6: Find "New" text via JS, get coordinates, click via Playwright mouse
             if not condition_selected:
                 try:
-                    # Find the radio's label using JS, get its bounds, click via Playwright
-                    bounds = page.evaluate('''() => {
-                        const radio = document.querySelector('input[type="radio"]');
-                        if (!radio) return null;
-                        // Walk up to find the clickable container (label, li, div)
-                        let target = radio.parentElement;
-                        for (let i = 0; i < 5 && target; i++) {
-                            const rect = target.getBoundingClientRect();
-                            if (rect.width > 20 && rect.height > 20) {
-                                return {x: rect.x + rect.width/2, y: rect.y + rect.height/2, tag: target.tagName};
+                    coords = page.evaluate('''(targets) => {
+                        // Find all elements and look for exact condition text
+                        const walker = document.createTreeWalker(
+                            document.body, NodeFilter.SHOW_TEXT, null, false
+                        );
+                        while (walker.nextNode()) {
+                            const text = walker.currentNode.textContent.trim();
+                            for (const target of targets) {
+                                if (text === target) {
+                                    const el = walker.currentNode.parentElement;
+                                    const rect = el.getBoundingClientRect();
+                                    if (rect.width > 0 && rect.height > 0) {
+                                        return {
+                                            x: rect.x + rect.width / 2,
+                                            y: rect.y + rect.height / 2,
+                                            tag: el.tagName,
+                                            text: text
+                                        };
+                                    }
+                                }
                             }
-                            target = target.parentElement;
                         }
                         return null;
-                    }''')
-                    if bounds:
-                        page.mouse.click(bounds['x'], bounds['y'])
+                    }''', cond_texts)
+                    if coords:
+                        log(f"Found text node '{coords['text']}' in <{coords['tag']}> at ({coords['x']}, {coords['y']})")
+                        page.mouse.click(coords['x'], coords['y'])
                         condition_selected = True
-                        log(f"Mouse-clicked radio parent <{bounds['tag']}> at ({bounds['x']}, {bounds['y']})")
+                        log(f"Mouse-clicked text element")
                 except Exception as e:
-                    log(f"Parent coordinate click error: {e}")
+                    log(f"Text node coordinate click error: {e}")
 
             if not condition_selected:
-                log("WARNING: Could not select condition — trying Continue anyway")
+                log("WARNING: All 6 condition methods failed — trying Continue anyway")
 
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(3000)
             take_screenshot(page, 'after_condition')
 
             # ─── Step 5: Click "Continue to listing" ──────────────
