@@ -375,40 +375,124 @@ def fill_listing_on_ebay(listing_data, image_paths):
             page.wait_for_timeout(4000)
             log(f"After title submit, on page: {page.url}")
 
-            # ─── Step 4: Category selection ──────────────────────
-            result['step'] = 'select_category'
-            log("Waiting for category suggestions...")
+            # ─── Step 4: Handle "Confirm details" page ──────────
+            result['step'] = 'confirm_details'
+            log("Handling confirm details / condition page...")
+            take_screenshot(page, 'confirm_details')
 
-            # eBay usually shows category suggestions after title
-            # Try to select the first suggestion or click through
-            try:
-                # Look for category suggestion radio/button
-                cat_suggestion = page.locator('.category-suggestion, [data-testid="category-suggestion"]').first
-                if cat_suggestion.is_visible(timeout=5000):
-                    cat_suggestion.click()
-                    log("Selected category suggestion")
-                else:
-                    # Try clicking first radio button in category list
+            # This intermediate page asks to select condition and click "Continue to listing"
+            # Select condition first
+            condition = listing_data.get('condition', 'NEW')
+            cond_map = {
+                'NEW': ['New', 'New with tags', 'New with box', 'Brand New'],
+                'NEW_OTHER': ['New (Other)', 'New without tags', 'New other'],
+                'LIKE_NEW': ['Like New', 'Excellent'],
+                'USED_EXCELLENT': ['Used - Excellent', 'Very Good', 'Pre-owned'],
+                'USED_GOOD': ['Used - Good', 'Good'],
+                'USED': ['Used', 'Pre-owned'],
+            }
+            cond_texts = cond_map.get(condition, ['New'])
+            
+            condition_selected = False
+            # Try clicking condition options on the confirm page
+            for cond_text in cond_texts:
+                try:
+                    # Try as button first
+                    cond_el = page.get_by_role("button", name=cond_text)
+                    if cond_el.first.is_visible(timeout=2000):
+                        cond_el.first.click()
+                        condition_selected = True
+                        log(f"Selected condition button: {cond_text}")
+                        break
+                except:
+                    pass
+                
+                try:
+                    # Try as radio/label
+                    cond_el = page.locator(f'text="{cond_text}"').first
+                    if cond_el.is_visible(timeout=1500):
+                        cond_el.click()
+                        condition_selected = True
+                        log(f"Selected condition text: {cond_text}")
+                        break
+                except:
+                    pass
+
+            if not condition_selected:
+                # Try selecting first available option
+                try:
+                    # Look for any radio buttons or selectable options
                     radio = page.locator('input[type="radio"]').first
-                    if radio.is_visible(timeout=3000):
+                    if radio.is_visible(timeout=2000):
                         radio.click()
-                        log("Selected first category radio")
-            except Exception as e:
-                log(f"Category selection: {e} — continuing anyway")
+                        log("Selected first condition radio")
+                        condition_selected = True
+                except:
+                    pass
+                    
+                if not condition_selected:
+                    # Try clicking any button that looks like a condition
+                    try:
+                        any_option = page.locator('[role="option"], [role="radio"], .condition-option, [data-testid*="condition"]').first
+                        if any_option.is_visible(timeout=2000):
+                            any_option.click()
+                            log("Selected condition via generic selector")
+                            condition_selected = True
+                    except:
+                        pass
 
-            # Click Continue after category
-            page.wait_for_timeout(2000)
-            for btn_text in ['Continue', 'Continue to listing']:
+            if not condition_selected:
+                log("WARNING: Could not select condition — trying to continue anyway")
+
+            page.wait_for_timeout(1500)
+            take_screenshot(page, 'after_condition')
+
+            # ─── Step 5: Click "Continue to listing" ──────────────
+            result['step'] = 'continue_to_listing'
+            log("Looking for 'Continue to listing' button...")
+            
+            continue_clicked = False
+            for btn_text in ['Continue to listing', 'Continue', 'Next', 'Start listing']:
                 try:
                     btn = page.get_by_role("button", name=btn_text)
-                    if btn.is_visible(timeout=3000):
-                        btn.click()
+                    if btn.first.is_visible(timeout=3000):
+                        btn.first.click()
+                        continue_clicked = True
                         log(f"Clicked '{btn_text}'")
                         break
                 except:
                     continue
 
-            page.wait_for_timeout(4000)
+            if not continue_clicked:
+                # Try finding by text content
+                try:
+                    btn = page.locator('button:has-text("Continue")').first
+                    if btn.is_visible(timeout=2000):
+                        btn.click()
+                        continue_clicked = True
+                        log("Clicked Continue button via locator")
+                except:
+                    pass
+
+            if not continue_clicked:
+                # Try clicking any primary/submit button
+                try:
+                    btn = page.locator('button[type="submit"], .btn--primary, .btn-primary').first
+                    if btn.is_visible(timeout=2000):
+                        btn.click()
+                        continue_clicked = True
+                        log("Clicked primary submit button")
+                except:
+                    pass
+
+            if continue_clicked:
+                # Wait for the full listing form to load
+                page.wait_for_timeout(5000)
+                log(f"After continue, on page: {page.url}")
+                take_screenshot(page, 'listing_form')
+            else:
+                log("WARNING: Could not click Continue — attempting to fill form anyway")
+                page.wait_for_timeout(2000)
 
             # ─── Step 5: Upload images ───────────────────────────
             result['step'] = 'upload_images'
