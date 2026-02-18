@@ -681,6 +681,47 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 log("WARNING: Could not click Continue")
                 take_screenshot(page, 'stuck_on_confirm')
             
+            # ─── CAPTCHA Detection ────────────────────────────
+            current_url = page.url
+            is_captcha = False
+            
+            # Check URL for captcha signals
+            if 'captcha' in current_url.lower():
+                is_captcha = True
+                log("CAPTCHA detected via URL")
+            
+            # Check page text for captcha signals
+            if not is_captcha:
+                try:
+                    page_text = page.evaluate('() => document.body.innerText.substring(0, 500).toLowerCase()')
+                    captcha_signals = ['verify yourself', 'i am human', 'captcha', 'hcaptcha', 'recaptcha']
+                    for signal in captcha_signals:
+                        if signal in page_text:
+                            is_captcha = True
+                            log(f"CAPTCHA detected via page text: '{signal}'")
+                            break
+                except:
+                    pass
+            
+            # Check for hCaptcha/reCAPTCHA iframe
+            if not is_captcha:
+                try:
+                    captcha_frames = page.locator('iframe[src*="captcha"], iframe[src*="hcaptcha"], iframe[src*="recaptcha"], #captcha, .h-captcha, .g-recaptcha')
+                    if captcha_frames.count() > 0:
+                        is_captcha = True
+                        log("CAPTCHA detected via iframe/element")
+                except:
+                    pass
+            
+            if is_captcha:
+                log("⚠️ CAPTCHA page detected — returning captcha status")
+                result['captcha_detected'] = True
+                result['error'] = 'CAPTCHA detected — please solve manually'
+                result['screenshot'] = take_screenshot(page, 'captcha_page')
+                result['ebay_url'] = current_url
+                context.close()
+                return result
+            
             # Check if we're still stuck on prelist
             if 'prelist' in page.url:
                 result['error'] = 'Stuck on prelist page — product or condition selection failed'

@@ -1449,7 +1449,22 @@
                 const fillData = await fillResp.json();
                 hideLoading();
 
-                if (fillData.success) {
+                if (fillData.captcha_detected) {
+                    // CAPTCHA detected — show user-friendly message
+                    lastAutofillUrl = fillData.ebay_url || 'https://www.ebay.com/sl/sell';
+                    document.getElementById('modalTitle').textContent = '🔒 CAPTCHA Detected';
+                    document.getElementById('modalMsg').textContent =
+                        'eBay is asking for human verification. Please click "Open eBay Now" to solve the CAPTCHA in your browser, then try auto-fill again.';
+
+                    if (fillData.screenshot) {
+                        const img = document.getElementById('modalScreenshot');
+                        img.src = fillData.screenshot;
+                        img.style.display = 'block';
+                    }
+
+                    document.getElementById('modalOpenEbay').textContent = '🔓 Open eBay to Solve CAPTCHA';
+                    document.getElementById('screenshotModal').classList.add('show');
+                } else if (fillData.success) {
                     // Show screenshot modal
                     lastAutofillUrl = fillData.ebay_url || 'https://www.ebay.com/sl/sell';
                     document.getElementById('modalTitle').textContent = '✅ eBay Form Filled!';
