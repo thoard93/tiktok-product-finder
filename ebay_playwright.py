@@ -437,62 +437,99 @@ def fill_listing_on_ebay(listing_data, image_paths):
             
             condition_selected = False
             
-            # Method 1: JS evaluate — click any element whose text matches
-            for cond_text in cond_texts:
-                if condition_selected:
-                    break
-                try:
-                    clicked = page.evaluate('''(target) => {
-                        const all = document.querySelectorAll('button, [role="button"], [role="option"], [role="radio"], label, span, div, a, li, input');
-                        for (const el of all) {
-                            const txt = (el.textContent || "").trim();
-                            if (txt === target || txt.startsWith(target + "\\n") || txt.startsWith(target + " ")) {
-                                el.click();
-                                return "clicked: " + el.tagName + " " + txt.substring(0, 40);
+            # Method 1: Force-click radio inputs via JS + dispatch events
+            # eBay uses custom styled radios — the <input> is often hidden
+            try:
+                clicked = page.evaluate('''(targets) => {
+                    // Find all radio inputs
+                    const radios = document.querySelectorAll('input[type="radio"]');
+                    for (const radio of radios) {
+                        // Check if the radio's label or parent contains our target text
+                        const parent = radio.closest('label, div, li, span, [class*="condition"], [class*="Condition"]') || radio.parentElement;
+                        const parentText = (parent?.textContent || "").trim();
+                        
+                        for (const target of targets) {
+                            if (parentText === target || parentText.startsWith(target)) {
+                                // Programmatically select the radio
+                                radio.checked = true;
+                                radio.dispatchEvent(new Event('change', {bubbles: true}));
+                                radio.dispatchEvent(new Event('input', {bubbles: true}));
+                                radio.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+                                // Also click the parent/label for React
+                                if (parent && parent !== radio) parent.click();
+                                return "selected: " + parentText.substring(0, 50);
                             }
                         }
-                        return false;
-                    }''', cond_text)
-                    if clicked:
-                        condition_selected = True
-                        log(f"Condition selected via JS: {clicked}")
-                except Exception as e:
-                    log(f"JS click error for '{cond_text}': {e}")
+                    }
+                    
+                    // Fallback: just click the first radio
+                    if (radios.length > 0) {
+                        const radio = radios[0];
+                        radio.checked = true;
+                        radio.dispatchEvent(new Event('change', {bubbles: true}));
+                        radio.dispatchEvent(new Event('input', {bubbles: true}));
+                        radio.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+                        const p = radio.parentElement;
+                        if (p) p.click();
+                        return "fallback first radio: " + (p?.textContent || "").substring(0, 50);
+                    }
+                    
+                    return false;
+                }''', cond_texts)
+                if clicked:
+                    condition_selected = True
+                    log(f"Condition via JS radio: {clicked}")
+            except Exception as e:
+                log(f"JS radio error: {e}")
 
-            # Method 2: Playwright text locator
+            # Method 2: Playwright force-click on radio (bypasses visibility)
+            if not condition_selected:
+                try:
+                    radios = page.locator('input[type="radio"]')
+                    count = radios.count()
+                    log(f"Found {count} radio inputs via Playwright")
+                    if count > 0:
+                        radios.first.click(force=True)
+                        condition_selected = True
+                        log("Force-clicked first radio via Playwright")
+                except Exception as e:
+                    log(f"Playwright radio force-click error: {e}")
+
+            # Method 3: Click the label containing condition text
             if not condition_selected:
                 for cond_text in cond_texts:
                     try:
-                        el = page.locator(f'text="{cond_text}"').first
-                        if el.is_visible(timeout=1500):
-                            el.click()
+                        label = page.locator(f'label:has-text("{cond_text}")').first
+                        if label.is_visible(timeout=1500):
+                            label.click()
                             condition_selected = True
-                            log(f"Condition selected via text locator: {cond_text}")
+                            log(f"Clicked label: {cond_text}")
                             break
                     except:
                         pass
             
-            # Method 3: Radio inputs
+            # Method 4: Click any container with the condition text
             if not condition_selected:
                 try:
-                    count = page.locator('input[type="radio"]').count()
-                    if count > 0:
-                        page.locator('input[type="radio"]').first.click()
+                    clicked = page.evaluate('''(targets) => {
+                        const all = document.querySelectorAll('*');
+                        for (const el of all) {
+                            const txt = (el.textContent || "").trim();
+                            if (txt.length > 50) continue; // Skip large containers
+                            for (const target of targets) {
+                                if (txt === target) {
+                                    el.click();
+                                    return "clicked: " + el.tagName + " " + txt;
+                                }
+                            }
+                        }
+                        return false;
+                    }''', cond_texts)
+                    if clicked:
                         condition_selected = True
-                        log(f"Selected first of {count} radio inputs")
-                except:
-                    pass
-
-            # Method 4: role=option
-            if not condition_selected:
-                try:
-                    opt = page.locator('[role="option"]').first
-                    if opt.is_visible(timeout=1500):
-                        opt.click()
-                        condition_selected = True
-                        log("Selected first role=option")
-                except:
-                    pass
+                        log(f"Condition via element click: {clicked}")
+                except Exception as e:
+                    log(f"Element click error: {e}")
 
             if not condition_selected:
                 log("WARNING: Could not select condition — trying Continue anyway")
@@ -568,6 +605,14 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 log("WARNING: Could not click Continue")
                 take_screenshot(page, 'stuck_on_confirm')
                 page.wait_for_timeout(2000)
+            
+            # Check if we're still stuck on the confirm/prelist page
+            current_url = page.url
+            if 'prelist' in current_url or 'confirm' in current_url:
+                result['error'] = 'Stuck on condition/confirm page — condition may not have been selected'
+                result['screenshot'] = take_screenshot(page, 'stuck_condition')
+                context.close()
+                return result
 
             # ─── Step 5: Upload images ───────────────────────────
             result['step'] = 'upload_images'
