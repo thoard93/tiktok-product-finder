@@ -722,6 +722,35 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 context.close()
                 return result
             
+            # ─── Login Page Detection ────────────────────────────
+            current_url = page.url
+            is_login = False
+            
+            if 'signin.ebay.com' in current_url or 'SignIn' in current_url:
+                is_login = True
+                log("Login page detected via URL")
+            
+            if not is_login:
+                try:
+                    page_text = page.evaluate('() => document.body.innerText.substring(0, 500).toLowerCase()')
+                    login_signals = ['welcome back', 'sign in', 'sign in to your account', 'continue with google']
+                    for signal in login_signals:
+                        if signal in page_text:
+                            is_login = True
+                            log(f"Login page detected via text: '{signal}'")
+                            break
+                except:
+                    pass
+            
+            if is_login:
+                log("⚠️ Login page detected — session expired")
+                result['login_required'] = True
+                result['error'] = 'eBay session expired — please log in again'
+                result['screenshot'] = take_screenshot(page, 'login_page')
+                result['ebay_url'] = current_url
+                context.close()
+                return result
+            
             # Check if we're still stuck on prelist
             if 'prelist' in page.url:
                 result['error'] = 'Stuck on prelist page — product or condition selection failed'

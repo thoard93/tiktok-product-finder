@@ -1115,6 +1115,7 @@ def ebay_autofill_listing(listing_id):
         return jsonify({
             'success': result.get('success', False),
             'captcha_detected': result.get('captcha_detected', False),
+            'login_required': result.get('login_required', False),
             'screenshot': result.get('screenshot'),
             'ebay_url': result.get('ebay_url'),
             'error': result.get('error'),
