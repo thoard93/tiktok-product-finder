@@ -1028,6 +1028,51 @@
         <h2 id="modalTitle">✅ eBay Form Filled!</h2>
         <div class="status-msg" id="modalMsg">Review the screenshot below to verify all fields look correct.</div>
         <img id="modalScreenshot" src="" alt="eBay form screenshot" style="display:none;">
+
+        <!-- Copyable Listing Data (shown on login/CAPTCHA/error) -->
+        <div id="modalListingData" style="display:none; margin:12px 0; text-align:left;">
+            <div style="background:rgba(255,255,255,0.08); border-radius:12px; padding:14px; font-size:13px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <strong style="color:#4ade80;">📋 Your Listing Data</strong>
+                    <button onclick="copyAllListingData()"
+                        style="background:#4ade80; color:#000; border:none; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;">Copy
+                        All</button>
+                </div>
+                <div id="dataFieldTitle" style="margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#aaa; font-size:11px;">TITLE</span>
+                        <button onclick="copyField('dataTitle')"
+                            style="background:none; border:1px solid #555; color:#ccc; padding:2px 8px; border-radius:6px; font-size:11px; cursor:pointer;">Copy</button>
+                    </div>
+                    <div id="dataTitle" style="color:#fff; padding:4px 0; word-break:break-word;"></div>
+                </div>
+                <div id="dataFieldDesc" style="margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#aaa; font-size:11px;">DESCRIPTION</span>
+                        <button onclick="copyField('dataDesc')"
+                            style="background:none; border:1px solid #555; color:#ccc; padding:2px 8px; border-radius:6px; font-size:11px; cursor:pointer;">Copy</button>
+                    </div>
+                    <div id="dataDesc"
+                        style="color:#fff; padding:4px 0; max-height:120px; overflow-y:auto; word-break:break-word; font-size:12px; line-height:1.4;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px;">
+                    <div style="flex:1;">
+                        <span style="color:#aaa; font-size:11px;">PRICE</span>
+                        <div id="dataPrice" style="color:#4ade80; font-weight:700; font-size:18px;"></div>
+                    </div>
+                    <div style="flex:1;">
+                        <span style="color:#aaa; font-size:11px;">CONDITION</span>
+                        <div id="dataCondition" style="color:#fff;"></div>
+                    </div>
+                    <div style="flex:1;">
+                        <span style="color:#aaa; font-size:11px;">SHIPPING</span>
+                        <div style="color:#fff;">Free</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="modal-actions">
             <button class="btn-looks-good" id="modalOpenEbay" onclick="openEbayFromModal()">✅ Looks Good → Open eBay
                 Now</button>
@@ -1450,11 +1495,12 @@
                 hideLoading();
 
                 if (fillData.login_required) {
-                    // Login required — session expired
-                    lastAutofillUrl = fillData.ebay_url || 'https://www.ebay.com/signin';
-                    document.getElementById('modalTitle').textContent = '🔑 eBay Login Required';
+                    // Login required — show listing data for manual copy
+                    lastAutofillUrl = 'https://www.ebay.com/sl/sell';
+                    document.getElementById('modalTitle').textContent = '🔑 Session Expired';
                     document.getElementById('modalMsg').textContent =
-                        'Your eBay session has expired. Please click below to log in, then try auto-fill again.';
+                        'eBay needs you to log in. Your listing data is below — tap "Copy All & Open eBay" to paste into eBay on your phone.';
+                    showListingDataInModal(listing);
 
                     if (fillData.screenshot) {
                         const img = document.getElementById('modalScreenshot');
@@ -1462,14 +1508,15 @@
                         img.style.display = 'block';
                     }
 
-                    document.getElementById('modalOpenEbay').textContent = '🔑 Open eBay to Log In';
+                    document.getElementById('modalOpenEbay').textContent = '📋 Copy All & Open eBay';
                     document.getElementById('screenshotModal').classList.add('show');
                 } else if (fillData.captcha_detected) {
-                    // CAPTCHA detected — show user-friendly message
-                    lastAutofillUrl = fillData.ebay_url || 'https://www.ebay.com/sl/sell';
+                    // CAPTCHA detected — show listing data for manual copy
+                    lastAutofillUrl = 'https://www.ebay.com/sl/sell';
                     document.getElementById('modalTitle').textContent = '🔒 CAPTCHA Detected';
                     document.getElementById('modalMsg').textContent =
-                        'eBay is asking for human verification. Please click "Open eBay Now" to solve the CAPTCHA in your browser, then try auto-fill again.';
+                        'eBay needs verification. Your listing data is below — tap "Copy All & Open eBay" to paste into eBay on your phone.';
+                    showListingDataInModal(listing);
 
                     if (fillData.screenshot) {
                         const img = document.getElementById('modalScreenshot');
@@ -1477,7 +1524,7 @@
                         img.style.display = 'block';
                     }
 
-                    document.getElementById('modalOpenEbay').textContent = '🔓 Open eBay to Solve CAPTCHA';
+                    document.getElementById('modalOpenEbay').textContent = '📋 Copy All & Open eBay';
                     document.getElementById('screenshotModal').classList.add('show');
                 } else if (fillData.success) {
                     // Show screenshot modal
@@ -1519,14 +1566,58 @@
             }
         }
 
+        function showListingDataInModal(listing) {
+            document.getElementById('dataTitle').textContent = listing.title || '';
+            document.getElementById('dataDesc').textContent = listing.description || '';
+            document.getElementById('dataPrice').textContent = '$' + (listing.price || 0).toFixed(2);
+            document.getElementById('dataCondition').textContent = listing.condition || 'NEW';
+            document.getElementById('modalListingData').style.display = 'block';
+        }
+
+        function copyField(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.getElementById('toast');
+                toast.textContent = '✅ Copied!';
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 1500);
+            });
+        }
+
+        function copyAllListingData() {
+            const title = document.getElementById('dataTitle').textContent;
+            const desc = document.getElementById('dataDesc').textContent;
+            const price = document.getElementById('dataPrice').textContent;
+            const condition = document.getElementById('dataCondition').textContent;
+            const text = `${title}\n\n${desc}\n\nPrice: ${price}\nCondition: ${condition}\nShipping: Free`;
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.getElementById('toast');
+                toast.textContent = '✅ All data copied to clipboard!';
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2000);
+            });
+        }
+
         function openEbayFromModal() {
-            window.open(lastAutofillUrl || 'https://www.ebay.com/sl/sell', '_blank');
+            // If listing data is showing, copy to clipboard first
+            const dataPanel = document.getElementById('modalListingData');
+            if (dataPanel && dataPanel.style.display !== 'none') {
+                copyAllListingData();
+            }
+            // Try eBay app deep link first, fall back to web
+            const ebayAppUrl = 'ebay://sell';
+            const webUrl = lastAutofillUrl || 'https://www.ebay.com/sl/sell';
+            window.location.href = ebayAppUrl;
+            setTimeout(() => {
+                window.open(webUrl, '_blank');
+            }, 1500);
             closeScreenshotModal();
         }
 
         function closeScreenshotModal() {
             document.getElementById('screenshotModal').classList.remove('show');
             document.getElementById('modalScreenshot').style.display = 'none';
+            document.getElementById('modalListingData').style.display = 'none';
             document.getElementById('modalOpenEbay').textContent = '✅ Looks Good → Open eBay Now';
         }
 
