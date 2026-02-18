@@ -762,29 +762,61 @@ def fill_listing_on_ebay(listing_data, image_paths):
             result['step'] = 'upload_images'
             if image_paths:
                 log(f"Uploading {len(image_paths)} images...")
+                upload_success = False
                 try:
-                    # Find file input for photos
-                    file_input = page.locator('input[type="file"]').first
-                    if file_input.count() > 0:
-                        # Upload all images at once
-                        file_input.set_input_files(image_paths)
+                    # Method 1: Direct file input (most reliable)
+                    file_inputs = page.locator('input[type="file"]')
+                    if file_inputs.count() > 0:
+                        file_inputs.first.set_input_files(image_paths)
                         log(f"Uploaded {len(image_paths)} images via file input")
-                        # Wait for upload processing
-                        page.wait_for_timeout(3000 + (len(image_paths) * 1500))
-                    else:
-                        log("No file input found — trying drag and drop area")
-                        # Try clicking the upload area first
-                        upload_area = page.locator('[data-testid="photos-upload"], .photo-upload, text=Add photos')
-                        if upload_area.first.is_visible(timeout=3000):
-                            # Use file chooser
-                            with page.expect_file_chooser() as fc:
-                                upload_area.first.click()
+                        upload_success = True
+                        page.wait_for_timeout(3000 + (len(image_paths) * 2000))
+                except Exception as e:
+                    log(f"File input upload failed: {e}")
+
+                if not upload_success:
+                    # Method 2: Try clicking upload areas one at a time
+                    upload_selectors = [
+                        '[data-testid="photos-upload"]',
+                        '.photo-upload',
+                        'button[aria-label*="photo"]',
+                        'button[aria-label*="Photo"]',
+                        'button[aria-label*="image"]',
+                        '[data-testid="add-photos"]',
+                    ]
+                    for sel in upload_selectors:
+                        try:
+                            el = page.locator(sel).first
+                            if el.is_visible(timeout=2000):
+                                with page.expect_file_chooser(timeout=5000) as fc:
+                                    el.click()
+                                file_chooser = fc.value
+                                file_chooser.set_files(image_paths)
+                                log(f"Uploaded via file chooser ({sel})")
+                                upload_success = True
+                                page.wait_for_timeout(3000 + (len(image_paths) * 2000))
+                                break
+                        except:
+                            continue
+
+                if not upload_success:
+                    # Method 3: Try text-based buttons
+                    try:
+                        add_photos_btn = page.get_by_text('Add photos', exact=False)
+                        if add_photos_btn.first.is_visible(timeout=2000):
+                            with page.expect_file_chooser(timeout=5000) as fc:
+                                add_photos_btn.first.click()
                             file_chooser = fc.value
                             file_chooser.set_files(image_paths)
-                            log("Uploaded via file chooser")
-                            page.wait_for_timeout(3000 + (len(image_paths) * 1500))
-                except Exception as e:
-                    log(f"Image upload issue: {e} — continuing")
+                            log("Uploaded via 'Add photos' text button")
+                            upload_success = True
+                            page.wait_for_timeout(3000 + (len(image_paths) * 2000))
+                    except Exception as e:
+                        log(f"Text-based upload failed: {e}")
+
+                if not upload_success:
+                    log("WARNING: Could not upload images — no upload method worked")
+                    take_screenshot(page, 'image_upload_failed')
 
             # ─── Step 6: Fill condition ──────────────────────────
             result['step'] = 'fill_condition'
@@ -843,24 +875,67 @@ def fill_listing_on_ebay(listing_data, image_paths):
             # ─── Step 8: Set shipping to Free ────────────────────
             result['step'] = 'set_shipping'
             log("Setting shipping to Free...")
+            shipping_set = False
 
             try:
-                # Look for Free shipping option
-                free_ship_selectors = [
-                    'text=Free shipping',
-                    'text=free shipping',
-                    'label:has-text("Free shipping")',
-                    'input[value="FREE"]',
-                ]
-                for sel in free_ship_selectors:
+                # Method 1: Click any "Free shipping" radio/checkbox
+                try:
+                    free_radio = page.get_by_role('radio', name='Free')
+                    if free_radio.first.is_visible(timeout=2000):
+                        free_radio.first.click()
+                        shipping_set = True
+                        log("Free shipping via radio button")
+                except:
+                    pass
+
+                # Method 2: Look for a shipping cost input and set to 0
+                if not shipping_set:
                     try:
-                        el = page.locator(sel).first
-                        if el.is_visible(timeout=2000):
-                            el.click()
-                            log("Free shipping selected")
-                            break
+                        ship_cost_input = page.locator('input[aria-label*="hipping cost"], input[aria-label*="hipping price"], input[name*="shipping"]').first
+                        if ship_cost_input.is_visible(timeout=2000):
+                            ship_cost_input.fill('0')
+                            shipping_set = True
+                            log("Shipping cost set to 0")
                     except:
-                        continue
+                        pass
+
+                # Method 3: Try selecting "Free shipping" from dropdowns
+                if not shipping_set:
+                    try:
+                        ship_select = page.locator('select').filter(has_text='shipping')
+                        if ship_select.first.is_visible(timeout=2000):
+                            ship_select.first.select_option(label='Free shipping')
+                            shipping_set = True
+                            log("Free shipping via dropdown")
+                    except:
+                        pass
+
+                # Method 4: Click text "Free shipping" anywhere
+                if not shipping_set:
+                    try:
+                        free_text = page.get_by_text('Free shipping', exact=False)
+                        if free_text.first.is_visible(timeout=2000):
+                            free_text.first.click()
+                            shipping_set = True
+                            log("Free shipping via text click")
+                    except:
+                        pass
+
+                # Method 5: Look for the eBay shipping section and check for "Free" option
+                if not shipping_set:
+                    try:
+                        free_label = page.get_by_label('Free shipping', exact=False)
+                        if free_label.first.is_visible(timeout=2000):
+                            free_label.first.check()
+                            shipping_set = True
+                            log("Free shipping via label checkbox")
+                    except:
+                        pass
+
+                if not shipping_set:
+                    log("WARNING: Could not set free shipping — none of the methods worked")
+                    take_screenshot(page, 'shipping_failed')
+
             except Exception as e:
                 log(f"Shipping selection: {e} — continuing")
 
