@@ -1496,41 +1496,23 @@
                 const fillData = await fillResp.json();
                 hideLoading();
 
-                if (fillData.login_required) {
-                    // Login required — show listing data + solve option
-                    lastAutofillUrl = 'https://www.ebay.com/sl/sell';
-                    document.getElementById('modalTitle').textContent = '🔑 Session Expired';
+                if (fillData.login_required || fillData.captcha_detected) {
+                    // Draft was started during prelist — user can complete in eBay app
+                    lastAutofillUrl = 'ebay://sell';
+                    document.getElementById('modalTitle').textContent = '📝 Draft Started in eBay!';
                     document.getElementById('modalMsg').textContent =
-                        'eBay needs you to log in. Solve below then retry, or copy your data and list manually.';
+                        'Title, category & condition are saved in your eBay drafts. Open the eBay app → Drafts to add the details below:';
                     showListingDataInModal(listing);
+                    document.getElementById('modalScreenshot').style.display = 'none';
+
                     document.getElementById('modalSolveCaptcha').style.display = 'block';
-                    document.getElementById('modalSolveCaptcha').textContent = '🔑 Log In to eBay & Retry';
+                    document.getElementById('modalSolveCaptcha').textContent = '📱 Open eBay App → Drafts';
+                    document.getElementById('modalSolveCaptcha').style.background = '#4ade80';
+                    document.getElementById('modalSolveCaptcha').onclick = function () {
+                        window.location.href = 'ebay://sell';
+                    };
 
-                    if (fillData.screenshot) {
-                        const img = document.getElementById('modalScreenshot');
-                        img.src = fillData.screenshot;
-                        img.style.display = 'block';
-                    }
-
-                    document.getElementById('modalOpenEbay').textContent = '📋 Copy All & Open eBay';
-                    document.getElementById('screenshotModal').classList.add('show');
-                } else if (fillData.captcha_detected) {
-                    // CAPTCHA detected — show listing data + solve option
-                    lastAutofillUrl = 'https://www.ebay.com/sl/sell';
-                    document.getElementById('modalTitle').textContent = '🔒 CAPTCHA Detected';
-                    document.getElementById('modalMsg').textContent =
-                        'eBay needs verification. Solve below then retry, or copy your data and list manually.';
-                    showListingDataInModal(listing);
-                    document.getElementById('modalSolveCaptcha').style.display = 'block';
-                    document.getElementById('modalSolveCaptcha').textContent = '🔓 Solve CAPTCHA & Retry';
-
-                    if (fillData.screenshot) {
-                        const img = document.getElementById('modalScreenshot');
-                        img.src = fillData.screenshot;
-                        img.style.display = 'block';
-                    }
-
-                    document.getElementById('modalOpenEbay').textContent = '📋 Copy All & Open eBay';
+                    document.getElementById('modalOpenEbay').textContent = '📋 Copy All to Clipboard';
                     document.getElementById('screenshotModal').classList.add('show');
                 } else if (fillData.success) {
                     // Show screenshot modal
