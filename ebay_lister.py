@@ -972,8 +972,23 @@ def research_pricing(title, category=''):
                 )
                 page = context.new_page()
 
+                def _ensure_page():
+                    nonlocal context, page
+                    try:
+                        page.title() # Will throw if closed
+                    except Exception:
+                        log.warning("[Pricing] Playwright page crashed. Recreating context and page...")
+                        try: context.close()
+                        except: pass
+                        context = browser.new_context(
+                            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            viewport={'width': 1280, 'height': 800}
+                        )
+                        page = context.new_page()
+
                 # Strategy 1: eBay SOLD listings via Playwright
                 if not prices:
+                    _ensure_page()
                     url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Complete=1&LH_Sold=1&_sop=13'
                     log.info(f"[Pricing] Playwright Strategy 1 (eBay SOLD): {url}")
                     try:
@@ -993,6 +1008,7 @@ def research_pricing(title, category=''):
 
                 # Strategy 1b: eBay SOLD (Short Query) via Playwright
                 if not prices:
+                    _ensure_page()
                     short_query = ' '.join(search_title.split()[:4])
                     short_encoded = quote_plus(short_query)
                     url = f'https://www.ebay.com/sch/i.html?_nkw={short_encoded}&LH_Complete=1&LH_Sold=1&_sop=13'
@@ -1012,6 +1028,7 @@ def research_pricing(title, category=''):
 
                 # Strategy 2: Google Shopping via Playwright (udm=28)
                 if len(prices) < 3:
+                    _ensure_page()
                     search_url = f'https://www.google.com/search?q={encoded_query}&udm=28'
                     log.info(f"[Pricing] Playwright Strategy 2 (Google Shopping): {search_url}")
                     try:
@@ -1038,6 +1055,7 @@ def research_pricing(title, category=''):
 
                 # Strategy 3: eBay ACTIVE via Playwright
                 if len(prices) < 2:
+                    _ensure_page()
                     url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&_sop=15'
                     log.info(f"[Pricing] Playwright Strategy 3 (eBay ACTIVE): {url}")
                     try:
