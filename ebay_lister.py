@@ -873,10 +873,37 @@ def research_pricing(title, category=''):
     }
 
     def _fetch(url):
-        """Fetch URL with curl_cffi Chrome impersonation if available."""
+        """Fetch URL with curl_cffi Chrome impersonation if available, fallback to Playwright if blocked."""
+        html = ""
         if HAS_CURL_CFFI:
-            return cf_requests.get(url, headers=headers, timeout=12, impersonate='chrome').text
-        return cf_requests.get(url, headers=headers, timeout=12).text
+            try:
+                html = cf_requests.get(url, headers=headers, timeout=12, impersonate='chrome').text
+            except Exception:
+                pass
+        else:
+            try:
+                html = cf_requests.get(url, headers=headers, timeout=12).text
+            except Exception:
+                pass
+                
+        # If eBay returned a JS-rendered page or blocked us (no s-item__info), use Playwright
+        if 'class="s-item__info clearfix"' not in html:
+            log.info(f"eBay returned a bot page or timeout (no s-item__info). Using Playwright fallback...")
+            try:
+                from playwright.sync_api import sync_playwright
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True)
+                    page = browser.new_page(
+                        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    )
+                    page.goto(url, timeout=15000)
+                    page.wait_for_timeout(2000)  # wait for results to render
+                    html = page.content()
+                    browser.close()
+            except Exception as e:
+                log.warning(f"Playwright eBay fallback failed: {e}")
+                
+        return html
 
     def _extract_ebay_prices(html_text, search_query):
         """Extract prices and shipping from eBay search results HTML and filter by Title Quantity."""
@@ -1069,36 +1096,8 @@ def ebay_generate_listing():
         pricing = research_pricing(listing_data.get('title', ''), listing_data.get('category_name', ''))
 
         # ─── TikTok DB Cross-Reference ───────────────────────────────────
+        # Note: Disabled because physical items not in the database often match random wrong products
         tiktok_match = None
-        try:
-            from app import Product
-            ai_title = listing_data.get('title', '')
-            ai_brand = listing_data.get('brand', '')
-            search_term = ai_brand if ai_brand and len(ai_brand) > 2 else ai_title[:40]
-
-            # Try fuzzy match against TikTok product database
-            matches = Product.query.filter(
-                Product.product_name.ilike(f'%{search_term}%'),
-                Product.product_status == 'active'
-            ).order_by(Product.sales_7d.desc()).limit(3).all()
-
-            if matches:
-                best = matches[0]
-                tiktok_match = {
-                    'product_name': best.product_name[:80] if best.product_name else '',
-                    'tiktok_price': round(best.price or 0, 2),
-                    'commission_rate': round((best.commission_rate or 0) * 100, 1),
-                    'sales_7d': best.sales_7d or 0,
-                    'sales_30d': best.sales_30d or 0,
-                    'video_count': best.video_count_alltime or best.video_count or 0,
-                    'influencer_count': best.influencer_count or 0,
-                    'ad_spend': round(best.ad_spend or 0, 2),
-                    'product_url': best.product_url or '',
-                    'match_confidence': 'high' if ai_brand.lower() in (best.product_name or '').lower() else 'medium',
-                }
-                log.info(f"TikTok cross-ref matched: {best.product_name[:40]} (${best.price})")
-        except Exception as e:
-            log.warning(f"TikTok cross-reference failed (non-fatal): {e}")
 
         # Calculate profit estimate (FREE SHIPPING model: seller pays shipping)
         suggested_price = pricing.get('optimal_price', listing_data.get('price', 0))
