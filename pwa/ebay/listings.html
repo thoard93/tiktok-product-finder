@@ -350,10 +350,95 @@
             color: #000;
         }
 
+        .modal .btn-success {
+            background: #22c55e;
+            color: #000;
+        }
+
         .modal .btn-danger {
             background: var(--bg-input);
             border: 1px solid var(--red);
             color: var(--red);
+        }
+
+        .modal .input-group {
+            margin-bottom: 12px;
+        }
+
+        .modal .input-group label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .modal .input-group input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 16px;
+            font-family: inherit;
+        }
+
+        .profit-preview {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            margin: 12px 0;
+        }
+
+        .profit-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            padding: 3px 0;
+            color: var(--text-dim);
+        }
+
+        .profit-row.total {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--green);
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+            margin-top: 4px;
+        }
+
+        .listing-card .card-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .listing-card .card-btn {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .card-btn.sold-btn {
+            background: #22c55e;
+            color: #000;
+        }
+
+        .card-btn.active-btn {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .card-profit {
+            font-size: 11px;
+            color: var(--green);
+            font-weight: 700;
         }
 
         .bottom-nav {
@@ -423,6 +508,46 @@
         </div>
     </div>
 
+    <!-- Mark Sold Modal -->
+    <div class="modal-overlay" id="soldModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>💰 Mark as Sold</h2>
+                <button class="modal-close" onclick="closeSoldModal()">✕</button>
+            </div>
+            <div id="soldListingTitle" style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"></div>
+            <div class="input-group">
+                <label>Sale Price ($)</label>
+                <input type="number" id="soldPrice" step="0.01" min="0" placeholder="26.00"
+                    oninput="updateProfitPreview()">
+            </div>
+            <div class="input-group">
+                <label>Shipping Charged to Buyer ($)</label>
+                <input type="number" id="soldShippingCharged" step="0.01" min="0" value="0" placeholder="5.52"
+                    oninput="updateProfitPreview()">
+            </div>
+            <div class="input-group">
+                <label>Your Actual Shipping Cost ($)</label>
+                <input type="number" id="soldShippingActual" step="0.01" min="0" value="0" placeholder="6.00"
+                    oninput="updateProfitPreview()">
+            </div>
+            <div class="profit-preview" id="profitPreview">
+                <div class="profit-row"><span>Sale Price</span><span id="pvSale">$0.00</span></div>
+                <div class="profit-row"><span>+ Shipping Charged</span><span id="pvShipCharged">$0.00</span></div>
+                <div class="profit-row"><span>− eBay Fees (13.25% + $0.30)</span><span id="pvFees">$0.00</span></div>
+                <div class="profit-row"><span>− Your Shipping Cost</span><span id="pvShipActual">$0.00</span></div>
+                <div class="profit-row"><span>− Product Cost</span><span id="pvCost">$0.00</span></div>
+                <div class="profit-row total"><span>Net Profit</span><span id="pvProfit">$0.00</span></div>
+            </div>
+            <button class="btn btn-success" id="confirmSoldBtn" onclick="confirmMarkSold()">✅ Confirm Sale</button>
+            <button class="btn btn-danger" onclick="closeSoldModal()" style="margin-top:6px;">Cancel</button>
+        </div>
+    </div>
+
+    <div id="toast"
+        style="position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#22c55e;color:#000;padding:10px 20px;border-radius:8px;font-weight:700;font-size:13px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:9999;">
+    </div>
+
     <div class="bottom-nav">
         <a class="nav-item" href="/ebay"><span class="icon">🏠</span>Home</a>
         <a class="nav-item" href="/ebay/new"><span class="icon">➕</span>New</a>
@@ -484,13 +609,108 @@
                         <div class="title">${l.title || 'Untitled'}</div>
                         <div class="meta">
                             <span class="status-badge ${l.status}">${l.status}</span>
-                            <span>SKU: ${l.sku || '—'}</span>
                             <span>${l.created_at ? new Date(l.created_at).toLocaleDateString() : ''}</span>
                         </div>
+                        ${l.status === 'sold' && l.net_profit ? `<span class="card-profit">💰 $${l.net_profit.toFixed(2)} profit</span>` : ''}
+                        <div class="card-actions">
+                            ${l.status === 'active' ? `<button class="card-btn sold-btn" onclick="event.stopPropagation();openSoldModal(${l.id})">💰 Mark Sold</button>` : ''}
+                            ${l.status === 'draft' ? `<button class="card-btn active-btn" onclick="event.stopPropagation();markActive(${l.id})">✅ Mark Active</button>` : ''}
+                        </div>
                     </div>
-                    <div class="price">$${(l.price || 0).toFixed(2)}</div>
+                    <div class="price">$${(l.sale_price || l.price || 0).toFixed(2)}</div>
                 </div>
             `).join('');
+        }
+
+        let soldListingId = null;
+        let soldListingCost = 0;
+
+        function openSoldModal(id) {
+            const l = listings.find(x => x.id === id);
+            if (!l) return;
+            soldListingId = id;
+            soldListingCost = l.cost_price || 0;
+            document.getElementById('soldListingTitle').textContent = l.title || 'Listing';
+            // Pre-fill sale price with listing price
+            document.getElementById('soldPrice').value = l.price ? l.price.toFixed(2) : '';
+            document.getElementById('soldShippingCharged').value = '0';
+            document.getElementById('soldShippingActual').value = '0';
+            updateProfitPreview();
+            document.getElementById('soldModal').classList.add('show');
+        }
+
+        function closeSoldModal() {
+            document.getElementById('soldModal').classList.remove('show');
+            soldListingId = null;
+        }
+
+        function updateProfitPreview() {
+            const sale = parseFloat(document.getElementById('soldPrice').value) || 0;
+            const shipCharged = parseFloat(document.getElementById('soldShippingCharged').value) || 0;
+            const shipActual = parseFloat(document.getElementById('soldShippingActual').value) || 0;
+            const fees = Math.round(((sale + shipCharged) * 0.1325 + 0.30) * 100) / 100;
+            const profit = Math.round((sale + shipCharged - fees - shipActual - soldListingCost) * 100) / 100;
+
+            document.getElementById('pvSale').textContent = '$' + sale.toFixed(2);
+            document.getElementById('pvShipCharged').textContent = '$' + shipCharged.toFixed(2);
+            document.getElementById('pvFees').textContent = '-$' + fees.toFixed(2);
+            document.getElementById('pvShipActual').textContent = '-$' + shipActual.toFixed(2);
+            document.getElementById('pvCost').textContent = '-$' + soldListingCost.toFixed(2);
+            const profitEl = document.getElementById('pvProfit');
+            profitEl.textContent = '$' + profit.toFixed(2);
+            profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
+        }
+
+        async function confirmMarkSold() {
+            const sale = parseFloat(document.getElementById('soldPrice').value) || 0;
+            if (sale <= 0) { alert('Enter the sale price'); return; }
+            const btn = document.getElementById('confirmSoldBtn');
+            btn.textContent = '⏳ Saving...';
+            btn.disabled = true;
+            try {
+                const resp = await fetch(`/ebay/api/listings/${soldListingId}/mark-sold`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sale_price: sale,
+                        shipping_charged: parseFloat(document.getElementById('soldShippingCharged').value) || 0,
+                        shipping_actual: parseFloat(document.getElementById('soldShippingActual').value) || 0,
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    closeSoldModal();
+                    showToast(`💰 Sold! Profit: $${data.breakdown.net_profit.toFixed(2)}`);
+                    loadListings();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.textContent = '✅ Confirm Sale';
+                btn.disabled = false;
+            }
+        }
+
+        async function markActive(id) {
+            try {
+                const resp = await fetch(`/ebay/api/listings/${id}/mark-active`, { method: 'POST' });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('✅ Marked as Active!');
+                    loadListings();
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.opacity = '1';
+            setTimeout(() => t.style.opacity = '0', 2000);
         }
 
         function showDetail(id) {
@@ -504,12 +724,14 @@
                 <div class="field"><label>SKU</label><div class="field-value">${l.sku || '—'}</div></div>
                 <div class="field"><label>Category</label><div class="field-value">${l.category_name || '—'}</div></div>
                 <div class="field"><label>Condition</label><div class="field-value">${l.condition}</div></div>
-                ${l.ebay_item_url ? `<div class="field"><label>eBay URL</label><div class="field-value"><a href="${l.ebay_item_url}" target="_blank" style="color:var(--accent);">${l.ebay_item_url}</a></div></div>` : ''}
                 ${l.status === 'sold' ? `
                     <div class="field"><label>Sale Price</label><div class="field-value">$${(l.sale_price || 0).toFixed(2)}</div></div>
-                    <div class="field"><label>Net Profit</label><div class="field-value" style="color:${(l.net_profit || 0) >= 0 ? 'var(--green)' : 'var(--red)'};">$${(l.net_profit || 0).toFixed(2)}</div></div>
+                    <div class="field"><label>eBay Fees</label><div class="field-value" style="color:var(--red);">-$${(l.ebay_fees || 0).toFixed(2)}</div></div>
+                    <div class="field"><label>Net Profit</label><div class="field-value" style="color:${(l.net_profit || 0) >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:800;">$${(l.net_profit || 0).toFixed(2)}</div></div>
+                    <div class="field"><label>Sold</label><div class="field-value">${l.sold_at ? new Date(l.sold_at).toLocaleString() : '—'}</div></div>
                 ` : ''}
-                ${l.status === 'draft' ? `<button class="btn btn-primary" onclick="postListing(${l.id})">🚀 Post to eBay</button>` : ''}
+                ${l.status === 'active' ? `<button class="btn btn-success" onclick="closeModal();openSoldModal(${l.id})">💰 Mark as Sold</button>` : ''}
+                ${l.status === 'draft' ? `<button class="btn btn-success" onclick="closeModal();markActive(${l.id})">✅ Mark as Active</button>` : ''}
                 <button class="btn btn-danger" onclick="deleteListing(${l.id})">🗑 Delete</button>
             `;
             document.getElementById('detailModal').classList.add('show');

@@ -103,6 +103,9 @@ class EbayTeam(db.Model):
     default_undercut_pct = db.Column(db.Integer, default=30)  # % below comps
     min_price_floor = db.Column(db.Float, default=5.0)
     default_condition = db.Column(db.String(50), default='NEW')
+    # Gmail integration (for auto-detecting sales)
+    gmail_tokens_json = db.Column(db.Text, default='')  # OAuth2 tokens JSON
+    gmail_last_sync = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     users = db.relationship('EbayUser', backref='team', lazy=True)
@@ -133,6 +136,8 @@ class EbayTeam(db.Model):
             'default_undercut_pct': self.default_undercut_pct,
             'min_price_floor': self.min_price_floor,
             'default_condition': self.default_condition,
+            'gmail_connected': bool(self.gmail_tokens_json),
+            'gmail_last_sync': self.gmail_last_sync.isoformat() if self.gmail_last_sync else None,
         }
 
 
@@ -717,7 +722,14 @@ CRITICAL RULES:
 
 PRODUCT ANALYSIS:
 1. Identify exact brand name, model name/number from packaging, labels, or product.
-2. Condition Detection — examine packaging:
+2. BUNDLE/SET DETECTION — If multiple distinct products are shown:
+   - Title must include "Lot of X" or "Set of X" or "Bundle" (e.g. "3-Piece Skincare Bundle Set NEW")
+   - Description should list EACH item in the bundle with its own bullet point
+   - Price should reflect the combined value (sum of individual items, then apply undercut)
+   - Weight should be the COMBINED shipped weight of all items
+   - If products are the same brand/line, group them as a "Collection" or "Kit"
+   - If products are different items, list each product name and size/variant
+3. Condition Detection — examine packaging:
    - "Factory sealed" = shrink-wrapped, security seals intact
    - "New in box" = box unopened but no shrink wrap
    - "Open box - never used" = box opened but product untouched
@@ -1048,7 +1060,8 @@ def ebay_autofill_listing(listing_id):
             shipping_cost=0,
             images_json=json.dumps(data.get('images', [])),
             sku=data.get('sku', f"EBAY-{team.name[:3].upper()}-{secrets.token_hex(4).upper()}"),
-            status='draft',
+            status='active',  # Active immediately — no API needed, user is listing on eBay
+            listed_at=datetime.utcnow(),
             title_hash=hashlib.md5(data.get('title', '').lower().encode()).hexdigest(),
         )
         db.session.add(listing)
@@ -1108,8 +1121,9 @@ def ebay_autofill_listing(listing_id):
                 'stderr': proc.stderr[-300:] if proc.stderr else '',
             }), 500
 
-        if result.get('success'):
-            listing.status = 'draft'  # Keep as draft until user confirms
+        if result.get('success') or result.get('listing_url'):
+            listing.status = 'active'
+            listing.listed_at = datetime.utcnow()
             db.session.commit()
 
         return jsonify({
@@ -1129,6 +1143,86 @@ def ebay_autofill_listing(listing_id):
     except Exception as e:
         log.error(f"Auto-fill error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# MARK SOLD / MARK ACTIVE
+# =============================================================================
+
+@app.route('/ebay/api/listings/<int:listing_id>/mark-sold', methods=['POST'])
+@ebay_login_required
+def ebay_mark_sold(listing_id):
+    """Mark a listing as sold with sale data. Auto-calculates eBay fees and net profit."""
+    team = get_current_team()
+    listing = EbayListing.query.filter_by(id=listing_id, team_id=team.id).first()
+    if not listing:
+        return jsonify({'error': 'Listing not found'}), 404
+
+    data = request.json or {}
+    sale_price = float(data.get('sale_price', 0))
+    shipping_charged = float(data.get('shipping_charged', 0))  # What buyer paid for shipping
+    shipping_actual = float(data.get('shipping_actual', 0))  # What you actually paid to ship
+
+    if sale_price <= 0:
+        return jsonify({'error': 'Sale price is required'}), 400
+
+    # eBay fee calculation: 13.25% of (sale_price + shipping_charged) + $0.30 per-order fee
+    ebay_fees = round((sale_price + shipping_charged) * 0.1325 + 0.30, 2)
+
+    # Net profit = sale_price + shipping_charged - ebay_fees - actual_shipping - cost
+    cost = listing.cost_price or 0
+    ad_spend = listing.ad_spend or 0
+    net_profit = round(sale_price + shipping_charged - ebay_fees - shipping_actual - cost - ad_spend, 2)
+
+    listing.status = 'sold'
+    listing.sold_at = datetime.utcnow()
+    listing.sale_price = sale_price
+    listing.shipping_actual = shipping_actual
+    listing.ebay_fees = ebay_fees
+    listing.net_profit = net_profit
+
+    # Optional fields from email parse
+    if data.get('order_number'):
+        listing.ebay_listing_id = data['order_number']  # Reuse field for order #
+    if data.get('buyer'):
+        listing.ebay_item_url = f"buyer:{data['buyer']}"  # Store buyer info
+    if data.get('sold_at'):
+        try:
+            listing.sold_at = datetime.fromisoformat(data['sold_at'])
+        except:
+            pass
+
+    db.session.commit()
+    log.info(f"Listing #{listing.id} marked as sold: ${sale_price} -> ${net_profit} profit")
+
+    return jsonify({
+        'success': True,
+        'listing': listing.to_dict(),
+        'breakdown': {
+            'sale_price': sale_price,
+            'shipping_charged': shipping_charged,
+            'ebay_fees': ebay_fees,
+            'shipping_actual': shipping_actual,
+            'cost_price': cost,
+            'ad_spend': ad_spend,
+            'net_profit': net_profit,
+        }
+    })
+
+
+@app.route('/ebay/api/listings/<int:listing_id>/mark-active', methods=['POST'])
+@ebay_login_required
+def ebay_mark_active(listing_id):
+    """Mark a draft listing as active (listed on eBay)."""
+    team = get_current_team()
+    listing = EbayListing.query.filter_by(id=listing_id, team_id=team.id).first()
+    if not listing:
+        return jsonify({'error': 'Listing not found'}), 404
+
+    listing.status = 'active'
+    listing.listed_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'success': True, 'listing': listing.to_dict()})
 
 
 @app.route('/ebay/api/ebay-session', methods=['GET', 'POST'])
@@ -1527,6 +1621,136 @@ def ebay_stats():
         },
         'recent_sold': recent_sold,
     })
+
+
+# =============================================================================
+# GMAIL SALES SYNC
+# =============================================================================
+
+GMAIL_CLIENT_ID = os.environ.get('GMAIL_CLIENT_ID', '')
+GMAIL_CLIENT_SECRET = os.environ.get('GMAIL_CLIENT_SECRET', '')
+GMAIL_REDIRECT_URI = os.environ.get('GMAIL_REDIRECT_URI', '')  # Set to your domain + /ebay/api/gmail/callback
+
+
+@app.route('/ebay/api/gmail/status')
+@ebay_login_required
+def gmail_status():
+    """Check if Gmail is connected for current team."""
+    team = get_current_team()
+    return jsonify({
+        'connected': bool(team.gmail_tokens_json),
+        'last_sync': team.gmail_last_sync.isoformat() if team.gmail_last_sync else None,
+    })
+
+
+@app.route('/ebay/api/gmail/auth')
+@ebay_login_required
+def gmail_auth():
+    """Start Gmail OAuth2 flow — redirect user to Google consent screen."""
+    if not GMAIL_CLIENT_ID:
+        return jsonify({'error': 'GMAIL_CLIENT_ID not configured'}), 500
+
+    team = get_current_team()
+    # Build the redirect URI dynamically if not set
+    redirect_uri = GMAIL_REDIRECT_URI or request.host_url.rstrip('/') + '/ebay/api/gmail/callback'
+
+    auth_url = (
+        'https://accounts.google.com/o/oauth2/v2/auth?'
+        f'client_id={GMAIL_CLIENT_ID}'
+        f'&redirect_uri={redirect_uri}'
+        '&response_type=code'
+        '&scope=https://www.googleapis.com/auth/gmail.readonly'
+        '&access_type=offline'
+        '&prompt=consent'
+        f'&state={team.id}'
+    )
+    return jsonify({'auth_url': auth_url})
+
+
+@app.route('/ebay/api/gmail/callback')
+def gmail_callback():
+    """Handle Gmail OAuth2 callback — exchange code for tokens."""
+    import requests as ext_requests
+
+    code = request.args.get('code')
+    team_id = request.args.get('state')
+    error = request.args.get('error')
+
+    if error:
+        return f'<h3>Gmail auth error: {error}</h3><p><a href="/ebay/settings">Back to Settings</a></p>'
+
+    if not code or not team_id:
+        return '<h3>Missing code or team</h3><p><a href="/ebay/settings">Back to Settings</a></p>', 400
+
+    team = EbayTeam.query.get(int(team_id))
+    if not team:
+        return '<h3>Team not found</h3>', 404
+
+    redirect_uri = GMAIL_REDIRECT_URI or request.host_url.rstrip('/') + '/ebay/api/gmail/callback'
+
+    # Exchange code for tokens
+    try:
+        token_resp = ext_requests.post('https://oauth2.googleapis.com/token', data={
+            'code': code,
+            'client_id': GMAIL_CLIENT_ID,
+            'client_secret': GMAIL_CLIENT_SECRET,
+            'redirect_uri': redirect_uri,
+            'grant_type': 'authorization_code',
+        })
+        token_data = token_resp.json()
+
+        if 'error' in token_data:
+            return f'<h3>Token error: {token_data["error"]}</h3><p>{token_data.get("error_description", "")}</p><p><a href="/ebay/settings">Back to Settings</a></p>'
+
+        # Store tokens
+        team.gmail_tokens_json = json.dumps({
+            'access_token': token_data.get('access_token'),
+            'refresh_token': token_data.get('refresh_token'),
+            'expires_in': token_data.get('expires_in'),
+            'token_type': token_data.get('token_type'),
+        })
+        db.session.commit()
+
+        log.info(f"Gmail connected for team {team.name} (#{team.id})")
+        return '<h3>✅ Gmail connected!</h3><p>Sales will now be auto-detected.</p><p><a href="/ebay/settings">Back to Settings</a></p>'
+
+    except Exception as e:
+        log.error(f"Gmail token exchange error: {e}")
+        return f'<h3>Error connecting Gmail: {e}</h3><p><a href="/ebay/settings">Back to Settings</a></p>'
+
+
+@app.route('/ebay/api/gmail/sync', methods=['POST'])
+@ebay_login_required
+def gmail_sync():
+    """Manually trigger Gmail sales sync."""
+    team = get_current_team()
+    if not team.gmail_tokens_json:
+        return jsonify({'error': 'Gmail not connected. Go to Settings to connect.'}), 400
+
+    try:
+        from ebay_gmail_sync import sync_ebay_sales
+        days = int(request.args.get('days', 30))
+        result = sync_ebay_sales(team.id, days_back=days)
+
+        # Update last sync time
+        team.gmail_last_sync = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Gmail sync error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/ebay/api/gmail/disconnect', methods=['POST'])
+@ebay_login_required
+def gmail_disconnect():
+    """Disconnect Gmail from current team."""
+    team = get_current_team()
+    team.gmail_tokens_json = ''
+    team.gmail_last_sync = None
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 # =============================================================================

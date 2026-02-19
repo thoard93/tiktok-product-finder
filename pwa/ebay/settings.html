@@ -610,6 +610,17 @@
         </div>
     </div>
 
+    <!-- Gmail Sales Tracking -->
+    <div class="card" id="gmailCard">
+        <h2>📧 Gmail Sales Tracking</h2>
+        <p class="info-text" style="font-size:12px;color:var(--text-dim);margin:-8px 0 12px;">
+            Auto-detect eBay sales from your Gmail and update your stats.
+        </p>
+        <div id="gmailStatus">
+            <div style="text-align:center;padding:20px;color:var(--text-dim);">Loading...</div>
+        </div>
+    </div>
+
     <div class="bottom-nav">
         <a class="nav-item" href="/ebay"><span class="icon">🏠</span>Home</a>
         <a class="nav-item" href="/ebay/new"><span class="icon">➕</span>New</a>
@@ -864,8 +875,94 @@
             }
         }
 
+        // ─── Gmail Sales Tracking ─────────────────────────
+        async function loadGmailStatus() {
+            try {
+                const resp = await fetch('/ebay/api/gmail/status');
+                const data = await resp.json();
+                const el = document.getElementById('gmailStatus');
+
+                if (data.connected) {
+                    el.innerHTML = `
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                            <span style="color:var(--green);font-weight:700;">✅ Gmail Connected</span>
+                            ${data.last_sync ? `<span style="font-size:11px;color:var(--text-dim);">Last sync: ${new Date(data.last_sync).toLocaleString()}</span>` : ''}
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn btn-secondary" id="gmailSyncBtn" onclick="syncGmail()" style="flex:1;">🔄 Sync Sales Now</button>
+                            <button class="btn btn-secondary" onclick="disconnectGmail()" style="flex:0;background:var(--bg-input);border:1px solid var(--red);color:var(--red);">Disconnect</button>
+                        </div>
+                        <div id="gmailSyncResult" style="margin-top:10px;"></div>
+                    `;
+                } else {
+                    el.innerHTML = `
+                        <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">
+                            Connect your Gmail to automatically detect eBay sales and update your profit stats.
+                        </p>
+                        <button class="btn btn-secondary" onclick="connectGmail()" style="background:#4285f4;color:white;border:none;">
+                            📧 Connect Gmail
+                        </button>
+                    `;
+                }
+            } catch (e) {
+                document.getElementById('gmailStatus').innerHTML = '<p style="color:var(--text-dim);font-size:12px;">Gmail tracking unavailable</p>';
+            }
+        }
+
+        async function connectGmail() {
+            const resp = await fetch('/ebay/api/gmail/auth');
+            const data = await resp.json();
+            if (data.auth_url) {
+                window.location.href = data.auth_url;
+            } else {
+                alert('Error: ' + (data.error || 'Could not start Gmail auth'));
+            }
+        }
+
+        async function syncGmail() {
+            const btn = document.getElementById('gmailSyncBtn');
+            const resultEl = document.getElementById('gmailSyncResult');
+            btn.textContent = '⏳ Scanning emails...';
+            btn.disabled = true;
+            resultEl.innerHTML = '';
+
+            try {
+                const resp = await fetch('/ebay/api/gmail/sync?days=30', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.error) {
+                    resultEl.innerHTML = `<div style="color:var(--red);font-size:12px;">❌ ${data.error}</div>`;
+                } else {
+                    let html = `<div style="font-size:12px;margin-top:8px;">`;
+                    html += `<div style="color:var(--green);font-weight:700;">✅ ${data.synced} sale${data.synced !== 1 ? 's' : ''} found and marked</div>`;
+                    if (data.skipped > 0) html += `<div style="color:var(--text-dim);">${data.skipped} skipped (already processed or no match)</div>`;
+                    if (data.details && data.details.length > 0) {
+                        html += '<div style="margin-top:6px;">';
+                        data.details.forEach(d => {
+                            html += `<div style="padding:4px 0;border-bottom:1px solid var(--border);">💰 ${d.title} — $${d.sale_price.toFixed(2)} → $${d.net_profit.toFixed(2)} profit</div>`;
+                        });
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    resultEl.innerHTML = html;
+                }
+            } catch (e) {
+                resultEl.innerHTML = `<div style="color:var(--red);font-size:12px;">Error: ${e.message}</div>`;
+            } finally {
+                btn.textContent = '🔄 Sync Sales Now';
+                btn.disabled = false;
+            }
+        }
+
+        async function disconnectGmail() {
+            if (!confirm('Disconnect Gmail? You can reconnect anytime.')) return;
+            await fetch('/ebay/api/gmail/disconnect', { method: 'POST' });
+            loadGmailStatus();
+        }
+
         // Auto-check session on page load
         setTimeout(checkEbaySession, 1500);
+        loadGmailStatus();
     </script>
 </body>
 
