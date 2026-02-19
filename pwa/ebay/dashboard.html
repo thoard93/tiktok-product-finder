@@ -612,12 +612,14 @@
                     : '📦';
 
                 const isDraft = l.status === 'draft';
-                const actionsHtml = isDraft ? `
+                const autofillHtml = isDraft ? `<button class="btn-fill" onclick="autoFillDraft(${l.id})">🚀 eBay</button>` : '';
+
+                const actionsHtml = `
                     <div class="actions" onclick="event.stopPropagation()">
-                        <button class="btn-fill" onclick="autoFillDraft(${l.id})">🚀 eBay</button>
+                        ${autofillHtml}
                         <button class="btn-del" onclick="deleteListing(${l.id})">🗑️</button>
                     </div>
-                ` : '';
+                `;
 
                 return `
                     <div class="listing-card" onclick="window.location='/ebay/listings?id=${l.id}'">
@@ -638,7 +640,7 @@
         }
 
         async function deleteListing(id) {
-            if (!confirm('Delete this draft? This cannot be undone.')) return;
+            if (!confirm('Delete this listing from your dashboard? This cannot be undone.')) return;
             try {
                 const resp = await fetch(`/ebay/api/listings/${id}`, { method: 'DELETE' });
                 const data = await resp.json();

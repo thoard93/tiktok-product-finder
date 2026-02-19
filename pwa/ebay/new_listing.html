@@ -856,7 +856,15 @@
 
         <!-- Pricing Research -->
         <div class="pricing-card" id="pricingCard">
-            <h3 style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:12px;">💰 Pricing Research</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="font-size:13px;font-weight:700;color:var(--yellow); margin: 0;">💰 Pricing Research</h3>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <input type="text" id="liveSearchQuery" placeholder="Refine search... e.g. 'Sony WH-1000XM4'"
+                    style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text); font-size: 13px;">
+                <button type="button" id="liveSearchBtn" onclick="searchLivePricing()"
+                    style="padding: 10px 16px; border-radius: 8px; border: none; background: var(--yellow); color: #000; font-weight: 700; cursor: pointer; font-size: 13px; font-family: inherit;">Search</button>
+            </div>
             <div class="price-compare">
                 <div class="comp-item">
                     <div class="val" id="priceAvg">—</div>
@@ -1200,6 +1208,7 @@
             const p = data.pricing;
 
             document.getElementById('editTitle').value = l.title || '';
+            document.getElementById('liveSearchQuery').value = l.title || '';
             document.getElementById('editDesc').value = l.description || '';
             document.getElementById('descPreview').innerHTML = l.description || '';
             document.getElementById('editCategory').value = l.category_name || '';
@@ -1279,6 +1288,43 @@
         function updateCharCount() {
             const len = document.getElementById('editTitle').value.length;
             document.getElementById('charCount').textContent = len;
+        }
+
+        async function searchLivePricing() {
+            const query = document.getElementById('liveSearchQuery').value.trim() || document.getElementById('editTitle').value.trim();
+            if (!query) {
+                showToast('⚠️ Please enter a search query');
+                return;
+            }
+
+            const btn = document.getElementById('liveSearchBtn');
+            const ogText = btn.textContent;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+
+            try {
+                const category = document.getElementById('editCategory').value || '';
+                const resp = await fetch(`/ebay/api/pricing?q=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}`);
+                const data = await resp.json();
+
+                if (data.success && data.pricing) {
+                    const p = data.pricing;
+                    document.getElementById('priceAvg').textContent = p.avg_sold_price ? `$${p.avg_sold_price}` : '—';
+                    document.getElementById('priceLow').textContent = (p.lowest_competitor_total || p.lowest_current) ? `$${p.lowest_competitor_total || p.lowest_current}` : '—';
+                    document.getElementById('priceOpt').textContent = p.optimal_price ? `$${p.optimal_price}` : '—';
+                    document.getElementById('priceReason').textContent = p.price_reasoning || '';
+                    document.getElementById('editPrice').value = p.optimal_price || 0;
+                    updateProfit();
+                    showToast('✅ Pricing updated');
+                } else {
+                    showToast('❌ ' + (data.error || 'Pricing error'));
+                }
+            } catch (err) {
+                showToast('❌ Error: ' + err.message);
+            } finally {
+                btn.textContent = ogText;
+                btn.disabled = false;
+            }
         }
 
         function updateProfit() {

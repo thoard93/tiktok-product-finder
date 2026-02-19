@@ -1193,6 +1193,27 @@ def ebay_generate_listing():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/ebay/api/pricing', methods=['GET'])
+@ebay_login_required
+def ebay_live_pricing():
+    """Live price lookup for an arbitrary search string."""
+    q = request.args.get('q', '').strip()
+    category = request.args.get('category', '').strip()
+    
+    if not q:
+        return jsonify({'error': 'Search query is required'}), 400
+        
+    try:
+        pricing = research_pricing(q, category)
+        return jsonify({
+            'success': True,
+            'pricing': pricing
+        })
+    except Exception as e:
+        log.error(f"Live pricing error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/ebay/api/listings/<int:listing_id>/clipboard', methods=['GET'])
 @ebay_login_required
 def ebay_clipboard_data(listing_id):

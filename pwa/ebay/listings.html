@@ -615,11 +615,28 @@
                         <div class="card-actions">
                             ${l.status === 'active' ? `<button class="card-btn sold-btn" onclick="event.stopPropagation();openSoldModal(${l.id})">💰 Mark Sold</button>` : ''}
                             ${l.status === 'draft' ? `<button class="card-btn active-btn" onclick="event.stopPropagation();markActive(${l.id})">✅ Mark Active</button>` : ''}
+                            <button class="card-btn danger" style="background: rgba(255, 77, 106, 0.12); color: var(--red);" onclick="event.stopPropagation();deleteListing(${l.id})">🗑️ Delete</button>
                         </div>
                     </div>
                     <div class="price">$${(l.sale_price || l.price || 0).toFixed(2)}</div>
                 </div>
             `).join('');
+        }
+
+        async function deleteListing(id) {
+            if (!confirm('Delete this listing? This cannot be undone.')) return;
+            try {
+                const resp = await fetch(`/ebay/api/listings/${id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('✅ Listing deleted');
+                    loadListings();
+                } else {
+                    showToast('❌ ' + (data.error || 'Delete failed'));
+                }
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
+            }
         }
 
         let soldListingId = null;
