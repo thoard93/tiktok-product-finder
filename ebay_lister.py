@@ -753,7 +753,17 @@ PRODUCT ANALYSIS:
 LISTING RULES:
 - Title: Max 80 chars, SEO-optimized. Brand + product name + key specs + "NEW" if applicable.
 - Description: Clean HTML with bullet points. Include features, specs from packaging. End with: "Brand new, sealed product. Authentic, limited stock available!"
-- Price: FREE SHIPPING model. Your suggested price must INCLUDE shipping cost (~$12 USPS Ground). Make total cost to buyer {undercut_pct}% below competitor total (their price + their shipping). Since our cost is $0, optimize for fast sales.
+- Price: FREE SHIPPING model. Your price must INCLUDE ~$12 shipping cost (USPS Ground).
+  CRITICAL PRICING RULES:
+  - DO NOT make up or guess competitor prices. ONLY reference a price if it is PRINTED ON THE PRODUCT PACKAGING (MSRP/SRP sticker, barcode label, or price tag).
+  - If an MSRP is visible on packaging, set your price 10-25% below it (after adding shipping cost).
+  - If NO retail price is visible, estimate the product's retail value based on the brand, product type, and size/quantity. Set your price at 70-85% of that estimated value.
+  - TIERED UNDERCUT: Higher-value items get smaller discounts:
+    * Items worth $80+ retail → price at 80-90% of retail (small undercut, these are premium finds)
+    * Items worth $30-$80 → price at 70-80% of retail
+    * Items worth under $30 → price at 60-75% of retail
+  - MINIMUM PRICE: Never go below $12.99 (must cover shipping + eBay fees).
+  - Round to .99 or .95 endings for psychological pricing.
 - Category: Most specific eBay category + numeric ID.
 - Weight: Estimate SHIPPED weight in ounces (product + box + packing material).
 - Dimensions: Estimate SHIPPED package dimensions in inches.
