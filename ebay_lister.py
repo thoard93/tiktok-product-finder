@@ -837,14 +837,19 @@ Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 
 def research_pricing(title, category=''):
     """
-    Research competitive pricing by scraping REAL prices from Google Shopping results.
-    No AI hallucination — only actual market data.
+    Research competitive pricing by scraping REAL eBay sold/active listings.
+    Primary: eBay sold listings (actual sale prices — gold standard)
+    Fallback: eBay active listings (current competitor prices)
+    Last resort: DuckDuckGo search
     """
     import re as _re
+    from urllib.parse import quote_plus
     try:
         from curl_cffi import requests as cf_requests
+        HAS_CURL_CFFI = True
     except ImportError:
         import requests as cf_requests
+        HAS_CURL_CFFI = False
 
     result = {
         'avg_sold_price': 0,
@@ -856,93 +861,119 @@ def research_pricing(title, category=''):
         'prices_found': [],
     }
 
-    # Clean title for search — remove filler words
-    search_title = _re.sub(r'\b(NEW|SEALED|NIB|NWT|AUTHENTIC|GENUINE|LOT OF|SET OF|BUNDLE)\b', '', title, flags=_re.IGNORECASE).strip()
+    # Clean title for search — remove filler words, keep brand + product
+    search_title = _re.sub(r'\b(NEW|SEALED|NIB|NWT|AUTHENTIC|GENUINE|LOT OF|SET OF|BUNDLE|FREE SHIPPING)\b', '', title, flags=_re.IGNORECASE).strip()
     search_title = ' '.join(search_title.split()[:8])  # First 8 meaningful words
+    encoded_query = quote_plus(search_title)
 
-    # Untrusted/wholesale domains to filter out
-    BLACKLISTED_DOMAINS = [
-        'alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com',
-        'banggood.com', 'gearbest.com', 'lightinthebox.com', 'miniinthebox.com',
-        'made-in-china.com', 'globalsources.com', 'chinabrands.com', '1688.com',
-        'joom.com', 'shein.com', 'zaful.com', 'rosegal.com', 'sammydress.com',
-        'tomtop.com', 'dx.com', 'focalprice.com', 'tinydeal.com',
-    ]
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
 
-    def _clean_html(html_text):
-        """Remove blacklisted domain sections from HTML."""
-        for domain in BLACKLISTED_DOMAINS:
-            html_text = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html_text)
-        return html_text
+    def _fetch(url):
+        """Fetch URL with curl_cffi Chrome impersonation if available."""
+        if HAS_CURL_CFFI:
+            return cf_requests.get(url, headers=headers, timeout=12, impersonate='chrome').text
+        return cf_requests.get(url, headers=headers, timeout=12).text
 
-    def _extract_prices(html_text, min_price=3.0, max_price=5000.0):
-        """Extract and filter dollar amounts from HTML."""
-        html_text = _clean_html(html_text)
-        matches = _re.findall(r'\$(\d{1,4}(?:\.\d{2})?)', html_text)
-        return [float(p) for p in matches if min_price < float(p) < max_price]
+    def _extract_ebay_prices(html_text):
+        """Extract prices from eBay search results HTML."""
+        prices = []
+        # eBay shows prices in multiple formats — catch them all
+        # Pattern 1: class="s-item__price" with $XX.XX inside
+        price_blocks = _re.findall(r's-item__price[^>]*>([^<]+)<', html_text)
+        for block in price_blocks:
+            amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', block)
+            for a in amounts:
+                p = float(a)
+                if 3.0 < p < 5000.0:
+                    prices.append(p)
 
-    from urllib.parse import quote_plus
-    encoded_query = quote_plus(f'{search_title} price')
+        # Pattern 2: General dollar amounts near "sold" or "price" context (broader)
+        if not prices:
+            all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html_text)
+            for a in all_amounts:
+                p = float(a)
+                if 3.0 < p < 5000.0:
+                    prices.append(p)
 
-    # ─── Strategy 1: DuckDuckGo (most reliable from servers) ──────
+        return prices
+
     prices = []
 
+    # ─── Strategy 1: eBay SOLD listings (actual completed sales) ──
     try:
-        url = f'https://html.duckduckgo.com/html/?q={encoded_query}'
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        }
-        resp = cf_requests.get(url, headers=headers, timeout=10)
-        raw_prices = _extract_prices(resp.text)
+        # LH_Complete=1&LH_Sold=1 filters to completed sold listings
+        url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Complete=1&LH_Sold=1&_sop=13'
+        html = _fetch(url)
+        raw_prices = _extract_ebay_prices(html)
         if raw_prices:
             prices = raw_prices
-            result['source'] = 'duckduckgo'
-            log.info(f"DDG price lookup for '{search_title}': found {len(prices)} prices: {prices[:10]}")
+            result['source'] = 'ebay_sold'
+            log.info(f"eBay SOLD lookup for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
     except Exception as e:
-        log.warning(f"DuckDuckGo search failed: {e}")
+        log.warning(f"eBay sold search failed: {e}")
 
-    # ─── Strategy 2: Bing Shopping (good fallback) ────────────────
+    # ─── Strategy 2: eBay ACTIVE listings (current market prices) ─
     if not prices:
         try:
-            url = f'https://www.bing.com/shop?q={encoded_query}'
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            }
-            resp = cf_requests.get(url, headers=headers, timeout=10)
-            raw_prices = _extract_prices(resp.text)
-            if not raw_prices:
-                # Try regular Bing search
-                url = f'https://www.bing.com/search?q={encoded_query}'
-                resp = cf_requests.get(url, headers=headers, timeout=10)
-                raw_prices = _extract_prices(resp.text)
+            url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&_sop=15'  # Sort by price+shipping lowest
+            html = _fetch(url)
+            raw_prices = _extract_ebay_prices(html)
             if raw_prices:
                 prices = raw_prices
-                result['source'] = 'bing'
-                log.info(f"Bing price lookup for '{search_title}': found {len(prices)} prices: {prices[:10]}")
+                result['source'] = 'ebay_active'
+                log.info(f"eBay ACTIVE lookup for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
         except Exception as e:
-            log.warning(f"Bing search failed: {e}")
+            log.warning(f"eBay active search failed: {e}")
 
-    # ─── Strategy 3: Google (last resort, often blocked on servers) ─
+    # ─── Strategy 3: Google Shopping via Playwright (real browser) ─
     if not prices:
         try:
-            url = f'https://www.google.com/search?q={encoded_query}&tbm=shop'
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-            }
-            try:
-                resp = cf_requests.get(url, headers=headers, timeout=8, impersonate='chrome')
-            except (TypeError, Exception):
-                resp = cf_requests.get(url, headers=headers, timeout=8)
-            raw_prices = _extract_prices(resp.text)
+            from playwright.sync_api import sync_playwright
+            search_url = f'https://www.google.com/search?q={encoded_query}&tbm=shop'
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page(
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                page.goto(search_url, timeout=15000)
+                page.wait_for_timeout(2000)  # Let results render
+                html = page.content()
+                browser.close()
+
+            # Filter out blacklisted domains
+            BLACKLISTED = ['alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com',
+                           'banggood.com', 'shein.com', 'made-in-china.com', '1688.com']
+            for domain in BLACKLISTED:
+                html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
+
+            all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html)
+            raw_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
             if raw_prices:
                 prices = raw_prices
-                result['source'] = 'google'
-                log.info(f"Google price lookup for '{search_title}': found {len(prices)} prices: {prices[:10]}")
+                result['source'] = 'google_shopping'
+                log.info(f"Google Shopping (Playwright) for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
         except Exception as e:
-            log.warning(f"Google search failed: {e}")
+            log.warning(f"Playwright Google Shopping failed: {e}")
 
-    # Trim outliers from whatever source we got
+    # ─── Strategy 4: DuckDuckGo (general web prices) ─────────────
+    if not prices:
+        try:
+            url = f'https://html.duckduckgo.com/html/?q={quote_plus(search_title + " price")}'
+            resp_text = cf_requests.get(url, headers=headers, timeout=10).text
+            all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', resp_text)
+            raw_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
+            if raw_prices:
+                prices = raw_prices
+                result['source'] = 'duckduckgo'
+                log.info(f"DDG price lookup for '{search_title}': found {len(prices)} prices: {prices[:10]}")
+        except Exception as e:
+            log.warning(f"DuckDuckGo search failed: {e}")
+
+    # Trim outliers (keep middle 60%)
     if prices:
         prices.sort()
         n = len(prices)
@@ -957,37 +988,33 @@ def research_pricing(title, category=''):
         high_price = max(prices)
         median_price = prices[len(prices) // 2]
 
-        # Use median as the reference (more resistant to outliers than avg)
+        # Use median as reference (resistant to outliers)
         reference_price = median_price
 
-        # Tiered undercut based on price range (FREE SHIPPING model: include ~$12 ship cost)
-        shipping_cost = 12.0
+        # Tiered undercut (FREE SHIPPING — includes ~$12 ship cost)
         if reference_price >= 80:
-            # Premium items: small undercut (85-90% of retail)
-            optimal = reference_price * 0.87
+            optimal = reference_price * 0.87  # Premium: small undercut
         elif reference_price >= 30:
-            # Mid-range: moderate undercut (75-80%)
-            optimal = reference_price * 0.77
+            optimal = reference_price * 0.77  # Mid-range: moderate
         else:
-            # Cheap items: bigger undercut but ensure profit (65-75%)
-            optimal = reference_price * 0.70
+            optimal = reference_price * 0.70  # Cheap: bigger undercut
 
-        # Ensure price covers shipping + fees at minimum
-        min_viable = shipping_cost + 3.0  # $12 ship + $3 min profit
+        # Floor: must cover shipping + fees
+        min_viable = 15.0  # $12 ship + $3 min margin
         optimal = max(optimal, min_viable)
 
         # Round to .99
         optimal = round(optimal) - 0.01 if optimal > 15 else round(optimal, 2)
 
-        quick_sale = optimal * 0.90  # 10% further undercut for quick sale
-        quick_sale = max(quick_sale, min_viable)
+        quick_sale = max(optimal * 0.90, min_viable)
 
+        source_label = {'ebay_sold': 'eBay sold listings', 'ebay_active': 'eBay active listings', 'google_shopping': 'Google Shopping', 'duckduckgo': 'web search'}.get(result['source'], 'online')
         result.update({
             'avg_sold_price': round(avg_price, 2),
             'lowest_competitor_total': round(low_price, 2),
             'quick_sale_price': round(quick_sale, 2),
             'optimal_price': round(optimal, 2),
-            'price_reasoning': f"Based on {len(prices)} real prices found online. Median ${median_price:.2f}, range ${low_price:.2f}-${high_price:.2f}. Priced at ${optimal:.2f} with free shipping (includes ~$12 ship cost).",
+            'price_reasoning': f"Based on {len(prices)} real prices from {source_label}. Median ${median_price:.2f}, range ${low_price:.2f}-${high_price:.2f}. Priced at ${optimal:.2f} with free shipping (includes ~$12 ship cost).",
             'prices_found': [round(p, 2) for p in prices[:15]],
         })
     else:
