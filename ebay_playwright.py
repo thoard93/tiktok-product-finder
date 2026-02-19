@@ -104,28 +104,47 @@ def take_screenshot(page, name):
     return f"/ebay/screenshots/{filename}"
 
 
-def extract_listing_url(redirect_url):
+def extract_listing_url(redirect_url, original_title=None):
     """Extract the actual eBay listing URL from a CAPTCHA/signin redirect chain.
-    The URL is typically nested 2-3 levels deep in 'ru' parameters."""
+    The URL is typically nested 2-3 levels deep in 'ru' parameters.
+    If original_title is provided, replaces eBay's product-matched title with ours."""
     try:
+        import re
+        from urllib.parse import quote_plus, urlencode
+        
         # Decode the full URL repeatedly to un-nest it
         decoded = redirect_url
         for _ in range(5):  # Max decode depth
             decoded = unquote(decoded)
         
         # Find the ebay.com/sl/list URL in the decoded string
-        import re
         match = re.search(r'(https://www\.ebay\.com/sl/list\?[^&\s"]*(?:&[^&\s"]*)*)', decoded)
-        if match:
-            listing_url = match.group(1)
-            log(f"Extracted listing URL: {listing_url[:100]}...")
-            return listing_url
+        if not match:
+            # Try to find any ebay.com/sl/ URL
+            match = re.search(r'(https://www\.ebay\.com/sl/[^&\s"]*(?:&[^&\s"]*)*)', decoded)
         
-        # Try to find any ebay.com/sl/ URL
-        match = re.search(r'(https://www\.ebay\.com/sl/[^&\s"]*(?:&[^&\s"]*)*)', decoded)
         if match:
             listing_url = match.group(1)
-            log(f"Extracted sell URL: {listing_url[:100]}...")
+            
+            if original_title:
+                # Replace eBay's wrong product-matched title with our original title
+                listing_url = re.sub(r'title=[^&]*', 'title=' + quote_plus(original_title), listing_url)
+                
+                # Remove productRefId (links to wrong catalog product)
+                listing_url = re.sub(r'&productRefId=[^&]*', '', listing_url)
+                
+                # Remove itemId (links to wrong seller's item)
+                listing_url = re.sub(r'&itemId=[^&]*', '', listing_url)
+                
+                # Remove aspects (pre-filled from wrong product)
+                listing_url = re.sub(r'&aspects=[^&]*', '', listing_url)
+                
+                # Change mode from SellLikeItem to AddItem (fresh listing)
+                listing_url = re.sub(r'mode=SellLikeItem', 'mode=AddItem', listing_url)
+                
+                log(f"Fixed listing URL with original title: {original_title[:50]}...")
+            
+            log(f"Extracted listing URL: {listing_url[:100]}...")
             return listing_url
             
     except Exception as e:
@@ -751,7 +770,7 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 result['screenshot'] = take_screenshot(page, 'captcha_page')
                 result['ebay_url'] = current_url
                 # Extract the actual listing URL from the redirect chain
-                listing_url = extract_listing_url(current_url)
+                listing_url = extract_listing_url(current_url, listing_data.get('title'))
                 if listing_url:
                     result['listing_url'] = listing_url
                     log(f"Listing URL for user: {listing_url[:80]}...")
@@ -785,7 +804,7 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 result['screenshot'] = take_screenshot(page, 'login_page')
                 result['ebay_url'] = current_url
                 # Extract the actual listing URL from the redirect chain
-                listing_url = extract_listing_url(current_url)
+                listing_url = extract_listing_url(current_url, listing_data.get('title'))
                 if listing_url:
                     result['listing_url'] = listing_url
                     log(f"Listing URL for user: {listing_url[:80]}...")
