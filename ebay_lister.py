@@ -1041,13 +1041,33 @@ def research_pricing(title, category=''):
         except Exception as e:
             log.warning(f"DuckDuckGo search failed: {e}")
 
-    # Trim outliers (keep middle 60%)
-    if prices:
+    # ─── Advanced Outlier Filtering (IQR Method) ───────────────────
+    if len(prices) >= 4:
         prices.sort()
-        n = len(prices)
-        if n > 4:
-            trim = max(1, n // 5)
+        # Calculate Q1 (25th percentile) and Q3 (75th percentile)
+        q1_idx = len(prices) // 4
+        q3_idx = (len(prices) * 3) // 4
+        q1 = prices[q1_idx]
+        q3 = prices[q3_idx]
+        iqr = q3 - q1
+        
+        # Define bounds (standard IQR multiplier is 1.5)
+        # We use a slightly tighter upper bound (1.2) to aggressively filter out reseller markups
+        lower_bound = q1 - (1.5 * iqr)
+        upper_bound = q3 + (1.2 * iqr)
+        
+        filtered_prices = [p for p in prices if lower_bound <= p <= upper_bound]
+        
+        # Fallback if filtering removed too much (e.g., highly volatile item)
+        if len(filtered_prices) >= 2:
+            prices = filtered_prices
+        else:
+            # Basic trim if IQR fails
+            trim = max(1, len(prices) // 5)
             prices = prices[trim:-trim]
+    elif len(prices) > 2:
+        prices.sort()
+        prices = prices[1:-1] # Strip top and bottom if just 3 items
 
     # ─── Calculate pricing from real data ─────────────────────────
     if prices:
