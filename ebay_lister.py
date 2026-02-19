@@ -941,95 +941,122 @@ def research_pricing(title, category=''):
 
     prices = []
 
-    # ─── Strategy 1: eBay SOLD listings (actual completed sales) ──
+    # ─── Initial Fast Check (curl_cffi) ───
     try:
         url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Complete=1&LH_Sold=1&_sop=13'
-        log.info(f"[Pricing] Strategy 1 (eBay SOLD) fetching: {url}")
+        log.info(f"[Pricing] Fast check (eBay SOLD) fetching: {url}")
         html = _fetch(url)
-        log.info(f"[Pricing] Strategy 1 received HTML length: {len(html)}")
-        raw_prices = _extract_ebay_prices(html, search_title)
-        if raw_prices:
-            prices = raw_prices
-            result['source'] = 'ebay_sold'
-            log.info(f"eBay SOLD lookup for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
-        else:
-            log.warning(f"[Pricing] Strategy 1 found 0 prices for '{search_title}'.")
-    except Exception as e:
-        log.warning(f"eBay sold search failed: {e}")
-
-    # ─── Strategy 1b: Retry eBay SOLD with shorter query if no results ──
-    if not prices:
-        try:
-            short_query = ' '.join(search_title.split()[:4])  # First 4 words only
-            short_encoded = quote_plus(short_query)
-            url = f'https://www.ebay.com/sch/i.html?_nkw={short_encoded}&LH_Complete=1&LH_Sold=1&_sop=13'
-            log.info(f"[Pricing] Strategy 1b (eBay SOLD short) fetching: {url}")
-            html = _fetch(url)
-            log.info(f"[Pricing] Strategy 1b received HTML length: {len(html)}")
-            raw_prices = _extract_ebay_prices(html, short_query)  # Use short_query for quantity matching too
+        log.info(f"[Pricing] Fast check received HTML length: {len(html)}")
+        if len(html) > 40000:
+            raw_prices = _extract_ebay_prices(html, search_title)
             if raw_prices:
                 prices = raw_prices
                 result['source'] = 'ebay_sold'
-                log.info(f"eBay SOLD (short query '{short_query}'): found {len(prices)} prices: {sorted(prices)[:10]}")
-            else:
-                log.warning(f"[Pricing] Strategy 1b found 0 prices for '{short_query}'.")
-        except Exception as e:
-            log.warning(f"eBay sold short-query search failed: {e}")
+                log.info(f"eBay SOLD (Fast) found {len(prices)} prices: {sorted(prices)[:10]}")
+    except Exception as e:
+        log.warning(f"Fast check failed: {e}")
 
-    # ─── Strategy 2: Google Shopping via Playwright (single browser launch) ─
+    # ─── Bypassing Bot Protection with Playwright ───
     if len(prices) < 3:
         try:
             from playwright.sync_api import sync_playwright
-            search_url = f'https://www.google.com/search?q={encoded_query}&tbm=shop'
-            log.info(f"[Pricing] Strategy 2 (Google Shopping) launching Playwright for: {search_url}")
+            log.info("[Pricing] Launching single Playwright instance to bypass bot protection...")
             with sync_playwright() as p:
                 browser = p.chromium.launch(
                     headless=True,
                     args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
                 )
-                page = browser.new_page(
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                context = browser.new_context(
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    viewport={'width': 1280, 'height': 800}
                 )
-                page.goto(search_url, timeout=15000)
-                page.wait_for_timeout(2000)  # Let results render
-                html = page.content()
+                page = context.new_page()
+
+                # Strategy 1: eBay SOLD listings via Playwright
+                if not prices:
+                    url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Complete=1&LH_Sold=1&_sop=13'
+                    log.info(f"[Pricing] Playwright Strategy 1 (eBay SOLD): {url}")
+                    try:
+                        page.goto(url, timeout=20000)
+                        page.wait_for_timeout(3000) # Let lazy load/JS render
+                        html = page.content()
+                        log.info(f"[Pricing] Playwright Strategy 1 received HTML length: {len(html)}")
+                        raw_prices = _extract_ebay_prices(html, search_title)
+                        if raw_prices:
+                            prices = raw_prices
+                            result['source'] = 'ebay_sold'
+                            log.info(f"eBay SOLD (Playwright) found {len(prices)} prices.")
+                        else:
+                            log.warning(f"[Pricing] Playwright Strategy 1 found 0 prices.")
+                    except Exception as e:
+                        log.warning(f"[Pricing] Playwright Strategy 1 error: {e}")
+
+                # Strategy 1b: eBay SOLD (Short Query) via Playwright
+                if not prices:
+                    short_query = ' '.join(search_title.split()[:4])
+                    short_encoded = quote_plus(short_query)
+                    url = f'https://www.ebay.com/sch/i.html?_nkw={short_encoded}&LH_Complete=1&LH_Sold=1&_sop=13'
+                    log.info(f"[Pricing] Playwright Strategy 1b (eBay SOLD short): {url}")
+                    try:
+                        page.goto(url, timeout=20000)
+                        page.wait_for_timeout(3000)
+                        html = page.content()
+                        log.info(f"[Pricing] Playwright Strategy 1b HTML length: {len(html)}")
+                        raw_prices = _extract_ebay_prices(html, short_query)
+                        if raw_prices:
+                            prices = raw_prices
+                            result['source'] = 'ebay_sold'
+                            log.info(f"eBay SOLD short (Playwright) found {len(prices)} prices.")
+                    except Exception as e:
+                        log.warning(f"[Pricing] Playwright Strategy 1b error: {e}")
+
+                # Strategy 2: Google Shopping via Playwright (udm=28)
+                if len(prices) < 3:
+                    search_url = f'https://www.google.com/search?q={encoded_query}&udm=28'
+                    log.info(f"[Pricing] Playwright Strategy 2 (Google Shopping): {search_url}")
+                    try:
+                        page.goto(search_url, timeout=20000)
+                        page.wait_for_timeout(3000)
+                        html = page.content()
+                        log.info(f"[Pricing] Playwright Strategy 2 HTML length: {len(html)}")
+                        
+                        BLACKLISTED = ['alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com', 'banggood.com', 'shein.com', '1688.com', 'ebay.com']
+                        for domain in BLACKLISTED:
+                            html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
+
+                        all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html)
+                        raw_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
+                        if raw_prices:
+                            prices.extend(raw_prices)
+                            if not result.get('source') or result['source'] == 'none':
+                                result['source'] = 'google_shopping'
+                            log.info(f"Google Shopping (Playwright) found {len(raw_prices)} prices.")
+                        else:
+                            log.warning(f"[Pricing] Playwright Strategy 2 found 0 prices.")
+                    except Exception as e:
+                        log.warning(f"[Pricing] Playwright Strategy 2 error: {e}")
+
+                # Strategy 3: eBay ACTIVE via Playwright
+                if len(prices) < 2:
+                    url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&_sop=15'
+                    log.info(f"[Pricing] Playwright Strategy 3 (eBay ACTIVE): {url}")
+                    try:
+                        page.goto(url, timeout=20000)
+                        page.wait_for_timeout(3000)
+                        html = page.content()
+                        log.info(f"[Pricing] Playwright Strategy 3 HTML length: {len(html)}")
+                        raw_prices = _extract_ebay_prices(html, search_title)
+                        if raw_prices:
+                            prices.extend(raw_prices)
+                            if not result.get('source') or result['source'] == 'none':
+                                result['source'] = 'ebay_active'
+                            log.info(f"eBay ACTIVE (Playwright) found {len(raw_prices)} prices.")
+                    except Exception as e:
+                        log.warning(f"[Pricing] Playwright Strategy 3 error: {e}")
+
                 browser.close()
-
-            log.info(f"[Pricing] Strategy 2 received HTML length: {len(html)}")
-            # Filter out blacklisted domains
-            BLACKLISTED = ['alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com',
-                           'banggood.com', 'shein.com', 'made-in-china.com', '1688.com', 'ebay.com']
-            for domain in BLACKLISTED:
-                html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
-
-            all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html)
-            raw_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
-            if raw_prices:
-                prices.extend(raw_prices)
-                if not result['source'] or result['source'] == 'none':
-                    result['source'] = 'google_shopping'
-                log.info(f"Google Shopping (Playwright) for '{search_title}': found {len(raw_prices)} prices: {sorted(raw_prices)[:10]}")
-            else:
-                log.warning(f"[Pricing] Strategy 2 found 0 prices.")
         except Exception as e:
-            log.warning(f"Playwright Google Shopping failed: {e}")
-
-    # ─── Strategy 3: eBay ACTIVE listings (current market prices) ─
-    if len(prices) < 2:
-        try:
-            url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&_sop=15'  # Sort by price+shipping lowest
-            log.info(f"[Pricing] Strategy 3 (eBay ACTIVE) fetching: {url}")
-            html = _fetch(url)
-            log.info(f"[Pricing] Strategy 3 received HTML length: {len(html)}")
-            raw_prices = _extract_ebay_prices(html, search_title)
-            if raw_prices:
-                prices = raw_prices
-                result['source'] = 'ebay_active'
-                log.info(f"eBay ACTIVE lookup for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
-            else:
-                log.warning(f"[Pricing] Strategy 3 found 0 prices.")
-        except Exception as e:
-            log.warning(f"eBay active search failed: {e}")
+            log.warning(f"Playwright full scraping session failed: {e}")
 
     # ─── Strategy 4: DuckDuckGo (general web prices) ─────────────
     if not prices:
