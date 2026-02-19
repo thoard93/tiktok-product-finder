@@ -873,43 +873,24 @@ def research_pricing(title, category=''):
     }
 
     def _fetch(url):
-        """Fetch URL with curl_cffi Chrome impersonation if available, fallback to Playwright if blocked."""
-        html = ""
+        """Fetch URL with curl_cffi Chrome impersonation if available."""
         if HAS_CURL_CFFI:
             try:
-                html = cf_requests.get(url, headers=headers, timeout=12, impersonate='chrome').text
-            except Exception:
-                pass
-        else:
-            try:
-                html = cf_requests.get(url, headers=headers, timeout=12).text
-            except Exception:
-                pass
-                
-        # If eBay returned a JS-rendered page or blocked us (no s-item__info), use Playwright
-        if 'class="s-item__info clearfix"' not in html:
-            log.info(f"eBay returned a bot page or timeout (no s-item__info). Using Playwright fallback...")
-            try:
-                from playwright.sync_api import sync_playwright
-                with sync_playwright() as p:
-                    browser = p.chromium.launch(
-                        headless=True,
-                        args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-                    )
-                    page = browser.new_page(
-                        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                    )
-                    page.goto(url, timeout=15000)
-                    page.wait_for_timeout(2000)  # wait for results to render
-                    html = page.content()
-                    browser.close()
+                return cf_requests.get(url, headers=headers, timeout=12, impersonate='chrome').text
             except Exception as e:
-                log.warning(f"Playwright eBay fallback failed: {e}")
-                
-        return html
+                log.warning(f"curl_cffi fetch failed: {e}")
+        try:
+            return cf_requests.get(url, headers=headers, timeout=12).text
+        except Exception as e:
+            log.warning(f"requests fetch failed: {e}")
+        return ""
 
     def _extract_ebay_prices(html_text, search_query):
-        """Extract prices and shipping from eBay search results HTML and filter by Title Quantity."""
+        """Extract prices from eBay search results HTML.
+        
+        Strategy A: Parse structured s-item blocks (price + shipping, quantity filter)
+        Strategy B: Broad regex fallback on entire HTML if no structured blocks found
+        """
         prices = []
         blocks = html_text.split('class="s-item__info clearfix"')[1:]
         
@@ -947,6 +928,14 @@ def research_pricing(title, category=''):
                     
             if not skip and 3.0 < total_price < 5000.0:
                 prices.append(total_price)
+        
+        # Strategy B: Broad fallback — if no structured blocks found, scan entire HTML for dollar amounts
+        if not prices:
+            all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html_text)
+            for a in all_amounts:
+                p = float(a)
+                if 3.0 < p < 5000.0:
+                    prices.append(p)
                 
         return prices
 
@@ -954,7 +943,6 @@ def research_pricing(title, category=''):
 
     # ─── Strategy 1: eBay SOLD listings (actual completed sales) ──
     try:
-        # LH_Complete=1&LH_Sold=1 filters to completed sold listings
         url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Complete=1&LH_Sold=1&_sop=13'
         html = _fetch(url)
         raw_prices = _extract_ebay_prices(html, search_title)
@@ -965,13 +953,31 @@ def research_pricing(title, category=''):
     except Exception as e:
         log.warning(f"eBay sold search failed: {e}")
 
-    # ─── Strategy 2: Google Shopping via Playwright (real browser) ─
+    # ─── Strategy 1b: Retry eBay SOLD with shorter query if no results ──
+    if not prices:
+        try:
+            short_query = ' '.join(search_title.split()[:4])  # First 4 words only
+            short_encoded = quote_plus(short_query)
+            url = f'https://www.ebay.com/sch/i.html?_nkw={short_encoded}&LH_Complete=1&LH_Sold=1&_sop=13'
+            html = _fetch(url)
+            raw_prices = _extract_ebay_prices(html, search_title)
+            if raw_prices:
+                prices = raw_prices
+                result['source'] = 'ebay_sold'
+                log.info(f"eBay SOLD (short query '{short_query}'): found {len(prices)} prices: {sorted(prices)[:10]}")
+        except Exception as e:
+            log.warning(f"eBay sold short-query search failed: {e}")
+
+    # ─── Strategy 2: Google Shopping via Playwright (single browser launch) ─
     if len(prices) < 3:
         try:
             from playwright.sync_api import sync_playwright
             search_url = f'https://www.google.com/search?q={encoded_query}&tbm=shop'
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
+                )
                 page = browser.new_page(
                     user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 )
@@ -989,9 +995,10 @@ def research_pricing(title, category=''):
             all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html)
             raw_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
             if raw_prices:
-                prices = raw_prices
-                result['source'] = 'google_shopping'
-                log.info(f"Google Shopping (Playwright) for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
+                prices.extend(raw_prices)
+                if not result['source'] or result['source'] == 'none':
+                    result['source'] = 'google_shopping'
+                log.info(f"Google Shopping (Playwright) for '{search_title}': found {len(raw_prices)} prices: {sorted(raw_prices)[:10]}")
         except Exception as e:
             log.warning(f"Playwright Google Shopping failed: {e}")
 
