@@ -860,87 +860,95 @@ def research_pricing(title, category=''):
     search_title = _re.sub(r'\b(NEW|SEALED|NIB|NWT|AUTHENTIC|GENUINE|LOT OF|SET OF|BUNDLE)\b', '', title, flags=_re.IGNORECASE).strip()
     search_title = ' '.join(search_title.split()[:8])  # First 8 meaningful words
 
-    # ─── Strategy 1: Google Shopping search ───────────────────────
+    # Untrusted/wholesale domains to filter out
+    BLACKLISTED_DOMAINS = [
+        'alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com',
+        'banggood.com', 'gearbest.com', 'lightinthebox.com', 'miniinthebox.com',
+        'made-in-china.com', 'globalsources.com', 'chinabrands.com', '1688.com',
+        'joom.com', 'shein.com', 'zaful.com', 'rosegal.com', 'sammydress.com',
+        'tomtop.com', 'dx.com', 'focalprice.com', 'tinydeal.com',
+    ]
+
+    def _clean_html(html_text):
+        """Remove blacklisted domain sections from HTML."""
+        for domain in BLACKLISTED_DOMAINS:
+            html_text = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html_text)
+        return html_text
+
+    def _extract_prices(html_text, min_price=3.0, max_price=5000.0):
+        """Extract and filter dollar amounts from HTML."""
+        html_text = _clean_html(html_text)
+        matches = _re.findall(r'\$(\d{1,4}(?:\.\d{2})?)', html_text)
+        return [float(p) for p in matches if min_price < float(p) < max_price]
+
+    from urllib.parse import quote_plus
+    encoded_query = quote_plus(f'{search_title} price')
+
+    # ─── Strategy 1: DuckDuckGo (most reliable from servers) ──────
     prices = []
 
     try:
-        # Google Shopping tab search
-        query = f'{search_title} price'
-        url = f'https://www.google.com/search?q={query}&tbm=shop'
+        url = f'https://html.duckduckgo.com/html/?q={encoded_query}'
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
         }
-
-        try:
-            resp = cf_requests.get(url, headers=headers, timeout=8, impersonate='chrome')
-            html = resp.text
-        except Exception:
-            # Fallback to regular Google search
-            url = f'https://www.google.com/search?q={query}'
-            resp = cf_requests.get(url, headers=headers, timeout=8, impersonate='chrome')
-            html = resp.text
-
-        # Strip out sections from untrusted/wholesale/Chinese marketplace sources
-        BLACKLISTED_DOMAINS = [
-            'alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com',
-            'banggood.com', 'gearbest.com', 'lightinthebox.com', 'miniinthebox.com',
-            'made-in-china.com', 'globalsources.com', 'chinabrands.com', '1688.com',
-            'joom.com', 'shein.com', 'zaful.com', 'rosegal.com', 'sammydress.com',
-            'tomtop.com', 'dx.com', 'focalprice.com', 'tinydeal.com',
-        ]
-        for domain in BLACKLISTED_DOMAINS:
-            # Remove any HTML chunks that reference these domains
-            html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
-
-        # Extract all dollar amounts from the cleaned page
-        price_matches = _re.findall(r'\$(\d{1,4}(?:\.\d{2})?)', html)
-        raw_prices = [float(p) for p in price_matches if 1.0 < float(p) < 5000.0]
-
+        resp = cf_requests.get(url, headers=headers, timeout=10)
+        raw_prices = _extract_prices(resp.text)
         if raw_prices:
-            # Remove outlier prices (keep middle 60%)
-            raw_prices.sort()
-            n = len(raw_prices)
-            if n > 4:
-                trim = max(1, n // 5)
-                raw_prices = raw_prices[trim:-trim]
-
             prices = raw_prices
-            result['source'] = 'google_shopping'
-            log.info(f"Price lookup for '{search_title}': found {len(prices)} prices from Google: {prices[:10]}")
-
+            result['source'] = 'duckduckgo'
+            log.info(f"DDG price lookup for '{search_title}': found {len(prices)} prices: {prices[:10]}")
     except Exception as e:
-        log.warning(f"Google Shopping search failed: {e}")
+        log.warning(f"DuckDuckGo search failed: {e}")
 
-    # ─── Strategy 2: Regular Google search fallback ───────────────
+    # ─── Strategy 2: Bing Shopping (good fallback) ────────────────
     if not prices:
         try:
-            query = f'{search_title} retail price USD'
-            url = f'https://www.google.com/search?q={query}'
+            url = f'https://www.bing.com/shop?q={encoded_query}'
             headers = {
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            }
+            resp = cf_requests.get(url, headers=headers, timeout=10)
+            raw_prices = _extract_prices(resp.text)
+            if not raw_prices:
+                # Try regular Bing search
+                url = f'https://www.bing.com/search?q={encoded_query}'
+                resp = cf_requests.get(url, headers=headers, timeout=10)
+                raw_prices = _extract_prices(resp.text)
+            if raw_prices:
+                prices = raw_prices
+                result['source'] = 'bing'
+                log.info(f"Bing price lookup for '{search_title}': found {len(prices)} prices: {prices[:10]}")
+        except Exception as e:
+            log.warning(f"Bing search failed: {e}")
+
+    # ─── Strategy 3: Google (last resort, often blocked on servers) ─
+    if not prices:
+        try:
+            url = f'https://www.google.com/search?q={encoded_query}&tbm=shop'
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
             }
             try:
                 resp = cf_requests.get(url, headers=headers, timeout=8, impersonate='chrome')
-            except TypeError:
+            except (TypeError, Exception):
                 resp = cf_requests.get(url, headers=headers, timeout=8)
-            html = resp.text
-
-            price_matches = _re.findall(r'\$(\d{1,4}(?:\.\d{2})?)', html)
-            raw_prices = [float(p) for p in price_matches if 3.0 < float(p) < 5000.0]
-
+            raw_prices = _extract_prices(resp.text)
             if raw_prices:
-                raw_prices.sort()
-                n = len(raw_prices)
-                if n > 4:
-                    trim = max(1, n // 5)
-                    raw_prices = raw_prices[trim:-trim]
                 prices = raw_prices
-                result['source'] = 'google_search'
-                log.info(f"Price lookup fallback for '{search_title}': {prices[:10]}")
-
+                result['source'] = 'google'
+                log.info(f"Google price lookup for '{search_title}': found {len(prices)} prices: {prices[:10]}")
         except Exception as e:
-            log.warning(f"Google search fallback failed: {e}")
+            log.warning(f"Google search failed: {e}")
+
+    # Trim outliers from whatever source we got
+    if prices:
+        prices.sort()
+        n = len(prices)
+        if n > 4:
+            trim = max(1, n // 5)
+            prices = prices[trim:-trim]
 
     # ─── Calculate pricing from real data ─────────────────────────
     if prices:
