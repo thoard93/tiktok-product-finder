@@ -1079,13 +1079,16 @@ def research_pricing(title, category=''):
         # Use median as reference (resistant to outliers)
         reference_price = median_price
 
-        # Tiered undercut (FREE SHIPPING — includes ~$12 ship cost)
-        if reference_price >= 80:
-            optimal = reference_price * 0.87  # Premium: small undercut
-        elif reference_price >= 30:
-            optimal = reference_price * 0.77  # Mid-range: moderate
+        # Tiered undercut (FREE SHIPPING — includes ~$8-$12 ship cost)
+        if reference_price >= 100:
+            optimal = reference_price * 0.90  # Premium (+$100): 10% undercut
+        elif reference_price >= 50:
+            optimal = reference_price * 0.88  # High ($50-$100): 12% undercut
+        elif reference_price >= 25:
+            optimal = reference_price * 0.85  # Mid ($25-$50): 15% undercut
         else:
-            optimal = reference_price * 0.70  # Cheap: bigger undercut
+            # Low (<$25): Slim margins due to shipping, apply gentle 10% undercut
+            optimal = reference_price * 0.90
 
         # Floor: must cover shipping + fees
         min_viable = 15.0  # $12 ship + $3 min margin
