@@ -293,6 +293,19 @@ class EbayListing(db.Model):
 # =============================================================================
 with app.app_context():
     db.create_all()
+    # Migrate: add new columns if they don't exist yet (create_all won't alter existing tables)
+    try:
+        db.session.execute(db.text("ALTER TABLE ebay_teams ADD COLUMN gmail_tokens_json TEXT DEFAULT ''"))
+        db.session.commit()
+        log.info("Added gmail_tokens_json column")
+    except Exception:
+        db.session.rollback()
+    try:
+        db.session.execute(db.text("ALTER TABLE ebay_teams ADD COLUMN gmail_last_sync TIMESTAMP"))
+        db.session.commit()
+        log.info("Added gmail_last_sync column")
+    except Exception:
+        db.session.rollback()
     # Seed default teams if they don't exist
     if not EbayTeam.query.filter_by(name='Thoard').first():
         t1 = EbayTeam(
