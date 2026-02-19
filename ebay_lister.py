@@ -878,27 +878,46 @@ def research_pricing(title, category=''):
             return cf_requests.get(url, headers=headers, timeout=12, impersonate='chrome').text
         return cf_requests.get(url, headers=headers, timeout=12).text
 
-    def _extract_ebay_prices(html_text):
-        """Extract prices from eBay search results HTML."""
+    def _extract_ebay_prices(html_text, search_query):
+        """Extract prices and shipping from eBay search results HTML and filter by Title Quantity."""
         prices = []
-        # eBay shows prices in multiple formats — catch them all
-        # Pattern 1: class="s-item__price" with $XX.XX inside
-        price_blocks = _re.findall(r's-item__price[^>]*>([^<]+)<', html_text)
-        for block in price_blocks:
-            amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', block)
-            for a in amounts:
-                p = float(a)
-                if 3.0 < p < 5000.0:
-                    prices.append(p)
-
-        # Pattern 2: General dollar amounts near "sold" or "price" context (broader)
-        if not prices:
-            all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html_text)
-            for a in all_amounts:
-                p = float(a)
-                if 3.0 < p < 5000.0:
-                    prices.append(p)
-
+        blocks = html_text.split('class="s-item__info clearfix"')[1:]
+        
+        # Identify target quantities in the search title
+        target_quantities = _re.findall(r'\b(\d+)\s*(?:ct|pack|pk|piece|pcs|oz|lbs|grams|g|count)\b', search_query, _re.IGNORECASE)
+        if not target_quantities:
+            target_quantities = _re.findall(r'\b(\d{1,3})\b', search_query)
+        
+        for block in blocks:
+            # Title
+            title_match = _re.search(r'class="s-item__title"[^>]*>(?:<span[^>]*>)?(.*?)(?:</span>|</div)', block)
+            item_title = title_match.group(1).strip() if title_match else ""
+            item_title = _re.sub(r'<[^>]+>', '', item_title)
+            
+            # Base price
+            price_match = _re.search(r'class="s-item__price"[^>]*>.*?\$(\d{1,4}\.\d{2})', block)
+            if not price_match:
+                continue
+            base_price = float(price_match.group(1))
+            
+            # Shipping
+            shipping_match = _re.search(r'class="s-item__shipping[^>]*>.*?\$(\d{1,4}\.\d{2})', block)
+            shipping = float(shipping_match.group(1)) if shipping_match else 0.0
+            total_price = base_price + shipping
+            
+            # Filter quantities
+            item_quantities = _re.findall(r'\b(\d+)\s*(?:ct|pack|pk|piece|pcs|oz|lbs|grams|g|count)?\b', item_title, _re.IGNORECASE)
+            skip = False
+            
+            if target_quantities and item_quantities:
+                target_q_set = set([int(q) for q in target_quantities])
+                item_q_set = set([int(q) for q in item_quantities])
+                if not target_q_set.intersection(item_q_set):
+                    skip = True
+                    
+            if not skip and 3.0 < total_price < 5000.0:
+                prices.append(total_price)
+                
         return prices
 
     prices = []
@@ -908,7 +927,7 @@ def research_pricing(title, category=''):
         # LH_Complete=1&LH_Sold=1 filters to completed sold listings
         url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Complete=1&LH_Sold=1&_sop=13'
         html = _fetch(url)
-        raw_prices = _extract_ebay_prices(html)
+        raw_prices = _extract_ebay_prices(html, search_title)
         if raw_prices:
             prices = raw_prices
             result['source'] = 'ebay_sold'
@@ -916,21 +935,8 @@ def research_pricing(title, category=''):
     except Exception as e:
         log.warning(f"eBay sold search failed: {e}")
 
-    # ─── Strategy 2: eBay ACTIVE listings (current market prices) ─
-    if not prices:
-        try:
-            url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&_sop=15'  # Sort by price+shipping lowest
-            html = _fetch(url)
-            raw_prices = _extract_ebay_prices(html)
-            if raw_prices:
-                prices = raw_prices
-                result['source'] = 'ebay_active'
-                log.info(f"eBay ACTIVE lookup for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
-        except Exception as e:
-            log.warning(f"eBay active search failed: {e}")
-
-    # ─── Strategy 3: Google Shopping via Playwright (real browser) ─
-    if not prices:
+    # ─── Strategy 2: Google Shopping via Playwright (real browser) ─
+    if len(prices) < 3:
         try:
             from playwright.sync_api import sync_playwright
             search_url = f'https://www.google.com/search?q={encoded_query}&tbm=shop'
@@ -946,7 +952,7 @@ def research_pricing(title, category=''):
 
             # Filter out blacklisted domains
             BLACKLISTED = ['alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com',
-                           'banggood.com', 'shein.com', 'made-in-china.com', '1688.com']
+                           'banggood.com', 'shein.com', 'made-in-china.com', '1688.com', 'ebay.com']
             for domain in BLACKLISTED:
                 html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
 
@@ -958,6 +964,19 @@ def research_pricing(title, category=''):
                 log.info(f"Google Shopping (Playwright) for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
         except Exception as e:
             log.warning(f"Playwright Google Shopping failed: {e}")
+
+    # ─── Strategy 3: eBay ACTIVE listings (current market prices) ─
+    if len(prices) < 2:
+        try:
+            url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&_sop=15'  # Sort by price+shipping lowest
+            html = _fetch(url)
+            raw_prices = _extract_ebay_prices(html, search_title)
+            if raw_prices:
+                prices = raw_prices
+                result['source'] = 'ebay_active'
+                log.info(f"eBay ACTIVE lookup for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
+        except Exception as e:
+            log.warning(f"eBay active search failed: {e}")
 
     # ─── Strategy 4: DuckDuckGo (general web prices) ─────────────
     if not prices:
