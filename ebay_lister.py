@@ -881,7 +881,19 @@ def research_pricing(title, category=''):
             resp = cf_requests.get(url, headers=headers, timeout=8, impersonate='chrome')
             html = resp.text
 
-        # Extract all dollar amounts from the page
+        # Strip out sections from untrusted/wholesale/Chinese marketplace sources
+        BLACKLISTED_DOMAINS = [
+            'alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com',
+            'banggood.com', 'gearbest.com', 'lightinthebox.com', 'miniinthebox.com',
+            'made-in-china.com', 'globalsources.com', 'chinabrands.com', '1688.com',
+            'joom.com', 'shein.com', 'zaful.com', 'rosegal.com', 'sammydress.com',
+            'tomtop.com', 'dx.com', 'focalprice.com', 'tinydeal.com',
+        ]
+        for domain in BLACKLISTED_DOMAINS:
+            # Remove any HTML chunks that reference these domains
+            html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
+
+        # Extract all dollar amounts from the cleaned page
         price_matches = _re.findall(r'\$(\d{1,4}(?:\.\d{2})?)', html)
         raw_prices = [float(p) for p in price_matches if 1.0 < float(p) < 5000.0]
 
