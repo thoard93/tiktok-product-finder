@@ -944,12 +944,16 @@ def research_pricing(title, category=''):
     # ─── Strategy 1: eBay SOLD listings (actual completed sales) ──
     try:
         url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Complete=1&LH_Sold=1&_sop=13'
+        log.info(f"[Pricing] Strategy 1 (eBay SOLD) fetching: {url}")
         html = _fetch(url)
+        log.info(f"[Pricing] Strategy 1 received HTML length: {len(html)}")
         raw_prices = _extract_ebay_prices(html, search_title)
         if raw_prices:
             prices = raw_prices
             result['source'] = 'ebay_sold'
             log.info(f"eBay SOLD lookup for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
+        else:
+            log.warning(f"[Pricing] Strategy 1 found 0 prices for '{search_title}'.")
     except Exception as e:
         log.warning(f"eBay sold search failed: {e}")
 
@@ -959,12 +963,16 @@ def research_pricing(title, category=''):
             short_query = ' '.join(search_title.split()[:4])  # First 4 words only
             short_encoded = quote_plus(short_query)
             url = f'https://www.ebay.com/sch/i.html?_nkw={short_encoded}&LH_Complete=1&LH_Sold=1&_sop=13'
+            log.info(f"[Pricing] Strategy 1b (eBay SOLD short) fetching: {url}")
             html = _fetch(url)
-            raw_prices = _extract_ebay_prices(html, search_title)
+            log.info(f"[Pricing] Strategy 1b received HTML length: {len(html)}")
+            raw_prices = _extract_ebay_prices(html, short_query)  # Use short_query for quantity matching too
             if raw_prices:
                 prices = raw_prices
                 result['source'] = 'ebay_sold'
                 log.info(f"eBay SOLD (short query '{short_query}'): found {len(prices)} prices: {sorted(prices)[:10]}")
+            else:
+                log.warning(f"[Pricing] Strategy 1b found 0 prices for '{short_query}'.")
         except Exception as e:
             log.warning(f"eBay sold short-query search failed: {e}")
 
@@ -973,6 +981,7 @@ def research_pricing(title, category=''):
         try:
             from playwright.sync_api import sync_playwright
             search_url = f'https://www.google.com/search?q={encoded_query}&tbm=shop'
+            log.info(f"[Pricing] Strategy 2 (Google Shopping) launching Playwright for: {search_url}")
             with sync_playwright() as p:
                 browser = p.chromium.launch(
                     headless=True,
@@ -986,6 +995,7 @@ def research_pricing(title, category=''):
                 html = page.content()
                 browser.close()
 
+            log.info(f"[Pricing] Strategy 2 received HTML length: {len(html)}")
             # Filter out blacklisted domains
             BLACKLISTED = ['alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com',
                            'banggood.com', 'shein.com', 'made-in-china.com', '1688.com', 'ebay.com']
@@ -999,6 +1009,8 @@ def research_pricing(title, category=''):
                 if not result['source'] or result['source'] == 'none':
                     result['source'] = 'google_shopping'
                 log.info(f"Google Shopping (Playwright) for '{search_title}': found {len(raw_prices)} prices: {sorted(raw_prices)[:10]}")
+            else:
+                log.warning(f"[Pricing] Strategy 2 found 0 prices.")
         except Exception as e:
             log.warning(f"Playwright Google Shopping failed: {e}")
 
@@ -1006,12 +1018,16 @@ def research_pricing(title, category=''):
     if len(prices) < 2:
         try:
             url = f'https://www.ebay.com/sch/i.html?_nkw={encoded_query}&_sop=15'  # Sort by price+shipping lowest
+            log.info(f"[Pricing] Strategy 3 (eBay ACTIVE) fetching: {url}")
             html = _fetch(url)
+            log.info(f"[Pricing] Strategy 3 received HTML length: {len(html)}")
             raw_prices = _extract_ebay_prices(html, search_title)
             if raw_prices:
                 prices = raw_prices
                 result['source'] = 'ebay_active'
                 log.info(f"eBay ACTIVE lookup for '{search_title}': found {len(prices)} prices: {sorted(prices)[:10]}")
+            else:
+                log.warning(f"[Pricing] Strategy 3 found 0 prices.")
         except Exception as e:
             log.warning(f"eBay active search failed: {e}")
 
@@ -1019,13 +1035,17 @@ def research_pricing(title, category=''):
     if not prices:
         try:
             url = f'https://html.duckduckgo.com/html/?q={quote_plus(search_title + " price")}'
+            log.info(f"[Pricing] Strategy 4 (DDG) fetching: {url}")
             resp_text = cf_requests.get(url, headers=headers, timeout=10).text
+            log.info(f"[Pricing] Strategy 4 received HTML length: {len(resp_text)}")
             all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', resp_text)
             raw_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
             if raw_prices:
                 prices = raw_prices
                 result['source'] = 'duckduckgo'
                 log.info(f"DDG price lookup for '{search_title}': found {len(prices)} prices: {prices[:10]}")
+            else:
+                log.warning(f"[Pricing] Strategy 4 found 0 prices.")
         except Exception as e:
             log.warning(f"DuckDuckGo search failed: {e}")
 
