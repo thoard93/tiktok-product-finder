@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Listings — eBay QuickList</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -28,6 +30,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            touch-action: manipulation;
         }
 
         body {
@@ -36,6 +39,12 @@
             color: var(--text);
             min-height: 100vh;
             padding-bottom: 80px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        body.ready {
+            opacity: 1;
         }
 
         .header {
@@ -426,10 +435,21 @@
         let currentFilter = 'all';
         let listings = [];
 
+        const _cached = localStorage.getItem('ebay_auth');
+        if (_cached) document.body.classList.add('ready');
         fetch('/ebay/api/me').then(r => r.json()).then(d => {
-            if (!d.authenticated) window.location.href = '/ebay/login';
-            else loadListings();
-        }).catch(() => window.location.href = '/ebay/login');
+            if (!d.authenticated) {
+                localStorage.removeItem('ebay_auth');
+                window.location.href = '/ebay/login';
+            } else {
+                localStorage.setItem('ebay_auth', JSON.stringify({ t: Date.now(), user: d.user }));
+                document.body.classList.add('ready');
+                loadListings();
+            }
+        }).catch(() => {
+            localStorage.removeItem('ebay_auth');
+            window.location.href = '/ebay/login';
+        });
 
         function filterBy(status, btn) {
             currentFilter = status;

@@ -9,6 +9,8 @@
     <meta name="theme-color" content="#0a0a0f">
     <link rel="manifest" href="/ebay/manifest.json">
     <title>eBay QuickList</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -33,6 +35,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            touch-action: manipulation;
         }
 
         body {
@@ -41,6 +44,12 @@
             color: var(--text);
             min-height: 100vh;
             padding-bottom: 80px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        body.ready {
+            opacity: 1;
         }
 
         /* ─── Top Bar ─── */
@@ -509,20 +518,28 @@
 
         // ─── Auth Check ─────────────────────────────────────
         async function checkAuth() {
+            // Instant show if cached auth exists (prevents login flicker)
+            const cached = localStorage.getItem('ebay_auth');
+            if (cached) document.body.classList.add('ready');
+
             try {
                 const resp = await fetch('/ebay/api/me');
                 const data = await resp.json();
                 if (!data.authenticated) {
+                    localStorage.removeItem('ebay_auth');
                     window.location.href = '/ebay/login';
                     return;
                 }
+                localStorage.setItem('ebay_auth', JSON.stringify({ t: Date.now(), user: data.user }));
                 currentUser = data.user;
                 currentTeamId = currentUser.team_id;
                 document.getElementById('userName').textContent = currentUser.display_name;
                 document.getElementById('teamBadge').textContent = currentUser.team_name;
+                document.body.classList.add('ready');
                 await loadTeams();
                 await loadDashboard();
             } catch (e) {
+                localStorage.removeItem('ebay_auth');
                 window.location.href = '/ebay/login';
             }
         }
@@ -675,6 +692,7 @@
         }
 
         async function logout() {
+            localStorage.removeItem('ebay_auth');
             await fetch('/ebay/api/logout', { method: 'POST' });
             window.location.href = '/ebay/login';
         }

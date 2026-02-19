@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>New Listing — eBay QuickList</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -28,6 +30,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            touch-action: manipulation;
         }
 
         body {
@@ -36,6 +39,12 @@
             color: var(--text);
             min-height: 100vh;
             padding-bottom: 80px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        body.ready {
+            opacity: 1;
         }
 
         /* ─── Header ─── */
@@ -1074,6 +1083,8 @@
         </div>
 
         <div class="modal-actions">
+            <button class="btn-looks-good" id="modalSaveImages" style="display:none; background:#3b82f6;"
+                onclick="saveImagesToPhone()">📸 Save Images to Phone</button>
             <button class="btn-looks-good" id="modalOpenEbay" onclick="openEbayFromModal()">✅ Looks Good → Open eBay
                 Now</button>
             <button class="btn-looks-good" id="modalSolveCaptcha" onclick="solveCaptchaAndRetry()"
@@ -1097,10 +1108,21 @@
         let currentListingData = null;
         let shippingType = 'FREE';
 
-        // Auth check
+        // Auth check — instant show if cached, verify in background
+        const _cached = localStorage.getItem('ebay_auth');
+        if (_cached) document.body.classList.add('ready');
         fetch('/ebay/api/me').then(r => r.json()).then(d => {
-            if (!d.authenticated) window.location.href = '/ebay/login';
-        }).catch(() => window.location.href = '/ebay/login');
+            if (!d.authenticated) {
+                localStorage.removeItem('ebay_auth');
+                window.location.href = '/ebay/login';
+            } else {
+                localStorage.setItem('ebay_auth', JSON.stringify({ t: Date.now(), user: d.user }));
+                document.body.classList.add('ready');
+            }
+        }).catch(() => {
+            localStorage.removeItem('ebay_auth');
+            window.location.href = '/ebay/login';
+        });
 
         // ─── Drag & Drop ────────────────────────────────────
         const zone = document.getElementById('uploadZone');
@@ -1515,9 +1537,15 @@
                         document.getElementById('modalSolveCaptcha').textContent = '🌐 Open Pre-Filled Form in Safari';
                         document.getElementById('modalSolveCaptcha').style.background = '#4ade80';
                         document.getElementById('modalSolveCaptcha').onclick = function () {
-                            copyAllListingData();
+                            copyDescriptionOnly();
                             window.open(fullUrl, '_blank');
                         };
+
+                        // Show Save Images button if we have images
+                        if (uploadedImages.length > 0) {
+                            document.getElementById('modalSaveImages').style.display = 'block';
+                            document.getElementById('modalSaveImages').textContent = '📸 Save ' + uploadedImages.length + ' Image' + (uploadedImages.length > 1 ? 's' : '') + ' to Phone';
+                        }
                     } else {
                         // No listing URL extracted — fallback to copy mode
                         lastAutofillUrl = 'https://www.ebay.com/sl/sell';
@@ -1624,6 +1652,44 @@
             });
         }
 
+        function copyDescriptionOnly() {
+            const desc = document.getElementById('dataDesc').textContent;
+            navigator.clipboard.writeText(desc).then(() => {
+                const toast = document.getElementById('toast');
+                toast.textContent = '📋 Description copied — paste it in eBay!';
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2500);
+            });
+        }
+
+        function saveImagesToPhone() {
+            const btn = document.getElementById('modalSaveImages');
+            let saved = 0;
+            const total = uploadedImages.length;
+            btn.textContent = '⏳ Saving...';
+            btn.disabled = true;
+
+            uploadedImages.forEach((b64, i) => {
+                // Create a downloadable link for each image
+                const a = document.createElement('a');
+                const mimeType = b64.startsWith('/9j/') ? 'image/jpeg' : 'image/png';
+                a.href = 'data:' + mimeType + ';base64,' + b64;
+                a.download = 'ebay_photo_' + (i + 1) + (mimeType === 'image/jpeg' ? '.jpg' : '.png');
+                document.body.appendChild(a);
+                // Stagger downloads to avoid browser blocking
+                setTimeout(() => {
+                    a.click();
+                    document.body.removeChild(a);
+                    saved++;
+                    if (saved === total) {
+                        btn.textContent = '✅ ' + total + ' Image' + (total > 1 ? 's' : '') + ' Saved!';
+                        btn.style.background = '#22c55e';
+                        setTimeout(() => { btn.disabled = false; }, 1000);
+                    }
+                }, i * 400);
+            });
+        }
+
         function copyAllListingData() {
             const title = document.getElementById('dataTitle').textContent;
             const desc = document.getElementById('dataDesc').textContent;
@@ -1659,6 +1725,7 @@
             document.getElementById('modalScreenshot').style.display = 'none';
             document.getElementById('modalListingData').style.display = 'none';
             document.getElementById('modalSolveCaptcha').style.display = 'none';
+            document.getElementById('modalSaveImages').style.display = 'none';
             document.getElementById('modalOpenEbay').textContent = '✅ Looks Good → Open eBay Now';
         }
 

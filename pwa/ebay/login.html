@@ -7,6 +7,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>eBay QuickList — Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -27,6 +29,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            touch-action: manipulation;
         }
 
         body {
@@ -294,9 +297,15 @@
     <script>
         let mode = 'login'; // or 'register'
 
+        // Clear cached auth (if user is on login page, they're not authenticated)
+        localStorage.removeItem('ebay_auth');
+
         // Check if already logged in
         fetch('/ebay/api/me').then(r => r.json()).then(data => {
-            if (data.authenticated) window.location.href = '/ebay';
+            if (data.authenticated) {
+                localStorage.setItem('ebay_auth', JSON.stringify({ t: Date.now(), user: data.user }));
+                window.location.href = '/ebay';
+            }
         }).catch(() => { });
 
         function switchTab(tab) {
@@ -340,6 +349,7 @@
                 const data = await resp.json();
 
                 if (data.success) {
+                    localStorage.setItem('ebay_auth', JSON.stringify({ t: Date.now() }));
                     window.location.href = '/ebay';
                 } else {
                     errEl.textContent = data.error || 'Something went wrong';
