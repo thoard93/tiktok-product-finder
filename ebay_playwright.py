@@ -154,11 +154,19 @@ def extract_listing_url(redirect_url, original_title=None):
 
 
 def launch_browser(playwright, headless=True):
-    """Launch persistent Chromium context with eBay profile."""
+    """Launch persistent Chromium context with eBay profile and Smartproxy."""
+    # Smartproxy Residential Proxy Settings
+    proxy_config = {
+        "server": "http://proxy.smartproxy.net:3120",
+        "username": "smart-yx842akr4euy",
+        "password": "pEMWTNMYDV2cMYsp"
+    }
+
     try:
         context = playwright.chromium.launch_persistent_context(
             PROFILE_DIR,
             headless=headless,
+            proxy=proxy_config,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
@@ -183,6 +191,7 @@ def launch_browser(playwright, headless=True):
             return playwright.chromium.launch_persistent_context(
                 PROFILE_DIR,
                 headless=headless,
+                proxy=proxy_config,
                 args=["--no-sandbox", "--disable-setuid-sandbox",
                       "--disable-dev-shm-usage", "--disable-gpu",
                       "--disable-blink-features=AutomationControlled"],
@@ -938,57 +947,42 @@ def fill_listing_on_ebay(listing_data, image_paths):
             shipping_set = False
 
             try:
-                # Method 1: Click any "Free shipping" radio/checkbox
+                # eBay's Modern Listing Tool uses a dropdown/radio for "Who pays?"
+                # Method A: Click "I'll pay" (Free Shipping for buyer)
                 try:
-                    free_radio = page.get_by_role('radio', name='Free')
-                    if free_radio.first.is_visible(timeout=2000):
-                        free_radio.first.click()
+                    ill_pay_radio = page.get_by_text("I'll pay").locator("xpath=ancestor::label")
+                    if ill_pay_radio.count() > 0 and ill_pay_radio.first.is_visible(timeout=2000):
+                        ill_pay_radio.first.click()
                         shipping_set = True
-                        log("Free shipping via radio button")
+                        log("Shipping: Clicked \"I'll pay\" (Free Shipping)")
                 except:
                     pass
 
-                # Method 2: Look for a shipping cost input and set to 0
+                # Method B: Click any label containing "Free"
                 if not shipping_set:
                     try:
-                        ship_cost_input = page.locator('input[aria-label*="hipping cost"], input[aria-label*="hipping price"], input[name*="shipping"]').first
-                        if ship_cost_input.is_visible(timeout=2000):
-                            ship_cost_input.fill('0')
+                        free_label = page.get_by_text("Free shipping", exact=False).locator("xpath=ancestor::label | ancestor::button")
+                        if free_label.count() > 0 and free_label.first.is_visible(timeout=2000):
+                            free_label.first.click()
                             shipping_set = True
-                            log("Shipping cost set to 0")
+                            log("Shipping: Clicked \"Free shipping\" label/button")
                     except:
                         pass
 
-                # Method 3: Try selecting "Free shipping" from dropdowns
+                # Method C: Find shipping cost input and set to 0
                 if not shipping_set:
                     try:
-                        ship_select = page.locator('select').filter(has_text='shipping')
-                        if ship_select.first.is_visible(timeout=2000):
-                            ship_select.first.select_option(label='Free shipping')
+                        cost_inputs = page.locator('input[aria-label*="cost"], input[name*="shipping"]')
+                        if cost_inputs.count() > 0 and cost_inputs.first.is_visible(timeout=2000):
+                            cost_inputs.first.fill('0')
                             shipping_set = True
-                            log("Free shipping via dropdown")
+                            log("Shipping: Manually set cost to 0")
                     except:
                         pass
 
-                # Method 4: Click text "Free shipping" anywhere
                 if not shipping_set:
-                    try:
-                        free_text = page.get_by_text('Free shipping', exact=False)
-                        if free_text.first.is_visible(timeout=2000):
-                            free_text.first.click()
-                            shipping_set = True
-                            log("Free shipping via text click")
-                    except:
-                        pass
-
-                # Method 5: Look for the eBay shipping section and check for "Free" option
-                if not shipping_set:
-                    try:
-                        free_label = page.get_by_label('Free shipping', exact=False)
-                        if free_label.first.is_visible(timeout=2000):
-                            free_label.first.check()
-                            shipping_set = True
-                            log("Free shipping via label checkbox")
+                    log("WARNING: Could not set free shipping — none of the methods worked")
+                    take_screenshot(page, 'shipping_failed')
                     except:
                         pass
 
