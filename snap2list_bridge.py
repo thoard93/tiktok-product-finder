@@ -155,7 +155,7 @@ def generate_listing(session_jwt, image_urls, fast_mode=False):
         )
         if resp.status_code == 200:
             data = resp.json()
-            log.info(f"AI generated listing: title='{data.get('title', '')[:60]}...'")
+            log.info(f"AI generated listing: title='{(data.get('seoTitle') or data.get('title', ''))[:60]}...'")
             return data
         else:
             log.error(f"Generate failed: {resp.status_code} {resp.text[:300]}")

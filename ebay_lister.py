@@ -1778,22 +1778,26 @@ def snap2list_quick_list(listing_id):
     # Log the full response keys for debugging
     log.info(f"AI response keys: {list(ai_data.keys()) if isinstance(ai_data, dict) else type(ai_data)}")
 
-    # Extract title — try multiple possible response structures
-    title = ai_data.get('title', '')
-    if not title and isinstance(ai_data.get('product'), dict):
-        title = ai_data['product'].get('title', '')
-    if not title and isinstance(ai_data.get('listing'), dict):
-        title = ai_data['listing'].get('title', '')
+    # Snap2List AI returns: seoTitle, seoDescription, seoDescriptionRaw, details, model, usedFallback
+    title = ai_data.get('seoTitle') or ai_data.get('title', '')
+    description = ai_data.get('seoDescription') or ai_data.get('description', '')
+    details = ai_data.get('details', {}) or {}
 
-    description = ai_data.get('description', '')
-    if not description and isinstance(ai_data.get('product'), dict):
-        description = ai_data['product'].get('description', '')
+    # Extract aspects and category from 'details'
+    aspects = {}
+    category_id = ''
+    if isinstance(details, dict):
+        aspects = details.get('aspects', {}) or details.get('itemSpecifics', {}) or {}
+        category_id = str(details.get('categoryId', '') or details.get('category_id', '') or '')
+        # If details has brand/type directly, build aspects
+        if not aspects:
+            for key in ['brand', 'type', 'color', 'material', 'size', 'style']:
+                val = details.get(key)
+                if val:
+                    aspects[key.capitalize()] = [val] if isinstance(val, str) else val
 
-    aspects = ai_data.get('aspects', {})
-    if not aspects and isinstance(ai_data.get('product'), dict):
-        aspects = ai_data['product'].get('aspects', {})
-
-    category_id = ai_data.get('categoryId') or ai_data.get('category_id', '')
+    if not category_id:
+        category_id = str(ai_data.get('categoryId') or ai_data.get('category_id', ''))
 
     log.info(f"Extracted: title='{title[:60] if title else ''}', desc_len={len(description)}, aspects={len(aspects)} keys, cat={category_id}")
 
