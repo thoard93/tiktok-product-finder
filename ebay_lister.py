@@ -1581,7 +1581,8 @@ def ebay_session_manage():
             try:
                 result = json.loads(proc.stdout)
             except:
-                result = {'error': f'Parse error: {proc.stdout[:200]}', 'stderr': proc.stderr[-300:] if proc.stderr else ''}
+                err_msg = f"Parse Error. stdout: {proc.stdout[:300]}. stderr: {proc.stderr[:800]}" if proc.stderr else f"Parse Error: {proc.stdout[:800]}"
+                result = {'error': err_msg, 'stderr': proc.stderr[-300:] if proc.stderr else ''}
             return jsonify(result)
         except subprocess.TimeoutExpired:
             return jsonify({'error': 'Cookie injection timed out'}), 504

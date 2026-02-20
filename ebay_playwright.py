@@ -156,8 +156,7 @@ def extract_listing_url(redirect_url, original_title=None):
         log(f"URL extraction failed: {e}")
     
     return None
-
-
+def launch_browser(playwright, headless=True):
     # ─── BrightData Premium Residential Proxy ──────────────────
     proxy_config = {
         "server": "http://brd.superproxy.io:33335",
