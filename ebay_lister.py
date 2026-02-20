@@ -1363,10 +1363,21 @@ def ebay_autofill_listing(listing_id):
             log.info("Playwright stderr: none")
 
         try:
-            result = json.loads(proc.stdout)
-        except:
+            # Sometmes Playwright/Python warnings leak into stdout.
+            # Find the actual JSON object bounds.
+            out_str = proc.stdout.strip()
+            start_idx = out_str.find('{')
+            end_idx = out_str.rfind('}')
+            
+            if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
+                json_str = out_str[start_idx:end_idx+1]
+                result = json.loads(json_str)
+            else:
+                raise ValueError("No JSON object found in stdout")
+                
+        except Exception as e:
             return jsonify({
-                'error': f'Playwright output parse error: {proc.stdout[:200]}',
+                'error': f'Playwright output parse error: {str(e)[:100]} | Raw stdout: {proc.stdout[:200]}',
                 'stderr': proc.stderr[-300:] if proc.stderr else '',
             }), 500
 
