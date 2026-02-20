@@ -292,7 +292,7 @@ def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
             'listingDescription': description,
             'availableQuantity': quantity,
             'pricingSummary': {
-                'price': {'value': price},
+                'price': {'value': price, 'currency': 'USD'},
             },
             'listingPolicies': {
                 'fulfillmentPolicyId': fulfillment_policy_id,
@@ -317,9 +317,10 @@ def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
             headers=_headers(session_jwt),
             timeout=60,
         )
+        log.info(f"Create listing response status: {resp.status_code}")
+        log.info(f"Create listing response body: {resp.text[:800]}")
         if resp.status_code == 200:
             data = resp.json()
-            log.info(f"Listing created! Response: {json.dumps(data)[:300]}")
             return data
         else:
             log.error(f"Create listing failed: {resp.status_code} {resp.text[:500]}")
