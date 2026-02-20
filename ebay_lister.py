@@ -1765,6 +1765,18 @@ def snap2list_quick_list(listing_id):
             else:
                 continue
 
+            # Auto-rotate based on EXIF orientation (fixes sideways phone photos)
+            try:
+                from PIL import Image, ImageOps
+                img = Image.open(io.BytesIO(img_bytes))
+                img = ImageOps.exif_transpose(img)
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG', quality=90)
+                img_bytes = buf.getvalue()
+                log.info(f"Image {i+1} EXIF rotated: {img.size}")
+            except Exception as exif_err:
+                log.warning(f"EXIF rotation skipped for image {i+1}: {exif_err}")
+
             cdn_url = s2l.upload_image(session_jwt, img_bytes, filename=filename, client_cookie=team.snap2list_client_cookie)
             if cdn_url and isinstance(cdn_url, str):
                 image_urls.append(cdn_url)
@@ -1810,17 +1822,15 @@ def snap2list_quick_list(listing_id):
     if not category_id:
         category_id = str(ai_data.get('categoryId') or ai_data.get('category_id', ''))
 
-    # CRITICAL: eBay requires at least Brand to publish. Generate from title if missing.
-    if not aspects or not aspects.get('Brand'):
-        # Try to extract brand from the title (first word is often the brand)
-        words = title.split() if title else []
-        brand = 'Unbranded'
-        if words:
-            # Common brand-like first words
-            brand = words[0] if len(words[0]) > 1 else 'Unbranded'
-        aspects.setdefault('Brand', [brand])
-        aspects.setdefault('Type', ['Other'])
-        log.info(f"Generated fallback aspects: {aspects}")
+    # CRITICAL: eBay requires at least Brand to publish.
+    # The AI 'details' Brand is often wrong (picks random words like 'Free', 'Packs').
+    # Always use the first word of the title as brand — it's typically the actual brand name.
+    words = title.split() if title else []
+    brand = words[0] if words and len(words[0]) > 1 else 'Unbranded'
+    aspects['Brand'] = [brand]
+    if not aspects.get('Type'):
+        aspects['Type'] = ['Other']
+    log.info(f"Aspects set: Brand='{brand}', total={len(aspects)} keys")
 
     log.info(f"Extracted: title='{title[:60] if title else ''}', desc_len={len(description)}, aspects={len(aspects)} keys, cat={category_id}")
 
