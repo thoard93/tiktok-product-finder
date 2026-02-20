@@ -876,7 +876,17 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ cookies }),
                 });
-                const data = await resp.json();
+
+                const responseText = await resp.text();
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseErr) {
+                    if (resp.status >= 500) {
+                        throw new Error(`Server Error (${resp.status}): The request likely timed out waiting for the BrightData proxy to solve CAPTCHAs. Try injecting cookies one more time.`);
+                    }
+                    throw new Error(`Non-JSON response from server: ${responseText.substring(0, 50)}...`);
+                }
 
                 if (data.logged_in) {
                     statusEl.innerHTML = '<div class="status-banner success">✅ eBay session established! Auto-Fill is ready to use.</div>';
