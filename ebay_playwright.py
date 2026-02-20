@@ -217,7 +217,7 @@ def launch_browser(playwright, headless=True):
 def check_login(page):
     """Check if we're logged into eBay using multiple methods."""
     try:
-        page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=30000)
+        page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(3000)
 
         # Method 1: Check cookies for login indicators (most reliable)
@@ -1245,16 +1245,26 @@ def main():
             page = context.pages[0] if context.pages else context.new_page()
 
             # Navigate to eBay first (required for cookie domain)
-            page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(1000)
+            try:
+                page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=60000)
+                page.wait_for_timeout(1000)
+            except Exception as e:
+                print(json.dumps({"error": f"Proxy Connection Timeout! BrightData Web Unlocker took too long or failed: {str(e)[:200]}"}))
+                context.close()
+                sys.exit(1)
 
             # Inject cookies
             context.add_cookies(cookies)
             log(f"Injected {len(cookies)} cookies")
 
             # Reload to apply cookies
-            page.reload(wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(3000)
+            try:
+                page.reload(wait_until="domcontentloaded", timeout=60000)
+                page.wait_for_timeout(3000)
+            except Exception as e:
+                print(json.dumps({"error": f"Failed to reload page after cookie injection: {str(e)[:200]}"}))
+                context.close()
+                sys.exit(1)
 
             # Verify login
             logged_in = check_login(page)
