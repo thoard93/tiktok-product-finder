@@ -332,37 +332,31 @@ def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
         return {'error': str(e)}
 
 
-def publish_offer(session_jwt, ebay_token, offer_id, account_id, user_id, client_cookie=None):
+def publish_offer(session_jwt, ebay_token, offer_id, account_id=None, user_id=None, client_cookie=None):
     """
-    Publish an unpublished eBay offer.
-    Some listings need this extra step after create_listing.
+    Publish an unpublished eBay offer directly via eBay's Inventory API.
+    This bypasses Snap2List — calls eBay's publishOffer endpoint directly.
     """
-    url = f'{SNAP2LIST_BASE}/api/publish-offer'
-    payload = {
-        'token': ebay_token,
-        'offerId': str(offer_id),
-        'userId': user_id,
-        'accountId': account_id,
-        'marketplace_id': 'EBAY_US',
+    url = f'https://api.ebay.com/sell/inventory/v1/offer/{offer_id}/publish'
+
+    headers = {
+        'Authorization': f'Bearer {ebay_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
     }
 
     try:
-        resp = requests.post(
-            url,
-            json=payload,
-            cookies=_cookies(session_jwt, client_cookie),
-            headers=_headers(session_jwt),
-            timeout=30,
-        )
+        resp = requests.post(url, headers=headers, timeout=30)
+        log.info(f"eBay publishOffer response: {resp.status_code} {resp.text[:500]}")
         if resp.status_code == 200:
             data = resp.json()
-            log.info(f"Offer published! Response: {json.dumps(data)[:300]}")
+            log.info(f"Offer published on eBay! listingId={data.get('listingId')}")
             return data
         else:
-            log.error(f"Publish offer failed: {resp.status_code} {resp.text[:300]}")
-            return {'error': f'Publish failed: {resp.status_code}'}
+            log.error(f"eBay publishOffer failed: {resp.status_code} {resp.text[:500]}")
+            return {'error': f'eBay publish failed: {resp.status_code}', 'details': resp.text[:300]}
     except Exception as e:
-        log.error(f"Publish offer error: {e}")
+        log.error(f"eBay publishOffer error: {e}")
         return {'error': str(e)}
 
 
