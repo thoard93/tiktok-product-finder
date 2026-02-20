@@ -159,11 +159,23 @@ def extract_listing_url(redirect_url, original_title=None):
 
 
 def launch_browser(playwright, headless=True):
-    """Launch persistent Chromium context with eBay profile (no proxy — Render's US IP works cleanly)."""
+    # ─── New Premium Residential Proxy Setup ───────────────────
+    # Replace with BrightData or Oxylabs credentials
+    # IMPORTANT: Ensure the provider is set to use "Sticky Sessions"
+    """
+    proxy_config = {
+        "server": "http://your-premium-proxy:port",
+        "username": "your-username",
+        "password": "your-password"
+    }
+    """
+    proxy_config = None  # Remove this line and uncomment above when ready
+
     try:
         context = playwright.chromium.launch_persistent_context(
             PROFILE_DIR,
             headless=headless,
+            proxy=proxy_config if proxy_config else None,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
@@ -177,6 +189,16 @@ def launch_browser(playwright, headless=True):
             timezone_id="America/New_York",
             ignore_https_errors=True,
         )
+        
+        # ─── Grok's Stealth Overrides ──────────────────────────
+        stealth_script = """
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3]}); 
+        """
+        context.add_init_script(stealth_script)
+        
         return context
     except Exception as e:
         if "Executable doesn't exist" in str(e):
@@ -314,15 +336,19 @@ def fill_listing_on_ebay(listing_data, image_paths):
             result['step'] = 'navigate_sell'
             log("Navigating to eBay sell page...")
 
-            # Try direct listing creation URLs first
+            # ─── Grok's URL Bypass ──────────────────────────────
+            # Try deeper links directly to the form first to bypass the Wizard -> Sign-In redirect trap
             listing_urls = [
+                "https://www.ebay.com/sl/sell/create",
                 "https://www.ebay.com/sell/create",
                 "https://www.ebay.com/sl/sell",
             ]
 
+            import random
             for url in listing_urls:
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                page.wait_for_timeout(3000)
+                # Grok: human-like delay between major actions
+                page.wait_for_timeout(random.randint(2500, 4500))
                 log(f"On page: {page.url}")
 
                 # Check if we're on the hub page — need to click through
@@ -672,6 +698,9 @@ def fill_listing_on_ebay(listing_data, image_paths):
             result['step'] = 'continue_to_listing'
             log("Clicking 'Continue to listing'...")
             
+            # Grok stealth: Wait randomly before action
+            page.wait_for_timeout(random.randint(1500, 3500))
+            
             continue_clicked = False
             
             # Method 1: Role-based
@@ -724,16 +753,21 @@ def fill_listing_on_ebay(listing_data, image_paths):
                     if btn.is_visible(timeout=2000):
                         btn.click()
                         continue_clicked = True
-                        log("Clicked submit/primary button")
+                        log("Clicked Continue via submit button type/class")
                 except:
                     pass
 
             if continue_clicked:
-                page.wait_for_timeout(6000)
+                # Grok stealth: human-like delay and network idle wait after continuing
+                page.wait_for_timeout(random.randint(2000, 4500))
+                try:
+                    page.wait_for_load_state('networkidle', timeout=15000)
+                except:
+                    pass
                 log(f"After continue, URL: {page.url}")
                 take_screenshot(page, 'listing_form')
             else:
-                log("WARNING: Could not click Continue")
+                log("WARNING: 'Continue' button not found/clicked")
                 take_screenshot(page, 'stuck_on_confirm')
             
             # ─── CAPTCHA Detection ────────────────────────────
