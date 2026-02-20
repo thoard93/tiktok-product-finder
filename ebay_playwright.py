@@ -160,7 +160,7 @@ def launch_browser(playwright, headless=True):
     # ─── BrightData Premium Residential Proxy ──────────────────
     proxy_config = {
         "server": "http://brd.superproxy.io:33335",
-        "username": "brd-customer-hl_ccfbc19a-zone-ebaylister",
+        "username": "brd-customer-hl_ccfbe19a-zone-ebaylister",
         "password": "osj7xt8ejrrw"
     }
 
