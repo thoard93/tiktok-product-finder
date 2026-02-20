@@ -438,58 +438,78 @@
                 <div class="status-banner warning">⏳ Not connected</div>
             </div>
             <p style="font-size:12px; color:var(--text-dim); margin-top:8px;">
-                Connect Snap2List for <strong>one-tap eBay listing</strong> — no Playwright, no CAPTCHAs, no proxies.
+                One-tap eBay listing — no Playwright, no CAPTCHAs, no proxies.
             </p>
 
             <div
                 style="margin-top:16px; padding:14px; background:var(--bg-input); border-radius:10px; border:1px solid var(--border);">
-                <h4 style="font-size:14px; margin-bottom:10px;">📋 How to Get Your Snap2List Credentials</h4>
-                <ol style="font-size:12px; color:var(--text-dim); padding-left:20px; line-height:1.8;">
-                    <li>Log into <a href="https://www.snaptolist.com" target="_blank"
-                            style="color:var(--accent);">snaptolist.com</a> in Chrome</li>
-                    <li>Press <strong>F12</strong> → go to <strong>Console</strong> tab</li>
-                    <li>Paste this command and press Enter:</li>
+                <h4 style="font-size:14px; margin-bottom:12px;">📋 Setup (3 simple steps)</h4>
+                <ol style="font-size:13px; color:var(--text-dim); padding-left:20px; line-height:2;">
+                    <li>Open <a href="https://www.snaptolist.com/dashboard/create-listing" target="_blank"
+                            style="color:var(--accent); font-weight:600;">snaptolist.com</a> (logged in)</li>
+                    <li>Press <strong style="color:var(--text);">F12</strong> → <strong
+                            style="color:var(--text);">Application</strong> tab → <strong
+                            style="color:var(--text);">Cookies</strong> → <code>www.snaptolist.com</code></li>
+                    <li>Copy each cookie value below ↓</li>
                 </ol>
-                <div style="margin:10px 0; position:relative;">
-                    <pre id="snap2listCmd"
-                        style="background:#1a1a2e; padding:10px; border-radius:6px; font-size:10px; color:#00e676; overflow-x:auto; white-space:pre-wrap; word-break:break-all;">JSON.stringify({session_jwt: document.cookie.match(/__session=([^;]+)/)?.[1] || '', client_cookie: document.cookie.match(/__client=([^;]+)/)?.[1] || '', session_id: document.cookie.match(/clerk_active_context=([^:;]+)/)?.[1] || '', user_id: '', account_id: '', ebay_token: ''})</pre>
-                    <button id="snap2listCopyBtn"
-                        onclick="navigator.clipboard.writeText(document.getElementById('snap2listCmd').textContent);this.textContent='✅';setTimeout(()=>this.textContent='📋',1500)"
-                        style="position:absolute;top:6px;right:6px;background:var(--border);border:none;border-radius:4px;padding:4px 8px;color:var(--text);cursor:pointer;font-size:12px;">📋</button>
+
+                <!-- Cookie: __session -->
+                <div style="margin-top:16px;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                        <code
+                            style="background:#7c5cff33; color:#7c5cff; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:700;">__session</code>
+                        <span style="font-size:11px; color:var(--text-dim);">← Copy this cookie's Value</span>
+                    </div>
+                    <textarea id="s2lSession" rows="2" placeholder="Paste __session cookie value here..."
+                        style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px; font-size:11px; font-family:monospace; resize:vertical;"></textarea>
                 </div>
-                <ol start="4" style="font-size:12px; color:var(--text-dim); padding-left:20px; line-height:1.8;">
-                    <li>Copy the output and paste it below</li>
-                    <li>Then go to <strong>Network</strong> tab → find any <code>create-listing</code> or
-                        <code>get-suggested-price</code> call → look at the <strong>Payload</strong> for the
-                        <code>token</code> (long string starting with <code>v^1.1#</code>), <code>userId</code>, and
-                        <code>accountId</code> values
-                    </li>
-                </ol>
 
-                <textarea id="snap2listInput" rows="3" placeholder='Paste the JSON output here...'
-                    style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px; font-size:12px; font-family:monospace; resize:vertical; margin-top:8px;"></textarea>
+                <!-- Cookie: __client -->
+                <div style="margin-top:12px;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                        <code
+                            style="background:#00c9a733; color:#00c9a7; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:700;">__client</code>
+                        <span style="font-size:11px; color:var(--text-dim);">← This one keeps the session alive
+                            (CRITICAL)</span>
+                    </div>
+                    <textarea id="s2lClient" rows="2" placeholder="Paste __client cookie value here..."
+                        style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px; font-size:11px; font-family:monospace; resize:vertical;"></textarea>
+                </div>
 
+                <!-- eBay Token -->
+                <div style="margin-top:12px;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                        <code
+                            style="background:#ffc10733; color:#ffc107; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:700;">eBay Token</code>
+                        <span style="font-size:11px; color:var(--text-dim);">← From Network tab → any request Payload →
+                            <code>token</code> field</span>
+                    </div>
+                    <textarea id="s2lEbayToken" rows="2" placeholder="Paste the long v^1.1#... token here"
+                        style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px; font-size:11px; font-family:monospace; resize:vertical;"></textarea>
+                </div>
+
+                <!-- Pre-filled IDs -->
+                <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <div>
+                        <label style="font-size:11px; color:var(--text-dim);">Session ID</label>
+                        <input id="s2lSessionId" value="sess_39wcEiA33iOP7BJyMSKpLvSJo5q"
+                            style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:11px; font-family:monospace; margin-top:4px;">
+                    </div>
+                    <div>
+                        <label style="font-size:11px; color:var(--text-dim);">Account ID</label>
+                        <input id="s2lAccountId" value="ebay__mglxqvzrye"
+                            style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:11px; font-family:monospace; margin-top:4px;">
+                    </div>
+                </div>
                 <div style="margin-top:8px;">
-                    <label style="font-size:12px; color:var(--text-dim);">eBay Token (from Network tab Payload →
-                        <code>token</code> field):</label>
-                    <textarea id="snap2listEbayToken" rows="2" placeholder='Paste the long v^1.1#... token here'
-                        style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px; font-size:11px; font-family:monospace; resize:vertical; margin-top:4px;"></textarea>
-                </div>
-                <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                    <div>
-                        <label style="font-size:12px; color:var(--text-dim);">Account ID:</label>
-                        <input id="snap2listAccountId" placeholder="ebay__mglxqvzrye" value="ebay__mglxqvzrye"
-                            style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:12px; margin-top:4px;">
-                    </div>
-                    <div>
-                        <label style="font-size:12px; color:var(--text-dim);">User ID:</label>
-                        <input id="snap2listUserId" placeholder="user_39wTGps2fRYk..."
-                            style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:12px; margin-top:4px;">
-                    </div>
+                    <label style="font-size:11px; color:var(--text-dim);">User ID</label>
+                    <input id="s2lUserId" value="user_39wTGps2fRYkGCzzvOTf7s2hOp0"
+                        style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:11px; font-family:monospace; margin-top:4px;">
                 </div>
 
                 <button class="btn btn-primary" onclick="saveSnap2List()" id="saveSnap2ListBtn"
-                    style="margin-top:12px;">⚡ Save Snap2List Connection</button>
+                    style="margin-top:16px; background:linear-gradient(135deg, #7c5cff, #00c9a7);">⚡ Save Snap2List
+                    Connection</button>
             </div>
         </div>
 
@@ -1135,26 +1155,21 @@
             btn.disabled = true;
 
             try {
-                let payload = {};
-                const rawInput = document.getElementById('snap2listInput').value.trim();
-                if (rawInput) {
-                    try { payload = JSON.parse(rawInput); } catch (e) {
-                        alert('Invalid JSON in credentials field. Make sure you copied the console output correctly.');
-                        return;
-                    }
-                }
-
-                // Add manually entered fields
-                const ebayToken = document.getElementById('snap2listEbayToken').value.trim();
-                const accountId = document.getElementById('snap2listAccountId').value.trim();
-                const userId = document.getElementById('snap2listUserId').value.trim();
-
-                if (ebayToken) payload.ebay_token = ebayToken;
-                if (accountId) payload.account_id = accountId;
-                if (userId) payload.user_id = userId;
+                const payload = {
+                    session_jwt: document.getElementById('s2lSession').value.trim(),
+                    client_cookie: document.getElementById('s2lClient').value.trim(),
+                    ebay_token: document.getElementById('s2lEbayToken').value.trim(),
+                    session_id: document.getElementById('s2lSessionId').value.trim(),
+                    account_id: document.getElementById('s2lAccountId').value.trim(),
+                    user_id: document.getElementById('s2lUserId').value.trim(),
+                };
 
                 if (!payload.session_jwt) {
-                    alert('Session JWT is required. Run the console command on Snap2List and paste the output.');
+                    alert('Paste the __session cookie value first!');
+                    return;
+                }
+                if (!payload.client_cookie) {
+                    alert('Paste the __client cookie value — this is critical for keeping the session alive!');
                     return;
                 }
 
@@ -1187,7 +1202,7 @@
                 if (data.connected) {
                     statusEl.innerHTML = '<div class="status-banner ok">✅ Snap2List connected! One-tap listing is ready.</div>';
                 } else if (data.has_session) {
-                    statusEl.innerHTML = '<div class="status-banner warning">⚠️ Session saved but eBay token missing. Add the eBay token below.</div>';
+                    statusEl.innerHTML = '<div class="status-banner warning">⚠️ Session saved but missing __client or eBay token. Fill the fields below.</div>';
                 } else {
                     statusEl.innerHTML = '<div class="status-banner warning">⏳ Not connected. Follow the steps below.</div>';
                 }
