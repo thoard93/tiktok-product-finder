@@ -34,6 +34,7 @@ def _headers(session_jwt, content_type='application/json'):
     """Build request headers with Clerk JWT auth."""
     h = {
         'accept': 'application/json, text/plain, */*',
+        'authorization': f'Bearer {session_jwt}' if session_jwt else '',
         'origin': SNAP2LIST_BASE,
         'referer': f'{SNAP2LIST_BASE}/dashboard/create-listing',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
