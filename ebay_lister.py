@@ -1791,6 +1791,9 @@ def snap2list_quick_list(listing_id):
     description = ai_data.get('seoDescription') or ai_data.get('description', '')
     details = ai_data.get('details', {}) or {}
 
+    # Log the details object to understand its structure
+    log.info(f"AI details type={type(details).__name__}, content={json.dumps(details)[:500] if isinstance(details, dict) else str(details)[:500]}")
+
     # Extract aspects and category from 'details'
     aspects = {}
     category_id = ''
@@ -1799,13 +1802,25 @@ def snap2list_quick_list(listing_id):
         category_id = str(details.get('categoryId', '') or details.get('category_id', '') or '')
         # If details has brand/type directly, build aspects
         if not aspects:
-            for key in ['brand', 'type', 'color', 'material', 'size', 'style']:
+            for key in ['brand', 'type', 'color', 'material', 'size', 'style', 'Brand', 'Type', 'Color']:
                 val = details.get(key)
                 if val:
                     aspects[key.capitalize()] = [val] if isinstance(val, str) else val
 
     if not category_id:
         category_id = str(ai_data.get('categoryId') or ai_data.get('category_id', ''))
+
+    # CRITICAL: eBay requires at least Brand to publish. Generate from title if missing.
+    if not aspects or not aspects.get('Brand'):
+        # Try to extract brand from the title (first word is often the brand)
+        words = title.split() if title else []
+        brand = 'Unbranded'
+        if words:
+            # Common brand-like first words
+            brand = words[0] if len(words[0]) > 1 else 'Unbranded'
+        aspects.setdefault('Brand', [brand])
+        aspects.setdefault('Type', ['Other'])
+        log.info(f"Generated fallback aspects: {aspects}")
 
     log.info(f"Extracted: title='{title[:60] if title else ''}', desc_len={len(description)}, aspects={len(aspects)} keys, cat={category_id}")
 
