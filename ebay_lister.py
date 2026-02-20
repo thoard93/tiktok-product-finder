@@ -1833,7 +1833,7 @@ def snap2list_quick_list(listing_id):
         log.info(f"No category from AI, fetching suggestions for: '{title[:50]}'")
         try:
             cat_data = s2l.get_category_suggestions(
-                session_jwt, team.snap2list_ebay_token, title, client_cookie=cc
+                session_jwt, team.snap2list_ebay_token, title, client_cookie=sid
             )
             if cat_data:
                 # Response is typically a list of category suggestions
@@ -1870,7 +1870,7 @@ def snap2list_quick_list(listing_id):
         # Try Snap2List pricing as fallback
         try:
             price_data = s2l.get_suggested_price(
-                session_jwt, team.snap2list_ebay_token, title, category_id, client_cookie=cc
+                session_jwt, team.snap2list_ebay_token, title, category_id, client_cookie=sid
             )
             if price_data:
                 sp = price_data.get('suggestedPrice')
@@ -1920,7 +1920,7 @@ def snap2list_quick_list(listing_id):
         fulfillment_policy_id=team.ebay_fulfillment_policy_id or '255590584010',
         payment_policy_id=team.ebay_payment_policy_id or '255590592010',
         return_policy_id=team.ebay_return_policy_id or '255590559010',
-        client_cookie=cc,
+        client_cookie=sid,
     )
 
     # If we got an offerId but no listingId, try publishing the offer
@@ -1937,7 +1937,7 @@ def snap2list_quick_list(listing_id):
             result['offerId'],
             account_id=team.snap2list_account_id or 'ebay__default',
             user_id=team.snap2list_user_id or 'user_default',
-            client_cookie=cc,
+            client_cookie=sid,
         )
         if pub and not pub.get('error'):
             result['published'] = True
