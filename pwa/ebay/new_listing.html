@@ -1698,14 +1698,33 @@
             });
         }
 
-        function copyDescriptionOnly() {
-            const desc = document.getElementById('dataDesc').textContent;
-            navigator.clipboard.writeText(desc).then(() => {
-                const toast = document.getElementById('toast');
-                toast.textContent = '📋 Description copied — paste it in eBay!';
-                toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 2500);
-            });
+        async function copyDescriptionOnly() {
+            try {
+                const desc = document.getElementById('editDesc').value;
+                if (!desc) return;
+
+                try {
+                    await navigator.clipboard.writeText(desc);
+                    const toast = document.getElementById('toast');
+                    toast.textContent = '📋 Description copied — paste it in eBay!';
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 2500);
+                } catch {
+                    // Fallback for older browsers
+                    const ta = document.createElement('textarea');
+                    ta.value = desc;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    ta.remove();
+                    const toast = document.getElementById('toast');
+                    toast.textContent = '📋 Description copied — paste it in eBay!';
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 2500);
+                }
+            } catch (e) {
+                console.error("Copy desc error", e);
+            }
         }
 
         function saveImagesToPhone() {
