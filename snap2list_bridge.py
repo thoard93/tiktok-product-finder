@@ -280,10 +280,6 @@ def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
             },
             'categoryId': category_id,
             'countryCode': 'US',
-            'packageWeightAndSize': {
-                'weight': weight,
-                'dimensions': dimensions,
-            },
         },
         'offerDetails': {
             'sku': sku,
@@ -292,7 +288,7 @@ def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
             'listingDescription': description,
             'availableQuantity': quantity,
             'pricingSummary': {
-                'price': {'value': price, 'currency': 'USD'},
+                'price': {'value': price},
             },
             'listingPolicies': {
                 'fulfillmentPolicyId': fulfillment_policy_id,
