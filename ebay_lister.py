@@ -1778,8 +1778,8 @@ def snap2list_quick_list(listing_id):
         return jsonify({'error': 'Failed to upload any images to Snap2List'}), 500
 
     # Generate listing via Gemini AI
-    cc = team.snap2list_client_cookie  # shorthand for passing to all bridge calls
-    ai_data = s2l.generate_listing(session_jwt, image_urls, fast_mode=False, client_cookie=cc)
+    sid = team.snap2list_session_id  # shorthand for passing to all bridge calls
+    ai_data = s2l.generate_listing(session_jwt, image_urls, fast_mode=False, client_cookie=sid)
     if not ai_data:
         return jsonify({'error': 'AI listing generation failed. Session may be expired.'}), 500
 

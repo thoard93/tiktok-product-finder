@@ -44,17 +44,20 @@ def _headers(session_jwt, content_type='application/json'):
     return h
 
 
-def _cookies(session_jwt, client_cookie=None):
-    """Build cookie dict with Clerk session."""
+def _cookies(session_jwt, client_cookie=None, session_id=None):
+    """Build cookie dict matching real browser request cookies."""
+    # client_cookie is now used as session_id for backward compat
+    sid = session_id or client_cookie
     c = {
         '__session': session_jwt,
         '__session_nwBmEOgz': session_jwt,
         'cookieConsent': 'accepted',
+        '__client_uat': str(int(time.time())),
+        '__client_uat_nwBmEOgz': str(int(time.time())),
     }
-    if client_cookie:
-        c['__client'] = client_cookie
-        c['__client_uat_nwBmEOgz'] = str(int(time.time()))
-        c['__client_uat'] = str(int(time.time()))
+    # Add clerk_active_context if we have the session ID (browser sends this)
+    if sid:
+        c['clerk_active_context'] = f'{sid}:'
     return c
 
 
