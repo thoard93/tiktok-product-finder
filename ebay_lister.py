@@ -13,6 +13,7 @@ import hashlib
 import base64
 import logging
 import secrets
+import time
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -106,6 +107,13 @@ class EbayTeam(db.Model):
     # Gmail integration (for auto-detecting sales)
     gmail_tokens_json = db.Column(db.Text, default='')  # OAuth2 tokens JSON
     gmail_last_sync = db.Column(db.DateTime)
+    # Snap2List API bridge credentials
+    snap2list_session_jwt = db.Column(db.Text, default='')    # Clerk JWT (__session)
+    snap2list_client_cookie = db.Column(db.Text, default='')  # Clerk __client cookie (for refresh)
+    snap2list_session_id = db.Column(db.String(100), default='')  # Clerk session ID
+    snap2list_ebay_token = db.Column(db.Text, default='')     # eBay OAuth token from Snap2List
+    snap2list_account_id = db.Column(db.String(100), default='')  # e.g. ebay__mglxqvzrye
+    snap2list_user_id = db.Column(db.String(100), default='')     # e.g. user_39wTGps2...
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     users = db.relationship('EbayUser', backref='team', lazy=True)
@@ -138,6 +146,7 @@ class EbayTeam(db.Model):
             'default_condition': self.default_condition,
             'gmail_connected': bool(self.gmail_tokens_json),
             'gmail_last_sync': self.gmail_last_sync.isoformat() if self.gmail_last_sync else None,
+            'snap2list_connected': bool(self.snap2list_session_jwt and self.snap2list_ebay_token),
         }
 
 
@@ -1606,6 +1615,304 @@ def ebay_session_manage():
             return jsonify({'error': 'Login timed out'}), 504
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# SNAP2LIST API BRIDGE ENDPOINTS
+# =============================================================================
+
+@app.route('/ebay/api/snap2list/session', methods=['GET', 'POST'])
+@ebay_login_required
+def snap2list_session():
+    """Save or check Snap2List session credentials."""
+    team = get_current_team()
+
+    if request.method == 'GET':
+        return jsonify({
+            'connected': bool(team.snap2list_session_jwt and team.snap2list_ebay_token),
+            'has_session': bool(team.snap2list_session_jwt),
+            'has_ebay_token': bool(team.snap2list_ebay_token),
+            'account_id': team.snap2list_account_id or '',
+        })
+
+    # POST: save credentials
+    data = request.json or {}
+    session_jwt = data.get('session_jwt', '').strip()
+    client_cookie = data.get('client_cookie', '').strip()
+    session_id = data.get('session_id', '').strip()
+    ebay_token = data.get('ebay_token', '').strip()
+    account_id = data.get('account_id', '').strip()
+    user_id = data.get('user_id', '').strip()
+
+    if not session_jwt:
+        return jsonify({'error': 'session_jwt is required'}), 400
+
+    team.snap2list_session_jwt = session_jwt
+    if client_cookie:
+        team.snap2list_client_cookie = client_cookie
+    if session_id:
+        team.snap2list_session_id = session_id
+    if ebay_token:
+        team.snap2list_ebay_token = ebay_token
+    if account_id:
+        team.snap2list_account_id = account_id
+    if user_id:
+        team.snap2list_user_id = user_id
+
+    # Try to refresh the JWT immediately to verify it works
+    if client_cookie and session_id:
+        try:
+            import snap2list_bridge as s2l
+            new_jwt = s2l.refresh_session(client_cookie, session_id)
+            if new_jwt:
+                team.snap2list_session_jwt = new_jwt
+                log.info("Snap2List session refreshed successfully on save")
+        except Exception as e:
+            log.warning(f"Snap2List refresh test failed (non-fatal): {e}")
+
+    db.session.commit()
+    log.info(f"Snap2List credentials saved for team {team.name}")
+
+    return jsonify({
+        'success': True,
+        'connected': bool(team.snap2list_session_jwt and team.snap2list_ebay_token),
+        'message': 'Snap2List credentials saved!',
+    })
+
+
+@app.route('/ebay/api/listings/<int:listing_id>/snap2list', methods=['POST'])
+@ebay_login_required
+def snap2list_quick_list(listing_id):
+    """
+    One-tap listing via Snap2List API bridge.
+    Uploads images, generates AI listing, and posts to eBay.
+    """
+    import snap2list_bridge as s2l
+
+    team = get_current_team()
+
+    # Check Snap2List credentials
+    if not team.snap2list_ebay_token:
+        return jsonify({'error': 'Snap2List not connected. Go to Settings → Snap2List Connection.'}), 400
+
+    # Try to refresh the JWT first
+    session_jwt = team.snap2list_session_jwt
+    if team.snap2list_client_cookie and team.snap2list_session_id:
+        new_jwt = s2l.refresh_session(team.snap2list_client_cookie, team.snap2list_session_id)
+        if new_jwt:
+            session_jwt = new_jwt
+            team.snap2list_session_jwt = new_jwt
+            db.session.commit()
+        else:
+            log.warning("JWT refresh failed — using stored JWT (may be expired)")
+
+    if not session_jwt:
+        return jsonify({'error': 'Snap2List session expired. Please refresh in Settings.'}), 401
+
+    # Get listing data
+    listing = EbayListing.query.filter_by(id=listing_id, team_id=team.id).first()
+    data = request.json or {}
+
+    if not listing and not data.get('title'):
+        return jsonify({'error': 'No listing found and no data provided'}), 400
+
+    # Determine images — either from listing or from request
+    images = []
+    if listing and listing.images_json:
+        images = json.loads(listing.images_json)
+    if data.get('images'):
+        images = data['images']
+
+    if not images:
+        return jsonify({'error': 'No images available for this listing'}), 400
+
+    # Download images and upload to Snap2List CDN
+    image_urls = []
+    for i, img_url in enumerate(images):
+        try:
+            if img_url.startswith('data:'):
+                # Base64 image — decode it
+                header, b64data = img_url.split(',', 1)
+                img_bytes = base64.b64decode(b64data)
+                filename = f'product_{i+1}.jpg'
+            elif img_url.startswith('http'):
+                # URL — download it
+                resp = http_requests.get(img_url, timeout=15)
+                img_bytes = resp.content
+                filename = f'product_{i+1}.jpg'
+            else:
+                continue
+
+            cdn_url = s2l.upload_image(session_jwt, img_bytes, filename=filename)
+            if cdn_url and isinstance(cdn_url, str):
+                image_urls.append(cdn_url)
+                log.info(f"Uploaded image {i+1}/{len(images)} to Snap2List CDN")
+            else:
+                log.warning(f"Image {i+1} upload returned unexpected: {cdn_url}")
+        except Exception as e:
+            log.error(f"Image {i+1} upload failed: {e}")
+
+    if not image_urls:
+        return jsonify({'error': 'Failed to upload any images to Snap2List'}), 500
+
+    # Generate listing via Gemini AI
+    ai_data = s2l.generate_listing(session_jwt, image_urls, fast_mode=False)
+    if not ai_data:
+        return jsonify({'error': 'AI listing generation failed. Session may be expired.'}), 500
+
+    title = ai_data.get('title', '')
+    description = ai_data.get('description', '')
+    aspects = ai_data.get('aspects', {})
+    category_id = ai_data.get('categoryId') or ai_data.get('category_id', '')
+
+    if not title:
+        return jsonify({'error': 'AI did not generate a title'}), 500
+
+    # Determine price — use Grok for aggressive pricing if possible
+    price = data.get('price')
+    if not price and listing:
+        price = listing.price
+
+    if not price or float(price) <= 0:
+        # Try Grok pricing (existing app logic)
+        try:
+            price = _grok_suggest_price(title, team.default_undercut_pct or 30)
+        except Exception:
+            price = None
+
+    if not price or float(price) <= 0:
+        # Try Snap2List pricing as fallback
+        try:
+            price_data = s2l.get_suggested_price(
+                session_jwt, team.snap2list_ebay_token, title, category_id
+            )
+            if price_data and price_data.get('suggestedPrice'):
+                price = price_data['suggestedPrice']
+        except Exception:
+            pass
+
+    if not price or float(price) <= 0:
+        price = 15  # Ultimate fallback
+
+    # Build SKU
+    sku = f'S2L-{int(time.time())}'
+    if listing and listing.sku:
+        sku = listing.sku
+
+    # Create listing on eBay via Snap2List
+    listing_data = {
+        'title': title,
+        'description': description,
+        'price': str(price),
+        'sku': sku,
+        'category_id': str(category_id),
+        'condition': data.get('condition', 'NEW'),
+        'image_urls': image_urls,
+        'aspects': aspects,
+    }
+
+    result = s2l.create_listing(
+        session_jwt,
+        team.snap2list_ebay_token,
+        listing_data,
+        account_id=team.snap2list_account_id or 'ebay__default',
+        user_id=team.snap2list_user_id or 'user_default',
+        fulfillment_policy_id=team.ebay_fulfillment_policy_id or '255590584010',
+        payment_policy_id=team.ebay_payment_policy_id or '255590592010',
+        return_policy_id=team.ebay_return_policy_id or '255590559010',
+    )
+
+    if result and not result.get('error'):
+        # Save/update listing in our DB
+        if not listing:
+            user = get_current_ebay_user()
+            listing = EbayListing(
+                team_id=team.id,
+                created_by=user.id if user else None,
+                title=title[:80],
+                description=description,
+                category_id=str(category_id),
+                condition='NEW',
+                price=float(price),
+                quantity=1,
+                cost_price=0,
+                shipping_type='FREE',
+                shipping_cost=0,
+                images_json=json.dumps(image_urls),
+                sku=sku,
+                status='active',
+                listed_at=datetime.utcnow(),
+                title_hash=hashlib.md5(title.lower().encode()).hexdigest(),
+            )
+            db.session.add(listing)
+        else:
+            listing.status = 'active'
+            listing.listed_at = datetime.utcnow()
+            listing.title = title[:80]
+            listing.description = description
+            listing.price = float(price)
+            if not listing.images_json or listing.images_json == '[]':
+                listing.images_json = json.dumps(image_urls)
+
+        db.session.commit()
+        log.info(f"Snap2List listing created: #{listing.id} '{title[:50]}'")
+
+        return jsonify({
+            'success': True,
+            'listing_id': listing.id,
+            'title': title,
+            'price': float(price),
+            'images_uploaded': len(image_urls),
+            'ebay_result': result,
+            'message': f'Listed on eBay! "{title[:50]}..." at ${price}',
+        })
+    else:
+        error_msg = result.get('error', 'Unknown error') if result else 'No response from Snap2List'
+        return jsonify({'error': f'Failed to create eBay listing: {error_msg}'}), 500
+
+
+def _grok_suggest_price(title, undercut_pct=30):
+    """Use Grok to suggest an aggressive price for a product title."""
+    if not XAI_API_KEY:
+        return None
+
+    prompt = f"""You are an eBay pricing expert. I have a product to list:
+Title: {title}
+
+Research what similar items sell for on eBay (recently sold).
+I want to undercut the average sold price by {undercut_pct}%.
+My cost is $0 (free sample) so any sale is pure profit.
+Include approximate shipping cost ($5-8) baked into the price.
+
+Return ONLY a single number (the recommended listing price in USD).
+Example: 14.99"""
+
+    try:
+        resp = http_requests.post(
+            XAI_API_URL,
+            headers={'Authorization': f'Bearer {XAI_API_KEY}', 'Content-Type': 'application/json'},
+            json={
+                'model': XAI_MODEL,
+                'messages': [{'role': 'user', 'content': prompt}],
+                'max_tokens': 20,
+                'temperature': 0.1,
+            },
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            text = resp.json()['choices'][0]['message']['content'].strip()
+            # Extract number from response
+            import re
+            match = re.search(r'[\d]+\.?\d*', text)
+            if match:
+                price = float(match.group())
+                if 1 <= price <= 500:
+                    log.info(f"Grok suggested price: ${price} for '{title[:40]}'")
+                    return price
+    except Exception as e:
+        log.error(f"Grok pricing error: {e}")
+
+    return None
 
 
 @app.route('/ebay/screenshots/<path:filename>')

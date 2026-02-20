@@ -431,6 +431,68 @@
             </div>
         </div>
 
+        <!-- Snap2List API Bridge Connection -->
+        <div class="card" id="snap2listCard">
+            <h3>⚡ Snap2List Connection</h3>
+            <div id="snap2listStatus">
+                <div class="status-banner warning">⏳ Not connected</div>
+            </div>
+            <p style="font-size:12px; color:var(--text-dim); margin-top:8px;">
+                Connect Snap2List for <strong>one-tap eBay listing</strong> — no Playwright, no CAPTCHAs, no proxies.
+            </p>
+
+            <div
+                style="margin-top:16px; padding:14px; background:var(--bg-input); border-radius:10px; border:1px solid var(--border);">
+                <h4 style="font-size:14px; margin-bottom:10px;">📋 How to Get Your Snap2List Credentials</h4>
+                <ol style="font-size:12px; color:var(--text-dim); padding-left:20px; line-height:1.8;">
+                    <li>Log into <a href="https://www.snaptolist.com" target="_blank"
+                            style="color:var(--accent);">snaptolist.com</a> in Chrome</li>
+                    <li>Press <strong>F12</strong> → go to <strong>Console</strong> tab</li>
+                    <li>Paste this command and press Enter:</li>
+                </ol>
+                <div style="margin:10px 0; position:relative;">
+                    <pre id="snap2listCmd"
+                        style="background:#1a1a2e; padding:10px; border-radius:6px; font-size:10px; color:#00e676; overflow-x:auto; white-space:pre-wrap; word-break:break-all;">JSON.stringify({session_jwt: document.cookie.match(/__session=([^;]+)/)?.[1] || '', client_cookie: document.cookie.match(/__client=([^;]+)/)?.[1] || '', session_id: document.cookie.match(/clerk_active_context=([^:;]+)/)?.[1] || '', user_id: '', account_id: '', ebay_token: ''})</pre>
+                    <button id="snap2listCopyBtn"
+                        onclick="navigator.clipboard.writeText(document.getElementById('snap2listCmd').textContent);this.textContent='✅';setTimeout(()=>this.textContent='📋',1500)"
+                        style="position:absolute;top:6px;right:6px;background:var(--border);border:none;border-radius:4px;padding:4px 8px;color:var(--text);cursor:pointer;font-size:12px;">📋</button>
+                </div>
+                <ol start="4" style="font-size:12px; color:var(--text-dim); padding-left:20px; line-height:1.8;">
+                    <li>Copy the output and paste it below</li>
+                    <li>Then go to <strong>Network</strong> tab → find any <code>create-listing</code> or
+                        <code>get-suggested-price</code> call → look at the <strong>Payload</strong> for the
+                        <code>token</code> (long string starting with <code>v^1.1#</code>), <code>userId</code>, and
+                        <code>accountId</code> values
+                    </li>
+                </ol>
+
+                <textarea id="snap2listInput" rows="3" placeholder='Paste the JSON output here...'
+                    style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px; font-size:12px; font-family:monospace; resize:vertical; margin-top:8px;"></textarea>
+
+                <div style="margin-top:8px;">
+                    <label style="font-size:12px; color:var(--text-dim);">eBay Token (from Network tab Payload →
+                        <code>token</code> field):</label>
+                    <textarea id="snap2listEbayToken" rows="2" placeholder='Paste the long v^1.1#... token here'
+                        style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px; font-size:11px; font-family:monospace; resize:vertical; margin-top:4px;"></textarea>
+                </div>
+                <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <div>
+                        <label style="font-size:12px; color:var(--text-dim);">Account ID:</label>
+                        <input id="snap2listAccountId" placeholder="ebay__mglxqvzrye" value="ebay__mglxqvzrye"
+                            style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:12px; margin-top:4px;">
+                    </div>
+                    <div>
+                        <label style="font-size:12px; color:var(--text-dim);">User ID:</label>
+                        <input id="snap2listUserId" placeholder="user_39wTGps2fRYk..."
+                            style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:12px; margin-top:4px;">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="saveSnap2List()" id="saveSnap2ListBtn"
+                    style="margin-top:12px;">⚡ Save Snap2List Connection</button>
+            </div>
+        </div>
+
         <!-- eBay Setup Wizard -->
         <div class="card" id="setupWizard">
             <h3>📖 eBay Setup Guide</h3>
@@ -1066,8 +1128,75 @@
             loadGmailStatus();
         }
 
+        // ─── Snap2List Connection ──────────────────────────────────────
+        async function saveSnap2List() {
+            const btn = document.getElementById('saveSnap2ListBtn');
+            btn.textContent = '⏳ Saving...';
+            btn.disabled = true;
+
+            try {
+                let payload = {};
+                const rawInput = document.getElementById('snap2listInput').value.trim();
+                if (rawInput) {
+                    try { payload = JSON.parse(rawInput); } catch (e) {
+                        alert('Invalid JSON in credentials field. Make sure you copied the console output correctly.');
+                        return;
+                    }
+                }
+
+                // Add manually entered fields
+                const ebayToken = document.getElementById('snap2listEbayToken').value.trim();
+                const accountId = document.getElementById('snap2listAccountId').value.trim();
+                const userId = document.getElementById('snap2listUserId').value.trim();
+
+                if (ebayToken) payload.ebay_token = ebayToken;
+                if (accountId) payload.account_id = accountId;
+                if (userId) payload.user_id = userId;
+
+                if (!payload.session_jwt) {
+                    alert('Session JWT is required. Run the console command on Snap2List and paste the output.');
+                    return;
+                }
+
+                const resp = await fetch('/ebay/api/snap2list/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+
+                const statusEl = document.getElementById('snap2listStatus');
+                if (data.success) {
+                    statusEl.innerHTML = '<div class="status-banner ok">✅ Snap2List connected! One-tap listing is ready.</div>';
+                } else {
+                    statusEl.innerHTML = `<div class="status-banner error">❌ ${data.error || 'Failed to save'}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('snap2listStatus').innerHTML = `<div class="status-banner error">❌ ${e.message}</div>`;
+            } finally {
+                btn.textContent = '⚡ Save Snap2List Connection';
+                btn.disabled = false;
+            }
+        }
+
+        async function checkSnap2List() {
+            try {
+                const resp = await fetch('/ebay/api/snap2list/session');
+                const data = await resp.json();
+                const statusEl = document.getElementById('snap2listStatus');
+                if (data.connected) {
+                    statusEl.innerHTML = '<div class="status-banner ok">✅ Snap2List connected! One-tap listing is ready.</div>';
+                } else if (data.has_session) {
+                    statusEl.innerHTML = '<div class="status-banner warning">⚠️ Session saved but eBay token missing. Add the eBay token below.</div>';
+                } else {
+                    statusEl.innerHTML = '<div class="status-banner warning">⏳ Not connected. Follow the steps below.</div>';
+                }
+            } catch (e) { /* ignore */ }
+        }
+
         // Auto-check session on page load
         setTimeout(checkEbaySession, 1500);
+        setTimeout(checkSnap2List, 2000);
         loadGmailStatus();
     </script>
 </body>
