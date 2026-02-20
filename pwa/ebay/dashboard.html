@@ -679,24 +679,35 @@
         }
 
         async function autoFillDraft(id) {
-            showToast('🚀 Auto-filling eBay... (30-60 sec)');
+            showToast('Generating native eBay App link...');
             try {
-                const resp = await fetch(`/ebay/api/listings/${id}/autofill`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                });
+                // Fetch listing details to build the URL
+                const resp = await fetch(`/ebay/api/listings/${id}`);
                 const data = await resp.json();
-                if (data.success && data.screenshot) {
-                    showToast('✅ eBay listing filled!');
-                    // Try eBay app deep link first (iOS), fallback to web
-                    const ebayUrl = data.ebay_url || 'https://www.ebay.com/sl/sell';
-                    window.location.href = 'ebay://sell';
-                    setTimeout(() => {
-                        // If app didn't open, fallback to web
-                        window.open(ebayUrl, '_blank');
-                    }, 1500);
+
+                if (data.success && data.listing) {
+                    const listing = data.listing;
+                    const priceVal = listing.price || 0;
+                    const fullUrl = `https://www.ebay.com/sl/list?mode=AddItem&title=${encodeURIComponent(listing.title)}&startPrice=${priceVal.toFixed(2)}&freeShipping=true&shippingType=Free`;
+
+                    showToast('✅ Launching eBay App!');
+
+                    // The description needs to be copied before opening, but we are just in the dashboard row.
+                    // Let's copy it using our plain text fallback method.
+                    if (listing.description) {
+                        try {
+                            const plainDesc = listing.description.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                            await navigator.clipboard.writeText(plainDesc);
+                            showToast('📋 Description copied automatically!');
+                        } catch (e) {
+                            console.error("Copy failed", e);
+                        }
+                    }
+
+                    // Using location.href triggers iOS Universal Links to open in the eBay app natively
+                    window.location.href = fullUrl;
                 } else {
-                    showToast('❌ ' + (data.error || 'Auto-fill failed'));
+                    showToast('❌ Failed to fetch draft details');
                 }
             } catch (e) {
                 showToast('❌ Error: ' + e.message);
