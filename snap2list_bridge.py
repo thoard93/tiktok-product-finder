@@ -306,6 +306,9 @@ def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
     }
 
     try:
+        # Log full payload (sans token for security) for debugging
+        debug_payload = {k: v for k, v in payload.items() if k != 'token'}
+        log.info(f"Create listing full payload: {json.dumps(debug_payload)[:1500]}")
         resp = requests.post(
             url,
             json=payload,

@@ -1893,6 +1893,9 @@ def snap2list_quick_list(listing_id):
             db.session.commit()
             log.info("Mid-flow JWT refresh successful")
 
+    log.info(f"eBay token length: {len(team.snap2list_ebay_token)}, starts: '{team.snap2list_ebay_token[:30]}', ends: '...{team.snap2list_ebay_token[-20:]}'")
+    log.info(f"Listing payload: sku={listing_data.get('sku')}, cat={listing_data.get('category_id')}, price={listing_data.get('price')}, imgs={len(listing_data.get('image_urls', []))}, aspects={listing_data.get('aspects')}")
+
     result = s2l.create_listing(
         session_jwt,
         team.snap2list_ebay_token,
