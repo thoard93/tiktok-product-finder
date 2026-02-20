@@ -838,6 +838,13 @@
             <button class="btn btn-primary" id="generateBtn" onclick="generateListing()" disabled>
                 🤖 Generate eBay Listing with AI
             </button>
+            <button class="btn" id="snap2listBtn" onclick="snap2listQuickPost()" disabled
+                style="margin-top:10px; background:linear-gradient(135deg, #7c5cff, #00c9a7); color:#fff; font-weight:700; border:none; position:relative; overflow:hidden;">
+                ⚡ One-Tap List on eBay (Snap2List)
+            </button>
+            <p style="text-align:center; font-size:11px; color:var(--text-dim); margin-top:6px;">
+                Uploads images → AI title/description → Grok pricing → posts to eBay instantly
+            </p>
         </div>
     </div>
 
@@ -1022,9 +1029,12 @@
     <div class="post-actions">
         <button class="btn btn-success" id="clipboardBtn" onclick="copyToClipboard()">📋 Copy All to
             Clipboard</button>
+        <button class="btn"
+            style="background:linear-gradient(135deg, #7c5cff, #00c9a7); color:#fff; font-weight:700; border:none;"
+            onclick="snap2listQuickPost()">⚡ Post to eBay via Snap2List</button>
         <button class="btn btn-primary"
             style="background:linear-gradient(135deg, var(--green), var(--accent)); color:#000; font-weight:700;"
-            onclick="autoFillEbay()">🚀 Auto-Fill eBay</button>
+            onclick="autoFillEbay()">🚀 Auto-Fill eBay (Playwright)</button>
         <button class="btn btn-primary" onclick="saveListing('draft')">💾 Save as Draft</button>
         <button class="btn btn-secondary" onclick="resetForm()">↩️ Start Over</button>
     </div>
@@ -1163,6 +1173,7 @@
                 </div>
             `).join('');
             document.getElementById('generateBtn').disabled = uploadedImages.length === 0;
+            document.getElementById('snap2listBtn').disabled = uploadedImages.length === 0;
         }
 
         function removeImage(idx) {
@@ -1817,6 +1828,90 @@
         }
         function hideLoading() {
             document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
+        // ─── Snap2List One-Tap Listing ────────────────────────
+        async function snap2listQuickPost() {
+            if (uploadedImages.length === 0) {
+                alert('Please upload at least one image first.');
+                return;
+            }
+
+            showLoading('⚡ Uploading images to Snap2List...', 'Step 1 of 3 — Sending images to CDN');
+
+            try {
+                // Save listing first to get an ID, then call snap2list endpoint
+                const saveResp = await fetch('/ebay/api/listings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: document.getElementById('editTitle')?.value || 'AI Generated',
+                        description: '',
+                        images: uploadedImages,
+                        price: 0,
+                        condition: 'NEW',
+                        quantity: 1,
+                        cost_price: 0,
+                        shipping_type: 'FREE',
+                    }),
+                });
+                const saveData = await saveResp.json();
+                if (!saveData.listing?.id && !saveData.id) {
+                    throw new Error(saveData.error || 'Failed to save listing');
+                }
+                const listingId = saveData.listing?.id || saveData.id;
+
+                // Now call the Snap2List bridge
+                document.getElementById('loadingStatus').textContent = '🤖 AI generating title & description...';
+                document.getElementById('loadingSub').textContent = 'Step 2 of 3 — Gemini AI analyzing your photos';
+
+                const resp = await fetch(`/ebay/api/listings/${listingId}/snap2list`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        images: uploadedImages,
+                        condition: 'NEW',
+                    }),
+                });
+
+                const data = await resp.json();
+
+                if (data.success) {
+                    hideLoading();
+                    // Show success modal
+                    const modal = document.getElementById('screenshotModal');
+                    document.getElementById('modalTitle').textContent = '⚡ Listed on eBay!';
+                    document.getElementById('modalMsg').innerHTML = `
+                        <div style="text-align:center; padding:20px;">
+                            <div style="font-size:48px; margin-bottom:16px;">🎉</div>
+                            <div style="font-size:18px; font-weight:700; color:var(--green); margin-bottom:12px;">
+                                ${data.message || 'Successfully listed!'}
+                            </div>
+                            <div style="font-size:14px; color:var(--text-dim); margin-bottom:16px;">
+                                <strong>Title:</strong> ${data.title || 'N/A'}<br>
+                                <strong>Price:</strong> $${data.price || 'N/A'}<br>
+                                <strong>Images:</strong> ${data.images_uploaded || 0} uploaded
+                            </div>
+                            <button class="btn btn-primary" onclick="resetForm(); closeScreenshotModal();" 
+                                style="max-width:250px; margin:auto;">
+                                📸 List Another Item
+                            </button>
+                        </div>
+                    `;
+                    modal.classList.add('show');
+                } else {
+                    hideLoading();
+                    const errorMsg = data.error || 'Unknown error';
+                    if (errorMsg.includes('expired') || errorMsg.includes('Session')) {
+                        alert('⚠️ Snap2List session expired!\n\nGo to Settings → Snap2List Connection and refresh your credentials.');
+                    } else {
+                        alert('❌ ' + errorMsg);
+                    }
+                }
+            } catch (err) {
+                hideLoading();
+                alert('Error: ' + err.message);
+            }
         }
     </script>
 </body>
