@@ -980,30 +980,36 @@ def research_pricing(title, category=''):
         except Exception as e:
             log.warning(f"eBay sold short-query search failed: {e}")
 
-    # ─── Strategy 2: Google Shopping (udm=28) ─
-    if len(prices) < 3:
-        try:
-            search_url = f'https://www.google.com/search?q={encoded_query}&udm=28'
-            log.info(f"[Pricing] Strategy 2 (Google Shopping) fetching: {search_url}")
-            html = _fetch(search_url)
-            log.info(f"[Pricing] Strategy 2 received HTML length: {len(html)}")
-            
-            # Filter out blacklisted domains
-            BLACKLISTED = ['alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com', 'banggood.com', 'shein.com', '1688.com', 'ebay.com']
-            for domain in BLACKLISTED:
-                html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
+    # ─── Strategy 2: Google Shopping (udm=28) — ALWAYS RUN for retail prices ─
+    # We always want retail context to prevent underpricing from cheap eBay bulk/clearance sales
+    google_prices = []
+    try:
+        search_url = f'https://www.google.com/search?q={encoded_query}&udm=28'
+        log.info(f"[Pricing] Strategy 2 (Google Shopping) fetching: {search_url}")
+        html = _fetch(search_url)
+        log.info(f"[Pricing] Strategy 2 received HTML length: {len(html)}")
+        
+        # Filter out blacklisted domains
+        BLACKLISTED = ['alibaba.com', 'aliexpress.com', 'dhgate.com', 'temu.com', 'wish.com', 'banggood.com', 'shein.com', '1688.com', 'ebay.com']
+        for domain in BLACKLISTED:
+            html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
 
-            all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html)
-            raw_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
-            if raw_prices:
-                prices.extend(raw_prices)
-                if not result.get('source') or result['source'] == 'none':
-                    result['source'] = 'google_shopping'
-                log.info(f"Google Shopping found {len(raw_prices)} prices: {sorted(raw_prices)[:10]}")
-            else:
-                log.warning(f"[Pricing] Strategy 2 found 0 prices.")
-        except Exception as e:
-            log.warning(f"Google Shopping search failed: {e}")
+        all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html)
+        google_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
+        if google_prices:
+            log.info(f"Google Shopping found {len(google_prices)} prices: {sorted(google_prices)[:10]}")
+        else:
+            log.warning(f"[Pricing] Strategy 2 found 0 prices.")
+    except Exception as e:
+        log.warning(f"Google Shopping search failed: {e}")
+
+    # Merge eBay SOLD + Google Shopping prices for combined analysis
+    if google_prices:
+        prices.extend(google_prices)
+        if not result.get('source') or result['source'] == 'none':
+            result['source'] = 'google_shopping'
+        elif result['source'] == 'ebay_sold':
+            result['source'] = 'ebay_sold+google'  # Combined source
 
     # ─── Strategy 3: eBay ACTIVE listings (current market prices) ─
     if len(prices) < 2:
@@ -1104,7 +1110,7 @@ def research_pricing(title, category=''):
 
         quick_sale = max(optimal * 0.90, min_viable)
 
-        source_label = {'ebay_sold': 'eBay sold listings', 'ebay_active': 'eBay active listings', 'google_shopping': 'Google Shopping', 'duckduckgo': 'web search'}.get(result['source'], 'online')
+        source_label = {'ebay_sold': 'eBay sold listings', 'ebay_sold+google': 'eBay sold + Google Shopping', 'ebay_active': 'eBay active listings', 'google_shopping': 'Google Shopping', 'duckduckgo': 'web search'}.get(result['source'], 'online')
         result.update({
             'avg_sold_price': round(avg_price, 2),
             'lowest_competitor_total': round(low_price, 2),
