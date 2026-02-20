@@ -1553,43 +1553,96 @@
 
                 // Update loading message
                 document.getElementById('loadingSub').textContent =
-                    `Draft saved (#${listingId}). Generating native eBay App link...`;
+                    `Draft saved (#${listingId}). Now filling eBay form...`;
 
+                // Trigger Playwright auto-fill
+                const fillResp = await fetch(`/ebay/api/listings/${listingId}/autofill`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(listing),
+                });
+                const fillData = await fillResp.json();
                 hideLoading();
 
-                // Generate native eBay Universal Link instantly
-                const priceVal = listing.price || 0;
-                // Add mode=AddItem for fresh listing, and encode arguments securely
-                const fullUrl = `https://www.ebay.com/sl/list?mode=AddItem&title=${encodeURIComponent(listing.title)}&startPrice=${priceVal.toFixed(2)}&freeShipping=true&shippingType=Free`;
+                if (fillData.login_required || fillData.captcha_detected) {
+                    // Extract the pre-filled listing URL from the redirect chain
+                    const listingUrl = fillData.listing_url;
+                    showListingDataInModal(listing);
+                    document.getElementById('modalScreenshot').style.display = 'none';
 
-                lastAutofillUrl = fullUrl;
-                showListingDataInModal(listing);
-                document.getElementById('modalScreenshot').style.display = 'none';
+                    if (listingUrl) {
+                        // Append price and free shipping to the listing URL
+                        const priceVal = listing.price || 0;
+                        const fullUrl = listingUrl + '&startPrice=' + priceVal.toFixed(2) + '&freeShipping=true&shippingType=Free';
+                        lastAutofillUrl = fullUrl;
+                        document.getElementById('modalTitle').textContent = '⚠️ Auto-Draft Blocked by CAPTCHA';
+                        document.getElementById('modalMsg').textContent =
+                            'eBay threw a CAPTCHA! The bot could NOT save the draft to your App. You MUST open Safari below to bypass the CAPTCHA and finish the draft:';
 
-                document.getElementById('modalTitle').textContent = '✅ Listing Ready!';
-                document.getElementById('modalMsg').textContent =
-                    'Your data is saved! Open the eBay App below. Your Title, Price, and Free Shipping are pre-filled. You just need to paste the description and upload your photos, then hit "Save for later".';
+                        document.getElementById('modalSolveCaptcha').style.display = 'block';
+                        document.getElementById('modalSolveCaptcha').textContent = '🌐 Open Safari Fallback to Finish';
+                        document.getElementById('modalSolveCaptcha').style.background = '#f59e0b';
+                        document.getElementById('modalSolveCaptcha').onclick = function () {
+                            copyDescriptionOnly();
+                            window.open(fullUrl, '_blank');
+                        };
 
-                document.getElementById('modalSolveCaptcha').style.display = 'block';
-                document.getElementById('modalSolveCaptcha').textContent = '📲 Open Pre-Filled Form in eBay App';
-                document.getElementById('modalSolveCaptcha').style.background = '#4ade80';
+                        // Show Save Images button if we have images
+                        if (uploadedImages.length > 0) {
+                            document.getElementById('modalSaveImages').style.display = 'block';
+                            document.getElementById('modalSaveImages').textContent = '📸 Save ' + uploadedImages.length + ' Image' + (uploadedImages.length > 1 ? 's' : '') + ' to Phone';
+                        }
+                    } else {
+                        // No listing URL extracted — fallback to copy mode
+                        lastAutofillUrl = 'https://www.ebay.com/sl/sell';
+                        document.getElementById('modalTitle').textContent = '⚠️ Bot Blocked by CAPTCHA';
+                        document.getElementById('modalMsg').textContent =
+                            'eBay challenged the bot with a CAPTCHA! Your draft was NOT saved. Copy your data below and open eBay Safari to list manually:';
 
-                // Show Save Images button if we have images
-                if (uploadedImages.length > 0) {
-                    document.getElementById('modalSaveImages').style.display = 'block';
-                    document.getElementById('modalSaveImages').textContent = '📸 Save ' + uploadedImages.length + ' Image' + (uploadedImages.length > 1 ? 's' : '') + ' to Phone';
+                        document.getElementById('modalSolveCaptcha').style.display = 'block';
+                        document.getElementById('modalSolveCaptcha').textContent = '🌐 Open eBay in Safari';
+                        document.getElementById('modalSolveCaptcha').style.background = '#f59e0b';
+                        document.getElementById('modalSolveCaptcha').onclick = function () {
+                            copyAllListingData();
+                            window.open('https://www.ebay.com/sl/sell', '_blank');
+                        };
+                    }
+
+                    document.getElementById('modalOpenEbay').textContent = '📋 Copy All to Clipboard';
+                    document.getElementById('screenshotModal').classList.add('show');
+                } else if (fillData.success) {
+                    // Show screenshot modal
+                    lastAutofillUrl = fillData.ebay_url || 'https://www.ebay.com/sl/sell';
+                    document.getElementById('modalTitle').textContent = '✅ eBay Form Filled!';
+                    document.getElementById('modalMsg').textContent =
+                        'Review the screenshot below. When ready, click "Open eBay Now" to review and submit.';
+
+                    if (fillData.screenshot) {
+                        const img = document.getElementById('modalScreenshot');
+                        img.src = fillData.screenshot;
+                        img.style.display = 'block';
+                    }
+
+                    document.getElementById('screenshotModal').classList.add('show');
                 } else {
-                    document.getElementById('modalSaveImages').style.display = 'none';
+                    // Show error with screenshot if available
+                    const errStep = fillData.step ? ` (at step: ${fillData.step})` : '';
+                    document.getElementById('modalTitle').textContent = '⚠️ Auto-Fill Issue';
+                    document.getElementById('modalMsg').textContent =
+                        (fillData.error || 'Unknown error') + errStep;
+
+                    if (fillData.screenshot) {
+                        const img = document.getElementById('modalScreenshot');
+                        img.src = fillData.screenshot;
+                        img.style.display = 'block';
+                    } else {
+                        document.getElementById('modalScreenshot').style.display = 'none';
+                    }
+
+                    document.getElementById('modalOpenEbay').textContent = '📋 Copy & List Manually Instead';
+                    lastAutofillUrl = 'https://www.ebay.com/sl/sell';
+                    document.getElementById('screenshotModal').classList.add('show');
                 }
-
-                document.getElementById('modalSolveCaptcha').onclick = function () {
-                    copyDescriptionOnly();
-                    // Use location.href instead of window.open to trigger iOS Universal Links for the eBay App
-                    window.location.href = fullUrl;
-                };
-
-                document.getElementById('modalOpenEbay').textContent = '📋 Copy All to Clipboard Instead';
-                document.getElementById('screenshotModal').classList.add('show');
 
             } catch (err) {
                 hideLoading();

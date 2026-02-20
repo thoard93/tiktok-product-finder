@@ -1082,7 +1082,21 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 except:
                     pass
 
-            # ─── Step 12: Final screenshot ───────────────────────
+            # ─── Step 12: Save Draft ───────────────────────────────
+            result['step'] = 'save_draft'
+            try:
+                # Click Save for Later to guarantee it appears in the iPhone App Drafts immediately
+                save_btn = page.get_by_role("button", name="Save for later").first
+                if save_btn.is_visible(timeout=3000):
+                    save_btn.click()
+                    log("Clicked 'Save for later' button")
+                    page.wait_for_timeout(3000)
+                else:
+                    log("Could not find explicit 'Save for later' button, relying on autosave")
+            except Exception as e:
+                log(f"Save draft click warning: {e}")
+
+            # ─── Step 13: Final screenshot ───────────────────────
             result['step'] = 'complete'
             page.wait_for_timeout(2000)
 
