@@ -1700,8 +1700,11 @@
 
         async function copyDescriptionOnly() {
             try {
-                const desc = document.getElementById('editDesc').value;
+                let desc = document.getElementById('editDesc').value;
                 if (!desc) return;
+
+                // User requested plain text only for the eBay app
+                desc = desc.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 
                 try {
                     await navigator.clipboard.writeText(desc);
