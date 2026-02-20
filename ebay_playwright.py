@@ -983,12 +983,6 @@ def fill_listing_on_ebay(listing_data, image_paths):
                 if not shipping_set:
                     log("WARNING: Could not set free shipping — none of the methods worked")
                     take_screenshot(page, 'shipping_failed')
-                    except:
-                        pass
-
-                if not shipping_set:
-                    log("WARNING: Could not set free shipping — none of the methods worked")
-                    take_screenshot(page, 'shipping_failed')
 
             except Exception as e:
                 log(f"Shipping selection: {e} — continuing")

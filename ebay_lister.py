@@ -1076,8 +1076,9 @@ def research_pricing(title, category=''):
         high_price = max(prices)
         median_price = prices[len(prices) // 2]
 
-        # Use median as reference (resistant to outliers)
-        reference_price = median_price
+        # Resellers often inflate the median. Use the 30th percentile as the true competitive market price.
+        market_price_idx = int(len(prices) * 0.30)
+        reference_price = prices[market_price_idx]
 
         # Tiered undercut (FREE SHIPPING — includes ~$8-$12 ship cost)
         if reference_price >= 100:
