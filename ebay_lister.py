@@ -315,6 +315,21 @@ with app.app_context():
         log.info("Added gmail_last_sync column")
     except Exception:
         db.session.rollback()
+    # Snap2List API bridge columns
+    for col_name, col_type in [
+        ('snap2list_session_jwt', 'TEXT'),
+        ('snap2list_client_cookie', 'TEXT'),
+        ('snap2list_session_id', 'VARCHAR(100)'),
+        ('snap2list_ebay_token', 'TEXT'),
+        ('snap2list_account_id', 'VARCHAR(100)'),
+        ('snap2list_user_id', 'VARCHAR(100)'),
+    ]:
+        try:
+            db.session.execute(db.text(f"ALTER TABLE ebay_teams ADD COLUMN {col_name} {col_type} DEFAULT ''"))
+            db.session.commit()
+            log.info(f"Added {col_name} column")
+        except Exception:
+            db.session.rollback()
     # Seed default teams if they don't exist
     if not EbayTeam.query.filter_by(name='Thoard').first():
         t1 = EbayTeam(
