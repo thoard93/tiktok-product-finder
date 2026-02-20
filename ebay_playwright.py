@@ -342,7 +342,7 @@ def fill_listing_on_ebay(listing_data, image_paths):
 
             import random
             for url in listing_urls:
-                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                page.goto(url, wait_until="domcontentloaded", timeout=90000)
                 # Grok: human-like delay between major actions
                 page.wait_for_timeout(random.randint(2500, 4500))
                 log(f"On page: {page.url}")
