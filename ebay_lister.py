@@ -1370,14 +1370,21 @@ def ebay_autofill_listing(listing_id):
             # Sometmes Playwright/Python warnings leak into stdout.
             # Find the actual JSON object bounds.
             out_str = proc.stdout.strip()
-            start_idx = out_str.find('{')
-            end_idx = out_str.rfind('}')
+            result = None
             
-            if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
-                json_str = out_str[start_idx:end_idx+1]
-                result = json.loads(json_str)
-            else:
-                raise ValueError("No JSON object found in stdout")
+            # Search backwards line-by-line to find the JSON output
+            # This cleanly ignores Render's injected '==> Detected service...' logs
+            for line in reversed(out_str.splitlines()):
+                line = line.strip()
+                if line.startswith('{') and line.endswith('}'):
+                    try:
+                        result = json.loads(line)
+                        break
+                    except json.JSONDecodeError:
+                        continue
+            
+            if result is None:
+                raise ValueError("No valid JSON object found in stdout")
                 
         except Exception as e:
             return jsonify({
