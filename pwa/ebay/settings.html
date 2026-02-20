@@ -536,6 +536,28 @@
             <button class="btn btn-secondary" onclick="saveShipping()">Save Shipping</button>
         </div>
 
+        <!-- Sales Tracking (Gmail) -->
+        <div class="card" id="gmailCard">
+            <h3>📧 Sales Tracking</h3>
+            <p style="font-size: 13px; color: var(--text-dim); margin-bottom: 12px; line-height: 1.5;">
+                Connect Gmail to automatically detect "Your item has sold" emails, calculate actual eBay fees, and log
+                net profit to your dashboard.
+            </p>
+
+            <div id="gmailStatusBox" class="status-banner warning">
+                Checking connection...
+            </div>
+
+            <div id="gmailActions">
+                <button class="btn btn-primary" id="gmailConnectBtn" onclick="connectGmail()" style="display: none;">
+                    🔗 Connect Gmail Account
+                </button>
+                <button class="btn btn-secondary" id="gmailSyncBtn" onclick="syncGmailSales()" style="display: none;">
+                    🔄 Sync Sales Now
+                </button>
+            </div>
+        </div>
+
         <!-- Pricing Defaults -->
         <div class="card">
             <h3>💰 Pricing Defaults</h3>
@@ -876,6 +898,80 @@
         }
 
         // ─── Gmail Sales Tracking ─────────────────────────
+        async function checkGmailStatus() {
+            try {
+                const resp = await fetch('/ebay/api/gmail/status');
+                const data = await resp.json();
+
+                const statusBox = document.getElementById('gmailStatusBox');
+                const connectBtn = document.getElementById('gmailConnectBtn');
+                const syncBtn = document.getElementById('gmailSyncBtn');
+
+                if (data.connected) {
+                    const lastSync = data.last_sync ? new Date(data.last_sync).toLocaleString() : 'Never';
+                    statusBox.className = 'status-banner success';
+                    statusBox.innerHTML = `✅ Gmail Connected!<br><span style="font-size:11px; font-weight:normal; opacity:0.8;">Last sync: ${lastSync}</span>`;
+
+                    connectBtn.style.display = 'none';
+                    syncBtn.style.display = 'inline-block';
+                } else {
+                    statusBox.className = 'status-banner error';
+                    statusBox.innerHTML = '❌ Gmail Not Connected';
+
+                    connectBtn.style.display = 'inline-block';
+                    syncBtn.style.display = 'none';
+                }
+            } catch (err) {
+                console.error("Gmail status check failed", err);
+            }
+        }
+
+        async function connectGmail() {
+            const btn = document.getElementById('gmailConnectBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Starting connection...';
+
+            try {
+                const resp = await fetch('/ebay/api/gmail/auth');
+                const data = await resp.json();
+
+                if (data.auth_url) {
+                    window.location.href = data.auth_url;
+                } else {
+                    showMsg(data.error || 'Failed to get auth URL', false);
+                    btn.disabled = false;
+                    btn.textContent = '🔗 Connect Gmail Account';
+                }
+            } catch (err) {
+                showMsg('Error initializing Gmail connection: ' + err.message, false);
+                btn.disabled = false;
+                btn.textContent = '🔗 Connect Gmail Account';
+            }
+        }
+
+        async function syncGmailSales() {
+            const btn = document.getElementById('gmailSyncBtn');
+            btn.disabled = true;
+            btn.textContent = '🔄 Scannng Inbox...';
+
+            try {
+                const resp = await fetch('/ebay/api/gmail/sync', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success) {
+                    const res = data.result;
+                    showMsg(`✅ Sync complete! Found ${res.synced} new sales.`, true);
+                    checkGmailStatus(); // update last sync time
+                } else {
+                    showMsg('❌ Sync failed: ' + (data.error || 'Unknown error'), false);
+                }
+            } catch (err) {
+                showMsg('❌ Error running sync: ' + err.message, false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 Sync Sales Now';
+            }
+        }
         async function loadGmailStatus() {
             try {
                 const resp = await fetch('/ebay/api/gmail/status');

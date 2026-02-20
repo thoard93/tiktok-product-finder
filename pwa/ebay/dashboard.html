@@ -582,6 +582,29 @@
                 console.error('Stats error:', e);
             }
 
+            // Sync Gmail Sales in Background
+            try {
+                fetch('/ebay/api/gmail/sync', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.success && d.result && d.result.synced > 0) {
+                            showToast(`📧 Auto-synced ${d.result.synced} new eBay sales from Gmail`);
+                            // Quick refresh to show new stats
+                            setTimeout(() => {
+                                fetch(`/ebay/api/stats?team_id=${currentTeamId}&period=30`)
+                                    .then(r => r.json())
+                                    .then(sData => {
+                                        const s = sData.summary;
+                                        document.getElementById('statActive').textContent = s.active;
+                                        document.getElementById('statSold').textContent = s.sold;
+                                        document.getElementById('statRevenue').textContent = `$${s.total_revenue.toFixed(0)}`;
+                                        document.getElementById('statProfit').textContent = `$${s.total_profit.toFixed(0)}`;
+                                    });
+                            }, 500);
+                        }
+                    }).catch(err => console.error('Gmail background sync error', err));
+            } catch (e) { }
+
             // Load recent listings
             try {
                 const listResp = await fetch(`/ebay/api/listings?team_id=${currentTeamId}&per_page=10`);
