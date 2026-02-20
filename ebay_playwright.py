@@ -159,19 +159,11 @@ def extract_listing_url(redirect_url, original_title=None):
 
 
 def launch_browser(playwright, headless=True):
-    """Launch persistent Chromium context with eBay profile and Smartproxy."""
-    # Smartproxy Residential Proxy Settings
-    proxy_config = {
-        "server": "http://proxy.smartproxy.net:3120",
-        "username": "smart-yx842akr4euy",
-        "password": "pEMWTNMYDV2cMYsp"
-    }
-
+    """Launch persistent Chromium context with eBay profile (no proxy — Render's US IP works cleanly)."""
     try:
         context = playwright.chromium.launch_persistent_context(
             PROFILE_DIR,
             headless=headless,
-            proxy=proxy_config,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
@@ -196,7 +188,6 @@ def launch_browser(playwright, headless=True):
             return playwright.chromium.launch_persistent_context(
                 PROFILE_DIR,
                 headless=headless,
-                proxy=proxy_config,
                 args=["--no-sandbox", "--disable-setuid-sandbox",
                       "--disable-dev-shm-usage", "--disable-gpu",
                       "--disable-blink-features=AutomationControlled"],
