@@ -1659,10 +1659,15 @@ def snap2list_session():
     account_id = data.get('account_id', '').strip()
     user_id = data.get('user_id', '').strip()
 
-    if not session_jwt:
-        return jsonify({'error': 'session_jwt is required'}), 400
+    # Allow partial updates — only update fields that are provided
+    has_update = any([
+        session_jwt, client_cookie, session_id, ebay_token, account_id, user_id
+    ])
+    if not has_update:
+        return jsonify({'error': 'No credentials provided'}), 400
 
-    team.snap2list_session_jwt = session_jwt
+    if session_jwt:
+        team.snap2list_session_jwt = session_jwt
     if client_cookie:
         team.snap2list_client_cookie = client_cookie
     if session_id:
@@ -1675,10 +1680,12 @@ def snap2list_session():
         team.snap2list_user_id = user_id
 
     # Try to refresh the JWT immediately to verify it works
-    if client_cookie and session_id:
+    c = team.snap2list_client_cookie
+    s = team.snap2list_session_id
+    if c and s:
         try:
             import snap2list_bridge as s2l
-            new_jwt = s2l.refresh_session(client_cookie, session_id)
+            new_jwt = s2l.refresh_session(c, s)
             if new_jwt:
                 team.snap2list_session_jwt = new_jwt
                 log.info("Snap2List session refreshed successfully on save")

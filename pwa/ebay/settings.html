@@ -1155,7 +1155,8 @@
             btn.disabled = true;
 
             try {
-                const payload = {
+                // Only include non-empty fields (allows partial updates)
+                const fields = {
                     session_jwt: document.getElementById('s2lSession').value.trim(),
                     client_cookie: document.getElementById('s2lClient').value.trim(),
                     ebay_token: document.getElementById('s2lEbayToken').value.trim(),
@@ -1163,13 +1164,11 @@
                     account_id: document.getElementById('s2lAccountId').value.trim(),
                     user_id: document.getElementById('s2lUserId').value.trim(),
                 };
+                const payload = {};
+                for (const [k, v] of Object.entries(fields)) { if (v) payload[k] = v; }
 
-                if (!payload.session_jwt) {
-                    alert('Paste the __session cookie value first!');
-                    return;
-                }
-                if (!payload.client_cookie) {
-                    alert('Paste the __client cookie value — this is critical for keeping the session alive!');
+                if (Object.keys(payload).length === 0) {
+                    alert('Fill in at least one field to update.');
                     return;
                 }
 
