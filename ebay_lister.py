@@ -994,14 +994,47 @@ def research_pricing(title, category=''):
         for domain in BLACKLISTED:
             html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
 
-        all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html)
-        google_prices = [float(a) for a in all_amounts if 3.0 < float(a) < 5000.0]
+        # Multiple price patterns to capture Google's various formats
+        price_patterns = [
+            r'\$(\d{1,4}\.\d{2})',           # Standard: $20.00
+            r'US\s*\$(\d{1,4}\.\d{2})',       # US $20.00 or US$20.00
+            r'"price"\s*:\s*"?(\d{1,4}\.\d{2})',  # JSON-LD: "price":"20.00"
+            r'content="(\d{1,4}\.\d{2})"',    # Microdata: content="20.00"
+        ]
+        for pattern in price_patterns:
+            all_amounts = _re.findall(pattern, html)
+            for a in all_amounts:
+                p = float(a)
+                if 3.0 < p < 5000.0 and p not in google_prices:
+                    google_prices.append(p)
+        
         if google_prices:
             log.info(f"Google Shopping found {len(google_prices)} prices: {sorted(google_prices)[:10]}")
         else:
             log.warning(f"[Pricing] Strategy 2 found 0 prices.")
     except Exception as e:
         log.warning(f"Google Shopping search failed: {e}")
+
+    # Strategy 2b: Google regular search for retail prices (fallback when Shopping returns 0)
+    if not google_prices:
+        try:
+            search_url = f'https://www.google.com/search?q={encoded_query}+price'
+            log.info(f"[Pricing] Strategy 2b (Google web) fetching: {search_url}")
+            html = _fetch(search_url)
+            log.info(f"[Pricing] Strategy 2b received HTML length: {len(html)}")
+            for domain in BLACKLISTED:
+                html = _re.sub(rf'[^<>]{{0,500}}{_re.escape(domain)}[^<>]{{0,500}}', '', html)
+            all_amounts = _re.findall(r'\$(\d{1,4}\.\d{2})', html)
+            for a in all_amounts:
+                p = float(a)
+                if 3.0 < p < 5000.0 and p not in google_prices:
+                    google_prices.append(p)
+            if google_prices:
+                log.info(f"Google web found {len(google_prices)} prices: {sorted(google_prices)[:10]}")
+            else:
+                log.warning(f"[Pricing] Strategy 2b found 0 prices.")
+        except Exception as e:
+            log.warning(f"Google web search failed: {e}")
 
     # Merge eBay SOLD + Google Shopping prices for combined analysis
     if google_prices:
