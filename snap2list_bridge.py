@@ -130,7 +130,7 @@ def upload_image(session_jwt, image_bytes, filename='product.jpg', content_type=
     return None
 
 
-def generate_listing(session_jwt, image_urls, fast_mode=False):
+def generate_listing(session_jwt, image_urls, fast_mode=False, client_cookie=None):
     """
     Use Snap2List's Gemini AI to generate title, description, aspects, etc.
     Returns dict with 'title', 'description', 'aspects', 'category', etc.
@@ -149,7 +149,7 @@ def generate_listing(session_jwt, image_urls, fast_mode=False):
         resp = requests.post(
             url,
             json=payload,
-            cookies=_cookies(session_jwt),
+            cookies=_cookies(session_jwt, client_cookie),
             headers=_headers(session_jwt),
             timeout=120,  # AI generation can take up to 60s
         )
@@ -165,7 +165,7 @@ def generate_listing(session_jwt, image_urls, fast_mode=False):
     return None
 
 
-def get_category_suggestions(session_jwt, ebay_token, title):
+def get_category_suggestions(session_jwt, ebay_token, title, client_cookie=None):
     """Get eBay category suggestions for a title."""
     url = f'{SNAP2LIST_BASE}/api/get-category-suggestions'
     payload = {
@@ -180,7 +180,7 @@ def get_category_suggestions(session_jwt, ebay_token, title):
         resp = requests.post(
             url,
             json=payload,
-            cookies=_cookies(session_jwt),
+            cookies=_cookies(session_jwt, client_cookie),
             headers=_headers(session_jwt),
             timeout=30,
         )
@@ -196,7 +196,7 @@ def get_category_suggestions(session_jwt, ebay_token, title):
     return None
 
 
-def get_suggested_price(session_jwt, ebay_token, title, category_id, condition='NEW'):
+def get_suggested_price(session_jwt, ebay_token, title, category_id, condition='NEW', client_cookie=None):
     """Get smart pricing suggestion from eBay sold data."""
     url = f'{SNAP2LIST_BASE}/api/get-suggested-price'
     payload = {
@@ -211,7 +211,7 @@ def get_suggested_price(session_jwt, ebay_token, title, category_id, condition='
         resp = requests.post(
             url,
             json=payload,
-            cookies=_cookies(session_jwt),
+            cookies=_cookies(session_jwt, client_cookie),
             headers=_headers(session_jwt),
             timeout=30,
         )
@@ -228,7 +228,8 @@ def get_suggested_price(session_jwt, ebay_token, title, category_id, condition='
 
 
 def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
-                   fulfillment_policy_id, payment_policy_id, return_policy_id):
+                   fulfillment_policy_id, payment_policy_id, return_policy_id,
+                   client_cookie=None):
     """
     Create an eBay listing via Snap2List's API.
 
@@ -312,7 +313,7 @@ def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
         resp = requests.post(
             url,
             json=payload,
-            cookies=_cookies(session_jwt),
+            cookies=_cookies(session_jwt, client_cookie),
             headers=_headers(session_jwt),
             timeout=60,
         )
@@ -325,6 +326,40 @@ def create_listing(session_jwt, ebay_token, listing_data, account_id, user_id,
             return {'error': f"Snap2List returned {resp.status_code}: {resp.text[:300]}"}
     except Exception as e:
         log.error(f"Create listing error: {e}")
+        return {'error': str(e)}
+
+
+def publish_offer(session_jwt, ebay_token, offer_id, account_id, user_id, client_cookie=None):
+    """
+    Publish an unpublished eBay offer.
+    Some listings need this extra step after create_listing.
+    """
+    url = f'{SNAP2LIST_BASE}/api/publish-offer'
+    payload = {
+        'token': ebay_token,
+        'offerId': str(offer_id),
+        'userId': user_id,
+        'accountId': account_id,
+        'marketplace_id': 'EBAY_US',
+    }
+
+    try:
+        resp = requests.post(
+            url,
+            json=payload,
+            cookies=_cookies(session_jwt, client_cookie),
+            headers=_headers(session_jwt),
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            log.info(f"Offer published! Response: {json.dumps(data)[:300]}")
+            return data
+        else:
+            log.error(f"Publish offer failed: {resp.status_code} {resp.text[:300]}")
+            return {'error': f'Publish failed: {resp.status_code}'}
+    except Exception as e:
+        log.error(f"Publish offer error: {e}")
         return {'error': str(e)}
 
 

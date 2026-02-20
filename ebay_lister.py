@@ -1778,7 +1778,8 @@ def snap2list_quick_list(listing_id):
         return jsonify({'error': 'Failed to upload any images to Snap2List'}), 500
 
     # Generate listing via Gemini AI
-    ai_data = s2l.generate_listing(session_jwt, image_urls, fast_mode=False)
+    cc = team.snap2list_client_cookie  # shorthand for passing to all bridge calls
+    ai_data = s2l.generate_listing(session_jwt, image_urls, fast_mode=False, client_cookie=cc)
     if not ai_data:
         return jsonify({'error': 'AI listing generation failed. Session may be expired.'}), 500
 
@@ -1817,7 +1818,7 @@ def snap2list_quick_list(listing_id):
         log.info(f"No category from AI, fetching suggestions for: '{title[:50]}'")
         try:
             cat_data = s2l.get_category_suggestions(
-                session_jwt, team.snap2list_ebay_token, title
+                session_jwt, team.snap2list_ebay_token, title, client_cookie=cc
             )
             if cat_data:
                 # Response is typically a list of category suggestions
@@ -1854,7 +1855,7 @@ def snap2list_quick_list(listing_id):
         # Try Snap2List pricing as fallback
         try:
             price_data = s2l.get_suggested_price(
-                session_jwt, team.snap2list_ebay_token, title, category_id
+                session_jwt, team.snap2list_ebay_token, title, category_id, client_cookie=cc
             )
             if price_data:
                 sp = price_data.get('suggestedPrice')
@@ -1901,7 +1902,31 @@ def snap2list_quick_list(listing_id):
         fulfillment_policy_id=team.ebay_fulfillment_policy_id or '255590584010',
         payment_policy_id=team.ebay_payment_policy_id or '255590592010',
         return_policy_id=team.ebay_return_policy_id or '255590559010',
+        client_cookie=cc,
     )
+
+    # If we got an offerId but no listingId, try publishing the offer
+    if result and not result.get('error') and result.get('offerId') and not result.get('listingId'):
+        log.info(f"Offer created (ID: {result['offerId']}), attempting publish...")
+        # Refresh JWT again for publish step
+        if team.snap2list_client_cookie and team.snap2list_session_id:
+            fresh = s2l.refresh_session(team.snap2list_client_cookie, team.snap2list_session_id)
+            if fresh:
+                session_jwt = fresh
+                team.snap2list_session_jwt = fresh
+        pub = s2l.publish_offer(
+            session_jwt, team.snap2list_ebay_token,
+            result['offerId'],
+            account_id=team.snap2list_account_id or 'ebay__default',
+            user_id=team.snap2list_user_id or 'user_default',
+            client_cookie=cc,
+        )
+        if pub and not pub.get('error'):
+            result['published'] = True
+            result['listingId'] = pub.get('listingId')
+            log.info(f"Offer published! listingId={pub.get('listingId')}")
+        else:
+            log.warning(f"Publish attempt result: {pub}")
 
     if result and not result.get('error'):
         # Save/update listing in our DB
