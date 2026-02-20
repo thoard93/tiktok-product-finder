@@ -132,44 +132,22 @@ def extract_listing_url(redirect_url, original_title=None):
             listing_url = match.group(1)
             
             if original_title:
-                try:
-                    from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
-                    parsed = urlparse(listing_url)
-                    query_params = parse_qsl(parsed.query, keep_blank_values=True)
-                    new_params = []
-                    
-                    found_title = False
-                    found_mode = False
-                    for k, v in query_params:
-                        # Strip all parameters that link back to eBay's catalog pricing / old items
-                        if k in ('productRefId', 'itemId', 'aspects', 'sgfl', 'epid'):
-                            continue
-                        
-                        if k == 'title':
-                            new_params.append((k, original_title))
-                            found_title = True
-                        elif k == 'mode':
-                            new_params.append((k, 'AddItem'))
-                            found_mode = True
-                        else:
-                            new_params.append((k, v))
-                            
-                    if not found_title:
-                        new_params.append(('title', original_title))
-                    if not found_mode:
-                        new_params.append(('mode', 'AddItem'))
-                        
-                    parsed = parsed._replace(query=urlencode(new_params))
-                    listing_url = urlunparse(parsed)
-                    log(f"Fixed listing URL with original title: {original_title[:50]}...")
-                except Exception as ex:
-                    log(f"URL parsing fallback failed: {ex}")
-                    # Fallback to older regex if urllib fails for whatever reason
-                    listing_url = re.sub(r'title=[^&]*', 'title=' + quote_plus(original_title), listing_url)
-                    listing_url = re.sub(r'&productRefId=[^&]*', '', listing_url)
-                    listing_url = re.sub(r'&itemId=[^&]*', '', listing_url)
-                    listing_url = re.sub(r'&aspects=[^&]*', '', listing_url)
-                    listing_url = re.sub(r'mode=SellLikeItem', 'mode=AddItem', listing_url)
+                # Replace eBay's wrong product-matched title with our original title
+                listing_url = re.sub(r'title=[^&]*', 'title=' + quote_plus(original_title), listing_url)
+                
+                # Remove productRefId (links to wrong catalog product)
+                listing_url = re.sub(r'&productRefId=[^&]*', '', listing_url)
+                
+                # Remove itemId (links to wrong seller's item)
+                listing_url = re.sub(r'&itemId=[^&]*', '', listing_url)
+                
+                # Remove aspects (pre-filled from wrong product)
+                listing_url = re.sub(r'&aspects=[^&]*', '', listing_url)
+                
+                # Change mode from SellLikeItem to AddItem (fresh listing)
+                listing_url = re.sub(r'mode=SellLikeItem', 'mode=AddItem', listing_url)
+                
+                log(f"Fixed listing URL with original title: {original_title[:50]}...")
             
             log(f"Extracted listing URL: {listing_url[:100]}...")
             return listing_url
