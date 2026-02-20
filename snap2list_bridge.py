@@ -109,13 +109,19 @@ def upload_image(session_jwt, image_bytes, filename='product.jpg', content_type=
         )
         if resp.status_code == 200:
             data = resp.json()
+            # Snap2List returns 'urls' (list) not 'url' (string)
             cdn_url = data.get('url') or data.get('imageUrl') or data.get('image_url')
-            if cdn_url:
+            # Check for 'urls' (plural) list format
+            if not cdn_url:
+                urls_list = data.get('urls') or data.get('originalUrls')
+                if isinstance(urls_list, list) and urls_list:
+                    cdn_url = urls_list[0]
+            if cdn_url and isinstance(cdn_url, str):
                 log.info(f"Image uploaded: {cdn_url[:80]}")
                 return cdn_url
-            # Sometimes the URL is nested
-            log.info(f"Upload response: {json.dumps(data)[:300]}")
-            return data  # Return full response for debugging
+            # Fallback: return full response for debugging
+            log.warning(f"Upload OK but could not extract URL: {json.dumps(data)[:400]}")
+            return None
         else:
             log.error(f"Upload failed: {resp.status_code} {resp.text[:200]}")
     except Exception as e:
