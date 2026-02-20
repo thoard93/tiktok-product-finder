@@ -1812,30 +1812,58 @@ def snap2list_quick_list(listing_id):
         log.error(f"No title found in AI response: {json.dumps(ai_data)[:500]}")
         return jsonify({'error': 'AI did not generate a title', 'response_keys': list(ai_data.keys()) if isinstance(ai_data, dict) else str(type(ai_data))}), 500
 
+    # Get eBay category if not already determined
+    if not category_id:
+        log.info(f"No category from AI, fetching suggestions for: '{title[:50]}'")
+        try:
+            cat_data = s2l.get_category_suggestions(
+                session_jwt, team.snap2list_ebay_token, title
+            )
+            if cat_data:
+                # Response is typically a list of category suggestions
+                if isinstance(cat_data, list) and cat_data:
+                    cat = cat_data[0]
+                    category_id = str(cat.get('categoryId', '') or cat.get('category', {}).get('categoryId', ''))
+                elif isinstance(cat_data, dict):
+                    cats = cat_data.get('categorySuggestions') or cat_data.get('categories') or []
+                    if isinstance(cats, list) and cats:
+                        category_id = str(cats[0].get('category', {}).get('categoryId', ''))
+                    elif cat_data.get('categoryId'):
+                        category_id = str(cat_data['categoryId'])
+                log.info(f"Category suggestion: {category_id}")
+        except Exception as e:
+            log.warning(f"Category suggestion failed: {e}")
+
+    if not category_id:
+        category_id = '177'  # Fallback: Health & Beauty > Vitamins & Supplements
+        log.warning(f"Using fallback category: {category_id}")
+
     # Determine price — use Grok for aggressive pricing if possible
     price = data.get('price')
     if not price and listing:
         price = listing.price
 
-    if not price or float(price) <= 0:
+    if not price or float(price or 0) <= 0:
         # Try Grok pricing (existing app logic)
         try:
             price = _grok_suggest_price(title, team.default_undercut_pct or 30)
         except Exception:
             price = None
 
-    if not price or float(price) <= 0:
+    if not price or float(price or 0) <= 0:
         # Try Snap2List pricing as fallback
         try:
             price_data = s2l.get_suggested_price(
                 session_jwt, team.snap2list_ebay_token, title, category_id
             )
-            if price_data and price_data.get('suggestedPrice'):
-                price = price_data['suggestedPrice']
+            if price_data:
+                sp = price_data.get('suggestedPrice')
+                if sp and float(sp) > 0:
+                    price = sp
         except Exception:
             pass
 
-    if not price or float(price) <= 0:
+    if not price or float(price or 0) <= 0:
         price = 15  # Ultimate fallback
 
     # Build SKU
