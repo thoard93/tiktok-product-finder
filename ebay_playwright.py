@@ -200,9 +200,10 @@ def launch_browser(playwright, headless=True):
                 [sys.executable, "-m", "playwright", "install", "chromium"],
                 check=True
             )
-            return playwright.chromium.launch_persistent_context(
+            context = playwright.chromium.launch_persistent_context(
                 PROFILE_DIR,
                 headless=headless,
+                proxy=proxy_config,
                 args=["--no-sandbox", "--disable-setuid-sandbox",
                       "--disable-dev-shm-usage", "--disable-gpu",
                       "--disable-blink-features=AutomationControlled"],
@@ -211,13 +212,15 @@ def launch_browser(playwright, headless=True):
                 locale="en-US", timezone_id="America/New_York",
                 ignore_https_errors=True,
             )
+            context.add_init_script(stealth_script)
+            return context
         raise
 
 
 def check_login(page):
     """Check if we're logged into eBay using multiple methods."""
     try:
-        page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=60000)
+        page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=90000)
         page.wait_for_timeout(3000)
 
         # Method 1: Check cookies for login indicators (most reliable)
@@ -1244,25 +1247,17 @@ def main():
             context = launch_browser(p, headless=True)
             page = context.pages[0] if context.pages else context.new_page()
 
-            # Navigate to eBay first (required for cookie domain)
-            try:
-                page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=60000)
-                page.wait_for_timeout(1000)
-            except Exception as e:
-                print(json.dumps({"error": f"Proxy Connection Timeout! BrightData Web Unlocker took too long or failed: {str(e)[:200]}"}))
-                context.close()
-                sys.exit(1)
-
-            # Inject cookies
+            # Inject cookies directly — no need to navigate to ebay.com first
+            # add_cookies() works without prior navigation, saving 30-60s proxy time
             context.add_cookies(cookies)
             log(f"Injected {len(cookies)} cookies")
 
-            # Reload to apply cookies
+            # NOW navigate to eBay to verify login with the injected cookies
             try:
-                page.reload(wait_until="domcontentloaded", timeout=60000)
+                page.goto("https://www.ebay.com", wait_until="domcontentloaded", timeout=90000)
                 page.wait_for_timeout(3000)
             except Exception as e:
-                print(json.dumps({"error": f"Failed to reload page after cookie injection: {str(e)[:200]}"}))
+                print(json.dumps({"error": f"Failed to load eBay after cookie injection (proxy may be slow): {str(e)[:200]}"}))
                 context.close()
                 sys.exit(1)
 

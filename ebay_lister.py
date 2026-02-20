@@ -1574,7 +1574,7 @@ def ebay_session_manage():
                 [sys.executable, script, '--inject-cookies'],
                 input=cookie_json,
                 capture_output=True, text=True,
-                timeout=90,
+                timeout=110,
                 cwd=os.path.dirname(__file__),
             )
             log.info(f"Cookie inject stderr: {proc.stderr[-300:] if proc.stderr else 'none'}")
