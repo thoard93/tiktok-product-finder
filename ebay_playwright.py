@@ -95,13 +95,18 @@ def cleanup_temp_images(paths):
 
 
 def take_screenshot(page, name):
-    """Save screenshot and return relative path."""
+    """Save screenshot and return relative path. Swallows timeouts."""
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"{name}_{ts}.png"
     screenshot_path = os.path.join(SCREENSHOTS_DIR, filename)
-    page.screenshot(path=screenshot_path, full_page=False)
-    log(f"Screenshot saved: {screenshot_path}")
-    return f"/ebay/screenshots/{filename}"
+    try:
+        # Ignore timeout errors if page fonts/resources are stuck loading
+        page.screenshot(path=screenshot_path, full_page=False, timeout=10000)
+        log(f"Screenshot saved: {screenshot_path}")
+        return f"/ebay/screenshots/{filename}"
+    except Exception as e:
+        log(f"Failed to take screenshot '{name}': {str(e)[:100]}")
+        return None
 
 
 def extract_listing_url(redirect_url, original_title=None):
