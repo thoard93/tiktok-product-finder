@@ -1758,7 +1758,7 @@ def snap2list_quick_list(listing_id):
             else:
                 continue
 
-            cdn_url = s2l.upload_image(session_jwt, img_bytes, filename=filename)
+            cdn_url = s2l.upload_image(session_jwt, img_bytes, filename=filename, client_cookie=team.snap2list_client_cookie)
             if cdn_url and isinstance(cdn_url, str):
                 image_urls.append(cdn_url)
                 log.info(f"Uploaded image {i+1}/{len(images)} to Snap2List CDN")

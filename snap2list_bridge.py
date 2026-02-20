@@ -43,13 +43,18 @@ def _headers(session_jwt, content_type='application/json'):
     return h
 
 
-def _cookies(session_jwt):
+def _cookies(session_jwt, client_cookie=None):
     """Build cookie dict with Clerk session."""
-    return {
+    c = {
         '__session': session_jwt,
         '__session_nwBmEOgz': session_jwt,
         'cookieConsent': 'accepted',
     }
+    if client_cookie:
+        c['__client'] = client_cookie
+        c['__client_uat_nwBmEOgz'] = str(int(time.time()))
+        c['__client_uat'] = str(int(time.time()))
+    return c
 
 
 def refresh_session(client_cookie, session_id):
@@ -85,7 +90,7 @@ def refresh_session(client_cookie, session_id):
     return None
 
 
-def upload_image(session_jwt, image_bytes, filename='product.jpg', content_type='image/jpeg'):
+def upload_image(session_jwt, image_bytes, filename='product.jpg', content_type='image/jpeg', client_cookie=None):
     """
     Upload an image to Snap2List's ImageKit CDN.
     Returns the CDN URL string, or None on failure.
@@ -97,7 +102,7 @@ def upload_image(session_jwt, image_bytes, filename='product.jpg', content_type=
         resp = requests.post(
             url,
             files=files,
-            cookies=_cookies(session_jwt),
+            cookies=_cookies(session_jwt, client_cookie),
             headers=_headers(session_jwt, content_type=None),  # multipart sets its own
             timeout=30,
         )
