@@ -158,18 +158,12 @@ def extract_listing_url(redirect_url, original_title=None):
     return None
 
 
-def launch_browser(playwright, headless=True):
-    # ─── New Premium Residential Proxy Setup ───────────────────
-    # Replace with BrightData or Oxylabs credentials
-    # IMPORTANT: Ensure the provider is set to use "Sticky Sessions"
-    """
+    # ─── BrightData Premium Residential Proxy ──────────────────
     proxy_config = {
-        "server": "http://your-premium-proxy:port",
-        "username": "your-username",
-        "password": "your-password"
+        "server": "http://brd.superproxy.io:33335",
+        "username": "brd-customer-hl_ccfbc19a-zone-ebaylister",
+        "password": "osj7xt8ejrrw"
     }
-    """
-    proxy_config = None  # Remove this line and uncomment above when ready
 
     try:
         context = playwright.chromium.launch_persistent_context(
