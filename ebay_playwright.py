@@ -1265,6 +1265,9 @@ def main():
         try:
             result = fill_listing_on_ebay(listing, image_paths)
             print(json.dumps(result))
+        except Exception as e:
+            print(json.dumps({"error": f"Scraper error: {str(e)}", "success": False}))
+            result = {}
         finally:
             cleanup_temp_images(image_paths)
 
@@ -1297,6 +1300,9 @@ def main():
     try:
         result = fill_listing_on_ebay(listing, image_paths)
         print(json.dumps(result))
+    except Exception as e:
+        print(json.dumps({"error": f"Scraper error: {str(e)}", "success": False}))
+        result = {}
     finally:
         cleanup_temp_images(image_paths)
 
