@@ -1883,6 +1883,15 @@ def snap2list_quick_list(listing_id):
         'aspects': aspects,
     }
 
+    # Refresh JWT before create_listing — the original JWT may have expired during the pipeline
+    if team.snap2list_client_cookie and team.snap2list_session_id:
+        fresh_jwt = s2l.refresh_session(team.snap2list_client_cookie, team.snap2list_session_id)
+        if fresh_jwt:
+            session_jwt = fresh_jwt
+            team.snap2list_session_jwt = fresh_jwt
+            db.session.commit()
+            log.info("Mid-flow JWT refresh successful")
+
     result = s2l.create_listing(
         session_jwt,
         team.snap2list_ebay_token,
