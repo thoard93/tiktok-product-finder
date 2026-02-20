@@ -1775,13 +1775,31 @@ def snap2list_quick_list(listing_id):
     if not ai_data:
         return jsonify({'error': 'AI listing generation failed. Session may be expired.'}), 500
 
+    # Log the full response keys for debugging
+    log.info(f"AI response keys: {list(ai_data.keys()) if isinstance(ai_data, dict) else type(ai_data)}")
+
+    # Extract title — try multiple possible response structures
     title = ai_data.get('title', '')
+    if not title and isinstance(ai_data.get('product'), dict):
+        title = ai_data['product'].get('title', '')
+    if not title and isinstance(ai_data.get('listing'), dict):
+        title = ai_data['listing'].get('title', '')
+
     description = ai_data.get('description', '')
+    if not description and isinstance(ai_data.get('product'), dict):
+        description = ai_data['product'].get('description', '')
+
     aspects = ai_data.get('aspects', {})
+    if not aspects and isinstance(ai_data.get('product'), dict):
+        aspects = ai_data['product'].get('aspects', {})
+
     category_id = ai_data.get('categoryId') or ai_data.get('category_id', '')
 
+    log.info(f"Extracted: title='{title[:60] if title else ''}', desc_len={len(description)}, aspects={len(aspects)} keys, cat={category_id}")
+
     if not title:
-        return jsonify({'error': 'AI did not generate a title'}), 500
+        log.error(f"No title found in AI response: {json.dumps(ai_data)[:500]}")
+        return jsonify({'error': 'AI did not generate a title', 'response_keys': list(ai_data.keys()) if isinstance(ai_data, dict) else str(type(ai_data))}), 500
 
     # Determine price — use Grok for aggressive pricing if possible
     price = data.get('price')
