@@ -1665,9 +1665,10 @@
                 if (data.error) {
                     alert('Gmail: ' + data.error);
                 } else {
-                    const msg = `Scanned ${data.total_scanned} emails\n` +
+                    const msg = `${data.summary}\n` +
                         `New listings: ${data.new_listings.length}\n` +
-                        `New sales: ${data.new_sales.length}`;
+                        `New sales: ${data.new_sales.length}\n` +
+                        `Shipping updates: ${(data.updated_shipping || []).length}`;
                     alert(msg);
 
                     // Push notification for new sales

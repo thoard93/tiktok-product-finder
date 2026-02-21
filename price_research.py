@@ -968,9 +968,12 @@ def _parse_ebay_listed_email(body):
     text = _strip_html(body)
     m = re.search(r'Item price:\s*\$?([\d,]+\.?\d*)', text)
     if m: info['list_price'] = float(m.group(1).replace(',', ''))
-    # Get product name from link text if available
-    m = re.search(r'<a[^>]*>([^<]{5,120})\.{0,3}</a>\s*Item price', body)
-    if m: info['product_name_from_body'] = m.group(1).strip().rstrip('.')
+    # Get product name from link text — try multiple patterns
+    m = re.search(r'<a[^>]*href="[^"]*ebay[^"]*"[^>]*>([^<]{5,200})</a>', body)
+    if m:
+        name = re.sub(r'\.{2,}$', '', m.group(1)).strip()
+        if len(name) > 5 and 'View listing' not in name and 'Manage' not in name:
+            info['product_name_from_body'] = name
     return info
 
 
@@ -1199,10 +1202,6 @@ def gmail_scan():
     except Exception as e:
         log.error(f"Gmail scan error: {e}")
         return jsonify({'error': str(e)}), 500
-
-
-
-
 
 
 # ─── Dashboard Stats ──────────────────────────────────────────────────────────
