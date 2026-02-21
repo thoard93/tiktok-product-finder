@@ -875,14 +875,19 @@ def delete_listing(listing_id):
 @app.route('/price/api/gmail/scan', methods=['POST'])
 def gmail_scan():
     """Scan Gmail for eBay listing and sold notification emails.
-    Uses IMAP with app password. Env vars: GMAIL_USER, GMAIL_APP_PASSWORD
+    Per-team env vars: GMAIL_USER_THOARD, GMAIL_APP_PASSWORD_THOARD,
+                       GMAIL_USER_REOL, GMAIL_APP_PASSWORD_REOL
+    Falls back to shared: GMAIL_USER, GMAIL_APP_PASSWORD
     """
-    gmail_user = os.environ.get('GMAIL_USER', '')
-    gmail_pass = os.environ.get('GMAIL_APP_PASSWORD', '')
-    if not gmail_user or not gmail_pass:
-        return jsonify({'error': 'Gmail credentials not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD env vars.'}), 400
-
     team = request.get_json().get('team', 'thoard') if request.is_json else 'thoard'
+    team_upper = team.upper()
+
+    # Try team-specific credentials first, then shared
+    gmail_user = os.environ.get(f'GMAIL_USER_{team_upper}', '') or os.environ.get('GMAIL_USER', '')
+    gmail_pass = os.environ.get(f'GMAIL_APP_PASSWORD_{team_upper}', '') or os.environ.get('GMAIL_APP_PASSWORD', '')
+    if not gmail_user or not gmail_pass:
+        return jsonify({'error': f'Gmail not configured for {team}. Set GMAIL_USER_{team_upper} and GMAIL_APP_PASSWORD_{team_upper} env vars on Render.'}), 400
+
     new_sales = []
     new_listings = []
 
