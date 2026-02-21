@@ -280,7 +280,7 @@ class EbayListing(db.Model):
     """Track eBay listings and sales."""
     __tablename__ = 'ebay_listings'
     id = db.Column(db.Integer, primary_key=True)
-    product_name = db.Column(db.String(200), default='')
+    product_name = db.Column(db.String(300), default='')
     product_details = db.Column(db.String(500), default='')
     status = db.Column(db.String(20), default='listed')  # listed, sold, shipped
     list_price = db.Column(db.Float, default=0)
@@ -290,8 +290,13 @@ class EbayListing(db.Model):
     profit = db.Column(db.Float, default=0)
     team = db.Column(db.String(20), default='thoard')
     notes = db.Column(db.Text, default='')
-    research_id = db.Column(db.Integer, nullable=True)  # Link to PriceResearch
+    research_id = db.Column(db.Integer, nullable=True)
     ebay_item_id = db.Column(db.String(50), default='')
+    order_number = db.Column(db.String(50), default='')
+    buyer_name = db.Column(db.String(100), default='')
+    buyer_address = db.Column(db.String(300), default='')
+    tracking_number = db.Column(db.String(100), default='')
+    shipping_service = db.Column(db.String(50), default='')
     listed_at = db.Column(db.DateTime, default=datetime.utcnow)
     sold_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -311,6 +316,11 @@ class EbayListing(db.Model):
             'notes': self.notes,
             'research_id': self.research_id,
             'ebay_item_id': self.ebay_item_id,
+            'order_number': self.order_number or '',
+            'buyer_name': self.buyer_name or '',
+            'buyer_address': self.buyer_address or '',
+            'tracking_number': self.tracking_number or '',
+            'shipping_service': self.shipping_service or '',
             'listed_at': self.listed_at.isoformat() if self.listed_at else None,
             'sold_at': self.sold_at.isoformat() if self.sold_at else None,
         }
@@ -330,17 +340,17 @@ with app.app_context():
         except Exception as e:
             log.warning(f"Table creation note for {model.__tablename__}: {e}")
 
-    # EbayListing: drop and recreate if columns are wrong (new table, no data to preserve)
+    # EbayListing: drop and recreate if columns are wrong or missing new fields
     try:
         inspector = db.inspect(db.engine)
         if inspector.has_table('ebay_listings'):
             ebay_cols = [c['name'] for c in inspector.get_columns('ebay_listings')]
-            if 'product_name' not in ebay_cols:
-                log.info("Migration: ebay_listings has wrong schema, dropping and recreating")
+            if 'product_name' not in ebay_cols or 'order_number' not in ebay_cols:
+                log.info("Migration: ebay_listings schema outdated, dropping and recreating")
                 db.session.execute(text("DROP TABLE ebay_listings"))
                 db.session.commit()
                 EbayListing.__table__.create(db.engine)
-                log.info("Migration: recreated ebay_listings table")
+                log.info("Migration: recreated ebay_listings table with new columns")
         else:
             EbayListing.__table__.create(db.engine)
             log.info("Created table: ebay_listings")
@@ -906,17 +916,100 @@ def delete_listing(listing_id):
 
 
 # ─── Gmail eBay Scanning ──────────────────────────────────────────────────────
+
+def _get_email_body(msg):
+    """Extract text/HTML body from email message."""
+    body = ''
+    if msg.is_multipart():
+        for part in msg.walk():
+            ct = part.get_content_type()
+            if ct == 'text/html':
+                payload = part.get_payload(decode=True)
+                if payload:
+                    body = payload.decode('utf-8', errors='replace')
+                    break
+            elif ct == 'text/plain' and not body:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    body = payload.decode('utf-8', errors='replace')
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            body = payload.decode('utf-8', errors='replace')
+    return body
+
+
+def _strip_html(body):
+    """Strip HTML tags and normalize whitespace for regex parsing."""
+    text = re.sub(r'<[^>]+>', ' ', body)
+    return re.sub(r'\s+', ' ', text)
+
+
+def _parse_ebay_sold_email(body):
+    """Parse eBay sold notification for price, order, buyer."""
+    info = {}
+    text = _strip_html(body)
+    m = re.search(r'Sold:\s*\$?([\d,]+\.?\d*)', text)
+    if m: info['sold_price'] = float(m.group(1).replace(',', ''))
+    m = re.search(r'Order:\s*([\d\-]+)', text)
+    if m: info['order_number'] = m.group(1)
+    m = re.search(r'Date sold:\s*([A-Za-z]+ \d+,?\s*\d{4}\s*[\d:]*)', text)
+    if m: info['date_sold'] = m.group(1).strip()
+    m = re.search(r'Buyer:\s*(\S+)', text)
+    if m: info['buyer_name'] = m.group(1).strip()
+    m = re.search(r"buyer.?s shipping details:\s*(.*?)(?:Ship by|United States)", text, re.IGNORECASE)
+    if m: info['buyer_address'] = m.group(1).strip()
+    return info
+
+
+def _parse_ebay_listed_email(body):
+    """Parse eBay listing notification for price, product link."""
+    info = {}
+    text = _strip_html(body)
+    m = re.search(r'Item price:\s*\$?([\d,]+\.?\d*)', text)
+    if m: info['list_price'] = float(m.group(1).replace(',', ''))
+    # Get product name from link text if available
+    m = re.search(r'<a[^>]*>([^<]{5,120})\.{0,3}</a>\s*Item price', body)
+    if m: info['product_name_from_body'] = m.group(1).strip().rstrip('.')
+    return info
+
+
+def _parse_ebay_shipping_email(body):
+    """Parse eBay shipping label for cost, tracking, service."""
+    info = {}
+    text = _strip_html(body)
+    m = re.search(r'Item Number\s*:?\s*(\d+)', text)
+    if m: info['ebay_item_id'] = m.group(1)
+    m = re.search(r'Tracking\s*:?\s*(\d{10,})', text)
+    if m: info['tracking_number'] = m.group(1)
+    m = re.search(r'Service\s*:?\s*(USPS[A-Za-z\s]+?)(?:\s*Tracking|\s*Package)', text)
+    if m: info['shipping_service'] = m.group(1).strip()
+    m = re.search(r'(?:USPS[^$]*|Total charged[^$]*|Order total[^$]*)\$([\d,]+\.?\d*)', text)
+    if m: info['shipping_cost'] = float(m.group(1).replace(',', ''))
+    m = re.search(r'Buyer\s*:?\s*([A-Z][a-z]+\s+[A-Z][a-z]+)', text)
+    if m: info['buyer_name'] = m.group(1)
+    m = re.search(r'Ship to\s*:?\s*(.*?)(?:\s*Service|\s*Tracking)', text)
+    if m: info['buyer_address'] = m.group(1).strip()
+    return info
+
+
+def _decode_subject(msg):
+    """Decode email subject."""
+    from email.header import decode_header
+    subject = ''
+    for part, enc in decode_header(msg['Subject'] or ''):
+        subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
+    return subject
+
+
 @app.route('/price/api/gmail/scan', methods=['POST'])
 def gmail_scan():
-    """Scan Gmail for eBay listing and sold notification emails.
-    Per-team env vars: GMAIL_USER_THOARD, GMAIL_APP_PASSWORD_THOARD,
-                       GMAIL_USER_REOL, GMAIL_APP_PASSWORD_REOL
-    Falls back to shared: GMAIL_USER, GMAIL_APP_PASSWORD
+    """Scan Gmail for eBay emails: sold, listed, and shipping labels.
+    Parses HTML bodies for prices, orders, tracking, and shipping costs.
     """
     team = request.get_json().get('team', 'thoard') if request.is_json else 'thoard'
     team_upper = team.upper()
 
-    # Try team-specific credentials first, then shared
     gmail_user = os.environ.get(f'GMAIL_USER_{team_upper}', '') or os.environ.get('GMAIL_USER', '')
     gmail_pass = os.environ.get(f'GMAIL_APP_PASSWORD_{team_upper}', '') or os.environ.get('GMAIL_APP_PASSWORD', '')
     if not gmail_user or not gmail_pass:
@@ -924,102 +1017,174 @@ def gmail_scan():
 
     new_sales = []
     new_listings = []
+    updated_shipping = []
 
     try:
         import imaplib
-        import email
-        from email.header import decode_header
+        import email as _email
+        from datetime import timedelta
 
-        # Connect to Gmail IMAP
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
         mail.login(gmail_user, gmail_pass)
         mail.select('inbox')
+        since_date = (datetime.utcnow() - timedelta(days=14)).strftime('%d-%b-%Y')
 
-        # Search for eBay emails from the last 7 days
-        from datetime import timedelta
-        since_date = (datetime.utcnow() - timedelta(days=7)).strftime('%d-%b-%Y')
+        # ── 1. SOLD EMAILS ──
+        for search_q in ['made the sale', 'item has sold', 'You sold']:
+            _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
+            for num in (msgs[0].split() if msgs[0] else []):
+                try:
+                    _, msg_data = mail.fetch(num, '(RFC822)')
+                    msg = _email.message_from_bytes(msg_data[0][1])
+                    subject = _decode_subject(msg)
 
-        # ── Scan for "sold" notifications ──
-        _, sold_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "sold" SINCE {since_date})')
-        for num in sold_msgs[0].split():
-            _, msg_data = mail.fetch(num, '(RFC822)')
-            msg = email.message_from_bytes(msg_data[0][1])
-            subject = ''
-            for part, enc in decode_header(msg['Subject'] or ''):
-                subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
+                    # Extract product name from subject
+                    product_name = subject
+                    for pfx in ['You made the sale for ', 'You sold ', 'Your item ']:
+                        product_name = product_name.replace(pfx, '')
+                    for sfx in ['!', ' has sold', ' has been sold']:
+                        product_name = product_name.replace(sfx, '')
+                    product_name = product_name.strip()
+                    if not product_name:
+                        continue
 
-            # Extract product name from subject
-            # Typical: "You sold ProductName!" or "Your item ProductName has sold!"
-            product_name = subject
-            for prefix in ['You sold ', 'Your item ', '🎉 ', '🏆 ', '✅ ', '💰 ', '📦 ']:
-                product_name = product_name.replace(prefix, '')
-            for suffix in ['!', ' has sold', ' has been sold', ' was sold']:
-                product_name = product_name.replace(suffix, '')
-            product_name = product_name.strip()
-            if not product_name:
-                continue
+                    body = _get_email_body(msg)
+                    info = _parse_ebay_sold_email(body) if body else {}
 
-            # Check if already tracked
-            existing = EbayListing.query.filter_by(
-                product_name=product_name, status='sold'
-            ).first()
-            if existing:
-                continue
+                    # Skip if already tracked by order number
+                    if info.get('order_number'):
+                        existing = EbayListing.query.filter_by(order_number=info['order_number']).first()
+                        if existing:
+                            continue
 
-            # Check if there's an active listing to update
-            active = EbayListing.query.filter(
-                EbayListing.product_name.ilike(f'%{product_name[:30]}%'),
-                EbayListing.status == 'listed'
-            ).first()
+                    # Check if already tracked as sold with same name
+                    existing_sold = EbayListing.query.filter(
+                        EbayListing.product_name.ilike(f'%{product_name[:40]}%'),
+                        EbayListing.status == 'sold'
+                    ).first()
+                    if existing_sold:
+                        # Fill in missing data
+                        if info.get('order_number') and not existing_sold.order_number:
+                            existing_sold.order_number = info['order_number']
+                        if info.get('buyer_name') and not existing_sold.buyer_name:
+                            existing_sold.buyer_name = info['buyer_name']
+                        if info.get('sold_price') and not existing_sold.sold_price:
+                            existing_sold.sold_price = info['sold_price']
+                            existing_sold.ebay_fees = round(existing_sold.sold_price * 0.13, 2)
+                            existing_sold.profit = round(existing_sold.sold_price - existing_sold.ebay_fees - existing_sold.shipping_cost, 2)
+                        continue
 
-            if active:
-                active.status = 'sold'
-                active.sold_at = datetime.utcnow()
-                if not active.sold_price:
-                    active.sold_price = active.list_price
-                active.ebay_fees = round(active.sold_price * 0.13, 2)
-                active.profit = round(active.sold_price - active.ebay_fees - active.shipping_cost, 2)
-                new_sales.append(active.to_dict())
-            else:
-                # Create new sold listing
-                listing = EbayListing(
-                    product_name=product_name,
-                    status='sold',
-                    team=team,
-                    sold_at=datetime.utcnow(),
-                )
-                db.session.add(listing)
-                new_sales.append({'product_name': product_name, 'status': 'sold'})
+                    # Upgrade active listing to sold
+                    active = EbayListing.query.filter(
+                        EbayListing.product_name.ilike(f'%{product_name[:40]}%'),
+                        EbayListing.status == 'listed'
+                    ).first()
 
-        # ── Scan for "listed" notifications ──
-        _, list_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "listed" SINCE {since_date})')
-        for num in list_msgs[0].split():
-            _, msg_data = mail.fetch(num, '(RFC822)')
-            msg = email.message_from_bytes(msg_data[0][1])
-            subject = ''
-            for part, enc in decode_header(msg['Subject'] or ''):
-                subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
+                    sold_price = info.get('sold_price', 0)
+                    if active:
+                        active.status = 'sold'
+                        active.sold_at = datetime.utcnow()
+                        active.sold_price = sold_price or active.list_price
+                        active.order_number = info.get('order_number', '')
+                        active.buyer_name = info.get('buyer_name', '')
+                        active.buyer_address = info.get('buyer_address', '')
+                        active.ebay_fees = round(active.sold_price * 0.13, 2)
+                        active.profit = round(active.sold_price - active.ebay_fees - active.shipping_cost, 2)
+                        new_sales.append(active.to_dict())
+                    else:
+                        fees = round(sold_price * 0.13, 2)
+                        listing = EbayListing(
+                            product_name=product_name, status='sold', team=team,
+                            sold_price=sold_price, sold_at=datetime.utcnow(),
+                            order_number=info.get('order_number', ''),
+                            buyer_name=info.get('buyer_name', ''),
+                            buyer_address=info.get('buyer_address', ''),
+                            ebay_fees=fees, profit=round(sold_price - fees, 2),
+                        )
+                        db.session.add(listing)
+                        new_sales.append(listing.to_dict())
+                except Exception as e:
+                    log.warning(f"Error parsing sold email: {e}")
 
-            product_name = subject
-            for prefix in ['Your item is listed: ', 'Your item is listed on eBay: ', 'Your listing is live: ', '🏷️ ', '📦 ', '✅ ']:
-                product_name = product_name.replace(prefix, '')
-            for suffix in [' has been listed', ' is now listed', ' is live']:
-                product_name = product_name.replace(suffix, '')
-            product_name = product_name.strip()
-            if not product_name:
-                continue
+        # ── 2. LISTED EMAILS ──
+        for search_q in ['listing is live', 'item is listed']:
+            _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
+            for num in (msgs[0].split() if msgs[0] else []):
+                try:
+                    _, msg_data = mail.fetch(num, '(RFC822)')
+                    msg = _email.message_from_bytes(msg_data[0][1])
+                    subject = _decode_subject(msg)
 
-            existing = EbayListing.query.filter_by(product_name=product_name).first()
-            if existing:
-                continue
+                    body = _get_email_body(msg)
+                    info = _parse_ebay_listed_email(body) if body else {}
 
-            listing = EbayListing(
-                product_name=product_name,
-                status='listed',
-                team=team,
-            )
-            db.session.add(listing)
-            new_listings.append({'product_name': product_name, 'status': 'listed'})
+                    # Get product name from subject or body
+                    product_name = subject
+                    for pfx in ['Your item is listed: ', 'Your item is listed on eBay: ']:
+                        product_name = product_name.replace(pfx, '')
+                    if 'listing is live' in product_name.lower() or 'your item is listed' in product_name.lower():
+                        product_name = info.get('product_name_from_body', '')
+                    product_name = product_name.strip().rstrip('.')
+                    if not product_name:
+                        continue
+
+                    existing = EbayListing.query.filter(
+                        EbayListing.product_name.ilike(f'%{product_name[:40]}%')
+                    ).first()
+                    if existing:
+                        if info.get('list_price') and not existing.list_price:
+                            existing.list_price = info['list_price']
+                        continue
+
+                    listing = EbayListing(
+                        product_name=product_name, status='listed', team=team,
+                        list_price=info.get('list_price', 0),
+                        ebay_fees=round(info.get('list_price', 0) * 0.13, 2),
+                    )
+                    db.session.add(listing)
+                    new_listings.append(listing.to_dict())
+                except Exception as e:
+                    log.warning(f"Error parsing listed email: {e}")
+
+        # ── 3. SHIPPING LABEL EMAILS ──
+        _, ship_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "shipping label" SINCE {since_date})')
+        for num in (ship_msgs[0].split() if ship_msgs[0] else []):
+            try:
+                _, msg_data = mail.fetch(num, '(RFC822)')
+                msg = _email.message_from_bytes(msg_data[0][1])
+                subject = _decode_subject(msg)
+
+                product_name = subject.replace('eBay shipping label for ', '').replace('Shipping label for ', '').strip()
+                body = _get_email_body(msg)
+                info = _parse_ebay_shipping_email(body) if body else {}
+
+                if not product_name:
+                    continue
+
+                listing = EbayListing.query.filter(
+                    EbayListing.product_name.ilike(f'%{product_name[:40]}%')
+                ).first()
+
+                if listing:
+                    changed = False
+                    if info.get('shipping_cost') and not listing.shipping_cost:
+                        listing.shipping_cost = info['shipping_cost']; changed = True
+                    if info.get('tracking_number') and not listing.tracking_number:
+                        listing.tracking_number = info['tracking_number']
+                    if info.get('shipping_service') and not listing.shipping_service:
+                        listing.shipping_service = info['shipping_service']
+                    if info.get('buyer_name') and not listing.buyer_name:
+                        listing.buyer_name = info['buyer_name']
+                    if info.get('ebay_item_id') and not listing.ebay_item_id:
+                        listing.ebay_item_id = info['ebay_item_id']
+                    if changed:
+                        price = listing.sold_price or listing.list_price
+                        if price:
+                            listing.ebay_fees = round(price * 0.13, 2)
+                            listing.profit = round(price - listing.ebay_fees - listing.shipping_cost, 2)
+                    updated_shipping.append(listing.to_dict())
+            except Exception as e:
+                log.warning(f"Error parsing shipping email: {e}")
 
         db.session.commit()
         mail.logout()
@@ -1027,12 +1192,17 @@ def gmail_scan():
         return jsonify({
             'new_sales': new_sales,
             'new_listings': new_listings,
-            'total_scanned': len(sold_msgs[0].split()) + len(list_msgs[0].split()),
+            'updated_shipping': updated_shipping,
+            'summary': f"{len(new_sales)} sales, {len(new_listings)} listings, {len(updated_shipping)} shipping updates",
         })
 
     except Exception as e:
         log.error(f"Gmail scan error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+
+
 
 
 # ─── Dashboard Stats ──────────────────────────────────────────────────────────
@@ -1136,7 +1306,6 @@ def _auto_scan_gmail():
             try:
                 import imaplib
                 import email as _email
-                from email.header import decode_header
                 from datetime import timedelta
 
                 mail = imaplib.IMAP4_SSL('imap.gmail.com')
@@ -1144,53 +1313,68 @@ def _auto_scan_gmail():
                 mail.select('inbox')
                 since_date = (datetime.utcnow() - timedelta(days=7)).strftime('%d-%b-%Y')
 
-                # Scan for sold
-                _, sold_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "sold" SINCE {since_date})')
                 with app.app_context():
-                    for num in sold_msgs[0].split():
-                        _, msg_data = mail.fetch(num, '(RFC822)')
-                        msg = _email.message_from_bytes(msg_data[0][1])
-                        subject = ''
-                        for part, enc in decode_header(msg['Subject'] or ''):
-                            subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
+                    # Scan for sold emails
+                    for search_q in ['made the sale', 'item has sold']:
+                        _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
+                        for num in (msgs[0].split() if msgs[0] else []):
+                            try:
+                                _, msg_data = mail.fetch(num, '(RFC822)')
+                                msg = _email.message_from_bytes(msg_data[0][1])
+                                subject = _decode_subject(msg)
 
-                        product_name = subject
-                        for prefix in ['You sold ', 'Your item ', '🎉 ', '🏆 ', '✅ ', '💰 ', '📦 ']:
-                            product_name = product_name.replace(prefix, '')
-                        for suffix in ['!', ' has sold', ' has been sold', ' was sold']:
-                            product_name = product_name.replace(suffix, '')
-                        product_name = product_name.strip()
-                        if not product_name:
-                            continue
+                                product_name = subject
+                                for pfx in ['You made the sale for ', 'You sold ', 'Your item ']:
+                                    product_name = product_name.replace(pfx, '')
+                                for sfx in ['!', ' has sold', ' has been sold']:
+                                    product_name = product_name.replace(sfx, '')
+                                product_name = product_name.strip()
+                                if not product_name:
+                                    continue
 
-                        existing = EbayListing.query.filter_by(
-                            product_name=product_name, status='sold'
-                        ).first()
-                        if existing:
-                            continue
+                                body = _get_email_body(msg)
+                                info = _parse_ebay_sold_email(body) if body else {}
 
-                        active = EbayListing.query.filter(
-                            EbayListing.product_name.ilike(f'%{product_name[:30]}%'),
-                            EbayListing.status == 'listed'
-                        ).first()
+                                # Skip if already tracked
+                                if info.get('order_number'):
+                                    if EbayListing.query.filter_by(order_number=info['order_number']).first():
+                                        continue
 
-                        if active:
-                            active.status = 'sold'
-                            active.sold_at = datetime.utcnow()
-                            if not active.sold_price:
-                                active.sold_price = active.list_price
-                                active.ebay_fees = round(active.sold_price * 0.13, 2)
-                                active.profit = round(active.sold_price - active.ebay_fees - active.shipping_cost, 2)
-                            _pending_sales.append({'product_name': product_name, 'team': team, 'profit': active.profit})
-                        else:
-                            listing = EbayListing(
-                                product_name=product_name,
-                                status='sold',
-                                team=team,
-                                sold_at=datetime.utcnow(),
-                            )
-                            db.session.add(listing)
-                            _pending_sales.append({'product_name': product_name, 'team': team})
+                                existing = EbayListing.query.filter(
+                                    EbayListing.product_name.ilike(f'%{product_name[:40]}%'),
+                                    EbayListing.status == 'sold'
+                                ).first()
+                                if existing:
+                                    continue
+
+                                active = EbayListing.query.filter(
+                                    EbayListing.product_name.ilike(f'%{product_name[:40]}%'),
+                                    EbayListing.status == 'listed'
+                                ).first()
+
+                                sold_price = info.get('sold_price', 0)
+                                if active:
+                                    active.status = 'sold'
+                                    active.sold_at = datetime.utcnow()
+                                    active.sold_price = sold_price or active.list_price
+                                    active.order_number = info.get('order_number', '')
+                                    active.buyer_name = info.get('buyer_name', '')
+                                    active.ebay_fees = round(active.sold_price * 0.13, 2)
+                                    active.profit = round(active.sold_price - active.ebay_fees - active.shipping_cost, 2)
+                                    _pending_sales.append({'product_name': product_name, 'team': team, 'profit': active.profit})
+                                else:
+                                    fees = round(sold_price * 0.13, 2)
+                                    listing = EbayListing(
+                                        product_name=product_name, status='sold', team=team,
+                                        sold_price=sold_price, sold_at=datetime.utcnow(),
+                                        order_number=info.get('order_number', ''),
+                                        buyer_name=info.get('buyer_name', ''),
+                                        ebay_fees=fees, profit=round(sold_price - fees, 2),
+                                    )
+                                    db.session.add(listing)
+                                    _pending_sales.append({'product_name': product_name, 'team': team, 'profit': round(sold_price - fees, 2)})
+                            except Exception as e:
+                                log.warning(f"Auto-scan email error: {e}")
 
                     db.session.commit()
 
