@@ -868,7 +868,10 @@
                 </div>
             </div>
 
-            <div style="display:flex; gap:8px;">
+            <div class="settings-label" style="margin-top:16px;">📊 Profit by Timeframe</div>
+            <div id="timeframeStats" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
+
+            <div style="display:flex; gap:8px; margin-top:16px;">
                 <button class="copy-btn" onclick="exportCSV()" style="flex:1;">📥 Export CSV</button>
                 <button class="copy-btn" onclick="loadDashboard()" style="flex:1;">🔄 Refresh</button>
             </div>
@@ -965,8 +968,15 @@
             localStorage.setItem('priceblade_team', team);
             document.querySelectorAll('[id^="team-"]').forEach(p => p.classList.remove('active'));
             btn.classList.add('active');
-            // Reload history for this team
-            loadHistory();
+            // Reload whatever view is currently active
+            const activeView = document.querySelector('.view.active');
+            if (activeView) {
+                const viewName = activeView.id.replace('view-', '');
+                if (viewName === 'history') loadHistory();
+                else if (viewName === 'listings') loadListings();
+                else if (viewName === 'dashboard') loadDashboard();
+                else if (viewName === 'settings') loadSettings();
+            }
         }
 
         // ─── View Navigation ───
@@ -1704,9 +1714,37 @@
                 document.getElementById('stat-avg').textContent = '$' + (stats.avg_profit || 0).toFixed(2);
                 document.getElementById('stat-research').textContent = stats.research_count || 0;
 
-                // Gmail status — just show instructions, don't fire an actual scan
+                // Time-frame profit cards
+                const tfDiv = document.getElementById('timeframeStats');
+                if (tfDiv) {
+                    const tf = [
+                        { label: 'Today', data: stats.today || {} },
+                        { label: 'Yesterday', data: stats.yesterday || {} },
+                        { label: 'Last 7 Days', data: stats.last_7d || {} },
+                        { label: 'Last 30 Days', data: stats.last_30d || {} },
+                    ];
+                    tfDiv.innerHTML = tf.map(t => `
+                        <div style="flex:1; min-width:120px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center;">
+                            <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px;">${t.label}</div>
+                            <div style="font-size:20px; font-weight:700; color:${t.data.profit >= 0 ? 'var(--green)' : 'var(--danger)'}; margin:4px 0;">$${(t.data.profit || 0).toFixed(2)}</div>
+                            <div style="font-size:11px; color:var(--text-secondary);">${t.data.sales || 0} sales • $${(t.data.revenue || 0).toFixed(2)}</div>
+                        </div>
+                    `).join('');
+                }
+
+                // Gmail status
                 const gmailEl = document.getElementById('gmailStatus');
-                gmailEl.innerHTML = `📧 Set <code>GMAIL_USER_${currentTeam.toUpperCase()}</code> and <code>GMAIL_APP_PASSWORD_${currentTeam.toUpperCase()}</code> on Render to enable Gmail scanning for this team.`;
+                try {
+                    const scanResp = await fetch(`/price/api/gmail/new-sales?team=${currentTeam}`);
+                    const scanData = await scanResp.json();
+                    if (scanData.last_scan) {
+                        gmailEl.innerHTML = `📧 Last auto-scan: ${new Date(scanData.last_scan).toLocaleTimeString()}`;
+                    } else {
+                        gmailEl.innerHTML = `📧 Auto-scan active (every 5 min)`;
+                    }
+                } catch (e) {
+                    gmailEl.innerHTML = `📧 Gmail scanning enabled`;
+                }
             } catch (err) {
                 console.error('Dashboard error:', err);
             }

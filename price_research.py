@@ -1132,7 +1132,8 @@ def gmail_scan():
                     log.warning(f"Error parsing sold email: {e}")
 
         # ── 2. LISTED EMAILS ──
-        for search_q in ['listing is live', 'item is listed']:
+        # eBay uses various subject formats for listing confirmations
+        for search_q in ['listing is live', 'item is listed', 'listing started', 'listed on eBay', 'is now listed', 'your listing']:
             _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
             for num in (msgs[0].split() if msgs[0] else []):
                 try:
@@ -1140,14 +1141,21 @@ def gmail_scan():
                     msg = _email.message_from_bytes(msg_data[0][1])
                     subject = _decode_subject(msg)
 
+                    # Skip if this is a sold or shipping email
+                    subj_lower = subject.lower()
+                    if 'made the sale' in subj_lower or 'shipping label' in subj_lower or 'has sold' in subj_lower:
+                        continue
+
                     body = _get_email_body(msg)
                     info = _parse_ebay_listed_email(body) if body else {}
 
                     # Get product name from subject or body
                     product_name = subject
-                    for pfx in ['Your item is listed: ', 'Your item is listed on eBay: ']:
+                    for pfx in ['Your item is listed: ', 'Your item is listed on eBay: ',
+                                'Your listing started: ', 'Your listing is live: ']:
                         product_name = product_name.replace(pfx, '')
-                    if 'listing is live' in product_name.lower() or 'your item is listed' in product_name.lower():
+                    # If subject is generic like "thomas, your listing is live" — use body
+                    if any(kw in product_name.lower() for kw in ['listing is live', 'your item is listed', 'listing started', 'your listing']):
                         product_name = info.get('product_name_from_body', '')
                     product_name = product_name.strip().rstrip('.')
                     if not product_name:
@@ -1289,8 +1297,9 @@ def gmail_debug_scan():
 # ─── Dashboard Stats ──────────────────────────────────────────────────────────
 @app.route('/price/api/dashboard', methods=['GET'])
 def dashboard_stats():
-    """Get dashboard stats (per team and combined)."""
+    """Get dashboard stats with time-frame breakdowns."""
     team = request.args.get('team', '')
+    from datetime import timedelta
 
     def get_team_stats(team_filter=None):
         query = EbayListing.query
@@ -1310,6 +1319,21 @@ def dashboard_stats():
             rq = rq.filter_by(team=team_filter)
         research_count = rq.count()
 
+        # Time-frame breakdowns
+        now = datetime.utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday_start = today_start - timedelta(days=1)
+        week_start = today_start - timedelta(days=7)
+        month_start = today_start - timedelta(days=30)
+
+        def period_stats(items, start, end=None):
+            filtered = [s for s in items if s.sold_at and s.sold_at >= start and (not end or s.sold_at < end)]
+            return {
+                'sales': len(filtered),
+                'revenue': round(sum(s.sold_price or 0 for s in filtered), 2),
+                'profit': round(sum(s.profit or 0 for s in filtered), 2),
+            }
+
         return {
             'active_listings': listed,
             'items_sold': len(sold_items),
@@ -1319,6 +1343,10 @@ def dashboard_stats():
             'total_profit': round(total_profit, 2),
             'avg_profit': round(total_profit / len(sold_items), 2) if sold_items else 0,
             'research_count': research_count,
+            'today': period_stats(sold_items, today_start),
+            'yesterday': period_stats(sold_items, yesterday_start, today_start),
+            'last_7d': period_stats(sold_items, week_start),
+            'last_30d': period_stats(sold_items, month_start),
         }
 
     result = {'team': get_team_stats(team) if team else get_team_stats()}
