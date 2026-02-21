@@ -11937,14 +11937,5 @@ try:
 except Exception as e:
     print(f"⚠️ PriceBlade module not loaded: {e}")
 
-# =============================================================================
-# EBAY AUTO-LISTER MODULE (legacy — kept for TikTok intelligence)
-# =============================================================================
-try:
-    import ebay_lister
-    print("✅ eBay Auto-Lister module loaded")
-except Exception as e:
-    print(f"⚠️ eBay Auto-Lister module not loaded: {e}")
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
