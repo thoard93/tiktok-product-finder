@@ -1249,7 +1249,19 @@ def gmail_scan():
         listed_items = EbayListing.query.filter_by(team=team, status='listed').all()
         sold_items = EbayListing.query.filter_by(team=team, status='sold').all()
         to_delete = []
+
+        # Delete junk-named items from DB
+        junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
+                      'selling tips', 'newsletter', 'account', 'verification']
         for listed in listed_items:
+            if any(jw in listed.product_name.lower() for jw in junk_words):
+                to_delete.append(listed)
+                log.info(f"Removing junk listing: '{listed.product_name}'")
+
+        # Merge listed items that match sold items
+        for listed in listed_items:
+            if listed in to_delete:
+                continue
             ln = listed.product_name.lower()
             for sold in sold_items:
                 sn = sold.product_name.lower()
