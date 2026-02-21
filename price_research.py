@@ -1171,6 +1171,11 @@ def gmail_scan():
                     product_name = body_name or subj_name
                     if not product_name:
                         continue
+                    # Skip junk/non-product names
+                    junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
+                                  'selling tips', 'newsletter', 'account', 'verification']
+                    if any(jw in product_name.lower() for jw in junk_words):
+                        continue
 
                     # Check if already tracked (match truncated names both ways)
                     existing = EbayListing.query.filter(
@@ -1239,19 +1244,26 @@ def gmail_scan():
                 log.warning(f"Error parsing shipping email: {e}")
 
         # ── 4. CLEANUP: merge duplicates ──
-        # If a listed item's name is a subset of a sold item's name, delete the listed duplicate
+        # If a listed item's name overlaps a sold item's name, delete the listed duplicate
+        db.session.flush()  # Ensure all new items are visible
         listed_items = EbayListing.query.filter_by(team=team, status='listed').all()
         sold_items = EbayListing.query.filter_by(team=team, status='sold').all()
+        to_delete = []
         for listed in listed_items:
+            ln = listed.product_name.lower()
             for sold in sold_items:
-                if (listed.product_name.lower() in sold.product_name.lower() or
-                    sold.product_name.lower() in listed.product_name.lower()):
+                sn = sold.product_name.lower()
+                # Match if either name contains the other, or first 8+ chars match
+                if (ln in sn or sn in ln or
+                    (len(ln) >= 8 and len(sn) >= 8 and ln[:8] == sn[:8])):
                     # Merge list_price into sold if missing
                     if listed.list_price and not sold.list_price:
                         sold.list_price = listed.list_price
-                    db.session.delete(listed)
+                    to_delete.append(listed)
                     log.info(f"Merged duplicate: '{listed.product_name}' into sold '{sold.product_name}'")
                     break
+        for item in to_delete:
+            db.session.delete(item)
 
         db.session.commit()
         mail.logout()
