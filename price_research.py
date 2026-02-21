@@ -968,12 +968,34 @@ def _parse_ebay_listed_email(body):
     text = _strip_html(body)
     m = re.search(r'Item price:\s*\$?([\d,]+\.?\d*)', text)
     if m: info['list_price'] = float(m.group(1).replace(',', ''))
-    # Get product name from link text — try multiple patterns
-    m = re.search(r'<a[^>]*href="[^"]*ebay[^"]*"[^>]*>([^<]{5,200})</a>', body)
-    if m:
-        name = re.sub(r'\.{2,}$', '', m.group(1)).strip()
-        if len(name) > 5 and 'View listing' not in name and 'Manage' not in name:
-            info['product_name_from_body'] = name
+    # Try multiple approaches to find the product name from the email body
+    product_name = ''
+    # 1. eBay item link with meaningful text
+    for pattern in [
+        r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>([^<]{5,200})</a>',
+        r'<a[^>]*href="[^"]*ebay[^"]*"[^>]*>([^<]{10,200})</a>',
+    ]:
+        m = re.search(pattern, body)
+        if m:
+            name = re.sub(r'\.{2,}$', '', m.group(1)).strip()
+            skip_words = ['View', 'Manage', 'Revise', 'Sell similar', 'eBay', 'Sign in', 'Learn', 'See details']
+            if len(name) > 8 and not any(sw in name for sw in skip_words):
+                product_name = name
+                break
+    # 2. Try title-like text from the body
+    if not product_name:
+        m = re.search(r'(?:Your item|Item title)[:\s]*([^<]{10,200}?)(?:\s*(?:has been|is now|Item price|View))', text)
+        if m:
+            product_name = m.group(1).strip().rstrip('.')
+    # 3. Alt text on product image
+    if not product_name:
+        m = re.search(r'<img[^>]*alt="([^"]{10,200})"[^>]*>', body)
+        if m:
+            alt = m.group(1).strip()
+            if 'eBay' not in alt and 'logo' not in alt.lower():
+                product_name = alt
+    if product_name:
+        info['product_name_from_body'] = product_name
     return info
 
 
@@ -1201,6 +1223,66 @@ def gmail_scan():
 
     except Exception as e:
         log.error(f"Gmail scan error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/price/api/gmail/debug-scan', methods=['POST'])
+def gmail_debug_scan():
+    """Debug endpoint: show raw email data without saving anything."""
+    team = request.get_json().get('team', 'thoard') if request.is_json else 'thoard'
+    team_upper = team.upper()
+    gmail_user = os.environ.get(f'GMAIL_USER_{team_upper}', '') or os.environ.get('GMAIL_USER', '')
+    gmail_pass = os.environ.get(f'GMAIL_APP_PASSWORD_{team_upper}', '') or os.environ.get('GMAIL_APP_PASSWORD', '')
+    if not gmail_user or not gmail_pass:
+        return jsonify({'error': 'Gmail not configured'}), 400
+
+    debug_results = []
+    try:
+        import imaplib
+        import email as _email
+        from datetime import timedelta
+
+        mail = imaplib.IMAP4_SSL('imap.gmail.com')
+        mail.login(gmail_user, gmail_pass)
+        mail.select('inbox')
+        since_date = (datetime.utcnow() - timedelta(days=14)).strftime('%d-%b-%Y')
+
+        # Check all eBay emails
+        for search_q in ['listing is live', 'item is listed', 'made the sale', 'shipping label']:
+            _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
+            count = len(msgs[0].split()) if msgs[0] else 0
+            if count == 0:
+                debug_results.append({'search': search_q, 'count': 0})
+                continue
+
+            # Show first 2 from each type
+            for num in (msgs[0].split() if msgs[0] else [])[:2]:
+                _, msg_data = mail.fetch(num, '(RFC822)')
+                msg = _email.message_from_bytes(msg_data[0][1])
+                subject = _decode_subject(msg)
+                body = _get_email_body(msg)
+                text = _strip_html(body)[:500] if body else ''
+
+                # Parse based on type
+                parsed = {}
+                if 'listing is live' in search_q or 'item is listed' in search_q:
+                    parsed = _parse_ebay_listed_email(body) if body else {}
+                elif 'made the sale' in search_q:
+                    parsed = _parse_ebay_sold_email(body) if body else {}
+                elif 'shipping label' in search_q:
+                    parsed = _parse_ebay_shipping_email(body) if body else {}
+
+                debug_results.append({
+                    'search': search_q,
+                    'total_found': count,
+                    'subject': subject,
+                    'body_preview': text,
+                    'parsed': parsed,
+                })
+
+        mail.logout()
+        return jsonify({'debug': debug_results})
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
