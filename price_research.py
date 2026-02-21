@@ -58,6 +58,13 @@ class PriceResearch(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
+        days_ago = (datetime.utcnow() - self.created_at).days if self.created_at else 999
+        if days_ago <= 7:
+            freshness = 'fresh'
+        elif days_ago <= 30:
+            freshness = 'stale'
+        else:
+            freshness = 'old'
         return {
             'id': self.id,
             'products': json.loads(self.products or '[]'),
@@ -66,6 +73,8 @@ class PriceResearch(db.Model):
             'is_bundle': self.is_bundle,
             'aggressiveness': self.aggressiveness,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'days_ago': days_ago,
+            'freshness': freshness,
         }
 
 
