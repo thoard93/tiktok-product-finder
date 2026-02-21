@@ -1151,25 +1151,22 @@ def gmail_scan():
                     body = _get_email_body(msg)
                     info = _parse_ebay_listed_email(body) if body else {}
 
-                    # Extract product name from subject
-                    # Subject format: "👏 Beauty By Earth... has been listed"
-                    product_name = subject
-                    # Strip emoji prefixes
-                    product_name = re.sub(r'^[\U0001F300-\U0001FAFF\u2600-\u27BF\s]+', '', product_name).strip()
-                    # Strip known suffixes
+                    # Extract product name — prefer body (more complete) over truncated subject
+                    body_name = info.get('product_name_from_body', '').strip().rstrip('.')
+                    # Subject fallback: strip emoji, suffixes, prefixes
+                    subj_name = subject
+                    subj_name = re.sub(r'^[\U0001F300-\U0001FAFF\u2600-\u27BF\s]+', '', subj_name).strip()
                     for sfx in ['has been listed', 'is now listed', 'is listed', '- Check our selling tips']:
-                        idx = product_name.lower().find(sfx.lower())
+                        idx = subj_name.lower().find(sfx.lower())
                         if idx > 0:
-                            product_name = product_name[:idx].strip()
-                    # Strip known prefixes
+                            subj_name = subj_name[:idx].strip()
                     for pfx in ['Your item is listed: ', 'Your listing started: ']:
-                        product_name = product_name.replace(pfx, '')
-                    # Handle truncated names like "Beauty By Earth..."
-                    product_name = product_name.rstrip('.').strip()
-                    # If subject is generic (no product name), use body
-                    if not product_name or any(kw in product_name.lower() for kw in ['listing is live', 'your listing', 'listing started']):
-                        product_name = info.get('product_name_from_body', '')
-                    product_name = product_name.strip().rstrip('.')
+                        subj_name = subj_name.replace(pfx, '')
+                    subj_name = subj_name.rstrip('.').strip()
+                    if any(kw in subj_name.lower() for kw in ['listing is live', 'your listing', 'listing started']):
+                        subj_name = ''
+                    # Use body name if available (it's more complete), else subject
+                    product_name = body_name or subj_name
                     if not product_name:
                         continue
 
