@@ -727,7 +727,9 @@
             </div>
             <div class="header-nav">
                 <button class="nav-btn active" onclick="showView('research')" id="nav-research">🔍</button>
+                <button class="nav-btn" onclick="showView('listings')" id="nav-listings">📦</button>
                 <button class="nav-btn" onclick="showView('history')" id="nav-history">📋</button>
+                <button class="nav-btn" onclick="showView('dashboard')" id="nav-dashboard">📊</button>
                 <button class="nav-btn" onclick="showView('settings')" id="nav-settings">⚙️</button>
             </div>
         </div>
@@ -784,6 +786,99 @@
         </div>
 
         <!-- ═══ SETTINGS VIEW ═══ -->
+        <!-- ═══ LISTINGS VIEW ═══ -->
+        <div class="view" id="view-listings">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <div class="section-title" style="margin:0;">📦 eBay Listings</div>
+                <div style="display:flex; gap:6px;">
+                    <button class="copy-btn" onclick="scanGmail()" id="scanGmailBtn" style="font-size:12px;">📧 Scan
+                        Gmail</button>
+                    <button class="copy-btn" onclick="showAddListing()" style="font-size:12px;">+ Add</button>
+                </div>
+            </div>
+
+            <!-- Add Listing Form (hidden by default) -->
+            <div id="addListingForm"
+                style="display:none; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:12px;">
+                <input id="newListingName" placeholder="Product name"
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text-primary); margin-bottom:8px; box-sizing:border-box;">
+                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                    <input id="newListingPrice" type="number" step="0.01" placeholder="List price"
+                        style="flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text-primary);">
+                    <input id="newListingShipping" type="number" step="0.01" placeholder="Ship cost"
+                        style="flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text-primary);">
+                </div>
+                <input id="newListingNotes" placeholder="Notes (optional)"
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text-primary); margin-bottom:8px; box-sizing:border-box;">
+                <div style="display:flex; gap:8px;">
+                    <button class="research-btn" style="flex:1; padding:10px;" onclick="addListing()">✅ Add
+                        Listing</button>
+                    <button class="copy-btn" style="flex:1; padding:10px;"
+                        onclick="document.getElementById('addListingForm').style.display='none'">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Active Listings -->
+            <div class="section-title" style="font-size:13px; color:var(--accent);">🟢 Active</div>
+            <div id="activeListings">
+                <div class="empty-state">
+                    <div class="empty-icon">📦</div>
+                    <div class="empty-text">No active listings</div>
+                </div>
+            </div>
+
+            <!-- Sold Items -->
+            <div class="section-title" style="font-size:13px; color:var(--green); margin-top:16px;">✅ Sold</div>
+            <div id="soldListings">
+                <div class="empty-state">
+                    <div class="empty-icon">💰</div>
+                    <div class="empty-text">No sold items yet</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ DASHBOARD VIEW ═══ -->
+        <div class="view" id="view-dashboard">
+            <div class="section-title">📊 Dashboard</div>
+            <div id="dashboardStats" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+                <div class="result-card" style="text-align:center; padding:16px;">
+                    <div style="color:var(--text-dim); font-size:12px;">Items Sold</div>
+                    <div id="stat-sold" style="font-size:28px; font-weight:700; color:var(--text-primary);">0</div>
+                </div>
+                <div class="result-card" style="text-align:center; padding:16px;">
+                    <div style="color:var(--text-dim); font-size:12px;">Active</div>
+                    <div id="stat-active" style="font-size:28px; font-weight:700; color:var(--accent);">0</div>
+                </div>
+                <div class="result-card" style="text-align:center; padding:16px;">
+                    <div style="color:var(--text-dim); font-size:12px;">Total Revenue</div>
+                    <div id="stat-revenue" style="font-size:24px; font-weight:700; color:var(--text-primary);">$0</div>
+                </div>
+                <div class="result-card" style="text-align:center; padding:16px;">
+                    <div style="color:var(--text-dim); font-size:12px;">Net Profit</div>
+                    <div id="stat-profit" style="font-size:24px; font-weight:700; color:var(--green);">$0</div>
+                </div>
+                <div class="result-card" style="text-align:center; padding:16px;">
+                    <div style="color:var(--text-dim); font-size:12px;">Avg Profit/Item</div>
+                    <div id="stat-avg" style="font-size:24px; font-weight:700; color:var(--text-primary);">$0</div>
+                </div>
+                <div class="result-card" style="text-align:center; padding:16px;">
+                    <div style="color:var(--text-dim); font-size:12px;">Researches</div>
+                    <div id="stat-research" style="font-size:28px; font-weight:700; color:var(--blue);">0</div>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:8px;">
+                <button class="copy-btn" onclick="exportCSV()" style="flex:1;">📥 Export CSV</button>
+                <button class="copy-btn" onclick="loadDashboard()" style="flex:1;">🔄 Refresh</button>
+            </div>
+
+            <div class="settings-group" style="margin-top:16px;">
+                <div class="settings-label">📧 Gmail Integration</div>
+                <div style="color:var(--text-dim); font-size:13px; margin-top:4px;" id="gmailStatus">Checking...</div>
+            </div>
+        </div>
+
+        <!-- ═══ SETTINGS VIEW ═══ -->
         <div class="view" id="view-settings">
             <div class="section-title">Pricing Strategy</div>
             <div class="settings-group">
@@ -793,21 +888,21 @@
                         <div class="radio-dot"></div>
                         <div>
                             <div class="radio-label">🛡️ Conservative</div>
-                            <div class="radio-desc">10-30% off • Protect margins on low-cost items</div>
+                            <div class="radio-desc">25–35% off • Protect margins</div>
                         </div>
                     </div>
                     <div class="radio-option" onclick="selectSetting(this, 'balanced')">
                         <div class="radio-dot"></div>
                         <div>
                             <div class="radio-label">⚖️ Balanced</div>
-                            <div class="radio-desc">14-35% off • Good balance of speed & profit</div>
+                            <div class="radio-desc">32–40% off • Good balance of speed & profit</div>
                         </div>
                     </div>
                     <div class="radio-option" onclick="selectSetting(this, 'aggressive')">
                         <div class="radio-dot"></div>
                         <div>
                             <div class="radio-label">⚡ Aggressive</div>
-                            <div class="radio-desc">18-40% off • Move inventory fast, higher volume</div>
+                            <div class="radio-desc">40–48% off • Move inventory fast</div>
                         </div>
                     </div>
                 </div>
@@ -822,29 +917,29 @@
                     </tr>
                     <tr>
                         <td>Under $15</td>
-                        <td style="text-align:right">10 – 18% off</td>
+                        <td style="text-align:right">25 – 40% off</td>
                     </tr>
                     <tr>
                         <td>$15 – $30</td>
-                        <td style="text-align:right">15 – 25% off</td>
+                        <td style="text-align:right">30 – 42% off</td>
                     </tr>
                     <tr>
                         <td>$30 – $60</td>
-                        <td style="text-align:right">20 – 30% off</td>
+                        <td style="text-align:right">28 – 40% off</td>
                     </tr>
                     <tr>
                         <td>$60 – $100</td>
-                        <td style="text-align:right">25 – 35% off</td>
+                        <td style="text-align:right">32 – 44% off</td>
                     </tr>
                     <tr>
                         <td>Over $100</td>
-                        <td style="text-align:right">30 – 40% off</td>
+                        <td style="text-align:right">35 – 48% off</td>
                     </tr>
                 </table>
             </div>
 
             <div class="settings-group" style="text-align:center; color: var(--text-dim); font-size: 12px;">
-                PriceBlade v1.0 • Powered by Grok 4.1<br>
+                PriceBlade v2.0 • Powered by Grok 4.1<br>
                 Built for zero-cost TikTok sample reselling
             </div>
         </div>
@@ -881,6 +976,8 @@
             document.getElementById('nav-' + name).classList.add('active');
             if (name === 'history') loadHistory();
             if (name === 'settings') loadSettings();
+            if (name === 'listings') loadListings();
+            if (name === 'dashboard') loadDashboard();
         }
 
         // ─── File Upload ───
@@ -1406,6 +1503,187 @@
             }
         }
 
+        // ─── Listings ───
+        async function loadListings() {
+            try {
+                const resp = await fetch(`/price/api/listings?team=${currentTeam}`);
+                const listings = await resp.json();
+                const active = listings.filter(l => l.status === 'listed');
+                const sold = listings.filter(l => l.status === 'sold');
+
+                const activeDiv = document.getElementById('activeListings');
+                if (active.length) {
+                    activeDiv.innerHTML = active.map(l => `
+                        <div class="history-item" style="cursor:default;">
+                            <div style="flex:1; min-width:0;">
+                                <div class="history-name">${escHtml(l.product_name)}</div>
+                                <div class="history-meta">${l.listed_at ? new Date(l.listed_at).toLocaleDateString() : ''} ${l.notes ? '• ' + escHtml(l.notes) : ''}</div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <div class="history-price">$${(l.list_price || 0).toFixed(2)}</div>
+                                <button onclick="markSold(${l.id})" style="background:none; border:none; font-size:14px; cursor:pointer;" title="Mark Sold">✅</button>
+                                <button onclick="deleteListing(${l.id})" style="background:none; border:none; color:var(--text-dim); font-size:14px; cursor:pointer;" title="Delete">🗑️</button>
+                            </div>
+                        </div>`).join('');
+                } else {
+                    activeDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">No active listings</div></div>';
+                }
+
+                const soldDiv = document.getElementById('soldListings');
+                if (sold.length) {
+                    soldDiv.innerHTML = sold.map(l => `
+                        <div class="history-item" style="cursor:default; border-left:3px solid var(--green);">
+                            <div style="flex:1; min-width:0;">
+                                <div class="history-name">${escHtml(l.product_name)}</div>
+                                <div class="history-meta">${l.sold_at ? 'Sold ' + new Date(l.sold_at).toLocaleDateString() : ''} • Fees $${(l.ebay_fees || 0).toFixed(2)} • Ship $${(l.shipping_cost || 0).toFixed(2)}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="history-price">$${(l.sold_price || l.list_price || 0).toFixed(2)}</div>
+                                <div style="color:var(--green); font-size:12px; font-weight:600;">+$${(l.profit || 0).toFixed(2)}</div>
+                            </div>
+                        </div>`).join('');
+                } else {
+                    soldDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">No sold items yet</div></div>';
+                }
+            } catch (err) {
+                console.error('Listings load error:', err);
+            }
+        }
+
+        function showAddListing() {
+            document.getElementById('addListingForm').style.display = 'block';
+            document.getElementById('newListingName').focus();
+        }
+
+        async function addListing() {
+            const name = document.getElementById('newListingName').value.trim();
+            if (!name) return alert('Enter a product name');
+            try {
+                await fetch('/price/api/listings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        product_name: name,
+                        list_price: parseFloat(document.getElementById('newListingPrice').value) || 0,
+                        shipping_cost: parseFloat(document.getElementById('newListingShipping').value) || 0,
+                        notes: document.getElementById('newListingNotes').value.trim(),
+                        team: currentTeam,
+                    })
+                });
+                document.getElementById('addListingForm').style.display = 'none';
+                document.getElementById('newListingName').value = '';
+                document.getElementById('newListingPrice').value = '';
+                document.getElementById('newListingShipping').value = '';
+                document.getElementById('newListingNotes').value = '';
+                loadListings();
+            } catch (err) {
+                alert('Failed to add: ' + err.message);
+            }
+        }
+
+        async function markSold(id) {
+            const price = prompt('Sale price? (leave blank to use list price)');
+            try {
+                const body = { status: 'sold' };
+                if (price) body.sold_price = parseFloat(price);
+                await fetch(`/price/api/listings/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                loadListings();
+            } catch (err) {
+                alert('Failed: ' + err.message);
+            }
+        }
+
+        async function deleteListing(id) {
+            if (!confirm('Delete this listing?')) return;
+            try {
+                await fetch(`/price/api/listings/${id}`, { method: 'DELETE' });
+                loadListings();
+            } catch (err) {
+                alert('Failed: ' + err.message);
+            }
+        }
+
+        // ─── Gmail Scan ───
+        async function scanGmail() {
+            const btn = document.getElementById('scanGmailBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Scanning...';
+            try {
+                const resp = await fetch('/price/api/gmail/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ team: currentTeam })
+                });
+                const data = await resp.json();
+                if (data.error) {
+                    alert('Gmail: ' + data.error);
+                } else {
+                    const msg = `Scanned ${data.total_scanned} emails\n` +
+                        `New listings: ${data.new_listings.length}\n` +
+                        `New sales: ${data.new_sales.length}`;
+                    alert(msg);
+
+                    // Push notification for new sales
+                    if (data.new_sales.length > 0 && Notification.permission === 'granted') {
+                        data.new_sales.forEach(s => {
+                            new Notification('💰 Item Sold!', {
+                                body: s.product_name || 'A product was sold',
+                                icon: '🔪',
+                            });
+                        });
+                    }
+
+                    loadListings();
+                }
+            } catch (err) {
+                alert('Gmail scan failed: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📧 Scan Gmail';
+            }
+        }
+
+        // ─── Dashboard ───
+        async function loadDashboard() {
+            try {
+                const resp = await fetch(`/price/api/dashboard?team=${currentTeam}`);
+                const data = await resp.json();
+                const stats = data.team || {};
+                document.getElementById('stat-sold').textContent = stats.items_sold || 0;
+                document.getElementById('stat-active').textContent = stats.active_listings || 0;
+                document.getElementById('stat-revenue').textContent = '$' + (stats.total_revenue || 0).toFixed(2);
+                document.getElementById('stat-profit').textContent = '$' + (stats.total_profit || 0).toFixed(2);
+                document.getElementById('stat-avg').textContent = '$' + (stats.avg_profit || 0).toFixed(2);
+                document.getElementById('stat-research').textContent = stats.research_count || 0;
+
+                // Gmail status
+                const gmailEl = document.getElementById('gmailStatus');
+                const gmailResp = await fetch('/price/api/gmail/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => null);
+                if (gmailResp && gmailResp.status === 400) {
+                    gmailEl.innerHTML = '⚠️ Not configured — Set <code>GMAIL_USER</code> and <code>GMAIL_APP_PASSWORD</code> on Render';
+                } else {
+                    gmailEl.innerHTML = '✅ Gmail connected';
+                }
+            } catch (err) {
+                console.error('Dashboard error:', err);
+            }
+        }
+
+        function exportCSV() {
+            window.open(`/price/api/export/csv?team=${currentTeam}`, '_blank');
+        }
+
+        // ─── Push Notification Permission ───
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }
+
         // ─── Utility ───
         function escHtml(s) {
             if (!s) return '';
@@ -1414,6 +1692,7 @@
 
         // ─── Init ───
         loadSettings();
+        requestNotificationPermission();
     </script>
 </body>
 

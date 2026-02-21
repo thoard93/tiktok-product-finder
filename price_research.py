@@ -242,6 +242,7 @@ class PriceResearch(db.Model):
     aggressiveness = db.Column(db.String(20), default='conservative')
     team = db.Column(db.String(20), default='thoard') # Team: thoard or reol
     raw_response = db.Column(db.Text, default='')     # Full Grok response for debugging
+    notes = db.Column(db.Text, default='')              # User notes
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -260,6 +261,7 @@ class PriceResearch(db.Model):
             'is_bundle': self.is_bundle,
             'aggressiveness': self.aggressiveness,
             'team': self.team or 'thoard',
+            'notes': self.notes or '',
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'days_ago': days_ago,
             'freshness': freshness,
@@ -274,10 +276,50 @@ class PriceSettings(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class EbayListing(db.Model):
+    """Track eBay listings and sales."""
+    __tablename__ = 'ebay_listings'
+    id = db.Column(db.Integer, primary_key=True)
+    product_name = db.Column(db.String(200), default='')
+    product_details = db.Column(db.String(500), default='')
+    status = db.Column(db.String(20), default='listed')  # listed, sold, shipped
+    list_price = db.Column(db.Float, default=0)
+    sold_price = db.Column(db.Float, default=0)
+    shipping_cost = db.Column(db.Float, default=0)
+    ebay_fees = db.Column(db.Float, default=0)
+    profit = db.Column(db.Float, default=0)
+    team = db.Column(db.String(20), default='thoard')
+    notes = db.Column(db.Text, default='')
+    research_id = db.Column(db.Integer, nullable=True)  # Link to PriceResearch
+    ebay_item_id = db.Column(db.String(50), default='')
+    listed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    sold_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'product_name': self.product_name,
+            'product_details': self.product_details,
+            'status': self.status,
+            'list_price': self.list_price,
+            'sold_price': self.sold_price,
+            'shipping_cost': self.shipping_cost,
+            'ebay_fees': self.ebay_fees,
+            'profit': self.profit,
+            'team': self.team,
+            'notes': self.notes,
+            'research_id': self.research_id,
+            'ebay_item_id': self.ebay_item_id,
+            'listed_at': self.listed_at.isoformat() if self.listed_at else None,
+            'sold_at': self.sold_at.isoformat() if self.sold_at else None,
+        }
+
+
 # ─── Ensure tables exist ─────────────────────────────────────────────────────
 with app.app_context():
     # Create tables if they don't exist
-    for model in [PriceResearch, PriceSettings]:
+    for model in [PriceResearch, PriceSettings, EbayListing]:
         table_name = model.__tablename__
         if not db.inspect(db.engine).has_table(table_name):
             model.__table__.create(db.engine)
@@ -292,6 +334,10 @@ with app.app_context():
             db.session.execute(text("ALTER TABLE price_research ADD COLUMN team VARCHAR(20) DEFAULT 'thoard'"))
             db.session.commit()
             log.info("Migration: added 'team' column to price_research")
+        if 'notes' not in existing_cols:
+            db.session.execute(text("ALTER TABLE price_research ADD COLUMN notes TEXT DEFAULT ''"))
+            db.session.commit()
+            log.info("Migration: added 'notes' column to price_research")
     except Exception as e:
         log.warning(f"Migration note: {e}")
 
@@ -739,6 +785,281 @@ def price_update_settings():
     settings.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({'aggressiveness': settings.aggressiveness})
+
+
+# ─── Notes ────────────────────────────────────────────────────────────────────
+@app.route('/price/api/history/<int:research_id>/notes', methods=['PUT'])
+def price_update_notes(research_id):
+    """Update notes for a research entry."""
+    research = PriceResearch.query.get_or_404(research_id)
+    data = request.get_json()
+    research.notes = data.get('notes', '')
+    db.session.commit()
+    return jsonify({'id': research.id, 'notes': research.notes})
+
+
+# ─── Listings CRUD ────────────────────────────────────────────────────────────
+@app.route('/price/api/listings', methods=['GET'])
+def get_listings():
+    """Get all listings, optionally by team and status."""
+    team = request.args.get('team', '')
+    status = request.args.get('status', '')
+    query = EbayListing.query
+    if team:
+        query = query.filter_by(team=team)
+    if status:
+        query = query.filter_by(status=status)
+    listings = query.order_by(EbayListing.created_at.desc()).limit(100).all()
+    return jsonify([l.to_dict() for l in listings])
+
+
+@app.route('/price/api/listings', methods=['POST'])
+def create_listing():
+    """Create a new listing manually."""
+    data = request.get_json()
+    listing = EbayListing(
+        product_name=data.get('product_name', 'Untitled'),
+        product_details=data.get('product_details', ''),
+        status=data.get('status', 'listed'),
+        list_price=data.get('list_price', 0),
+        shipping_cost=data.get('shipping_cost', 0),
+        team=data.get('team', 'thoard'),
+        notes=data.get('notes', ''),
+        research_id=data.get('research_id'),
+        ebay_item_id=data.get('ebay_item_id', ''),
+    )
+    # Calculate eBay fees
+    listing.ebay_fees = round(listing.list_price * 0.13, 2)
+    db.session.add(listing)
+    db.session.commit()
+    return jsonify(listing.to_dict()), 201
+
+
+@app.route('/price/api/listings/<int:listing_id>', methods=['PUT'])
+def update_listing(listing_id):
+    """Update a listing (mark sold, update price, add notes)."""
+    listing = EbayListing.query.get_or_404(listing_id)
+    data = request.get_json()
+    if 'status' in data:
+        listing.status = data['status']
+        if data['status'] == 'sold':
+            listing.sold_at = datetime.utcnow()
+    if 'sold_price' in data:
+        listing.sold_price = data['sold_price']
+        listing.ebay_fees = round(listing.sold_price * 0.13, 2)
+        listing.profit = round(listing.sold_price - listing.ebay_fees - listing.shipping_cost, 2)
+    if 'shipping_cost' in data:
+        listing.shipping_cost = data['shipping_cost']
+        # Recalculate profit
+        price = listing.sold_price or listing.list_price
+        listing.ebay_fees = round(price * 0.13, 2)
+        listing.profit = round(price - listing.ebay_fees - listing.shipping_cost, 2)
+    if 'notes' in data:
+        listing.notes = data['notes']
+    if 'list_price' in data:
+        listing.list_price = data['list_price']
+    db.session.commit()
+    return jsonify(listing.to_dict())
+
+
+@app.route('/price/api/listings/<int:listing_id>', methods=['DELETE'])
+def delete_listing(listing_id):
+    """Delete a listing."""
+    listing = EbayListing.query.get_or_404(listing_id)
+    db.session.delete(listing)
+    db.session.commit()
+    return jsonify({'deleted': True})
+
+
+# ─── Gmail eBay Scanning ──────────────────────────────────────────────────────
+@app.route('/price/api/gmail/scan', methods=['POST'])
+def gmail_scan():
+    """Scan Gmail for eBay listing and sold notification emails.
+    Uses IMAP with app password. Env vars: GMAIL_USER, GMAIL_APP_PASSWORD
+    """
+    gmail_user = os.environ.get('GMAIL_USER', '')
+    gmail_pass = os.environ.get('GMAIL_APP_PASSWORD', '')
+    if not gmail_user or not gmail_pass:
+        return jsonify({'error': 'Gmail credentials not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD env vars.'}), 400
+
+    team = request.get_json().get('team', 'thoard') if request.is_json else 'thoard'
+    new_sales = []
+    new_listings = []
+
+    try:
+        import imaplib
+        import email
+        from email.header import decode_header
+
+        # Connect to Gmail IMAP
+        mail = imaplib.IMAP4_SSL('imap.gmail.com')
+        mail.login(gmail_user, gmail_pass)
+        mail.select('inbox')
+
+        # Search for eBay emails from the last 7 days
+        from datetime import timedelta
+        since_date = (datetime.utcnow() - timedelta(days=7)).strftime('%d-%b-%Y')
+
+        # ── Scan for "sold" notifications ──
+        _, sold_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "sold" SINCE {since_date})')
+        for num in sold_msgs[0].split():
+            _, msg_data = mail.fetch(num, '(RFC822)')
+            msg = email.message_from_bytes(msg_data[0][1])
+            subject = ''
+            for part, enc in decode_header(msg['Subject'] or ''):
+                subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
+
+            # Extract product name from subject
+            # Typical: "You sold ProductName!"
+            product_name = subject.replace('You sold ', '').replace('!', '').strip()
+            if not product_name:
+                continue
+
+            # Check if already tracked
+            existing = EbayListing.query.filter_by(
+                product_name=product_name, status='sold'
+            ).first()
+            if existing:
+                continue
+
+            # Check if there's an active listing to update
+            active = EbayListing.query.filter(
+                EbayListing.product_name.ilike(f'%{product_name[:30]}%'),
+                EbayListing.status == 'listed'
+            ).first()
+
+            if active:
+                active.status = 'sold'
+                active.sold_at = datetime.utcnow()
+                if not active.sold_price:
+                    active.sold_price = active.list_price
+                active.ebay_fees = round(active.sold_price * 0.13, 2)
+                active.profit = round(active.sold_price - active.ebay_fees - active.shipping_cost, 2)
+                new_sales.append(active.to_dict())
+            else:
+                # Create new sold listing
+                listing = EbayListing(
+                    product_name=product_name,
+                    status='sold',
+                    team=team,
+                    sold_at=datetime.utcnow(),
+                )
+                db.session.add(listing)
+                new_sales.append({'product_name': product_name, 'status': 'sold'})
+
+        # ── Scan for "listed" notifications ──
+        _, list_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "listed" SINCE {since_date})')
+        for num in list_msgs[0].split():
+            _, msg_data = mail.fetch(num, '(RFC822)')
+            msg = email.message_from_bytes(msg_data[0][1])
+            subject = ''
+            for part, enc in decode_header(msg['Subject'] or ''):
+                subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
+
+            product_name = subject.replace('Your item is listed: ', '').replace('Your item is listed on eBay: ', '').strip()
+            if not product_name:
+                continue
+
+            existing = EbayListing.query.filter_by(product_name=product_name).first()
+            if existing:
+                continue
+
+            listing = EbayListing(
+                product_name=product_name,
+                status='listed',
+                team=team,
+            )
+            db.session.add(listing)
+            new_listings.append({'product_name': product_name, 'status': 'listed'})
+
+        db.session.commit()
+        mail.logout()
+
+        return jsonify({
+            'new_sales': new_sales,
+            'new_listings': new_listings,
+            'total_scanned': len(sold_msgs[0].split()) + len(list_msgs[0].split()),
+        })
+
+    except Exception as e:
+        log.error(f"Gmail scan error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ─── Dashboard Stats ──────────────────────────────────────────────────────────
+@app.route('/price/api/dashboard', methods=['GET'])
+def dashboard_stats():
+    """Get dashboard stats (per team and combined)."""
+    team = request.args.get('team', '')
+
+    def get_team_stats(team_filter=None):
+        query = EbayListing.query
+        if team_filter:
+            query = query.filter_by(team=team_filter)
+
+        listed = query.filter_by(status='listed').count()
+        sold_items = query.filter_by(status='sold').all()
+        total_revenue = sum(s.sold_price or 0 for s in sold_items)
+        total_shipping = sum(s.shipping_cost or 0 for s in sold_items)
+        total_fees = sum(s.ebay_fees or 0 for s in sold_items)
+        total_profit = sum(s.profit or 0 for s in sold_items)
+
+        # Research count
+        rq = PriceResearch.query
+        if team_filter:
+            rq = rq.filter_by(team=team_filter)
+        research_count = rq.count()
+
+        return {
+            'active_listings': listed,
+            'items_sold': len(sold_items),
+            'total_revenue': round(total_revenue, 2),
+            'total_shipping': round(total_shipping, 2),
+            'total_fees': round(total_fees, 2),
+            'total_profit': round(total_profit, 2),
+            'avg_profit': round(total_profit / len(sold_items), 2) if sold_items else 0,
+            'research_count': research_count,
+        }
+
+    result = {'team': get_team_stats(team) if team else get_team_stats()}
+    if not team:
+        result['thoard'] = get_team_stats('thoard')
+        result['reol'] = get_team_stats('reol')
+    return jsonify(result)
+
+
+# ─── CSV Export ───────────────────────────────────────────────────────────────
+@app.route('/price/api/export/csv', methods=['GET'])
+def export_csv():
+    """Export research history as CSV."""
+    team = request.args.get('team', '')
+    query = PriceResearch.query
+    if team:
+        query = query.filter_by(team=team)
+    researches = query.order_by(PriceResearch.created_at.desc()).all()
+
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Date', 'Product', 'Brand', 'Recommended Price', 'Tier', 'Team', 'Notes'])
+    for r in researches:
+        products = json.loads(r.products or '[]')
+        name = products[0]['name'] if products else 'Unknown'
+        brand = products[0].get('brand', '') if products else ''
+        writer.writerow([
+            r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '',
+            name, brand,
+            f'${r.recommended_price:.2f}' if r.recommended_price else '',
+            r.aggressiveness, r.team or 'thoard', r.notes or '',
+        ])
+
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=priceblade_export.csv'},
+    )
 
 
 log.info("✅ PriceBlade module loaded")
