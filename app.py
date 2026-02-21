@@ -11929,7 +11929,16 @@ def copilot_auth_verify():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
-# EBAY AUTO-LISTER MODULE
+# PRICEBLADE — PRICE RESEARCH MODULE
+# =============================================================================
+try:
+    import price_research
+    print("✅ PriceBlade module loaded")
+except Exception as e:
+    print(f"⚠️ PriceBlade module not loaded: {e}")
+
+# =============================================================================
+# EBAY AUTO-LISTER MODULE (legacy — kept for TikTok intelligence)
 # =============================================================================
 try:
     import ebay_lister

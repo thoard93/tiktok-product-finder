@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>PriceBlade — Smart Pricing</title>
+    <meta name="description"
+        content="AI-powered price research for product resellers. Multi-source pricing intelligence.">
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/price/manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #111118;
+            --bg-card: #16161f;
+            --bg-card-hover: #1c1c28;
+            --border: #2a2a3a;
+            --text-primary: #f0f0f5;
+            --text-secondary: #8888a0;
+            --text-dim: #55556a;
+            --accent: #00ff88;
+            --accent-dim: rgba(0, 255, 136, 0.15);
+            --accent-glow: rgba(0, 255, 136, 0.3);
+            --danger: #ff4466;
+            --warning: #ffaa33;
+            --blue: #4488ff;
+            --radius: 16px;
+            --radius-sm: 10px;
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ─── Background Gradient ─── */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -30%;
+            left: -20%;
+            width: 140%;
+            height: 60%;
+            background: radial-gradient(ellipse, rgba(0, 255, 136, 0.04) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ─── Header ─── */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: calc(var(--safe-top) + 12px) 20px 12px;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent) 0%, #00cc66 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .logo-text {
+            font-weight: 800;
+            font-size: 20px;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text span {
+            color: var(--accent);
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 18px;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-btn.active {
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .nav-btn:hover {
+            color: var(--text-primary);
+        }
+
+        /* ─── Main Content ─── */
+        .main {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px 16px calc(var(--safe-bottom) + 20px);
+            position: relative;
+            z-index: 1;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        /* ─── Upload Area ─── */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--bg-card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .upload-area.has-images {
+            padding: 16px;
+            border-style: solid;
+            border-color: var(--border);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.8;
+        }
+
+        .upload-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .upload-sub {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .preview-img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+            border: 2px solid var(--border);
+        }
+
+        .preview-remove {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .preview-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* ─── Research Button ─── */
+        .research-btn {
+            width: 100%;
+            padding: 16px;
+            margin-top: 16px;
+            background: linear-gradient(135deg, var(--accent) 0%, #00cc66 100%);
+            color: #000;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 24px var(--accent-glow);
+            letter-spacing: 0.3px;
+        }
+
+        .research-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 30px var(--accent-glow);
+        }
+
+        .research-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .research-btn.loading {
+            background: var(--bg-card);
+            color: var(--accent);
+            border: 2px solid var(--accent);
+        }
+
+        /* ─── Loading Spinner ─── */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--accent-dim);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ─── Results ─── */
+        .results {
+            margin-top: 24px;
+        }
+
+        .result-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 16px;
+            animation: slideUp 0.4s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .product-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .product-badge {
+            background: var(--accent-dim);
+            color: var(--accent);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .product-name {
+            font-size: 17px;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        .product-details {
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        /* ─── Price Table ─── */
+        .price-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+
+        .price-table th {
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .price-table td {
+            padding: 10px 0;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .price-table td:last-child {
+            text-align: right;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .source-icon {
+            font-size: 16px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .estimated {
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        .estimated::after {
+            content: ' ~';
+            font-size: 10px;
+        }
+
+        /* ─── Recommendation Box ─── */
+        .recommendation {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.08) 0%, rgba(0, 204, 102, 0.04) 100%);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-top: 16px;
+            text-align: center;
+        }
+
+        .rec-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .rec-price {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--accent);
+            text-shadow: 0 0 30px var(--accent-glow);
+            letter-spacing: -1px;
+        }
+
+        .rec-discount {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .rec-profit {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            padding: 6px 14px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        /* ─── Copy Buttons ─── */
+        .copy-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .copy-btn {
+            flex: 1;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent);
+        }
+
+        .copy-btn.copied {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ─── Bundle Card ─── */
+        .bundle-card {
+            background: linear-gradient(135deg, rgba(68, 136, 255, 0.08) 0%, rgba(68, 136, 255, 0.03) 100%);
+            border: 1px solid rgba(68, 136, 255, 0.2);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-top: 16px;
+            text-align: center;
+        }
+
+        .bundle-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--blue);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .bundle-price {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--blue);
+            margin: 8px 0;
+        }
+
+        /* ─── History ─── */
+        .history-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .history-item:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent);
+        }
+
+        .history-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .history-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .history-price {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        /* ─── Settings ─── */
+        .settings-group {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .settings-label {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .radio-option:hover {
+            border-color: var(--text-dim);
+        }
+
+        .radio-option.selected {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .radio-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid var(--text-dim);
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .radio-option.selected .radio-dot {
+            border-color: var(--accent);
+        }
+
+        .radio-option.selected .radio-dot::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .radio-label {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .radio-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        /* ─── Section Title ─── */
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+        }
+
+        /* ─── Notes ─── */
+        .notes-box {
+            background: var(--bg-secondary);
+            border-left: 3px solid var(--warning);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            padding: 12px 16px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ─── Empty State ─── */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-text {
+            font-size: 15px;
+        }
+
+        /* ─── Aggressiveness Pill (inline on research view) ─── */
+        .agg-selector {
+            display: flex;
+            gap: 6px;
+            margin-top: 16px;
+        }
+
+        .agg-pill {
+            flex: 1;
+            padding: 10px 8px;
+            text-align: center;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .agg-pill.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <div class="logo-icon">🔪</div>
+                <div class="logo-text">Price<span>Blade</span></div>
+            </div>
+            <div class="header-nav">
+                <button class="nav-btn active" onclick="showView('research')" id="nav-research">🔍</button>
+                <button class="nav-btn" onclick="showView('history')" id="nav-history">📋</button>
+                <button class="nav-btn" onclick="showView('settings')" id="nav-settings">⚙️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+
+        <!-- ═══ RESEARCH VIEW ═══ -->
+        <div class="view active" id="view-research">
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                <div id="uploadPrompt">
+                    <div class="upload-icon">📸</div>
+                    <div class="upload-title">Upload Product Images</div>
+                    <div class="upload-sub">Tap to select or drag & drop • Singles or bundles</div>
+                </div>
+                <div class="preview-grid" id="previewGrid"></div>
+            </div>
+            <input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+            <!-- Aggressiveness Quick Select -->
+            <div class="agg-selector">
+                <div class="agg-pill active" data-level="conservative" onclick="setAgg(this)">🛡️ Conservative</div>
+                <div class="agg-pill" data-level="balanced" onclick="setAgg(this)">⚖️ Balanced</div>
+                <div class="agg-pill" data-level="aggressive" onclick="setAgg(this)">⚡ Aggressive</div>
+            </div>
+
+            <button class="research-btn" id="researchBtn" onclick="runResearch()" disabled>
+                🔍 Research Pricing
+            </button>
+
+            <div class="results" id="results"></div>
+        </div>
+
+        <!-- ═══ HISTORY VIEW ═══ -->
+        <div class="view" id="view-history">
+            <div class="section-title">Recent Research</div>
+            <div id="historyList">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <div class="empty-text">No research history yet.<br>Start by uploading product images.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ SETTINGS VIEW ═══ -->
+        <div class="view" id="view-settings">
+            <div class="section-title">Pricing Strategy</div>
+            <div class="settings-group">
+                <div class="settings-label">Default Aggressiveness</div>
+                <div class="radio-group" id="settingsRadios">
+                    <div class="radio-option selected" onclick="selectSetting(this, 'conservative')">
+                        <div class="radio-dot"></div>
+                        <div>
+                            <div class="radio-label">🛡️ Conservative</div>
+                            <div class="radio-desc">10-30% off • Protect margins on low-cost items</div>
+                        </div>
+                    </div>
+                    <div class="radio-option" onclick="selectSetting(this, 'balanced')">
+                        <div class="radio-dot"></div>
+                        <div>
+                            <div class="radio-label">⚖️ Balanced</div>
+                            <div class="radio-desc">14-35% off • Good balance of speed & profit</div>
+                        </div>
+                    </div>
+                    <div class="radio-option" onclick="selectSetting(this, 'aggressive')">
+                        <div class="radio-dot"></div>
+                        <div>
+                            <div class="radio-label">⚡ Aggressive</div>
+                            <div class="radio-desc">18-40% off • Move inventory fast, higher volume</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-label">Discount Ladder</div>
+                <table class="price-table">
+                    <tr>
+                        <th>Market Price</th>
+                        <th style="text-align:right">Discount Range</th>
+                    </tr>
+                    <tr>
+                        <td>Under $15</td>
+                        <td style="text-align:right">10 – 18% off</td>
+                    </tr>
+                    <tr>
+                        <td>$15 – $30</td>
+                        <td style="text-align:right">15 – 25% off</td>
+                    </tr>
+                    <tr>
+                        <td>$30 – $60</td>
+                        <td style="text-align:right">20 – 30% off</td>
+                    </tr>
+                    <tr>
+                        <td>$60 – $100</td>
+                        <td style="text-align:right">25 – 35% off</td>
+                    </tr>
+                    <tr>
+                        <td>Over $100</td>
+                        <td style="text-align:right">30 – 40% off</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="settings-group" style="text-align:center; color: var(--text-dim); font-size: 12px;">
+                PriceBlade v1.0 • Powered by Grok 4.1<br>
+                Built for zero-cost TikTok sample reselling
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ─── State ───
+        let uploadedImages = [];
+        let currentAgg = 'conservative';
+
+        // ─── View Navigation ───
+        function showView(name) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('view-' + name).classList.add('active');
+            document.getElementById('nav-' + name).classList.add('active');
+            if (name === 'history') loadHistory();
+            if (name === 'settings') loadSettings();
+        }
+
+        // ─── File Upload ───
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+
+        fileInput.addEventListener('change', handleFiles);
+
+        uploadArea.addEventListener('dragover', e => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+        uploadArea.addEventListener('drop', e => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles({ target: { files: e.dataTransfer.files } });
+        });
+
+        function handleFiles(e) {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    uploadedImages.push(ev.target.result);
+                    updatePreviews();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updatePreviews() {
+            const grid = document.getElementById('previewGrid');
+            const prompt = document.getElementById('uploadPrompt');
+            const btn = document.getElementById('researchBtn');
+            const area = document.getElementById('uploadArea');
+
+            if (uploadedImages.length > 0) {
+                prompt.style.display = 'none';
+                area.classList.add('has-images');
+                grid.innerHTML = uploadedImages.map((img, i) => `
+            <div class="preview-wrapper">
+                <img src="${img}" class="preview-img" alt="Product ${i + 1}">
+                <button class="preview-remove" onclick="event.stopPropagation(); removeImage(${i})">✕</button>
+            </div>
+        `).join('');
+                btn.disabled = false;
+            } else {
+                prompt.style.display = 'block';
+                area.classList.remove('has-images');
+                grid.innerHTML = '';
+                btn.disabled = true;
+            }
+        }
+
+        function removeImage(idx) {
+            uploadedImages.splice(idx, 1);
+            updatePreviews();
+        }
+
+        // ─── Aggressiveness ───
+        function setAgg(el) {
+            document.querySelectorAll('.agg-pill').forEach(p => p.classList.remove('active'));
+            el.classList.add('active');
+            currentAgg = el.dataset.level;
+        }
+
+        // ─── Research ───
+        async function runResearch() {
+            const btn = document.getElementById('researchBtn');
+            btn.disabled = true;
+            btn.classList.add('loading');
+            btn.innerHTML = '<span class="spinner"></span> Researching prices...';
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            try {
+                const resp = await fetch('/price/api/research', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        images: uploadedImages,
+                        aggressiveness: currentAgg
+                    })
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    resultsDiv.innerHTML = `<div class="result-card" style="border-color: var(--danger);">
+                <div style="color: var(--danger); font-weight: 600;">❌ Error</div>
+                <div style="color: var(--text-secondary); margin-top: 8px;">${data.error}</div>
+                ${data.raw ? `<div style="color: var(--text-dim); margin-top: 8px; font-size: 12px;">${data.raw}</div>` : ''}
+            </div>`;
+                    return;
+                }
+
+                renderResults(data);
+            } catch (err) {
+                resultsDiv.innerHTML = `<div class="result-card" style="border-color: var(--danger);">
+            <div style="color: var(--danger); font-weight: 600;">❌ Network Error</div>
+            <div style="color: var(--text-secondary); margin-top: 8px;">${err.message}</div>
+        </div>`;
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btn.innerHTML = '🔍 Research Pricing';
+            }
+        }
+
+        function renderResults(data) {
+            const resultsDiv = document.getElementById('results');
+            let html = '';
+
+            // Render each product
+            (data.products || []).forEach((product, idx) => {
+                const priceData = (data.prices || [])[idx] || {};
+                const sources = priceData.sources || {};
+
+                html += `<div class="result-card">
+            <div class="product-header">
+                <div style="flex:1">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                        <span class="product-badge">${product.confidence === 'high' ? '✅ High' : product.confidence === 'medium' ? '🔶 Medium' : '⚠️ Low'} Confidence</span>
+                        ${data.is_bundle ? '<span class="product-badge" style="background:rgba(68,136,255,0.15); color:var(--blue);">📦 Bundle Item</span>' : ''}
+                    </div>
+                    <div class="product-name">${escHtml(product.name)}</div>
+                    <div class="product-details">${escHtml(product.brand)} • ${escHtml(product.details)} • ${escHtml(product.condition)}</div>
+                </div>
+            </div>
+
+            <table class="price-table">
+                <tr><th>Source</th><th style="text-align:right">Price</th></tr>
+                ${renderSourceRow('🟠 Amazon', sources.amazon)}
+                ${renderSourceRow('🔵 Walmart', sources.walmart)}
+                ${renderSourceRow('🟢 Google', sources.google_shopping)}
+                ${renderSourceRow('⚫ TikTok', sources.tiktok_shop)}
+                ${renderSourceRow('🔴 eBay Sold', sources.ebay_sold)}
+            </table>
+
+            <div class="recommendation">
+                <div class="rec-label">Recommended Price</div>
+                <div class="rec-price">$${(priceData.recommended_price || 0).toFixed(2)}</div>
+                <div class="rec-discount">${escHtml(priceData.discount_applied || '')}</div>
+                <div class="rec-profit">💰 Est. Profit: $${(priceData.estimated_profit || 0).toFixed(2)}</div>
+            </div>
+
+            <div class="copy-row">
+                <button class="copy-btn" onclick="copyText('${(priceData.recommended_price || 0).toFixed(2)}', this)">📋 Copy Price</button>
+                <button class="copy-btn" onclick="copyAll(${idx}, this)">📋 Copy All</button>
+            </div>
+        </div>`;
+            });
+
+            // Bundle recommendation
+            if (data.bundle_recommendation) {
+                const br = data.bundle_recommendation;
+                html += `<div class="bundle-card">
+            <div class="bundle-label">📦 Bundle Recommendation</div>
+            <div style="font-size:13px; color:var(--text-secondary); margin:8px 0;">
+                Individual total: $${br.individual_total.toFixed(2)} → ${br.bundle_discount}
+            </div>
+            <div class="bundle-price">$${br.bundle_price.toFixed(2)}</div>
+            <div class="rec-profit" style="background:rgba(68,136,255,0.1); color:var(--blue);">
+                💰 Bundle Profit: $${br.bundle_profit.toFixed(2)}
+            </div>
+            <div class="copy-row" style="margin-top:12px;">
+                <button class="copy-btn" onclick="copyText('${br.bundle_price.toFixed(2)}', this)">📋 Copy Bundle Price</button>
+            </div>
+        </div>`;
+            }
+
+            // Notes
+            if (data.notes) {
+                html += `<div class="notes-box">💡 ${escHtml(data.notes)}</div>`;
+            }
+
+            resultsDiv.innerHTML = html;
+
+            // Store data globally for copy-all
+            window._lastResults = data;
+        }
+
+        function renderSourceRow(label, source) {
+            if (!source || !source.price) return '';
+            const cls = source.estimated ? ' class="estimated"' : '';
+            return `<tr>
+        <td>${label}</td>
+        <td${cls} style="text-align:right">$${source.price.toFixed(2)}</td>
+    </tr>`;
+        }
+
+        // ─── Copy Functions ───
+        function copyText(text, btn) {
+            navigator.clipboard.writeText(text);
+            btn.classList.add('copied');
+            btn.textContent = '✅ Copied!';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.textContent = '📋 Copy Price';
+            }, 2000);
+        }
+
+        function copyAll(idx, btn) {
+            const data = window._lastResults;
+            if (!data) return;
+            const product = data.products[idx];
+            const prices = data.prices[idx];
+            const text = `${product.name}\nBrand: ${product.brand}\n${product.details}\n\nRecommended: $${prices.recommended_price.toFixed(2)}\nEst. Profit: $${prices.estimated_profit.toFixed(2)}\n${prices.discount_applied}`;
+            navigator.clipboard.writeText(text);
+            btn.classList.add('copied');
+            btn.textContent = '✅ Copied!';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.textContent = '📋 Copy All';
+            }, 2000);
+        }
+
+        // ─── History ───
+        async function loadHistory() {
+            try {
+                const resp = await fetch('/price/api/history?limit=30');
+                const items = await resp.json();
+                const list = document.getElementById('historyList');
+
+                if (!items.length) {
+                    list.innerHTML = `<div class="empty-state">
+                <div class="empty-icon">📋</div>
+                <div class="empty-text">No research history yet.</div>
+            </div>`;
+                    return;
+                }
+
+                list.innerHTML = items.map(item => {
+                    const products = item.products || [];
+                    const name = products.length ? products[0].name : 'Unknown Product';
+                    const date = new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                    return `<div class="history-item">
+                <div>
+                    <div class="history-name">${escHtml(name.substring(0, 50))}</div>
+                    <div class="history-meta">${date} • ${item.aggressiveness} • ${item.is_bundle ? '📦 Bundle' : 'Single'}</div>
+                </div>
+                <div class="history-price">$${(item.recommended_price || 0).toFixed(2)}</div>
+            </div>`;
+                }).join('');
+            } catch (err) {
+                console.error('History load error:', err);
+            }
+        }
+
+        // ─── Settings ───
+        async function loadSettings() {
+            try {
+                const resp = await fetch('/price/api/settings');
+                const data = await resp.json();
+                document.querySelectorAll('#settingsRadios .radio-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+                const active = document.querySelector(`#settingsRadios .radio-option[onclick*="${data.aggressiveness}"]`);
+                if (active) active.classList.add('selected');
+            } catch (err) {
+                console.error('Settings load error:', err);
+            }
+        }
+
+        async function selectSetting(el, level) {
+            document.querySelectorAll('#settingsRadios .radio-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+
+            // Also update the pills on research view
+            document.querySelectorAll('.agg-pill').forEach(p => p.classList.remove('active'));
+            const pill = document.querySelector(`.agg-pill[data-level="${level}"]`);
+            if (pill) pill.classList.add('active');
+            currentAgg = level;
+
+            try {
+                await fetch('/price/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ aggressiveness: level })
+                });
+            } catch (err) {
+                console.error('Settings save error:', err);
+            }
+        }
+
+        // ─── Utility ───
+        function escHtml(s) {
+            if (!s) return '';
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // ─── Init ───
+        loadSettings();
+    </script>
+</body>
+
+</html>
