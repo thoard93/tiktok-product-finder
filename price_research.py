@@ -23,11 +23,12 @@ XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 XAI_API_URL = 'https://api.x.ai/v1/chat/completions'
 XAI_MODEL = os.environ.get('XAI_MODEL', 'grok-4-1-fast-reasoning')
 
-# ─── Discount Ladder (bumped ~5% to undercut TikTok Shop) ────────────────────
+# ─── Discount Ladder (aggressive to undercut TikTok Shop) ────────────────────
+# Lower-priced items ($0-30) get steeper discounts since TikTok prices them low
 DISCOUNT_LADDER = {
-    'conservative': {15: 0.15, 30: 0.20, 60: 0.25, 100: 0.30, 9999: 0.35},
-    'balanced':     {15: 0.20, 30: 0.25, 60: 0.30, 100: 0.35, 9999: 0.40},
-    'aggressive':   {15: 0.25, 30: 0.32, 60: 0.38, 100: 0.42, 9999: 0.48},
+    'conservative': {15: 0.25, 30: 0.30, 60: 0.28, 100: 0.32, 9999: 0.35},
+    'balanced':     {15: 0.32, 30: 0.35, 60: 0.33, 100: 0.37, 9999: 0.40},
+    'aggressive':   {15: 0.40, 30: 0.42, 60: 0.40, 100: 0.44, 9999: 0.48},
 }
 
 def get_discount(price, aggressiveness='conservative'):
