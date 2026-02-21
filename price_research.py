@@ -120,17 +120,24 @@ def grok_research(image_data_list, aggressiveness='conservative'):
         'type': 'text',
         'text': f'''You are PriceBlade, a premium price research AI. Analyze these product images and provide a complete price research report.
 
+CONTEXT: The user receives these products as FREE TikTok Shop samples and resells them on eBay/other platforms. The recommended price MUST be competitive — especially LOWER than TikTok Shop's own price, since buyers can find it there.
+
 INSTRUCTIONS:
 1. IDENTIFY each product: brand, exact product name, size/count/flavor, condition
 2. DETECT if this is a BUNDLE (multiple different products) or single product
-3. RESEARCH current market prices from these sources (use your knowledge of typical retail pricing):
+3. RESEARCH current market prices from ALL these sources (use your knowledge of typical retail pricing):
+   - TikTok Shop (MOST IMPORTANT — this is the competitor! Get the actual TikTok Shop price)
    - Amazon (current price)
    - Walmart (current price)
    - Google Shopping (lowest price across sellers)
-   - TikTok Shop (if available)
-   - eBay sold listings (recent average)
-4. For each source, give the ACTUAL current retail price. If you're not sure, give your best estimate and mark it.
-5. Calculate a recommended selling price using a {aggressiveness} discount strategy.
+   - eBay sold listings (recent average sold price)
+4. For each source, give the ACTUAL current retail price. If not sure, give your best estimate and mark estimated=true.
+
+CRITICAL PRICING RULE:
+- The recommended_price MUST be LOWER than the TikTok Shop price (since buyers can find it there)
+- If TikTok Shop sells it for $18, recommend $14-16 range (not $19!)
+- Use the LOWEST price across ALL sources as the baseline, then apply the {aggressiveness} discount
+- These are zero-cost products, so any price is pure profit minus fees
 
 RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
 {{
@@ -140,7 +147,7 @@ RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
       "name": "Full product name",
       "brand": "Brand name",
       "details": "Size, count, flavor, etc.",
-      "condition": "New/Used/Open Box",
+      "condition": "New",
       "confidence": "high/medium/low"
     }}
   ],
@@ -148,22 +155,23 @@ RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
     {{
       "product_index": 0,
       "sources": {{
+        "tiktok_shop": {{"price": 18.99, "url_hint": "search term for TikTok Shop", "estimated": false}},
         "amazon": {{"price": 24.99, "url_hint": "search term", "estimated": false}},
         "walmart": {{"price": 22.49, "url_hint": "search term", "estimated": false}},
         "google_shopping": {{"price": 21.99, "estimated": true}},
-        "tiktok_shop": {{"price": 18.99, "estimated": true}},
         "ebay_sold": {{"price": 19.99, "avg_of": 5, "estimated": false}}
       }},
       "lowest_price": 18.99,
       "average_price": 21.69,
-      "recommended_price": 16.99,
-      "discount_applied": "15% off lowest",
-      "estimated_profit": 13.59,
-      "profit_note": "Cost $0 (TikTok sample) + ~$3.40 shipping/fees"
+      "tiktok_price": 18.99,
+      "recommended_price": 15.99,
+      "discount_applied": "16% below TikTok ($18.99)",
+      "estimated_profit": 12.51,
+      "profit_note": "Cost $0 (free sample) + ~$3.48 fees/shipping"
     }}
   ],
   "bundle_recommendation": null,
-  "notes": "Any relevant notes about the product, deals, rarity, etc."
+  "notes": "Any relevant notes about pricing, competition, rarity, etc."
 }}
 
 If it's a BUNDLE, include each product separately in "products" and "prices", then add:
@@ -243,18 +251,33 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
 
         result = json.loads(json_text)
 
-        # Apply discount ladder to recommended prices
+        # Apply discount ladder to recommended prices, enforce TikTok undercutting
         for price_entry in result.get('prices', []):
             lowest = price_entry.get('lowest_price', 0)
+            tiktok_price = None
+            sources = price_entry.get('sources', {})
+            if sources.get('tiktok_shop') and sources['tiktok_shop'].get('price'):
+                tiktok_price = float(sources['tiktok_shop']['price'])
+
             if lowest and lowest > 0:
                 discount = get_discount(lowest, aggressiveness)
                 recommended = round(lowest * (1 - discount), 2)
+
+                # CRITICAL: Never price above TikTok Shop
+                if tiktok_price and recommended >= tiktok_price:
+                    recommended = round(tiktok_price * (1 - discount), 2)
+                    price_entry['tiktok_warning'] = f"Price capped below TikTok (${tiktok_price})"
+
                 # eBay fees ~13% + shipping ~$3.40
                 est_fees = round(recommended * 0.13 + 3.40, 2)
                 est_profit = round(recommended - est_fees, 2)
 
                 price_entry['recommended_price'] = recommended
-                price_entry['discount_applied'] = f"{int(discount * 100)}% off lowest (${lowest})"
+                if tiktok_price:
+                    pct_below = round((1 - recommended / tiktok_price) * 100)
+                    price_entry['discount_applied'] = f"{pct_below}% below TikTok (${tiktok_price})"
+                else:
+                    price_entry['discount_applied'] = f"{int(discount * 100)}% off lowest (${lowest})"
                 price_entry['estimated_profit'] = est_profit
                 price_entry['profit_note'] = f"Cost $0 + ~${est_fees} fees/shipping"
 

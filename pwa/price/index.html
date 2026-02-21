@@ -1009,12 +1009,16 @@
 
             <table class="price-table">
                 <tr><th>Source</th><th style="text-align:right">Price</th></tr>
+                ${renderSourceRow('⚫ TikTok Shop', sources.tiktok_shop)}
                 ${renderSourceRow('🟠 Amazon', sources.amazon)}
                 ${renderSourceRow('🔵 Walmart', sources.walmart)}
                 ${renderSourceRow('🟢 Google', sources.google_shopping)}
-                ${renderSourceRow('⚫ TikTok', sources.tiktok_shop)}
                 ${renderSourceRow('🔴 eBay Sold', sources.ebay_sold)}
             </table>
+
+            <div class="notes-box" style="border-color: var(--warning); margin-bottom:12px;">
+                ⚠️ TikTok prices are AI estimates — always verify on TikTok Shop before listing!
+            </div>
 
             <div class="recommendation">
                 <div class="rec-label">Recommended Price</div>
@@ -1135,7 +1139,7 @@
                 return;
             }
 
-            list.innerHTML = items.map(item => {
+            list.innerHTML = items.map((item, idx) => {
                 const products = item.products || [];
                 const name = products.length ? products[0].name : 'Unknown Product';
                 const date = new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -1148,14 +1152,74 @@
                 } else {
                     badge = `<span class="freshness-badge freshness-old">🔴 ${days}d ago</span>`;
                 }
-                return `<div class="history-item">
+                return `<div class="history-item" onclick="showHistoryDetail(${idx})">
                     <div>
                         <div class="history-name">${escHtml(name.substring(0, 50))}${badge}</div>
                         <div class="history-meta">${date} • ${item.aggressiveness} • ${item.is_bundle ? '📦 Bundle' : 'Single'}</div>
                     </div>
-                    <div class="history-price">$${(item.recommended_price || 0).toFixed(2)}</div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div class="history-price">$${(item.recommended_price || 0).toFixed(2)}</div>
+                        <span style="color:var(--text-dim); font-size:16px;">›</span>
+                    </div>
                 </div>`;
             }).join('');
+        }
+
+        function showHistoryDetail(idx) {
+            const item = _historyData[idx];
+            if (!item) return;
+
+            const list = document.getElementById('historyList');
+            const products = item.products || [];
+            const name = products.length ? products[0].name : 'Unknown Product';
+
+            // Build detail view using the stored data
+            let html = `<button class="copy-btn" style="margin-bottom:16px; width:100%;" onclick="renderHistory(_historyData)">← Back to History</button>`;
+
+            // Render each product with full breakdown
+            products.forEach((product, pidx) => {
+                const priceData = (item.prices || [])[pidx] || {};
+                const sources = priceData.sources || {};
+
+                html += `<div class="result-card">
+                    <div class="product-header">
+                        <div style="flex:1">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+                                <span class="product-badge">${product.confidence === 'high' ? '✅ High' : product.confidence === 'medium' ? '🔶 Medium' : '⚠️ Low'} Confidence</span>
+                                ${item.is_bundle ? '<span class="product-badge" style="background:rgba(68,136,255,0.15); color:var(--blue);">📦 Bundle</span>' : ''}
+                            </div>
+                            <div class="product-name">${escHtml(product.name)}</div>
+                            <div class="product-details">${escHtml(product.brand)} • ${escHtml(product.details)} • ${escHtml(product.condition)}</div>
+                        </div>
+                    </div>
+
+                    <table class="price-table">
+                        <tr><th>Source</th><th style="text-align:right">Price</th></tr>
+                        ${renderSourceRow('⚫ TikTok Shop', sources.tiktok_shop)}
+                        ${renderSourceRow('🟠 Amazon', sources.amazon)}
+                        ${renderSourceRow('🔵 Walmart', sources.walmart)}
+                        ${renderSourceRow('🟢 Google', sources.google_shopping)}
+                        ${renderSourceRow('🔴 eBay Sold', sources.ebay_sold)}
+                    </table>
+
+                    <div class="notes-box" style="border-color: var(--warning); margin-bottom:12px;">
+                        ⚠️ TikTok prices are AI estimates — verify on TikTok Shop before listing!
+                    </div>
+
+                    <div class="recommendation">
+                        <div class="rec-label">Recommended Price</div>
+                        <div class="rec-price">$${safePrice(priceData.recommended_price)}</div>
+                        <div class="rec-discount">${escHtml(priceData.discount_applied || '')}</div>
+                        <div class="rec-profit">💰 Est. Profit: $${safePrice(priceData.estimated_profit)}</div>
+                    </div>
+
+                    <div class="copy-row">
+                        <button class="copy-btn" onclick="copyText('${safePrice(priceData.recommended_price)}', this)">📋 Copy Price</button>
+                    </div>
+                </div>`;
+            });
+
+            list.innerHTML = html;
         }
 
         // ─── Settings ───
