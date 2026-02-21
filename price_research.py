@@ -594,12 +594,14 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
                 individual_total = sum(p['recommended_price'] for p in tier_prices)
                 bundle_disc = 0.15
                 bundle_price = round(individual_total * (1 - bundle_disc), 2)
-                bundle_fees = round(bundle_price * 0.13 + 3.40, 2)
+                # Use sum of shipping costs from tier prices, or default
+                total_shipping = sum(p.get('shipping_cost', 5.15) for p in tier_prices)
+                bundle_fees = round(bundle_price * 0.13, 2)
                 tier_bundle = {
                     'individual_total': round(individual_total, 2),
                     'bundle_price': bundle_price,
                     'bundle_discount': f"{int(bundle_disc * 100)}% off individual total",
-                    'bundle_profit': round(bundle_price - bundle_fees, 2),
+                    'bundle_profit': round(bundle_price - bundle_fees - total_shipping, 2),
                 }
 
             all_tiers[tier_name] = {
@@ -844,6 +846,11 @@ def update_listing(listing_id):
         listing.status = data['status']
         if data['status'] == 'sold':
             listing.sold_at = datetime.utcnow()
+            # If no sold_price explicitly set, use list_price and recalculate
+            if not listing.sold_price and listing.list_price:
+                listing.sold_price = listing.list_price
+                listing.ebay_fees = round(listing.sold_price * 0.13, 2)
+                listing.profit = round(listing.sold_price - listing.ebay_fees - listing.shipping_cost, 2)
     if 'sold_price' in data:
         listing.sold_price = data['sold_price']
         listing.ebay_fees = round(listing.sold_price * 0.13, 2)

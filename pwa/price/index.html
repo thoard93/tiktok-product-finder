@@ -29,6 +29,7 @@
             --danger: #ff4466;
             --warning: #ffaa33;
             --blue: #4488ff;
+            --green: #22cc66;
             --radius: 16px;
             --radius-sm: 10px;
             --safe-top: env(safe-area-inset-top);
@@ -1169,7 +1170,7 @@
                 <div style="color:var(--text-dim); margin-bottom:4px;">📦 Shipping Estimate (USPS Ground Advantage)</div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span>${priceData.shipping_estimate ?
-                        `~${priceData.shipping_estimate.weight_oz || 12}oz • ${priceData.shipping_estimate.length_in || '?'}×${priceData.shipping_estimate.width_in || '?'}×${priceData.shipping_estimate.height_in || '?'}" • ${(priceData.shipping_estimate.package_type || 'small_box').replace('_', ' ')}` :
+                        `~${priceData.shipping_estimate.weight_oz || 12}oz • ${priceData.shipping_estimate.length_in || '?'}×${priceData.shipping_estimate.width_in || '?'}×${priceData.shipping_estimate.height_in || '?'} • ${(priceData.shipping_estimate.package_type || 'small_box').replace('_', ' ')}` :
                         '~12oz (default estimate)'
                     }</span>
                     <strong style="color:var(--accent);" id="ship-cost-${idx}">$${safePrice(priceData.shipping_cost || 5.15)}</strong>
@@ -1660,14 +1661,9 @@
                 document.getElementById('stat-avg').textContent = '$' + (stats.avg_profit || 0).toFixed(2);
                 document.getElementById('stat-research').textContent = stats.research_count || 0;
 
-                // Gmail status
+                // Gmail status — just show instructions, don't fire an actual scan
                 const gmailEl = document.getElementById('gmailStatus');
-                const gmailResp = await fetch('/price/api/gmail/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => null);
-                if (gmailResp && gmailResp.status === 400) {
-                    gmailEl.innerHTML = '⚠️ Not configured — Set <code>GMAIL_USER</code> and <code>GMAIL_APP_PASSWORD</code> on Render';
-                } else {
-                    gmailEl.innerHTML = '✅ Gmail connected';
-                }
+                gmailEl.innerHTML = `📧 Set <code>GMAIL_USER_${currentTeam.toUpperCase()}</code> and <code>GMAIL_APP_PASSWORD_${currentTeam.toUpperCase()}</code> on Render to enable Gmail scanning for this team.`;
             } catch (err) {
                 console.error('Dashboard error:', err);
             }
