@@ -1051,12 +1051,30 @@ def gmail_scan():
 
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
         mail.login(gmail_user, gmail_pass)
-        mail.select('inbox')
         since_date = (datetime.utcnow() - timedelta(days=14)).strftime('%d-%b-%Y')
+
+        # Try inbox first, fall back to All Mail for Workspace accounts
+        mail.select('inbox')
+        _, test_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SINCE {since_date})')
+        from_filter = 'ebay@ebay.com'
+        if not test_msgs[0]:
+            # Try broader FROM and All Mail folder for custom domain accounts
+            _, test_msgs2 = mail.search(None, f'(FROM "ebay" SINCE {since_date})')
+            if test_msgs2[0]:
+                from_filter = 'ebay'
+            else:
+                # Try All Mail folder
+                status, _ = mail.select('"[Gmail]/All Mail"')
+                if status == 'OK':
+                    _, test_msgs3 = mail.search(None, f'(FROM "ebay@ebay.com" SINCE {since_date})')
+                    if not test_msgs3[0]:
+                        _, test_msgs4 = mail.search(None, f'(FROM "ebay" SINCE {since_date})')
+                        if test_msgs4[0]:
+                            from_filter = 'ebay'
 
         # ── 1. SOLD EMAILS ──
         for search_q in ['made the sale', 'item has sold', 'You sold']:
-            _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
+            _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
             for num in (msgs[0].split() if msgs[0] else []):
                 try:
                     _, msg_data = mail.fetch(num, '(RFC822)')
@@ -1138,7 +1156,7 @@ def gmail_scan():
         # ── 2. LISTED EMAILS ──
         # eBay subject format: "👏 Product Name... has been listed"
         for search_q in ['has been listed', 'listing is live', 'item is listed', 'listing started', 'your listing']:
-            _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
+            _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
             for num in (msgs[0].split() if msgs[0] else []):
                 try:
                     _, msg_data = mail.fetch(num, '(RFC822)')
@@ -1204,7 +1222,7 @@ def gmail_scan():
                     log.warning(f"Error parsing listed email: {e}")
 
         # ── 3. SHIPPING LABEL EMAILS ──
-        _, ship_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "shipping label" SINCE {since_date})')
+        _, ship_msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "shipping label" SINCE {since_date})')
         for num in (ship_msgs[0].split() if ship_msgs[0] else []):
             try:
                 _, msg_data = mail.fetch(num, '(RFC822)')
@@ -1310,46 +1328,78 @@ def gmail_debug_scan():
 
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
         mail.login(gmail_user, gmail_pass)
-        mail.select('inbox')
         since_date = (datetime.utcnow() - timedelta(days=14)).strftime('%d-%b-%Y')
 
-        # Check all eBay emails
-        for search_q in ['listing is live', 'item is listed', 'made the sale', 'shipping label']:
-            _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
-            count = len(msgs[0].split()) if msgs[0] else 0
-            if count == 0:
-                debug_results.append({'search': search_q, 'count': 0})
+        # Try multiple folders (Workspace accounts may filter to different folders)
+        folders_to_try = ['inbox', '"[Gmail]/All Mail"']
+        for folder in folders_to_try:
+            status, _ = mail.select(folder)
+            if status != 'OK':
+                debug_results.append({'folder': folder, 'status': 'not available'})
                 continue
 
-            # Show first 2 from each type
-            for num in (msgs[0].split() if msgs[0] else [])[:2]:
-                _, msg_data = mail.fetch(num, '(RFC822)')
-                msg = _email.message_from_bytes(msg_data[0][1])
-                subject = _decode_subject(msg)
-                body = _get_email_body(msg)
-                text = _strip_html(body)[:500] if body else ''
+            # First: search ALL eBay emails (no subject filter) to verify access
+            _, all_ebay = mail.search(None, f'(FROM "ebay@ebay.com" SINCE {since_date})')
+            total_ebay = len(all_ebay[0].split()) if all_ebay[0] else 0
 
-                # Parse based on type
-                parsed = {}
-                if 'listing is live' in search_q or 'item is listed' in search_q:
-                    parsed = _parse_ebay_listed_email(body) if body else {}
-                elif 'made the sale' in search_q:
-                    parsed = _parse_ebay_sold_email(body) if body else {}
-                elif 'shipping label' in search_q:
-                    parsed = _parse_ebay_shipping_email(body) if body else {}
+            # Also try broader FROM patterns for custom domain accounts
+            _, all_ebay2 = mail.search(None, f'(FROM "ebay" SINCE {since_date})')
+            total_ebay_broad = len(all_ebay2[0].split()) if all_ebay2[0] else 0
 
-                debug_results.append({
-                    'search': search_q,
-                    'total_found': count,
-                    'subject': subject,
-                    'body_preview': text,
-                    'parsed': parsed,
-                })
+            debug_results.append({
+                'folder': folder,
+                'gmail_user': gmail_user,
+                'total_ebay_emails_exact': total_ebay,
+                'total_ebay_emails_broad': total_ebay_broad,
+            })
+
+            # If we found eBay emails, search by subject
+            search_source = all_ebay2 if total_ebay_broad > 0 else all_ebay
+            from_filter = 'ebay' if total_ebay_broad > total_ebay else 'ebay@ebay.com'
+
+            for search_q in ['has been listed', 'made the sale', 'shipping label', 'listing is live', 'item has sold']:
+                _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
+                count = len(msgs[0].split()) if msgs[0] else 0
+                if count == 0:
+                    debug_results.append({'search': search_q, 'folder': folder, 'count': 0})
+                    continue
+
+                # Show first 2 from each type
+                for num in (msgs[0].split() if msgs[0] else [])[:2]:
+                    _, msg_data = mail.fetch(num, '(RFC822)')
+                    msg = _email.message_from_bytes(msg_data[0][1])
+                    subject = _decode_subject(msg)
+                    body = _get_email_body(msg)
+                    text = _strip_html(body)[:500] if body else ''
+                    sender = msg.get('From', '')
+
+                    # Parse based on type
+                    parsed = {}
+                    if 'listed' in search_q or 'listing' in search_q:
+                        parsed = _parse_ebay_listed_email(body) if body else {}
+                    elif 'sale' in search_q or 'sold' in search_q:
+                        parsed = _parse_ebay_sold_email(body) if body else {}
+                    elif 'shipping' in search_q:
+                        parsed = _parse_ebay_shipping_email(body) if body else {}
+
+                    debug_results.append({
+                        'search': search_q,
+                        'folder': folder,
+                        'total_found': count,
+                        'subject': subject,
+                        'from': sender,
+                        'body_preview': text,
+                        'parsed': parsed,
+                    })
+
+            # If we found emails in this folder, no need to check others
+            if total_ebay > 0 or total_ebay_broad > 0:
+                break
 
         mail.logout()
         return jsonify({'debug': debug_results})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e), 'gmail_user': gmail_user}), 500
 
 
 # ─── Dashboard Stats ──────────────────────────────────────────────────────────
