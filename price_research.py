@@ -316,32 +316,41 @@ class EbayListing(db.Model):
         }
 
 
-# ─── Ensure tables exist ─────────────────────────────────────────────────────────────
+# ─── Ensure tables exist ─────────────────────────────────────────────────────
 with app.app_context():
-    # Create tables if they don't exist
+    from sqlalchemy import text
+
+    # Create base tables if they don't exist
     for model in [PriceResearch, PriceSettings]:
-        table_name = model.__tablename__
-        if not db.inspect(db.engine).has_table(table_name):
-            model.__table__.create(db.engine)
-            log.info(f"Created table: {table_name}")
+        try:
+            table_name = model.__tablename__
+            if not db.inspect(db.engine).has_table(table_name):
+                model.__table__.create(db.engine)
+                log.info(f"Created table: {table_name}")
+        except Exception as e:
+            log.warning(f"Table creation note for {model.__tablename__}: {e}")
 
     # EbayListing: drop and recreate if columns are wrong (new table, no data to preserve)
-    from sqlalchemy import text
-    inspector = db.inspect(db.engine)
-    if inspector.has_table('ebay_listings'):
-        ebay_cols = [c['name'] for c in inspector.get_columns('ebay_listings')]
-        if 'product_name' not in ebay_cols:
-            log.info("Migration: ebay_listings has wrong schema, dropping and recreating")
-            db.session.execute(text("DROP TABLE ebay_listings"))
-            db.session.commit()
+    try:
+        inspector = db.inspect(db.engine)
+        if inspector.has_table('ebay_listings'):
+            ebay_cols = [c['name'] for c in inspector.get_columns('ebay_listings')]
+            if 'product_name' not in ebay_cols:
+                log.info("Migration: ebay_listings has wrong schema, dropping and recreating")
+                db.session.execute(text("DROP TABLE ebay_listings"))
+                db.session.commit()
+                EbayListing.__table__.create(db.engine)
+                log.info("Migration: recreated ebay_listings table")
+        else:
             EbayListing.__table__.create(db.engine)
-            log.info("Migration: recreated ebay_listings table")
-    else:
-        EbayListing.__table__.create(db.engine)
-        log.info("Created table: ebay_listings")
+            log.info("Created table: ebay_listings")
+    except Exception as e:
+        db.session.rollback()
+        log.warning(f"EbayListing migration note: {e}")
 
     # Add new columns if missing (safe migrations)
     try:
+        inspector = db.inspect(db.engine)
         existing_cols = [c['name'] for c in inspector.get_columns('price_research')]
         if 'team' not in existing_cols:
             db.session.execute(text("ALTER TABLE price_research ADD COLUMN team VARCHAR(20) DEFAULT 'thoard'"))
@@ -352,12 +361,17 @@ with app.app_context():
             db.session.commit()
             log.info("Migration: added 'notes' column to price_research")
     except Exception as e:
+        db.session.rollback()
         log.warning(f"Migration note: {e}")
 
     # Ensure default settings exist
-    if not PriceSettings.query.first():
-        db.session.add(PriceSettings(aggressiveness='conservative'))
-        db.session.commit()
+    try:
+        if not PriceSettings.query.first():
+            db.session.add(PriceSettings(aggressiveness='conservative'))
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        log.warning(f"Default settings note: {e}")
 
 
 # =============================================================================
