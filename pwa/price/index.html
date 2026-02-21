@@ -1146,7 +1146,7 @@
                 return;
             }
 
-            list.innerHTML = items.map((item, idx) => {
+            let html = items.map((item, idx) => {
                 const products = item.products || [];
                 const name = products.length ? products[0].name : 'Unknown Product';
                 const date = new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -1160,16 +1160,48 @@
                     badge = `<span class="freshness-badge freshness-old">🔴 ${days}d ago</span>`;
                 }
                 return `<div class="history-item" onclick="showHistoryDetail(${idx})">
-                    <div>
+                    <div style="flex:1; min-width:0;">
                         <div class="history-name">${escHtml(name.substring(0, 50))}${badge}</div>
                         <div class="history-meta">${date} • ${item.aggressiveness} • ${item.is_bundle ? '📦 Bundle' : 'Single'}</div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
                         <div class="history-price">$${(item.recommended_price || 0).toFixed(2)}</div>
+                        <button onclick="event.stopPropagation(); deleteHistoryItem(${item.id}, ${idx})" style="background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:4px 6px; border-radius:6px;" title="Delete">🗑️</button>
                         <span style="color:var(--text-dim); font-size:16px;">›</span>
                     </div>
                 </div>`;
             }).join('');
+
+            // Clear All button
+            if (items.length > 1) {
+                html += `<button onclick="clearAllHistory()" style="width:100%; margin-top:12px; padding:12px; background:transparent; border:1px solid var(--border); color:var(--text-dim); border-radius:12px; font-size:13px; cursor:pointer;">🗑️ Clear All History</button>`;
+            }
+
+            list.innerHTML = html;
+        }
+
+        async function deleteHistoryItem(id, idx) {
+            if (!confirm('Delete this research?')) return;
+            try {
+                await fetch(`/price/api/history/${id}`, { method: 'DELETE' });
+                _historyData.splice(idx, 1);
+                renderHistory(_historyData);
+            } catch (err) {
+                alert('Failed to delete: ' + err.message);
+            }
+        }
+
+        async function clearAllHistory() {
+            if (!confirm('Delete ALL research history? This cannot be undone.')) return;
+            try {
+                for (const item of _historyData) {
+                    await fetch(`/price/api/history/${item.id}`, { method: 'DELETE' });
+                }
+                _historyData = [];
+                renderHistory(_historyData);
+            } catch (err) {
+                alert('Failed to clear: ' + err.message);
+            }
         }
 
         function showHistoryDetail(idx) {
