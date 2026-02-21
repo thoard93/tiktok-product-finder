@@ -1131,6 +1131,8 @@ def gmail_scan():
                 except Exception as e:
                     log.warning(f"Error parsing sold email: {e}")
 
+        db.session.flush()  # Make sold items visible to listed email queries
+
         # ── 2. LISTED EMAILS ──
         # eBay subject format: "👏 Product Name... has been listed"
         for search_q in ['has been listed', 'listing is live', 'item is listed', 'listing started', 'your listing']:
@@ -1171,9 +1173,17 @@ def gmail_scan():
                     if not product_name:
                         continue
 
+                    # Check if already tracked (match truncated names both ways)
                     existing = EbayListing.query.filter(
                         EbayListing.product_name.ilike(f'%{product_name[:40]}%')
                     ).first()
+                    # Also check reverse: does a sold/listed item's name contain this short name?
+                    if not existing and len(product_name) >= 8:
+                        all_items = EbayListing.query.filter_by(team=team).all()
+                        for item in all_items:
+                            if product_name.lower() in item.product_name.lower():
+                                existing = item
+                                break
                     if existing:
                         if info.get('list_price') and not existing.list_price:
                             existing.list_price = info['list_price']
@@ -1228,6 +1238,21 @@ def gmail_scan():
                     updated_shipping.append(listing.to_dict())
             except Exception as e:
                 log.warning(f"Error parsing shipping email: {e}")
+
+        # ── 4. CLEANUP: merge duplicates ──
+        # If a listed item's name is a subset of a sold item's name, delete the listed duplicate
+        listed_items = EbayListing.query.filter_by(team=team, status='listed').all()
+        sold_items = EbayListing.query.filter_by(team=team, status='sold').all()
+        for listed in listed_items:
+            for sold in sold_items:
+                if (listed.product_name.lower() in sold.product_name.lower() or
+                    sold.product_name.lower() in listed.product_name.lower()):
+                    # Merge list_price into sold if missing
+                    if listed.list_price and not sold.list_price:
+                        sold.list_price = listed.list_price
+                    db.session.delete(listed)
+                    log.info(f"Merged duplicate: '{listed.product_name}' into sold '{sold.product_name}'")
+                    break
 
         db.session.commit()
         mail.logout()
