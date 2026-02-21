@@ -39,6 +39,170 @@ def get_discount(price, aggressiveness='conservative'):
     return 0.30  # fallback
 
 
+# ─── BrightData TikTok Shop Price Lookup ─────────────────────────────────────
+BRIGHTDATA_PROXY_HOST = os.environ.get('BRIGHTDATA_PROXY_HOST', 'brd.superproxy.io')
+BRIGHTDATA_PROXY_PORT = os.environ.get('BRIGHTDATA_PROXY_PORT', '33335')
+BRIGHTDATA_PROXY_USER = os.environ.get('BRIGHTDATA_PROXY_USER', '')
+BRIGHTDATA_PROXY_PASS = os.environ.get('BRIGHTDATA_PROXY_PASS', '')
+
+
+def search_tiktok_shop(product_name, brand=''):
+    """
+    Search TikTok Shop for a product and return the real price.
+    Uses BrightData Web Unlocker to bypass TikTok's JS rendering.
+    
+    Returns: dict with {price, name, url, verified} or None on failure
+    """
+    if not BRIGHTDATA_PROXY_USER or not BRIGHTDATA_PROXY_PASS:
+        log.warning("TikTok Shop lookup skipped: no BrightData proxy credentials")
+        return None
+    
+    # Build optimized search query (brand + key product words)
+    search_query = product_name.strip()
+    if brand and brand.lower() not in search_query.lower():
+        search_query = f"{brand} {search_query}"
+    
+    # Clean up search query: remove size/count details that may hurt matching
+    # Keep brand + product name, drop "8.4oz", "Full Size", "Pack of 3", etc.
+    clean_query = re.sub(r'\b\d+(\.\d+)?\s*(oz|ml|fl|g|mg|count|pack|ct|lb|kg)\b', '', search_query, flags=re.IGNORECASE)
+    clean_query = re.sub(r'\b(full size|travel size|trial size|sample)\b', '', clean_query, flags=re.IGNORECASE)
+    clean_query = re.sub(r'\s+', ' ', clean_query).strip()
+    
+    from urllib.parse import quote_plus
+    search_url = f"https://www.tiktok.com/shop/search?q={quote_plus(clean_query)}"
+    
+    proxy_url = f"http://{BRIGHTDATA_PROXY_USER}:{BRIGHTDATA_PROXY_PASS}@{BRIGHTDATA_PROXY_HOST}:{BRIGHTDATA_PROXY_PORT}"
+    proxies = {
+        'http': proxy_url,
+        'https': proxy_url,
+    }
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    
+    try:
+        import time as _time
+        _start = _time.time()
+        log.info(f"TikTok Shop search: '{clean_query}' via BrightData")
+        
+        resp = requests.get(
+            search_url,
+            headers=headers,
+            proxies=proxies,
+            timeout=30,
+            verify=False,  # BrightData proxy SSL
+        )
+        
+        elapsed = round(_time.time() - _start, 1)
+        log.info(f"TikTok Shop response: {resp.status_code} in {elapsed}s, {len(resp.text)} bytes")
+        
+        if resp.status_code != 200:
+            log.warning(f"TikTok Shop search failed: {resp.status_code}")
+            return None
+        
+        html = resp.text
+        
+        # Parse prices from the rendered HTML
+        # TikTok Shop search results typically have price in structured data or product cards
+        prices_found = []
+        
+        # Method 1: Look for JSON-LD structured data
+        json_ld_matches = re.findall(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', html, re.DOTALL)
+        for jld in json_ld_matches:
+            try:
+                data = json.loads(jld)
+                if isinstance(data, dict) and data.get('offers'):
+                    offers = data['offers'] if isinstance(data['offers'], list) else [data['offers']]
+                    for offer in offers:
+                        price = offer.get('price') or offer.get('lowPrice')
+                        if price:
+                            prices_found.append({
+                                'price': float(price),
+                                'name': data.get('name', ''),
+                                'source': 'json_ld'
+                            })
+            except:
+                pass
+        
+        # Method 2: Look for price patterns in the HTML (common TikTok Shop patterns)
+        # Prices like $18.00, $24.99 etc in product cards
+        price_patterns = re.findall(
+            r'(?:"price"|"salePrice"|"currentPrice"|price["\s:]+)\s*[":]*\s*\$?(\d+\.?\d{0,2})',
+            html, re.IGNORECASE
+        )
+        for p in price_patterns:
+            try:
+                pf = float(p)
+                if 1.0 < pf < 500:  # Reasonable price range
+                    prices_found.append({'price': pf, 'name': '', 'source': 'html_pattern'})
+            except:
+                pass
+        
+        # Method 3: Look for __NEXT_DATA__ or similar SSR data blocks
+        next_data = re.search(r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+        if next_data:
+            try:
+                nd = json.loads(next_data.group(1))
+                # Traverse for product price data
+                nd_str = json.dumps(nd)
+                nd_prices = re.findall(r'"(?:price|salePrice|originalPrice)":\s*"?(\d+\.?\d{0,2})"?', nd_str)
+                for p in nd_prices:
+                    pf = float(p)
+                    if 1.0 < pf < 500:
+                        prices_found.append({'price': pf, 'name': '', 'source': 'next_data'})
+            except:
+                pass
+        
+        # Method 4: Look for SIGI_STATE or similar TikTok data blocks
+        sigi_match = re.search(r'window\[.SIGI_STATE.\]\s*=\s*({.*?});?\s*</script>', html, re.DOTALL)
+        if not sigi_match:
+            sigi_match = re.search(r'"ItemModule":\s*({.*?})\s*[,}]', html, re.DOTALL)
+        if sigi_match:
+            try:
+                sigi_str = sigi_match.group(1)[:10000]  # Limit size
+                sigi_prices = re.findall(r'"(?:price|salePrice)":\s*"?(\d+\.?\d{0,2})"?', sigi_str)
+                for p in sigi_prices:
+                    pf = float(p)
+                    if 1.0 < pf < 500:
+                        prices_found.append({'price': pf, 'name': '', 'source': 'sigi_state'})
+            except:
+                pass
+        
+        if not prices_found:
+            log.info(f"TikTok Shop: no prices found in HTML ({len(html)} bytes)")
+            # Log a snippet for debugging
+            log.debug(f"TikTok HTML snippet: {html[:2000]}")
+            return None
+        
+        # Get the most common / median price (filter outliers)
+        price_values = [p['price'] for p in prices_found]
+        # Use the most common price (mode)
+        from collections import Counter
+        price_counter = Counter(price_values)
+        most_common_price = price_counter.most_common(1)[0][0]
+        
+        result = {
+            'price': most_common_price,
+            'name': next((p['name'] for p in prices_found if p['name']), clean_query),
+            'url': search_url,
+            'verified': True,
+            'source_method': prices_found[0]['source'],
+            'prices_found': len(prices_found),
+        }
+        log.info(f"TikTok Shop VERIFIED: ${most_common_price} for '{clean_query}' ({len(prices_found)} price signals)")
+        return result
+        
+    except requests.exceptions.Timeout:
+        log.warning(f"TikTok Shop lookup timed out after 30s")
+        return None
+    except Exception as e:
+        log.error(f"TikTok Shop lookup error: {e}")
+        return None
+
+
 # =============================================================================
 # DATABASE MODELS
 # =============================================================================
@@ -250,6 +414,39 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
         json_text = re.sub(r'<think>.*?</think>', '', json_text, flags=re.DOTALL).strip()
 
         result = json.loads(json_text)
+
+        # ── REAL TIKTOK SHOP PRICE LOOKUP ──
+        # After Grok identifies products, search TikTok Shop for real prices
+        products = result.get('products', [])
+        for idx, product in enumerate(products):
+            try:
+                tiktok_result = search_tiktok_shop(
+                    product.get('name', ''),
+                    product.get('brand', '')
+                )
+                if tiktok_result and tiktok_result.get('price'):
+                    real_price = tiktok_result['price']
+                    log.info(f"Product {idx}: TikTok VERIFIED ${real_price} (was estimated)")
+                    
+                    # Override TikTok price in the sources
+                    if idx < len(result.get('prices', [])):
+                        price_entry = result['prices'][idx]
+                        if 'sources' not in price_entry:
+                            price_entry['sources'] = {}
+                        price_entry['sources']['tiktok_shop'] = {
+                            'price': real_price,
+                            'url_hint': tiktok_result.get('url', ''),
+                            'estimated': False,
+                            'verified': True,
+                            'source_method': tiktok_result.get('source_method', ''),
+                        }
+                        # Recalculate lowest_price if TikTok is lower
+                        current_lowest = price_entry.get('lowest_price', 999)
+                        if real_price < current_lowest:
+                            price_entry['lowest_price'] = real_price
+                            log.info(f"Product {idx}: new lowest price ${real_price} (TikTok)")
+            except Exception as e:
+                log.warning(f"TikTok lookup failed for product {idx}: {e}")
 
         # Apply discount ladder to recommended prices, enforce TikTok undercutting
         for price_entry in result.get('prices', []):

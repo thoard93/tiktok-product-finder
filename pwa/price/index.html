@@ -1071,8 +1071,14 @@
             if (!source || source.price == null) return '';
             const price = parseFloat(source.price) || 0;
             const cls = source.estimated ? ' class="estimated"' : '';
+            let badge = '';
+            if (source.verified) {
+                badge = ' <span style="font-size:10px; color:var(--accent);">✅ Verified</span>';
+            } else if (source.estimated) {
+                badge = ' <span style="font-size:10px; color:var(--warning);">⚠️ Est</span>';
+            }
             return `<tr>
-        <td>${label}</td>
+        <td>${label}${badge}</td>
         <td${cls} style="text-align:right">$${price.toFixed(2)}</td>
     </tr>`;
         }
