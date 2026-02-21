@@ -40,6 +40,28 @@ def get_discount(price, aggressiveness='conservative'):
     return 0.30  # fallback
 
 
+# ─── USPS Ground Advantage Cost Table ────────────────────────────────────────
+# Approximate rates for USPS Ground Advantage (varies by zone, these are averages)
+USPS_GROUND_RATES = [
+    (4,   4.00),   # ≤ 4oz
+    (8,   4.65),   # ≤ 8oz
+    (12,  5.15),   # ≤ 12oz
+    (16,  5.65),   # ≤ 1lb
+    (32,  7.00),   # ≤ 2lb
+    (48,  8.50),   # ≤ 3lb
+    (80,  10.50),  # ≤ 5lb
+    (160, 14.00),  # ≤ 10lb
+    (320, 18.00),  # ≤ 20lb
+]
+
+def get_usps_shipping_cost(weight_oz):
+    """Get estimated USPS Ground Advantage cost based on weight in ounces."""
+    for max_oz, cost in USPS_GROUND_RATES:
+        if weight_oz <= max_oz:
+            return cost
+    return 20.00  # fallback for heavy items
+
+
 # ─── BrightData TikTok Shop Price Lookup ─────────────────────────────────────
 BRIGHTDATA_PROXY_HOST = os.environ.get('BRIGHTDATA_PROXY_HOST', 'brd.superproxy.io')
 BRIGHTDATA_PROXY_PORT = os.environ.get('BRIGHTDATA_PROXY_PORT', '33335')
@@ -218,6 +240,7 @@ class PriceResearch(db.Model):
     recommended_price = db.Column(db.Float, default=0)
     is_bundle = db.Column(db.Boolean, default=False)
     aggressiveness = db.Column(db.String(20), default='conservative')
+    team = db.Column(db.String(20), default='thoard') # Team: thoard or reol
     raw_response = db.Column(db.Text, default='')     # Full Grok response for debugging
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -236,6 +259,7 @@ class PriceResearch(db.Model):
             'recommended_price': self.recommended_price,
             'is_bundle': self.is_bundle,
             'aggressiveness': self.aggressiveness,
+            'team': self.team or 'thoard',
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'days_ago': days_ago,
             'freshness': freshness,
@@ -258,6 +282,18 @@ with app.app_context():
         if not db.inspect(db.engine).has_table(table_name):
             model.__table__.create(db.engine)
             log.info(f"Created table: {table_name}")
+
+    # Add new columns if missing (safe migrations)
+    try:
+        inspector = db.inspect(db.engine)
+        existing_cols = [c['name'] for c in inspector.get_columns('price_research')]
+        from sqlalchemy import text
+        if 'team' not in existing_cols:
+            db.session.execute(text("ALTER TABLE price_research ADD COLUMN team VARCHAR(20) DEFAULT 'thoard'"))
+            db.session.commit()
+            log.info("Migration: added 'team' column to price_research")
+    except Exception as e:
+        log.warning(f"Migration note: {e}")
 
     # Ensure default settings exist
     if not PriceSettings.query.first():
@@ -297,12 +333,13 @@ INSTRUCTIONS:
    - Google Shopping (lowest price across sellers)
    - eBay sold listings (recent average sold price)
 4. For each source, give the ACTUAL current retail price. If not sure, give your best estimate and mark estimated=true.
+5. ESTIMATE SHIPPING: For each product, estimate the approximate weight in ounces, dimensions in inches (L x W x H), and best package type (padded_envelope, small_box, medium_box, large_box).
 
 CRITICAL PRICING RULE:
 - The recommended_price MUST be LOWER than the TikTok Shop price (since buyers can find it there)
 - If TikTok Shop sells it for $18, recommend $14-16 range (not $19!)
 - Use the LOWEST price across ALL sources as the baseline, then apply the {aggressiveness} discount
-- These are zero-cost products, so any price is pure profit minus fees
+- These are zero-cost products, so any price is pure profit minus eBay fees and shipping
 
 RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
 {{
@@ -325,6 +362,13 @@ RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
         "walmart": {{"price": 22.49, "url_hint": "search term", "estimated": false}},
         "google_shopping": {{"price": 21.99, "estimated": true}},
         "ebay_sold": {{"price": 19.99, "avg_of": 5, "estimated": false}}
+      }},
+      "shipping_estimate": {{
+        "weight_oz": 12,
+        "length_in": 8,
+        "width_in": 4,
+        "height_in": 3,
+        "package_type": "small_box"
       }},
       "lowest_price": 18.99,
       "average_price": 21.69,
@@ -468,8 +512,13 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
                     if tiktok_price and recommended >= tiktok_price:
                         recommended = round(tiktok_price * (1 - discount), 2)
 
-                    est_fees = round(recommended * 0.13 + 3.40, 2)
-                    est_profit = round(recommended - est_fees, 2)
+                    # Get shipping cost from AI estimate or default
+                    shipping = price_entry.get('shipping_estimate', {})
+                    weight_oz = shipping.get('weight_oz', 12)  # default 12oz
+                    shipping_cost = get_usps_shipping_cost(weight_oz)
+
+                    ebay_fees = round(recommended * 0.13, 2)
+                    est_profit = round(recommended - ebay_fees - shipping_cost, 2)
 
                     if tiktok_price:
                         pct_below = round((1 - recommended / tiktok_price) * 100)
@@ -481,7 +530,9 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
                         'recommended_price': recommended,
                         'discount_applied': discount_label,
                         'estimated_profit': est_profit,
-                        'profit_note': f"Cost $0 + ~${est_fees} fees/shipping",
+                        'profit_note': f"$0 cost + ${ebay_fees} eBay fees + ${shipping_cost} shipping",
+                        'shipping_cost': shipping_cost,
+                        'shipping_estimate': shipping,
                     })
                 else:
                     tier_prices.append({
@@ -617,6 +668,7 @@ def price_research():
             recommended_price=result['prices'][0]['recommended_price'] if result.get('prices') else 0,
             is_bundle=result.get('is_bundle', False),
             aggressiveness=aggressiveness,
+            team=data.get('team', 'thoard'),
             raw_response=raw[:5000],
         )
         db.session.add(research)
@@ -631,9 +683,13 @@ def price_research():
 # ─── Research History ─────────────────────────────────────────────────────────
 @app.route('/price/api/history', methods=['GET'])
 def price_history():
-    """Get research history (last 30 days)."""
+    """Get research history, optionally filtered by team."""
     limit = request.args.get('limit', 50, type=int)
-    researches = PriceResearch.query.order_by(
+    team = request.args.get('team', '')
+    query = PriceResearch.query
+    if team:
+        query = query.filter_by(team=team)
+    researches = query.order_by(
         PriceResearch.created_at.desc()
     ).limit(limit).all()
     return jsonify([r.to_dict() for r in researches])

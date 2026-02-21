@@ -736,6 +736,14 @@
     <!-- Main Content -->
     <div class="main">
 
+        <!-- Team Selector -->
+        <div style="display:flex; justify-content:center; gap:8px; padding:8px 16px 0;">
+            <div class="agg-pill active" id="team-thoard" onclick="selectTeam('thoard', this)" style="font-size:13px;">
+                👤 Thoard</div>
+            <div class="agg-pill" id="team-reol" onclick="selectTeam('reol', this)" style="font-size:13px;">👤 Reol
+            </div>
+        </div>
+
         <!-- ═══ RESEARCH VIEW ═══ -->
         <div class="view active" id="view-research">
             <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
@@ -847,6 +855,23 @@
         // ─── State ───
         let uploadedImages = [];
         let currentAgg = 'conservative';
+        let currentTeam = localStorage.getItem('priceblade_team') || 'thoard';
+
+        // Restore team pill on load
+        (function () {
+            document.querySelectorAll('[id^="team-"]').forEach(p => p.classList.remove('active'));
+            const pill = document.getElementById('team-' + currentTeam);
+            if (pill) pill.classList.add('active');
+        })();
+
+        function selectTeam(team, btn) {
+            currentTeam = team;
+            localStorage.setItem('priceblade_team', team);
+            document.querySelectorAll('[id^="team-"]').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            // Reload history for this team
+            loadHistory();
+        }
 
         // ─── View Navigation ───
         function showView(name) {
@@ -971,7 +996,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         images: uploadedImages,
-                        aggressiveness: currentAgg
+                        aggressiveness: currentAgg,
+                        team: currentTeam
                     })
                 });
                 const data = await resp.json();
@@ -1040,6 +1066,17 @@
             <div class="notes-box" style="border-color: var(--warning); margin-bottom:12px;">
                 ⚠️ TikTok prices are AI estimates —
                 <a href="https://www.tiktok.com/shop/search?q=${encodeURIComponent(product.name)}" target="_blank" style="color:var(--accent); text-decoration:underline;">verify on TikTok Shop →</a>
+            </div>
+
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:13px;">
+                <div style="color:var(--text-dim); margin-bottom:4px;">📦 Shipping Estimate (USPS Ground Advantage)</div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>${priceData.shipping_estimate ?
+                        `~${priceData.shipping_estimate.weight_oz || 12}oz • ${priceData.shipping_estimate.length_in || '?'}×${priceData.shipping_estimate.width_in || '?'}×${priceData.shipping_estimate.height_in || '?'}" • ${(priceData.shipping_estimate.package_type || 'small_box').replace('_', ' ')}` :
+                        '~12oz (default estimate)'
+                    }</span>
+                    <strong style="color:var(--accent);" id="ship-cost-${idx}">$${safePrice(priceData.shipping_cost || 5.15)}</strong>
+                </div>
             </div>
 
             <div class="agg-selector" style="margin:12px 0 0 0;">
@@ -1189,7 +1226,7 @@
 
         async function loadHistory() {
             try {
-                const resp = await fetch('/price/api/history?limit=50');
+                const resp = await fetch(`/price/api/history?limit=50&team=${currentTeam}`);
                 _historyData = await resp.json();
                 renderHistory(_historyData);
             } catch (err) {
