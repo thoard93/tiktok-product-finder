@@ -23,11 +23,11 @@ XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 XAI_API_URL = 'https://api.x.ai/v1/chat/completions'
 XAI_MODEL = os.environ.get('XAI_MODEL', 'grok-4-1-fast-reasoning')
 
-# ─── Discount Ladder ─────────────────────────────────────────────────────────
+# ─── Discount Ladder (bumped ~5% to undercut TikTok Shop) ────────────────────
 DISCOUNT_LADDER = {
-    'conservative': {15: 0.10, 30: 0.15, 60: 0.20, 100: 0.25, 9999: 0.30},
-    'balanced':     {15: 0.14, 30: 0.20, 60: 0.25, 100: 0.30, 9999: 0.35},
-    'aggressive':   {15: 0.18, 30: 0.25, 60: 0.30, 100: 0.35, 9999: 0.40},
+    'conservative': {15: 0.15, 30: 0.20, 60: 0.25, 100: 0.30, 9999: 0.35},
+    'balanced':     {15: 0.20, 30: 0.25, 60: 0.30, 100: 0.35, 9999: 0.40},
+    'aggressive':   {15: 0.25, 30: 0.32, 60: 0.38, 100: 0.42, 9999: 0.48},
 }
 
 def get_discount(price, aggressiveness='conservative'):
@@ -448,48 +448,78 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
             except Exception as e:
                 log.warning(f"TikTok lookup failed for product {idx}: {e}")
 
-        # Apply discount ladder to recommended prices, enforce TikTok undercutting
-        for price_entry in result.get('prices', []):
-            lowest = price_entry.get('lowest_price', 0)
-            tiktok_price = None
-            sources = price_entry.get('sources', {})
-            if sources.get('tiktok_shop') and sources['tiktok_shop'].get('price'):
-                tiktok_price = float(sources['tiktok_shop']['price'])
+        # Calculate ALL 3 pricing tiers per product so frontend can tab-switch
+        all_tiers = {}
+        for tier_name in ['conservative', 'balanced', 'aggressive']:
+            tier_prices = []
+            for price_entry in result.get('prices', []):
+                lowest = price_entry.get('lowest_price', 0)
+                tiktok_price = None
+                sources = price_entry.get('sources', {})
+                if sources.get('tiktok_shop') and sources['tiktok_shop'].get('price'):
+                    tiktok_price = float(sources['tiktok_shop']['price'])
 
-            if lowest and lowest > 0:
-                discount = get_discount(lowest, aggressiveness)
-                recommended = round(lowest * (1 - discount), 2)
+                if lowest and lowest > 0:
+                    discount = get_discount(lowest, tier_name)
+                    recommended = round(lowest * (1 - discount), 2)
 
-                # CRITICAL: Never price above TikTok Shop
-                if tiktok_price and recommended >= tiktok_price:
-                    recommended = round(tiktok_price * (1 - discount), 2)
-                    price_entry['tiktok_warning'] = f"Price capped below TikTok (${tiktok_price})"
+                    # CRITICAL: Never price above TikTok Shop
+                    if tiktok_price and recommended >= tiktok_price:
+                        recommended = round(tiktok_price * (1 - discount), 2)
 
-                # eBay fees ~13% + shipping ~$3.40
-                est_fees = round(recommended * 0.13 + 3.40, 2)
-                est_profit = round(recommended - est_fees, 2)
+                    est_fees = round(recommended * 0.13 + 3.40, 2)
+                    est_profit = round(recommended - est_fees, 2)
 
-                price_entry['recommended_price'] = recommended
-                if tiktok_price:
-                    pct_below = round((1 - recommended / tiktok_price) * 100)
-                    price_entry['discount_applied'] = f"{pct_below}% below TikTok (${tiktok_price})"
+                    if tiktok_price:
+                        pct_below = round((1 - recommended / tiktok_price) * 100)
+                        discount_label = f"{pct_below}% below TikTok (${tiktok_price})"
+                    else:
+                        discount_label = f"{int(discount * 100)}% off lowest (${lowest})"
+
+                    tier_prices.append({
+                        'recommended_price': recommended,
+                        'discount_applied': discount_label,
+                        'estimated_profit': est_profit,
+                        'profit_note': f"Cost $0 + ~${est_fees} fees/shipping",
+                    })
                 else:
-                    price_entry['discount_applied'] = f"{int(discount * 100)}% off lowest (${lowest})"
-                price_entry['estimated_profit'] = est_profit
-                price_entry['profit_note'] = f"Cost $0 + ~${est_fees} fees/shipping"
+                    tier_prices.append({
+                        'recommended_price': price_entry.get('recommended_price', 0),
+                        'discount_applied': price_entry.get('discount_applied', ''),
+                        'estimated_profit': price_entry.get('estimated_profit', 0),
+                        'profit_note': price_entry.get('profit_note', ''),
+                    })
 
-        # Handle bundle pricing
-        if result.get('is_bundle') and len(result.get('prices', [])) > 1:
-            individual_total = sum(p.get('recommended_price', 0) for p in result['prices'])
-            bundle_discount = 0.15  # 15% off individual total for bundles
-            bundle_price = round(individual_total * (1 - bundle_discount), 2)
-            bundle_fees = round(bundle_price * 0.13 + 3.40, 2)
-            result['bundle_recommendation'] = {
-                'individual_total': round(individual_total, 2),
-                'bundle_price': bundle_price,
-                'bundle_discount': f"{int(bundle_discount * 100)}% off individual total",
-                'bundle_profit': round(bundle_price - bundle_fees, 2),
+            # Bundle pricing per tier
+            tier_bundle = None
+            if result.get('is_bundle') and len(tier_prices) > 1:
+                individual_total = sum(p['recommended_price'] for p in tier_prices)
+                bundle_disc = 0.15
+                bundle_price = round(individual_total * (1 - bundle_disc), 2)
+                bundle_fees = round(bundle_price * 0.13 + 3.40, 2)
+                tier_bundle = {
+                    'individual_total': round(individual_total, 2),
+                    'bundle_price': bundle_price,
+                    'bundle_discount': f"{int(bundle_disc * 100)}% off individual total",
+                    'bundle_profit': round(bundle_price - bundle_fees, 2),
+                }
+
+            all_tiers[tier_name] = {
+                'prices': tier_prices,
+                'bundle_recommendation': tier_bundle,
             }
+
+        result['pricing_tiers'] = all_tiers
+
+        # Apply the selected tier to the main fields (for backward compat + DB storage)
+        selected_tier = all_tiers.get(aggressiveness, all_tiers['conservative'])
+        for idx, price_entry in enumerate(result.get('prices', [])):
+            if idx < len(selected_tier['prices']):
+                price_entry.update(selected_tier['prices'][idx])
+
+        # Handle bundle pricing (selected tier)
+        if selected_tier.get('bundle_recommendation'):
+            result['bundle_recommendation'] = selected_tier['bundle_recommendation']
 
         result['_raw'] = raw_text
         return result

@@ -1021,15 +1021,21 @@
                 <a href="https://www.tiktok.com/shop/search?q=${encodeURIComponent(product.name)}" target="_blank" style="color:var(--accent); text-decoration:underline;">verify on TikTok Shop →</a>
             </div>
 
-            <div class="recommendation">
+            <div class="agg-selector" style="margin:12px 0 0 0;">
+                <div class="agg-pill active" data-tier="conservative" onclick="switchTier('conservative', ${idx}, this)">🛡️ Conservative</div>
+                <div class="agg-pill" data-tier="balanced" onclick="switchTier('balanced', ${idx}, this)">⚖️ Balanced</div>
+                <div class="agg-pill" data-tier="aggressive" onclick="switchTier('aggressive', ${idx}, this)">⚡ Aggressive</div>
+            </div>
+
+            <div class="recommendation" id="rec-${idx}">
                 <div class="rec-label">Recommended Price</div>
-                <div class="rec-price">$${(priceData.recommended_price || 0).toFixed(2)}</div>
-                <div class="rec-discount">${escHtml(priceData.discount_applied || '')}</div>
-                <div class="rec-profit">💰 Est. Profit: $${(priceData.estimated_profit || 0).toFixed(2)}</div>
+                <div class="rec-price" id="rec-price-${idx}">$${safePrice(priceData.recommended_price)}</div>
+                <div class="rec-discount" id="rec-discount-${idx}">${escHtml(priceData.discount_applied || '')}</div>
+                <div class="rec-profit" id="rec-profit-${idx}">💰 Est. Profit: $${safePrice(priceData.estimated_profit)}</div>
             </div>
 
             <div class="copy-row">
-                <button class="copy-btn" onclick="copyText('${(priceData.recommended_price || 0).toFixed(2)}', this)">📋 Copy Price</button>
+                <button class="copy-btn" id="copy-price-${idx}" onclick="copyText(document.getElementById('rec-price-${idx}').textContent.replace('$',''), this)">📋 Copy Price</button>
                 <button class="copy-btn" onclick="copyAll(${idx}, this)">📋 Copy All</button>
             </div>
         </div>`;
@@ -1085,6 +1091,50 @@
 
         function safePrice(val) {
             return (parseFloat(val) || 0).toFixed(2);
+        }
+
+        function switchTier(tier, productIdx, btn) {
+            // Update pill active state
+            const pills = btn.parentElement.querySelectorAll('.agg-pill');
+            pills.forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Get tier data from stored results
+            const data = window._lastResults;
+            if (!data || !data.pricing_tiers || !data.pricing_tiers[tier]) return;
+
+            const tierData = data.pricing_tiers[tier];
+            const priceInfo = tierData.prices[productIdx];
+            if (!priceInfo) return;
+
+            // Update recommendation in-place
+            const priceEl = document.getElementById(`rec-price-${productIdx}`);
+            const discountEl = document.getElementById(`rec-discount-${productIdx}`);
+            const profitEl = document.getElementById(`rec-profit-${productIdx}`);
+
+            if (priceEl) priceEl.textContent = `$${safePrice(priceInfo.recommended_price)}`;
+            if (discountEl) discountEl.textContent = priceInfo.discount_applied || '';
+            if (profitEl) profitEl.textContent = `💰 Est. Profit: $${safePrice(priceInfo.estimated_profit)}`;
+
+            // Update bundle if exists
+            if (tierData.bundle_recommendation) {
+                const br = tierData.bundle_recommendation;
+                const bundleCard = document.querySelector('.bundle-card');
+                if (bundleCard) {
+                    bundleCard.innerHTML = `
+                        <div class="bundle-label">📦 Bundle Recommendation</div>
+                        <div style="font-size:13px; color:var(--text-secondary); margin:8px 0;">
+                            Individual total: $${safePrice(br.individual_total)} → ${br.bundle_discount}
+                        </div>
+                        <div class="bundle-price">$${safePrice(br.bundle_price)}</div>
+                        <div class="rec-profit" style="background:rgba(68,136,255,0.1); color:var(--blue);">
+                            💰 Bundle Profit: $${safePrice(br.bundle_profit)}
+                        </div>
+                        <div class="copy-row" style="margin-top:12px;">
+                            <button class="copy-btn" onclick="copyText('${safePrice(br.bundle_price)}', this)">📋 Copy Bundle Price</button>
+                        </div>`;
+                }
+            }
         }
 
         // ─── Copy Functions ───
