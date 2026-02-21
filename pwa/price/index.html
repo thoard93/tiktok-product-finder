@@ -886,6 +886,8 @@
                 };
                 reader.readAsDataURL(file);
             });
+            // Reset input so same file can be re-selected
+            fileInput.value = '';
         }
 
         function updatePreviews() {
@@ -925,11 +927,19 @@
         }
 
         // ─── Research ───
+        let _researchTimer = null;
+        let _researchStart = 0;
+
         async function runResearch() {
             const btn = document.getElementById('researchBtn');
             btn.disabled = true;
             btn.classList.add('loading');
-            btn.innerHTML = '<span class="spinner"></span> Researching prices...';
+            _researchStart = Date.now();
+            _researchTimer = setInterval(() => {
+                const elapsed = Math.round((Date.now() - _researchStart) / 1000);
+                btn.innerHTML = `<span class="spinner"></span> Researching... ${elapsed}s`;
+            }, 1000);
+            btn.innerHTML = '<span class="spinner"></span> Researching... 0s';
 
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = '';
@@ -961,10 +971,19 @@
             <div style="color: var(--text-secondary); margin-top: 8px;">${err.message}</div>
         </div>`;
             } finally {
+                clearInterval(_researchTimer);
+                const elapsed = Math.round((Date.now() - _researchStart) / 1000);
                 btn.disabled = false;
                 btn.classList.remove('loading');
-                btn.innerHTML = '🔍 Research Pricing';
+                btn.innerHTML = `🔍 Research Pricing (last: ${elapsed}s)`;
             }
+        }
+
+        function resetResearch() {
+            uploadedImages = [];
+            updatePreviews();
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('researchBtn').innerHTML = '🔍 Research Pricing';
         }
 
         function renderResults(data) {
@@ -1034,6 +1053,9 @@
                 html += `<div class="notes-box">💡 ${escHtml(data.notes)}</div>`;
             }
 
+            // Reset button
+            html += `<button class="research-btn" style="margin-top:16px; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border); box-shadow:none;" onclick="resetResearch()">🔄 New Research</button>`;
+
             resultsDiv.innerHTML = html;
 
             // Store data globally for copy-all
@@ -1041,12 +1063,17 @@
         }
 
         function renderSourceRow(label, source) {
-            if (!source || !source.price) return '';
+            if (!source || source.price == null) return '';
+            const price = parseFloat(source.price) || 0;
             const cls = source.estimated ? ' class="estimated"' : '';
             return `<tr>
         <td>${label}</td>
-        <td${cls} style="text-align:right">$${source.price.toFixed(2)}</td>
+        <td${cls} style="text-align:right">$${price.toFixed(2)}</td>
     </tr>`;
+        }
+
+        function safePrice(val) {
+            return (parseFloat(val) || 0).toFixed(2);
         }
 
         // ─── Copy Functions ───

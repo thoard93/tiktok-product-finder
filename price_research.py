@@ -6,12 +6,11 @@ Uses Grok 4.1 fast reasoning with vision for product identification & pricing.
 
 import os
 import json
-import time
 import io
-import hashlib
 import logging
 import requests
 import base64
+import re
 from datetime import datetime
 from flask import request, jsonify, send_from_directory
 
@@ -226,10 +225,12 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
 
         # Parse JSON from response (strip any markdown wrapping)
         json_text = raw_text.strip()
-        if json_text.startswith('```'):
-            # Remove markdown code block
-            lines = json_text.split('\n')
-            json_text = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
+        # Remove markdown code blocks (```json ... ``` or ``` ... ```)
+        md_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', json_text, re.DOTALL)
+        if md_match:
+            json_text = md_match.group(1).strip()
+        # Remove any <think>...</think> tags (some models add these)
+        json_text = re.sub(r'<think>.*?</think>', '', json_text, flags=re.DOTALL).strip()
 
         result = json.loads(json_text)
 
@@ -311,7 +312,7 @@ def price_research():
 
     log.info(f"Price research: {len(images)} images, aggressiveness={aggressiveness}")
 
-    # Auto-rotate images (EXIF)
+    # Auto-rotate images and compress (EXIF + size limit)
     processed_images = []
     for img_data in images:
         if img_data.startswith('data:'):
@@ -321,11 +322,17 @@ def price_research():
                 img_bytes = base64.b64decode(b64data)
                 img = Image.open(io.BytesIO(img_bytes))
                 img = ImageOps.exif_transpose(img)
+                # Resize if too large (max 1600px on longest side to limit API payload)
+                max_dim = 1600
+                if max(img.size) > max_dim:
+                    img.thumbnail((max_dim, max_dim), Image.LANCZOS)
                 buf = io.BytesIO()
-                img.save(buf, format='JPEG', quality=85)
+                img.save(buf, format='JPEG', quality=80)
                 rotated_b64 = base64.b64encode(buf.getvalue()).decode()
                 processed_images.append(f'data:image/jpeg;base64,{rotated_b64}')
-            except Exception:
+                log.info(f"Image processed: {img.size}, {len(rotated_b64)//1024}KB")
+            except Exception as e:
+                log.warning(f"Image processing failed: {e}")
                 processed_images.append(img_data)
         else:
             processed_images.append(img_data)
