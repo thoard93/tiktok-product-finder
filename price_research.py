@@ -198,6 +198,12 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
             })
 
     try:
+        # Dynamic timeout: base 60s + 20s per image, max 180s
+        timeout = min(60 + len(image_data_list) * 20, 180)
+        log.info(f"Calling Grok API with {len(image_data_list)} images, timeout={timeout}s")
+        import time as _time
+        _start = _time.time()
+
         resp = requests.post(
             XAI_API_URL,
             headers={
@@ -212,8 +218,11 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
                 'temperature': 0.3,
                 'max_tokens': 4000,
             },
-            timeout=60,
+            timeout=timeout,
         )
+
+        elapsed = round(_time.time() - _start, 1)
+        log.info(f"Grok API responded in {elapsed}s, status={resp.status_code}")
 
         if resp.status_code != 200:
             log.error(f"Grok API error: {resp.status_code} {resp.text[:500]}")
@@ -313,6 +322,11 @@ def price_research():
     log.info(f"Price research: {len(images)} images, aggressiveness={aggressiveness}")
 
     # Auto-rotate images and compress (EXIF + size limit)
+    # Compress harder for bundles (multiple images = larger payload)
+    is_multi = len(images) > 1
+    max_dim = 1200 if is_multi else 1600
+    quality = 70 if is_multi else 80
+
     processed_images = []
     for img_data in images:
         if img_data.startswith('data:'):
@@ -322,15 +336,14 @@ def price_research():
                 img_bytes = base64.b64decode(b64data)
                 img = Image.open(io.BytesIO(img_bytes))
                 img = ImageOps.exif_transpose(img)
-                # Resize if too large (max 1600px on longest side to limit API payload)
-                max_dim = 1600
+                # Resize to limit API payload
                 if max(img.size) > max_dim:
                     img.thumbnail((max_dim, max_dim), Image.LANCZOS)
                 buf = io.BytesIO()
-                img.save(buf, format='JPEG', quality=80)
+                img.save(buf, format='JPEG', quality=quality)
                 rotated_b64 = base64.b64encode(buf.getvalue()).decode()
                 processed_images.append(f'data:image/jpeg;base64,{rotated_b64}')
-                log.info(f"Image processed: {img.size}, {len(rotated_b64)//1024}KB")
+                log.info(f"Image processed: {img.size}, {len(rotated_b64)//1024}KB (q={quality})")
             except Exception as e:
                 log.warning(f"Image processing failed: {e}")
                 processed_images.append(img_data)
