@@ -316,20 +316,33 @@ class EbayListing(db.Model):
         }
 
 
-# ─── Ensure tables exist ─────────────────────────────────────────────────────
+# ─── Ensure tables exist ─────────────────────────────────────────────────────────────
 with app.app_context():
     # Create tables if they don't exist
-    for model in [PriceResearch, PriceSettings, EbayListing]:
+    for model in [PriceResearch, PriceSettings]:
         table_name = model.__tablename__
         if not db.inspect(db.engine).has_table(table_name):
             model.__table__.create(db.engine)
             log.info(f"Created table: {table_name}")
 
+    # EbayListing: drop and recreate if columns are wrong (new table, no data to preserve)
+    from sqlalchemy import text
+    inspector = db.inspect(db.engine)
+    if inspector.has_table('ebay_listings'):
+        ebay_cols = [c['name'] for c in inspector.get_columns('ebay_listings')]
+        if 'product_name' not in ebay_cols:
+            log.info("Migration: ebay_listings has wrong schema, dropping and recreating")
+            db.session.execute(text("DROP TABLE ebay_listings"))
+            db.session.commit()
+            EbayListing.__table__.create(db.engine)
+            log.info("Migration: recreated ebay_listings table")
+    else:
+        EbayListing.__table__.create(db.engine)
+        log.info("Created table: ebay_listings")
+
     # Add new columns if missing (safe migrations)
     try:
-        inspector = db.inspect(db.engine)
         existing_cols = [c['name'] for c in inspector.get_columns('price_research')]
-        from sqlalchemy import text
         if 'team' not in existing_cols:
             db.session.execute(text("ALTER TABLE price_research ADD COLUMN team VARCHAR(20) DEFAULT 'thoard'"))
             db.session.commit()
@@ -922,8 +935,13 @@ def gmail_scan():
                 subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
 
             # Extract product name from subject
-            # Typical: "You sold ProductName!"
-            product_name = subject.replace('You sold ', '').replace('!', '').strip()
+            # Typical: "You sold ProductName!" or "Your item ProductName has sold!"
+            product_name = subject
+            for prefix in ['You sold ', 'Your item ', '🎉 ', '🏆 ', '✅ ', '💰 ', '📦 ']:
+                product_name = product_name.replace(prefix, '')
+            for suffix in ['!', ' has sold', ' has been sold', ' was sold']:
+                product_name = product_name.replace(suffix, '')
+            product_name = product_name.strip()
             if not product_name:
                 continue
 
@@ -968,7 +986,12 @@ def gmail_scan():
             for part, enc in decode_header(msg['Subject'] or ''):
                 subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
 
-            product_name = subject.replace('Your item is listed: ', '').replace('Your item is listed on eBay: ', '').strip()
+            product_name = subject
+            for prefix in ['Your item is listed: ', 'Your item is listed on eBay: ', 'Your listing is live: ', '🏷️ ', '📦 ', '✅ ']:
+                product_name = product_name.replace(prefix, '')
+            for suffix in [' has been listed', ' is now listed', ' is live']:
+                product_name = product_name.replace(suffix, '')
+            product_name = product_name.strip()
             if not product_name:
                 continue
 
@@ -1075,3 +1098,113 @@ def export_csv():
 
 
 log.info("✅ PriceBlade module loaded")
+
+
+# ─── Background Gmail Auto-Scanner ───────────────────────────────────────────
+# Scans every 5 minutes for both teams, stores new sales for push notifications
+import threading
+import time as _time
+
+_pending_sales = []  # New sales waiting to be fetched by frontend
+_last_scan_time = None
+
+def _auto_scan_gmail():
+    """Background thread: scan Gmail for both teams every 5 minutes."""
+    global _pending_sales, _last_scan_time
+    while True:
+        _time.sleep(300)  # 5 minutes
+        for team in ['thoard', 'reol']:
+            team_upper = team.upper()
+            gmail_user = os.environ.get(f'GMAIL_USER_{team_upper}', '') or os.environ.get('GMAIL_USER', '')
+            gmail_pass = os.environ.get(f'GMAIL_APP_PASSWORD_{team_upper}', '') or os.environ.get('GMAIL_APP_PASSWORD', '')
+            if not gmail_user or not gmail_pass:
+                continue
+            try:
+                import imaplib
+                import email as _email
+                from email.header import decode_header
+                from datetime import timedelta
+
+                mail = imaplib.IMAP4_SSL('imap.gmail.com')
+                mail.login(gmail_user, gmail_pass)
+                mail.select('inbox')
+                since_date = (datetime.utcnow() - timedelta(days=7)).strftime('%d-%b-%Y')
+
+                # Scan for sold
+                _, sold_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "sold" SINCE {since_date})')
+                with app.app_context():
+                    for num in sold_msgs[0].split():
+                        _, msg_data = mail.fetch(num, '(RFC822)')
+                        msg = _email.message_from_bytes(msg_data[0][1])
+                        subject = ''
+                        for part, enc in decode_header(msg['Subject'] or ''):
+                            subject += part.decode(enc or 'utf-8') if isinstance(part, bytes) else part
+
+                        product_name = subject
+                        for prefix in ['You sold ', 'Your item ', '🎉 ', '🏆 ', '✅ ', '💰 ', '📦 ']:
+                            product_name = product_name.replace(prefix, '')
+                        for suffix in ['!', ' has sold', ' has been sold', ' was sold']:
+                            product_name = product_name.replace(suffix, '')
+                        product_name = product_name.strip()
+                        if not product_name:
+                            continue
+
+                        existing = EbayListing.query.filter_by(
+                            product_name=product_name, status='sold'
+                        ).first()
+                        if existing:
+                            continue
+
+                        active = EbayListing.query.filter(
+                            EbayListing.product_name.ilike(f'%{product_name[:30]}%'),
+                            EbayListing.status == 'listed'
+                        ).first()
+
+                        if active:
+                            active.status = 'sold'
+                            active.sold_at = datetime.utcnow()
+                            if not active.sold_price:
+                                active.sold_price = active.list_price
+                                active.ebay_fees = round(active.sold_price * 0.13, 2)
+                                active.profit = round(active.sold_price - active.ebay_fees - active.shipping_cost, 2)
+                            _pending_sales.append({'product_name': product_name, 'team': team, 'profit': active.profit})
+                        else:
+                            listing = EbayListing(
+                                product_name=product_name,
+                                status='sold',
+                                team=team,
+                                sold_at=datetime.utcnow(),
+                            )
+                            db.session.add(listing)
+                            _pending_sales.append({'product_name': product_name, 'team': team})
+
+                    db.session.commit()
+
+                mail.logout()
+                _last_scan_time = datetime.utcnow()
+                log.info(f"Auto-scan complete for {team}")
+            except Exception as e:
+                log.warning(f"Auto-scan error for {team}: {e}")
+
+
+@app.route('/price/api/gmail/new-sales', methods=['GET'])
+def get_new_sales():
+    """Get pending new sales for push notifications, then clear them."""
+    global _pending_sales
+    team = request.args.get('team', '')
+    if team:
+        sales = [s for s in _pending_sales if s.get('team') == team]
+        _pending_sales = [s for s in _pending_sales if s.get('team') != team]
+    else:
+        sales = list(_pending_sales)
+        _pending_sales = []
+    return jsonify({
+        'new_sales': sales,
+        'last_scan': _last_scan_time.isoformat() if _last_scan_time else None,
+    })
+
+
+# Start auto-scanner thread
+_scan_thread = threading.Thread(target=_auto_scan_gmail, daemon=True)
+_scan_thread.start()
+log.info("📧 Gmail auto-scanner started (every 5 minutes)")
