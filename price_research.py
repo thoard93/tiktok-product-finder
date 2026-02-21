@@ -1076,9 +1076,11 @@ def gmail_scan():
                     body = _get_email_body(msg)
                     info = _parse_ebay_sold_email(body) if body else {}
 
-                    # Skip if already tracked by order number
+                    # Skip if already tracked by order number + same product
                     if info.get('order_number'):
-                        existing = EbayListing.query.filter_by(order_number=info['order_number']).first()
+                        existing = EbayListing.query.filter_by(order_number=info['order_number']).filter(
+                            EbayListing.product_name.ilike(f'%{product_name[:40]}%')
+                        ).first()
                         if existing:
                             continue
 
