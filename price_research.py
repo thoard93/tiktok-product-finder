@@ -1418,7 +1418,19 @@ def gmail_debug_scan():
                         'from': sender,
                         'body_preview': text,
                         'parsed': parsed,
+                        # Show raw HTML around product link for debugging
+                        'raw_html_near_price': '',
                     })
+                    # Extract HTML window around "Item price" for listed emails
+                    if body and ('listed' in search_q or 'listing' in search_q):
+                        import re as _re
+                        idx = body.find('Item price')
+                        if idx == -1:
+                            idx = body.find('listing is live')
+                        if idx > 0:
+                            start = max(0, idx - 2000)
+                            end = min(len(body), idx + 500)
+                            debug_results[-1]['raw_html_near_price'] = body[start:end]
 
             # If we found emails in this folder, no need to check others
             if total_ebay > 0 or total_ebay_broad > 0:
