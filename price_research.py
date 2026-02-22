@@ -1202,9 +1202,9 @@ def gmail_scan():
                     info = _parse_ebay_listed_email(body) if body else {}
 
                     # Extract product name — prefer body (more complete) over truncated subject
-                    body_name = info.get('product_name_from_body', '').strip().rstrip('.')
+                    body_name = info.get('product_name_from_body', '').replace('\ufe0f', '').replace('\ufe0e', '').strip().rstrip('.')
                     # Subject fallback: strip emoji, suffixes, prefixes
-                    subj_name = subject
+                    subj_name = subject.replace('\ufe0f', '').replace('\ufe0e', '')
                     subj_name = re.sub(r'^[\U0001F300-\U0001FAFF\u2600-\u27BF\s]+', '', subj_name).strip()
                     for sfx in ['has been listed', 'is now listed', 'is listed', '- Check our selling tips']:
                         idx = subj_name.lower().find(sfx.lower())
@@ -1695,8 +1695,8 @@ def _auto_scan_gmail():
                                 body = _get_email_body(msg)
                                 info = _parse_ebay_listed_email(body) if body else {}
 
-                                body_name = info.get('product_name_from_body', '').strip().rstrip('.')
-                                subj_name = subject
+                                body_name = info.get('product_name_from_body', '').replace('\ufe0f', '').replace('\ufe0e', '').strip().rstrip('.')
+                                subj_name = subject.replace('\ufe0f', '').replace('\ufe0e', '')
                                 subj_name = re.sub(r'^[\U0001F300-\U0001FAFF\u2600-\u27BF\s]+', '', subj_name).strip()
                                 for sfx in ['has been listed', 'is now listed', 'is listed', '- Check our selling tips']:
                                     idx = subj_name.lower().find(sfx.lower())
