@@ -1251,6 +1251,10 @@ def gmail_scan():
                     if existing:
                         if info.get('list_price') and not existing.list_price:
                             existing.list_price = info['list_price']
+                        # Upgrade truncated name with fuller body name
+                        if len(product_name) > len(existing.product_name) + 3:
+                            log.info(f"Upgrading name: '{existing.product_name}' → '{product_name}'")
+                            existing.product_name = product_name
                         continue
 
                     listing = EbayListing(
@@ -1735,6 +1739,10 @@ def _auto_scan_gmail():
                                 if existing:
                                     if info.get('list_price') and not existing.list_price:
                                         existing.list_price = info['list_price']
+                                    # Upgrade truncated name with fuller body name
+                                    if len(product_name) > len(existing.product_name) + 3:
+                                        log.info(f"Upgrading name: '{existing.product_name}' → '{product_name}'")
+                                        existing.product_name = product_name
                                     continue
 
                                 listing = EbayListing(
