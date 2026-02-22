@@ -972,34 +972,43 @@ def _parse_ebay_listed_email(body):
     # Skip words that indicate non-product links
     skip_words = ['View', 'Manage', 'Revise', 'Sell similar', 'eBay', 'Sign in',
                   'Learn', 'See details', 'Terms', 'Privacy', 'Payments', 'Unsubscribe',
-                  'User Agreement', 'Copyright', 'Help', 'Contact']
+                  'User Agreement', 'Copyright', 'Help', 'Contact', 'email preferences']
 
     product_name = ''
 
-    # 1. Look for ebay.com/itm links (product page links)
-    itm_links = re.findall(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>([^<]{5,200})</a>', body, re.IGNORECASE)
-    for link_text in itm_links:
-        name = re.sub(r'\.{2,}$', '', link_text).strip()
-        if len(name) > 8 and not any(sw.lower() in name.lower() for sw in skip_words):
+    # 1. eBay listed emails put the product name inside <span class="linkStyledText">
+    #    wrapped in MSO conditional comments, within an <a href="ebay.com/itm/..."> link.
+    #    Structure: <a href="ebay.com/itm/..."><span><h3><span class="linkStyledText">
+    #              <!--[if mso]><font>...<![endif]-->PRODUCT NAME...<![endif]--></span></h3></span></a>
+    m = re.search(r'<span[^>]*class="linkStyledText"[^>]*>(.*?)</span>', body, re.DOTALL | re.IGNORECASE)
+    if m:
+        raw = m.group(1)
+        # Strip MSO conditional comments: <!--[if mso]>...<![endif]-->
+        raw = re.sub(r'<!--\[if mso\]>.*?<!\[endif\]-->', '', raw, flags=re.DOTALL)
+        # Strip any remaining HTML tags
+        raw = re.sub(r'<[^>]+>', '', raw)
+        name = raw.strip().rstrip('.')
+        # Remove trailing "..." and clean up
+        name = re.sub(r'\.{2,}$', '', name).strip()
+        if len(name) > 5 and not any(sw.lower() in name.lower() for sw in skip_words):
             product_name = name
-            break
 
-    # 2. Look for any ebay link near "Item price" or "listing is live" context
+    # 2. Fallback: look for text near "Item price" in the stripped body
     if not product_name:
-        all_links = re.findall(r'<a[^>]*href="[^"]*ebay[^"]*"[^>]*>([^<]{10,200})</a>', body, re.IGNORECASE)
-        for link_text in all_links:
-            name = re.sub(r'\.{2,}$', '', link_text).strip()
-            if len(name) > 8 and not any(sw.lower() in name.lower() for sw in skip_words):
-                product_name = name
-                break
-
-    # 3. Try title-like text from the stripped body
-    if not product_name:
-        m = re.search(r'(?:Your item|Item title)[:\s]*([^<]{10,200}?)(?:\s*(?:has been|is now|Item price|View))', text)
+        # The product name appears before "Item price:" in the stripped text
+        m = re.search(r'(?:listing is live|your listing)\s+(.*?)\s*Item price', text, re.DOTALL | re.IGNORECASE)
         if m:
-            product_name = m.group(1).strip().rstrip('.')
+            # Extract the last meaningful text block before Item price
+            candidate = m.group(1).strip()
+            # Clean up whitespace and take the last line (product name is usually last)
+            lines = [l.strip() for l in candidate.split('\n') if l.strip()]
+            if lines:
+                name = lines[-1].rstrip('.').strip()
+                name = re.sub(r'\.{2,}$', '', name).strip()
+                if len(name) > 5 and not any(sw.lower() in name.lower() for sw in skip_words):
+                    product_name = name
 
-    # 4. Alt text on product image
+    # 3. Alt text on product image
     if not product_name:
         m = re.search(r'<img[^>]*alt="([^"]{10,200})"[^>]*>', body, re.IGNORECASE)
         if m:
