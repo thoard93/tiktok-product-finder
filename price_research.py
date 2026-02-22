@@ -1168,6 +1168,7 @@ def gmail_scan():
 
         # ── 2. LISTED EMAILS ──
         # eBay subject format: "👏 Product Name... has been listed"
+        seen_names = set()  # Track names within this scan to prevent in-batch duplicates
         for search_q in ['has been listed', 'listing is live', 'item is listed', 'listing started', 'your listing']:
             _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
             for num in (msgs[0].split() if msgs[0] else []):
@@ -1214,7 +1215,13 @@ def gmail_scan():
                     if any(jw in product_name.lower() for jw in junk_words):
                         continue
 
-                    # Check if already tracked (match truncated names both ways)
+                    # Skip if already seen in this batch
+                    name_key = product_name[:30].lower().strip()
+                    if name_key in seen_names:
+                        continue
+                    seen_names.add(name_key)
+
+                    # Check if already tracked in DB (ANY status — including sold)
                     existing = EbayListing.query.filter(
                         EbayListing.product_name.ilike(f'%{product_name[:40]}%')
                     ).first()
@@ -1236,6 +1243,7 @@ def gmail_scan():
                         ebay_fees=round(info.get('list_price', 0) * 0.13, 2),
                     )
                     db.session.add(listing)
+                    db.session.flush()  # Make visible to subsequent queries
                     new_listings.append(listing.to_dict())
                 except Exception as e:
                     log.warning(f"Error parsing listed email: {e}")
@@ -1631,6 +1639,7 @@ def _auto_scan_gmail():
                     db.session.flush()
 
                     # ── LISTED EMAILS ──
+                    seen_names = set()
                     for search_q in ['has been listed', 'listing is live', 'item is listed', 'listing started', 'your listing']:
                         _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
                         for num in (msgs[0].split() if msgs[0] else []):
@@ -1642,18 +1651,18 @@ def _auto_scan_gmail():
                                 body = _get_email_body(msg)
                                 info = _parse_ebay_listed_email(body) if body else {}
 
-                                # Prefer body name over truncated subject
                                 body_name = info.get('product_name_from_body', '').strip().rstrip('.')
                                 subj_name = subject
                                 subj_name = re.sub(r'^[\U0001F300-\U0001FAFF\u2600-\u27BF\s]+', '', subj_name).strip()
-                                for sfx in ['has been listed', 'is now listed', 'is listed']:
+                                for sfx in ['has been listed', 'is now listed', 'is listed', '- Check our selling tips']:
                                     idx = subj_name.lower().find(sfx.lower())
                                     if idx > 0:
                                         subj_name = subj_name[:idx].strip()
+                                for pfx in ['Your item is listed: ', 'Your listing started: ']:
+                                    subj_name = subj_name.replace(pfx, '')
                                 subj_name = subj_name.rstrip('.').strip()
                                 if any(kw in subj_name.lower() for kw in ['listing is live', 'your listing', 'listing started']):
                                     subj_name = ''
-                                # Use subject as primary (reliable), body only if subject truncated
                                 junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
                                               'selling tips', 'newsletter', 'account', 'verification',
                                               'email preferences', 'privacy', 'copyright', 'unsubscribe']
@@ -1664,15 +1673,28 @@ def _auto_scan_gmail():
                                     product_name = subj_name or (body_name if body_is_valid else '')
                                 if not product_name:
                                     continue
-                                # Final junk check
                                 if any(jw in product_name.lower() for jw in junk_words):
                                     continue
 
-                                # Skip if already tracked
+                                # Skip if already seen in this batch
+                                name_key = product_name[:30].lower().strip()
+                                if name_key in seen_names:
+                                    continue
+                                seen_names.add(name_key)
+
+                                # Skip if already tracked in DB (ANY status including sold)
                                 existing = EbayListing.query.filter(
                                     EbayListing.product_name.ilike(f'%{product_name[:40]}%')
                                 ).first()
+                                if not existing and len(product_name) >= 8:
+                                    all_items = EbayListing.query.filter_by(team=team).all()
+                                    for item in all_items:
+                                        if product_name.lower() in item.product_name.lower():
+                                            existing = item
+                                            break
                                 if existing:
+                                    if info.get('list_price') and not existing.list_price:
+                                        existing.list_price = info['list_price']
                                     continue
 
                                 listing = EbayListing(
@@ -1681,6 +1703,7 @@ def _auto_scan_gmail():
                                     listed_at=datetime.utcnow(),
                                 )
                                 db.session.add(listing)
+                                db.session.flush()  # Make visible to subsequent queries
                             except Exception as e:
                                 log.warning(f"Auto-scan listed error: {e}")
 
