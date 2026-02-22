@@ -968,32 +968,45 @@ def _parse_ebay_listed_email(body):
     text = _strip_html(body)
     m = re.search(r'Item price:\s*\$?([\d,]+\.?\d*)', text)
     if m: info['list_price'] = float(m.group(1).replace(',', ''))
-    # Try multiple approaches to find the product name from the email body
+
+    # Skip words that indicate non-product links
+    skip_words = ['View', 'Manage', 'Revise', 'Sell similar', 'eBay', 'Sign in',
+                  'Learn', 'See details', 'Terms', 'Privacy', 'Payments', 'Unsubscribe',
+                  'User Agreement', 'Copyright', 'Help', 'Contact']
+
     product_name = ''
-    # 1. eBay item link with meaningful text
-    for pattern in [
-        r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>([^<]{5,200})</a>',
-        r'<a[^>]*href="[^"]*ebay[^"]*"[^>]*>([^<]{10,200})</a>',
-    ]:
-        m = re.search(pattern, body)
-        if m:
-            name = re.sub(r'\.{2,}$', '', m.group(1)).strip()
-            skip_words = ['View', 'Manage', 'Revise', 'Sell similar', 'eBay', 'Sign in', 'Learn', 'See details']
-            if len(name) > 8 and not any(sw in name for sw in skip_words):
+
+    # 1. Look for ebay.com/itm links (product page links)
+    itm_links = re.findall(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>([^<]{5,200})</a>', body, re.IGNORECASE)
+    for link_text in itm_links:
+        name = re.sub(r'\.{2,}$', '', link_text).strip()
+        if len(name) > 8 and not any(sw.lower() in name.lower() for sw in skip_words):
+            product_name = name
+            break
+
+    # 2. Look for any ebay link near "Item price" or "listing is live" context
+    if not product_name:
+        all_links = re.findall(r'<a[^>]*href="[^"]*ebay[^"]*"[^>]*>([^<]{10,200})</a>', body, re.IGNORECASE)
+        for link_text in all_links:
+            name = re.sub(r'\.{2,}$', '', link_text).strip()
+            if len(name) > 8 and not any(sw.lower() in name.lower() for sw in skip_words):
                 product_name = name
                 break
-    # 2. Try title-like text from the body
+
+    # 3. Try title-like text from the stripped body
     if not product_name:
         m = re.search(r'(?:Your item|Item title)[:\s]*([^<]{10,200}?)(?:\s*(?:has been|is now|Item price|View))', text)
         if m:
             product_name = m.group(1).strip().rstrip('.')
-    # 3. Alt text on product image
+
+    # 4. Alt text on product image
     if not product_name:
-        m = re.search(r'<img[^>]*alt="([^"]{10,200})"[^>]*>', body)
+        m = re.search(r'<img[^>]*alt="([^"]{10,200})"[^>]*>', body, re.IGNORECASE)
         if m:
             alt = m.group(1).strip()
             if 'eBay' not in alt and 'logo' not in alt.lower():
                 product_name = alt
+
     if product_name:
         info['product_name_from_body'] = product_name
     return info
@@ -1512,8 +1525,8 @@ _last_scan_time = None
 def _auto_scan_gmail():
     """Background thread: scan Gmail for both teams every 5 minutes."""
     global _pending_sales, _last_scan_time
+    _time.sleep(30)  # Wait 30s for app to fully start
     while True:
-        _time.sleep(300)  # 5 minutes
         for team in ['thoard', 'reol']:
             team_upper = team.upper()
             gmail_user = os.environ.get(f'GMAIL_USER_{team_upper}', '') or os.environ.get('GMAIL_USER', '')
@@ -1527,7 +1540,7 @@ def _auto_scan_gmail():
 
                 mail = imaplib.IMAP4_SSL('imap.gmail.com')
                 mail.login(gmail_user, gmail_pass)
-                since_date = (datetime.utcnow() - timedelta(days=7)).strftime('%d-%b-%Y')
+                since_date = (datetime.utcnow() - timedelta(days=14)).strftime('%d-%b-%Y')
 
                 # Auto-detect folder and FROM filter (Workspace support)
                 mail.select('inbox')
@@ -1546,7 +1559,7 @@ def _auto_scan_gmail():
 
                 with app.app_context():
                     # ── SOLD EMAILS ──
-                    for search_q in ['made the sale', 'item has sold']:
+                    for search_q in ['made the sale', 'item has sold', 'You sold']:
                         _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
                         for num in (msgs[0].split() if msgs[0] else []):
                             try:
@@ -1612,7 +1625,7 @@ def _auto_scan_gmail():
                     db.session.flush()
 
                     # ── LISTED EMAILS ──
-                    for search_q in ['has been listed', 'listing is live', 'item is listed']:
+                    for search_q in ['has been listed', 'listing is live', 'item is listed', 'listing started', 'your listing']:
                         _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
                         for num in (msgs[0].split() if msgs[0] else []):
                             try:
@@ -1727,6 +1740,7 @@ def _auto_scan_gmail():
                 log.info(f"Auto-scan complete for {team}")
             except Exception as e:
                 log.warning(f"Auto-scan error for {team}: {e}")
+        _time.sleep(300)  # Wait 5 minutes before next cycle
 
 
 @app.route('/price/api/gmail/new-sales', methods=['GET'])
