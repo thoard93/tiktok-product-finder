@@ -1639,17 +1639,17 @@
 
         document.getElementById('shipFileInput').addEventListener('change', function (e) {
             const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function (ev) {
-                shipImage = ev.target.result;
+            if (!file || !file.type.startsWith('image/')) return;
+            // Compress image to avoid sending 5MB+ raw photos
+            compressImage(file, 1200, 0.8).then(dataUrl => {
+                shipImage = dataUrl;
                 document.getElementById('shipUploadPrompt').style.display = 'none';
                 const preview = document.getElementById('shipPreview');
                 preview.style.display = 'block';
                 document.getElementById('shipPreviewImg').src = shipImage;
                 document.getElementById('shipEstimateBtn').disabled = false;
-            };
-            reader.readAsDataURL(file);
+            });
+            e.target.value = ''; // Allow re-selecting same file
         });
 
         async function runShippingEstimate() {
