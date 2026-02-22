@@ -1527,13 +1527,27 @@ def _auto_scan_gmail():
 
                 mail = imaplib.IMAP4_SSL('imap.gmail.com')
                 mail.login(gmail_user, gmail_pass)
-                mail.select('inbox')
                 since_date = (datetime.utcnow() - timedelta(days=7)).strftime('%d-%b-%Y')
 
+                # Auto-detect folder and FROM filter (Workspace support)
+                mail.select('inbox')
+                _, test_msgs = mail.search(None, f'(FROM "ebay@ebay.com" SINCE {since_date})')
+                from_filter = 'ebay@ebay.com'
+                if not test_msgs[0]:
+                    _, test_msgs2 = mail.search(None, f'(FROM "ebay" SINCE {since_date})')
+                    if test_msgs2[0]:
+                        from_filter = 'ebay'
+                    else:
+                        status, _ = mail.select('"[Gmail]/All Mail"')
+                        if status == 'OK':
+                            _, test_msgs3 = mail.search(None, f'(FROM "ebay" SINCE {since_date})')
+                            if test_msgs3[0]:
+                                from_filter = 'ebay'
+
                 with app.app_context():
-                    # Scan for sold emails
+                    # ── SOLD EMAILS ──
                     for search_q in ['made the sale', 'item has sold']:
-                        _, msgs = mail.search(None, f'(FROM "ebay@ebay.com" SUBJECT "{search_q}" SINCE {since_date})')
+                        _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
                         for num in (msgs[0].split() if msgs[0] else []):
                             try:
                                 _, msg_data = mail.fetch(num, '(RFC822)')
@@ -1579,7 +1593,7 @@ def _auto_scan_gmail():
                                     active.order_number = info.get('order_number', '')
                                     active.buyer_name = info.get('buyer_name', '')
                                     active.ebay_fees = round(active.sold_price * 0.13, 2)
-                                    active.profit = round(active.sold_price - active.ebay_fees - active.shipping_cost, 2)
+                                    active.profit = round(active.sold_price - active.ebay_fees - (active.shipping_cost or 0), 2)
                                     _pending_sales.append({'product_name': product_name, 'team': team, 'profit': active.profit})
                                 else:
                                     fees = round(sold_price * 0.13, 2)
@@ -1593,7 +1607,118 @@ def _auto_scan_gmail():
                                     db.session.add(listing)
                                     _pending_sales.append({'product_name': product_name, 'team': team, 'profit': round(sold_price - fees, 2)})
                             except Exception as e:
-                                log.warning(f"Auto-scan email error: {e}")
+                                log.warning(f"Auto-scan sold error: {e}")
+
+                    db.session.flush()
+
+                    # ── LISTED EMAILS ──
+                    for search_q in ['has been listed', 'listing is live', 'item is listed']:
+                        _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
+                        for num in (msgs[0].split() if msgs[0] else []):
+                            try:
+                                _, msg_data = mail.fetch(num, '(RFC822)')
+                                msg = _email.message_from_bytes(msg_data[0][1])
+                                subject = _decode_subject(msg)
+
+                                body = _get_email_body(msg)
+                                info = _parse_ebay_listed_email(body) if body else {}
+
+                                # Prefer body name over truncated subject
+                                body_name = info.get('product_name_from_body', '').strip().rstrip('.')
+                                subj_name = subject
+                                subj_name = re.sub(r'^[\U0001F300-\U0001FAFF\u2600-\u27BF\s]+', '', subj_name).strip()
+                                for sfx in ['has been listed', 'is now listed', 'is listed']:
+                                    idx = subj_name.lower().find(sfx.lower())
+                                    if idx > 0:
+                                        subj_name = subj_name[:idx].strip()
+                                subj_name = subj_name.rstrip('.').strip()
+                                if any(kw in subj_name.lower() for kw in ['listing is live', 'your listing']):
+                                    subj_name = ''
+                                product_name = body_name or subj_name
+                                if not product_name:
+                                    continue
+
+                                # Skip junk names
+                                junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
+                                              'selling tips', 'newsletter', 'account', 'verification']
+                                if any(jw in product_name.lower() for jw in junk_words):
+                                    continue
+
+                                # Skip if already tracked
+                                existing = EbayListing.query.filter(
+                                    EbayListing.product_name.ilike(f'%{product_name[:40]}%')
+                                ).first()
+                                if existing:
+                                    continue
+
+                                listing = EbayListing(
+                                    product_name=product_name, status='listed', team=team,
+                                    list_price=info.get('list_price'),
+                                    listed_at=datetime.utcnow(),
+                                )
+                                db.session.add(listing)
+                            except Exception as e:
+                                log.warning(f"Auto-scan listed error: {e}")
+
+                    # ── SHIPPING LABEL EMAILS ──
+                    _, ship_msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "shipping label" SINCE {since_date})')
+                    for num in (ship_msgs[0].split() if ship_msgs[0] else []):
+                        try:
+                            _, msg_data = mail.fetch(num, '(RFC822)')
+                            msg = _email.message_from_bytes(msg_data[0][1])
+                            subject = _decode_subject(msg)
+                            product_name = subject.replace('eBay shipping label for ', '').replace('Shipping label for ', '').strip()
+                            body = _get_email_body(msg)
+                            info = _parse_ebay_shipping_email(body) if body else {}
+                            if not product_name:
+                                continue
+                            listing = EbayListing.query.filter(
+                                EbayListing.product_name.ilike(f'%{product_name[:40]}%')
+                            ).first()
+                            if listing:
+                                changed = False
+                                if info.get('shipping_cost') and not listing.shipping_cost:
+                                    listing.shipping_cost = info['shipping_cost']; changed = True
+                                if info.get('tracking_number') and not listing.tracking_number:
+                                    listing.tracking_number = info['tracking_number']
+                                if info.get('shipping_service') and not listing.shipping_service:
+                                    listing.shipping_service = info['shipping_service']
+                                if info.get('buyer_name') and not listing.buyer_name:
+                                    listing.buyer_name = info['buyer_name']
+                                if info.get('ebay_item_id') and not listing.ebay_item_id:
+                                    listing.ebay_item_id = info['ebay_item_id']
+                                if changed:
+                                    price = listing.sold_price or listing.list_price
+                                    if price:
+                                        listing.ebay_fees = round(price * 0.13, 2)
+                                        listing.profit = round(price - listing.ebay_fees - listing.shipping_cost, 2)
+                        except Exception as e:
+                            log.warning(f"Auto-scan shipping error: {e}")
+
+                    # ── CLEANUP: merge duplicates ──
+                    db.session.flush()
+                    listed_items = EbayListing.query.filter_by(team=team, status='listed').all()
+                    sold_items = EbayListing.query.filter_by(team=team, status='sold').all()
+                    to_delete = []
+                    junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
+                                  'selling tips', 'newsletter', 'account', 'verification']
+                    for listed in listed_items:
+                        if any(jw in listed.product_name.lower() for jw in junk_words):
+                            to_delete.append(listed)
+                    for listed in listed_items:
+                        if listed in to_delete:
+                            continue
+                        ln = listed.product_name.lower()
+                        for sold in sold_items:
+                            sn = sold.product_name.lower()
+                            if (ln in sn or sn in ln or
+                                (len(ln) >= 8 and len(sn) >= 8 and ln[:8] == sn[:8])):
+                                if listed.list_price and not sold.list_price:
+                                    sold.list_price = listed.list_price
+                                to_delete.append(listed)
+                                break
+                    for item in to_delete:
+                        db.session.delete(item)
 
                     db.session.commit()
 
@@ -1617,7 +1742,7 @@ def get_new_sales():
         _pending_sales = []
     return jsonify({
         'new_sales': sales,
-        'last_scan': _last_scan_time.isoformat() if _last_scan_time else None,
+        'last_scan': (_last_scan_time.isoformat() + 'Z') if _last_scan_time else None,
     })
 
 
