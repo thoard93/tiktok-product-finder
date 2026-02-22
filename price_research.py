@@ -1198,13 +1198,19 @@ def gmail_scan():
                     subj_name = subj_name.rstrip('.').strip()
                     if any(kw in subj_name.lower() for kw in ['listing is live', 'your listing', 'listing started']):
                         subj_name = ''
-                    # Use body name if available (it's more complete), else subject
-                    product_name = body_name or subj_name
+                    # Use subject name as primary (reliable), body only if subject was truncated
+                    junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
+                                  'selling tips', 'newsletter', 'account', 'verification',
+                                  'email preferences', 'privacy', 'copyright', 'unsubscribe']
+                    body_is_valid = body_name and len(body_name) > 8 and not any(jw in body_name.lower() for jw in junk_words)
+                    if subj_name and '...' in subject:
+                        # Subject is truncated — use body name if it's valid and longer
+                        product_name = body_name if body_is_valid and len(body_name) > len(subj_name) else subj_name
+                    else:
+                        product_name = subj_name or (body_name if body_is_valid else '')
                     if not product_name:
                         continue
-                    # Skip junk/non-product names
-                    junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
-                                  'selling tips', 'newsletter', 'account', 'verification']
+                    # Final junk check on selected name
                     if any(jw in product_name.lower() for jw in junk_words):
                         continue
 
@@ -1645,15 +1651,20 @@ def _auto_scan_gmail():
                                     if idx > 0:
                                         subj_name = subj_name[:idx].strip()
                                 subj_name = subj_name.rstrip('.').strip()
-                                if any(kw in subj_name.lower() for kw in ['listing is live', 'your listing']):
+                                if any(kw in subj_name.lower() for kw in ['listing is live', 'your listing', 'listing started']):
                                     subj_name = ''
-                                product_name = body_name or subj_name
+                                # Use subject as primary (reliable), body only if subject truncated
+                                junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
+                                              'selling tips', 'newsletter', 'account', 'verification',
+                                              'email preferences', 'privacy', 'copyright', 'unsubscribe']
+                                body_is_valid = body_name and len(body_name) > 8 and not any(jw in body_name.lower() for jw in junk_words)
+                                if subj_name and '...' in subject:
+                                    product_name = body_name if body_is_valid and len(body_name) > len(subj_name) else subj_name
+                                else:
+                                    product_name = subj_name or (body_name if body_is_valid else '')
                                 if not product_name:
                                     continue
-
-                                # Skip junk names
-                                junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
-                                              'selling tips', 'newsletter', 'account', 'verification']
+                                # Final junk check
                                 if any(jw in product_name.lower() for jw in junk_words):
                                     continue
 
