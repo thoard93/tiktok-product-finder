@@ -978,11 +978,18 @@ def _parse_ebay_listed_email(body):
 
     # 1. eBay listed emails put the product name inside <span class="linkStyledText">
     #    wrapped in MSO conditional comments, within an <a href="ebay.com/itm/..."> link.
-    #    Structure: <a href="ebay.com/itm/..."><span><h3><span class="linkStyledText">
-    #              <!--[if mso]><font>...<![endif]-->PRODUCT NAME...<![endif]--></span></h3></span></a>
-    m = re.search(r'<span[^>]*class="linkStyledText"[^>]*>(.*?)</span>', body, re.DOTALL | re.IGNORECASE)
-    if m:
-        raw = m.group(1)
+    #    IMPORTANT: linkStyledText is used in MULTIPLE places (product + footer), so we
+    #    must scope the search to inside the ebay.com/itm anchor tag only.
+    itm_block = re.search(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>(.*?)</a>', body, re.DOTALL | re.IGNORECASE)
+    if itm_block:
+        block_html = itm_block.group(1)
+        # Look for linkStyledText span within this block
+        m = re.search(r'<span[^>]*class="linkStyledText"[^>]*>(.*?)</span>', block_html, re.DOTALL | re.IGNORECASE)
+        if m:
+            raw = m.group(1)
+        else:
+            # Fallback: strip all HTML from the link block
+            raw = block_html
         # Strip MSO conditional comments: <!--[if mso]>...<![endif]-->
         raw = re.sub(r'<!--\[if mso\]>.*?<!\[endif\]-->', '', raw, flags=re.DOTALL)
         # Strip any remaining HTML tags
