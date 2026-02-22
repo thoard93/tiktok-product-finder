@@ -1147,7 +1147,7 @@ def gmail_scan():
                         active.buyer_name = info.get('buyer_name', '')
                         active.buyer_address = info.get('buyer_address', '')
                         active.ebay_fees = round(active.sold_price * 0.13, 2)
-                        active.profit = round(active.sold_price - active.ebay_fees - active.shipping_cost, 2)
+                        active.profit = round(active.sold_price - active.ebay_fees - (active.shipping_cost or 0), 2)
                         new_sales.append(active.to_dict())
                     else:
                         fees = round(sold_price * 0.13, 2)
@@ -1297,7 +1297,8 @@ def gmail_scan():
 
         # Delete junk-named items from DB
         junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
-                      'selling tips', 'newsletter', 'account', 'verification']
+                      'selling tips', 'newsletter', 'account', 'verification',
+                      'email preferences', 'privacy', 'copyright', 'unsubscribe']
         for listed in listed_items:
             if any(jw in listed.product_name.lower() for jw in junk_words):
                 to_delete.append(listed)
@@ -1454,9 +1455,10 @@ def dashboard_stats():
             rq = rq.filter_by(team=team_filter)
         research_count = rq.count()
 
-        # Time-frame breakdowns
+        # Time-frame breakdowns (EST = UTC-5)
         now = datetime.utcnow()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        est_now = now - timedelta(hours=5)
+        today_start = est_now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=5)  # Back to UTC
         yesterday_start = today_start - timedelta(days=1)
         week_start = today_start - timedelta(days=7)
         month_start = today_start - timedelta(days=30)
@@ -1605,6 +1607,15 @@ def _auto_scan_gmail():
                                     EbayListing.status == 'sold'
                                 ).first()
                                 if existing:
+                                    # Fill in missing data on existing sold entry
+                                    if info.get('order_number') and not existing.order_number:
+                                        existing.order_number = info['order_number']
+                                    if info.get('buyer_name') and not existing.buyer_name:
+                                        existing.buyer_name = info['buyer_name']
+                                    if info.get('sold_price') and not existing.sold_price:
+                                        existing.sold_price = info['sold_price']
+                                        existing.ebay_fees = round(existing.sold_price * 0.13, 2)
+                                        existing.profit = round(existing.sold_price - existing.ebay_fees - (existing.shipping_cost or 0), 2)
                                     continue
 
                                 active = EbayListing.query.filter(
@@ -1619,6 +1630,7 @@ def _auto_scan_gmail():
                                     active.sold_price = sold_price or active.list_price
                                     active.order_number = info.get('order_number', '')
                                     active.buyer_name = info.get('buyer_name', '')
+                                    active.buyer_address = info.get('buyer_address', '')
                                     active.ebay_fees = round(active.sold_price * 0.13, 2)
                                     active.profit = round(active.sold_price - active.ebay_fees - (active.shipping_cost or 0), 2)
                                     _pending_sales.append({'product_name': product_name, 'team': team, 'profit': active.profit})
@@ -1748,10 +1760,12 @@ def _auto_scan_gmail():
                     sold_items = EbayListing.query.filter_by(team=team, status='sold').all()
                     to_delete = []
                     junk_words = ['terms of use', 'user agreement', 'payment', 'policy update',
-                                  'selling tips', 'newsletter', 'account', 'verification']
+                                  'selling tips', 'newsletter', 'account', 'verification',
+                                  'email preferences', 'privacy', 'copyright', 'unsubscribe']
                     for listed in listed_items:
                         if any(jw in listed.product_name.lower() for jw in junk_words):
                             to_delete.append(listed)
+                    # Remove active items that match a sold item
                     for listed in listed_items:
                         if listed in to_delete:
                             continue
@@ -1764,6 +1778,16 @@ def _auto_scan_gmail():
                                     sold.list_price = listed.list_price
                                 to_delete.append(listed)
                                 break
+                    # Remove duplicate active-to-active items (keep first)
+                    seen_active = set()
+                    for listed in listed_items:
+                        if listed in to_delete:
+                            continue
+                        key = listed.product_name[:30].lower().strip()
+                        if key in seen_active:
+                            to_delete.append(listed)
+                        else:
+                            seen_active.add(key)
                     for item in to_delete:
                         db.session.delete(item)
 
