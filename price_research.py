@@ -23,12 +23,13 @@ XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 XAI_API_URL = 'https://api.x.ai/v1/chat/completions'
 XAI_MODEL = os.environ.get('XAI_MODEL', 'grok-4-1-fast-reasoning')
 
-# ─── Discount Ladder (aggressive to undercut TikTok Shop) ────────────────────
-# Lower-priced items ($0-30) get steeper discounts since TikTok prices them low
+# ─── Discount Ladder (competitive undercut vs TikTok Shop) ────────────────────
+# We want to undercut TikTok Shop but not by so much that we leave money on table.
+# These are % below the MEDIAN price across sources (not the lowest).
 DISCOUNT_LADDER = {
-    'conservative': {15: 0.25, 30: 0.30, 60: 0.28, 100: 0.32, 9999: 0.35},
-    'balanced':     {15: 0.32, 30: 0.35, 60: 0.33, 100: 0.37, 9999: 0.40},
-    'aggressive':   {15: 0.40, 30: 0.42, 60: 0.40, 100: 0.44, 9999: 0.48},
+    'conservative': {15: 0.12, 30: 0.15, 60: 0.15, 100: 0.18, 9999: 0.20},
+    'balanced':     {15: 0.18, 30: 0.22, 60: 0.22, 100: 0.25, 9999: 0.28},
+    'aggressive':   {15: 0.28, 30: 0.32, 60: 0.30, 100: 0.34, 9999: 0.38},
 }
 
 def get_discount(price, aggressiveness='conservative'):
@@ -419,9 +420,11 @@ INSTRUCTIONS:
 5. ESTIMATE SHIPPING: For each product, estimate the approximate weight in ounces, dimensions in inches (L x W x H), and best package type (padded_envelope, small_box, medium_box, large_box).
 
 CRITICAL PRICING RULE:
-- The recommended_price MUST be LOWER than the TikTok Shop price (since buyers can find it there)
-- If TikTok Shop sells it for $18, recommend $14-16 range (not $19!)
-- Use the LOWEST price across ALL sources as the baseline, then apply the {aggressiveness} discount
+- The recommended_price should be competitive but not excessively discounted
+- Use the MEDIAN price across all sources as the baseline (not the lowest)
+- Apply a modest {aggressiveness} discount (12-20% for conservative) below the median
+- The goal: undercut TikTok Shop by a small margin, not slash prices dramatically
+- Example: If median is $20 and TikTok Shop is $18, recommend around $15-16
 - These are zero-cost products, so any price is pure profit minus eBay fees and shipping
 
 RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
@@ -457,7 +460,7 @@ RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
       "average_price": 21.69,
       "tiktok_price": 18.99,
       "recommended_price": 15.99,
-      "discount_applied": "16% below TikTok ($18.99)",
+      "discount_applied": "16% below median ($19.09)",
       "estimated_profit": 12.51,
       "profit_note": "Cost $0 (free sample) + ~$3.48 fees/shipping"
     }}
@@ -465,6 +468,14 @@ RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
   "bundle_recommendation": null,
   "notes": "Any relevant notes about pricing, competition, rarity, etc."
 }}
+
+BUNDLE PRICING (CRITICAL — when multiple products are shown):
+If the images show MULTIPLE DIFFERENT products that will be sold together as a bundle:
+1. Research EACH product individually with full price data in the "prices" array
+2. Calculate the sum of ALL individual recommended prices — this is the "individual_total"
+3. Apply a small bundle discount (5-10%) to the total for the "bundle_price"
+4. The bundle_price represents what the ENTIRE set/lot should sell for on eBay
+5. DO NOT just price the bundle at one product's price — it must reflect ALL items combined
 
 If it's a BUNDLE, include each product separately in "products" and "prices", then add:
 "bundle_recommendation": {{
