@@ -729,6 +729,7 @@
             <div class="header-nav">
                 <button class="nav-btn active" onclick="showView('research')" id="nav-research">🔍</button>
                 <button class="nav-btn" onclick="showView('listings')" id="nav-listings">📦</button>
+                <button class="nav-btn" onclick="showView('shipping')" id="nav-shipping">📐</button>
                 <button class="nav-btn" onclick="showView('history')" id="nav-history">📋</button>
                 <button class="nav-btn" onclick="showView('dashboard')" id="nav-dashboard">📊</button>
                 <button class="nav-btn" onclick="showView('settings')" id="nav-settings">⚙️</button>
@@ -771,6 +772,29 @@
             </button>
 
             <div class="results" id="results"></div>
+        </div>
+
+        <!-- ═══ SHIPPING CALCULATOR VIEW ═══ -->
+        <div class="view" id="view-shipping">
+            <div class="section-title">📐 Shipping Calculator</div>
+            <div class="upload-area" id="shipUploadArea" onclick="document.getElementById('shipFileInput').click()"
+                style="margin-bottom:12px;">
+                <div id="shipUploadPrompt">
+                    <div class="upload-icon">📦</div>
+                    <div class="upload-title">Upload Product Photo</div>
+                    <div class="upload-sub">Get AI-estimated weight & dimensions for eBay shipping labels</div>
+                </div>
+                <div id="shipPreview" style="display:none; text-align:center;">
+                    <img id="shipPreviewImg"
+                        style="max-width:200px; max-height:200px; border-radius:12px; border:2px solid var(--border);">
+                </div>
+            </div>
+            <input type="file" id="shipFileInput" accept="image/*" hidden>
+            <button class="research-btn" id="shipEstimateBtn" onclick="runShippingEstimate()" disabled
+                style="margin-bottom:16px;">
+                📐 Estimate Shipping
+            </button>
+            <div id="shipResults"></div>
         </div>
 
         <!-- ═══ HISTORY VIEW ═══ -->
@@ -1546,6 +1570,7 @@
                                 ${l.tracking_number ? `<div>📬 Tracking: ${escHtml(l.tracking_number)}</div>` : ''}
                                 ${l.shipping_service ? `<div>🚚 ${escHtml(l.shipping_service)}</div>` : ''}
                                 ${l.shipping_cost ? `<div>💵 Shipping: $${l.shipping_cost.toFixed(2)}</div>` : ''}
+                                ${l.weight_oz ? `<div style="margin-top:6px; padding:8px 10px; background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.15); border-radius:8px;">📐 <strong>${l.weight_oz}oz</strong> • ${l.length_in || '?'}×${l.width_in || '?'}×${l.height_in || '?'}" • ${(l.package_type || 'box').replace('_', ' ')}</div>` : ''}
                                 ${l.notes ? `<div>📝 ${escHtml(l.notes)}</div>` : ''}
                                 <div style="margin-top:4px; color:var(--text-dim);">eBay Fees (est): $${(l.ebay_fees || 0).toFixed(2)}</div>
                             </div>
@@ -1580,6 +1605,7 @@
                                     <span>Ship: <strong style="color:var(--danger);">-$${(l.shipping_cost || 0).toFixed(2)}</strong></span>
                                     <span>Profit: <strong style="color:var(--green);">$${(l.profit || 0).toFixed(2)}</strong></span>
                                 </div>
+                                ${l.weight_oz ? `<div style="margin-top:6px; padding:8px 10px; background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.15); border-radius:8px;">📐 <strong>${l.weight_oz}oz</strong> • ${l.length_in || '?'}×${l.width_in || '?'}×${l.height_in || '?'}" • ${(l.package_type || 'box').replace('_', ' ')}</div>` : ''}
                                 ${l.ebay_item_id ? `<div style="margin-top:4px;">📦 Item: ${escHtml(l.ebay_item_id)}</div>` : ''}
                                 ${l.notes ? `<div>📝 ${escHtml(l.notes)}</div>` : ''}
                             </div>
@@ -1606,6 +1632,96 @@
         function showAddListing() {
             document.getElementById('addListingForm').style.display = 'block';
             document.getElementById('newListingName').focus();
+        }
+
+        // ─── Shipping Calculator ───
+        let shipImage = null;
+
+        document.getElementById('shipFileInput').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (ev) {
+                shipImage = ev.target.result;
+                document.getElementById('shipUploadPrompt').style.display = 'none';
+                const preview = document.getElementById('shipPreview');
+                preview.style.display = 'block';
+                document.getElementById('shipPreviewImg').src = shipImage;
+                document.getElementById('shipEstimateBtn').disabled = false;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        async function runShippingEstimate() {
+            if (!shipImage) return;
+            const btn = document.getElementById('shipEstimateBtn');
+            const resultsDiv = document.getElementById('shipResults');
+            btn.disabled = true;
+            btn.classList.add('loading');
+            btn.innerHTML = '<div class="spinner"></div> Analyzing product...';
+            resultsDiv.innerHTML = '';
+
+            try {
+                const resp = await fetch('/price/api/shipping-estimate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: shipImage })
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    resultsDiv.innerHTML = `<div class="result-card" style="border-color: var(--danger);"><div style="color: var(--danger); font-weight: 600;">❌ ${data.error}</div></div>`;
+                    return;
+                }
+
+                resultsDiv.innerHTML = `
+                    <div class="result-card" style="border-color: var(--accent);">
+                        <div class="product-header">
+                            <div style="flex:1">
+                                <div class="product-name">${escHtml(data.product_name || 'Product')}</div>
+                            </div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0;">
+                            <div style="background:var(--bg-secondary); padding:14px; border-radius:10px; text-align:center;">
+                                <div style="color:var(--text-dim); font-size:11px; margin-bottom:4px;">⚖️ Weight</div>
+                                <div style="font-size:22px; font-weight:700; color:var(--accent);">${data.weight_oz || '?'}oz</div>
+                                <div style="color:var(--text-dim); font-size:11px; margin-top:2px;">${((data.weight_oz || 0) / 16).toFixed(1)} lbs</div>
+                            </div>
+                            <div style="background:var(--bg-secondary); padding:14px; border-radius:10px; text-align:center;">
+                                <div style="color:var(--text-dim); font-size:11px; margin-bottom:4px;">📏 Dimensions</div>
+                                <div style="font-size:22px; font-weight:700; color:var(--text-primary);">${data.length_in || '?'}×${data.width_in || '?'}×${data.height_in || '?'}</div>
+                                <div style="color:var(--text-dim); font-size:11px; margin-top:2px;">inches (L×W×H)</div>
+                            </div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+                            <div style="background:var(--bg-secondary); padding:14px; border-radius:10px; text-align:center;">
+                                <div style="color:var(--text-dim); font-size:11px; margin-bottom:4px;">📦 Package Type</div>
+                                <div style="font-size:16px; font-weight:600; color:var(--text-primary);">${(data.package_type || 'small_box').replace('_', ' ')}</div>
+                            </div>
+                            <div style="background:var(--bg-secondary); padding:14px; border-radius:10px; text-align:center;">
+                                <div style="color:var(--text-dim); font-size:11px; margin-bottom:4px;">💵 USPS Cost</div>
+                                <div style="font-size:22px; font-weight:700; color:var(--green);">$${(data.usps_cost_calculated || data.usps_cost_estimate || 5.15).toFixed(2)}</div>
+                            </div>
+                        </div>
+
+                        ${data.notes ? `<div class="notes-box">${escHtml(data.notes)}</div>` : ''}
+
+                        <div class="copy-row" style="flex-wrap:wrap;">
+                            <button class="copy-btn" onclick="copyText('${data.weight_oz || ''}', this)">📋 Weight</button>
+                            <button class="copy-btn" onclick="copyText('${data.length_in || ''}x${data.width_in || ''}x${data.height_in || ''}', this)">📋 Dimensions</button>
+                            <button class="copy-btn" onclick="copyText('${(data.usps_cost_calculated || data.usps_cost_estimate || 5.15).toFixed(2)}', this)">📋 Ship Cost</button>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                resultsDiv.innerHTML = `<div class="result-card" style="border-color: var(--danger);"><div style="color: var(--danger);">❌ ${err.message}</div></div>`;
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btn.innerHTML = '📐 Estimate Shipping';
+            }
         }
 
         async function addListing() {

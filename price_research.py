@@ -298,6 +298,11 @@ class EbayListing(db.Model):
     buyer_address = db.Column(db.String(300), default='')
     tracking_number = db.Column(db.String(100), default='')
     shipping_service = db.Column(db.String(50), default='')
+    weight_oz = db.Column(db.Float, nullable=True)
+    length_in = db.Column(db.Float, nullable=True)
+    width_in = db.Column(db.Float, nullable=True)
+    height_in = db.Column(db.Float, nullable=True)
+    package_type = db.Column(db.String(30), default='')
     listed_at = db.Column(db.DateTime, default=datetime.utcnow)
     sold_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -322,6 +327,11 @@ class EbayListing(db.Model):
             'buyer_address': self.buyer_address or '',
             'tracking_number': self.tracking_number or '',
             'shipping_service': self.shipping_service or '',
+            'weight_oz': self.weight_oz,
+            'length_in': self.length_in,
+            'width_in': self.width_in,
+            'height_in': self.height_in,
+            'package_type': self.package_type or '',
             'listed_at': self.listed_at.isoformat() if self.listed_at else None,
             'sold_at': self.sold_at.isoformat() if self.sold_at else None,
         }
@@ -358,6 +368,30 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         log.warning(f"EbayListing migration note: {e}")
+
+    # Add new shipping dimension columns if missing (safe migrations)
+    try:
+        inspector = db.inspect(db.engine)
+        ebay_cols = [c['name'] for c in inspector.get_columns('ebay_listings')]
+        shipping_cols = {
+            'weight_oz': 'FLOAT',
+            'length_in': 'FLOAT',
+            'width_in': 'FLOAT',
+            'height_in': 'FLOAT',
+            'package_type': "VARCHAR(30) DEFAULT ''",
+        }
+        for col_name, col_type in shipping_cols.items():
+            if col_name not in ebay_cols:
+                try:
+                    db.session.execute(text(f"ALTER TABLE ebay_listings ADD COLUMN {col_name} {col_type}"))
+                    db.session.commit()
+                    log.info(f"Migration: added '{col_name}' column to ebay_listings")
+                except Exception as col_err:
+                    db.session.rollback()
+                    log.warning(f"Migration note for {col_name}: {col_err}")
+    except Exception as e:
+        db.session.rollback()
+        log.warning(f"Shipping column migration note: {e}")
 
     # Add new columns if missing (safe migrations)
     try:
@@ -913,6 +947,12 @@ def update_listing(listing_id):
         listing.notes = data['notes']
     if 'list_price' in data:
         listing.list_price = data['list_price']
+    if 'product_name' in data:
+        listing.product_name = data['product_name']
+    # Shipping dimensions
+    for field in ['weight_oz', 'length_in', 'width_in', 'height_in', 'package_type']:
+        if field in data:
+            setattr(listing, field, data[field])
     db.session.commit()
     return jsonify(listing.to_dict())
 
@@ -924,6 +964,83 @@ def delete_listing(listing_id):
     db.session.delete(listing)
     db.session.commit()
     return jsonify({'deleted': True})
+
+
+@app.route('/price/api/shipping-estimate', methods=['POST'])
+def shipping_estimate():
+    """Estimate shipping dimensions for a product from its image using Grok vision."""
+    data = request.get_json()
+    image = data.get('image', '')
+    if not image:
+        return jsonify({'error': 'No image provided'}), 400
+    if not XAI_API_KEY:
+        return jsonify({'error': 'XAI_API_KEY not configured'}), 400
+
+    content_parts = [{
+        'type': 'text',
+        'text': '''You are a shipping expert. Look at this product image and estimate the shipping dimensions.
+
+Provide:
+1. Product weight in ounces (estimate based on typical product weight for this type of item)
+2. Package dimensions in inches (Length × Width × Height) for the smallest box/envelope it would fit in
+3. Best package type: padded_envelope, small_box, medium_box, or large_box
+4. USPS Ground Advantage shipping cost estimate
+
+RESPOND IN THIS EXACT JSON FORMAT ONLY (no markdown, no code blocks):
+{
+  "product_name": "What this product appears to be",
+  "weight_oz": 12,
+  "length_in": 8,
+  "width_in": 4,
+  "height_in": 3,
+  "package_type": "small_box",
+  "usps_cost_estimate": 5.15,
+  "notes": "Brief note about packaging recommendation"
+}'''
+    }]
+
+    if image.startswith('data:'):
+        content_parts.append({'type': 'image_url', 'image_url': {'url': image}})
+    elif image.startswith('http'):
+        content_parts.append({'type': 'image_url', 'image_url': {'url': image}})
+    else:
+        content_parts.append({'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{image}'}})
+
+    try:
+        resp = requests.post(
+            XAI_API_URL,
+            headers={
+                'Authorization': f'Bearer {XAI_API_KEY}',
+                'Content-Type': 'application/json',
+            },
+            json={
+                'model': XAI_MODEL,
+                'messages': [{'role': 'user', 'content': content_parts}],
+                'temperature': 0.2,
+                'max_tokens': 1000,
+            },
+            timeout=60,
+        )
+
+        if resp.status_code != 200:
+            return jsonify({'error': f'Grok API returned {resp.status_code}'}), 500
+
+        raw = resp.json()['choices'][0]['message']['content']
+        # Strip markdown code block if present
+        raw = re.sub(r'^```(?:json)?\s*', '', raw.strip())
+        raw = re.sub(r'\s*```$', '', raw.strip())
+        result = json.loads(raw)
+
+        # Calculate USPS cost from our rate table
+        weight = result.get('weight_oz', 12)
+        result['usps_cost_calculated'] = get_usps_shipping_cost(weight)
+
+        return jsonify(result)
+    except json.JSONDecodeError:
+        return jsonify({'error': 'Could not parse AI response', 'raw': raw[:500]}), 500
+    except Exception as e:
+        log.error(f"Shipping estimate error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # ─── Gmail eBay Scanning ──────────────────────────────────────────────────────
