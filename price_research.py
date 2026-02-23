@@ -27,9 +27,9 @@ XAI_MODEL = os.environ.get('XAI_MODEL', 'grok-4-1-fast-reasoning')
 # We want to undercut TikTok Shop but not by so much that we leave money on table.
 # These are % below the MEDIAN price across sources (not the lowest).
 DISCOUNT_LADDER = {
-    'conservative': {15: 0.12, 30: 0.15, 60: 0.15, 100: 0.18, 9999: 0.20},
-    'balanced':     {15: 0.18, 30: 0.22, 60: 0.22, 100: 0.25, 9999: 0.28},
-    'aggressive':   {15: 0.28, 30: 0.32, 60: 0.30, 100: 0.34, 9999: 0.38},
+    'conservative': {15: 0.17, 30: 0.20, 60: 0.20, 100: 0.23, 9999: 0.25},
+    'balanced':     {15: 0.23, 30: 0.27, 60: 0.27, 100: 0.30, 9999: 0.33},
+    'aggressive':   {15: 0.33, 30: 0.37, 60: 0.35, 100: 0.39, 9999: 0.43},
 }
 
 def get_discount(price, aggressiveness='conservative'):
