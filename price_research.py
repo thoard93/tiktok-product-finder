@@ -626,13 +626,47 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
         for tier_name in ['conservative', 'balanced', 'aggressive']:
             tier_prices = []
             for price_entry in result.get('prices', []):
-                lowest = price_entry.get('lowest_price', 0)
-                tiktok_price = None
-                sources = price_entry.get('sources', {})
-                if sources.get('tiktok_shop') and sources['tiktok_shop'].get('price'):
-                    tiktok_price = float(sources['tiktok_shop']['price'])
+                # Get lowest price — compute from sources if Grok didn't provide it
+                lowest = 0
+                try:
+                    lowest = float(price_entry.get('lowest_price', 0) or 0)
+                except (ValueError, TypeError):
+                    lowest = 0
 
-                if lowest and lowest > 0:
+                # If no lowest_price, compute from sources
+                sources = price_entry.get('sources', {})
+                if lowest <= 0:
+                    source_prices = []
+                    for src_name, src_data in sources.items():
+                        if src_data and src_data.get('price'):
+                            try:
+                                source_prices.append(float(src_data['price']))
+                            except (ValueError, TypeError):
+                                pass
+                    if source_prices:
+                        lowest = min(source_prices)
+                        log.info(f"Computed lowest_price from sources: ${lowest}")
+
+                # If STILL no lowest, try average_price or recommended_price from Grok
+                if lowest <= 0:
+                    try:
+                        lowest = float(price_entry.get('average_price', 0) or 0)
+                    except (ValueError, TypeError):
+                        lowest = 0
+                if lowest <= 0:
+                    try:
+                        lowest = float(price_entry.get('recommended_price', 0) or 0)
+                    except (ValueError, TypeError):
+                        lowest = 0
+
+                tiktok_price = None
+                if sources.get('tiktok_shop') and sources['tiktok_shop'].get('price'):
+                    try:
+                        tiktok_price = float(sources['tiktok_shop']['price'])
+                    except (ValueError, TypeError):
+                        tiktok_price = None
+
+                if lowest > 0:
                     discount = get_discount(lowest, tier_name)
                     recommended = round(lowest * (1 - discount), 2)
 
@@ -642,7 +676,7 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
 
                     # Get shipping cost from AI estimate or default
                     shipping = price_entry.get('shipping_estimate', {})
-                    weight_oz = shipping.get('weight_oz', 12)  # default 12oz
+                    weight_oz = shipping.get('weight_oz', 12) if isinstance(shipping, dict) else 12
                     shipping_cost = get_usps_shipping_cost(weight_oz)
 
                     ebay_fees = round(recommended * 0.13, 2)
