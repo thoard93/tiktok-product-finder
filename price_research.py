@@ -1374,7 +1374,8 @@ def gmail_scan():
                     if not existing and len(product_name) >= 8:
                         all_items = EbayListing.query.filter_by(team=team).all()
                         for item in all_items:
-                            if product_name.lower() in item.product_name.lower():
+                            db_name = _html.unescape(item.product_name).replace('\ufe0f', '').replace('\ufe0e', '').lower()
+                            if product_name.lower() in db_name:
                                 existing = item
                                 break
                     if existing:
@@ -1863,7 +1864,8 @@ def _auto_scan_gmail():
                                 if not existing and len(product_name) >= 8:
                                     all_items = EbayListing.query.filter_by(team=team).all()
                                     for item in all_items:
-                                        if product_name.lower() in item.product_name.lower():
+                                        db_name = _html.unescape(item.product_name).replace('\ufe0f', '').replace('\ufe0e', '').lower()
+                                        if product_name.lower() in db_name:
                                             existing = item
                                             break
                                 if existing:
