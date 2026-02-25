@@ -1383,11 +1383,15 @@ def gmail_scan():
                                   'selling tips', 'newsletter', 'account', 'verification',
                                   'email preferences', 'privacy', 'copyright', 'unsubscribe']
                     body_is_valid = body_name and len(body_name) > 8 and not any(jw in body_name.lower() for jw in junk_words)
-                    if subj_name and '...' in subject:
-                        # Subject is truncated — use body name if it's valid and longer
-                        product_name = body_name if body_is_valid and len(body_name) > len(subj_name) else subj_name
+                    # ALWAYS prefer body_name when it's longer — eBay subjects are often truncated
+                    if body_is_valid and len(body_name) > len(subj_name) + 3:
+                        product_name = body_name
+                    elif subj_name:
+                        product_name = subj_name
+                    elif body_is_valid:
+                        product_name = body_name
                     else:
-                        product_name = subj_name or (body_name if body_is_valid else '')
+                        product_name = ''
                     if not product_name:
                         continue
                     # Final junk check on selected name
@@ -1771,6 +1775,7 @@ def _auto_scan_gmail():
 
                 with app.app_context():
                     # ── SOLD EMAILS ──
+                    seen_sold = set()  # Track processed sold items to prevent duplicates
                     for search_q in ['made the sale', 'item has sold', 'You sold']:
                         _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
                         for num in (msgs[0].split() if msgs[0] else []):
@@ -1790,6 +1795,12 @@ def _auto_scan_gmail():
 
                                 body = _get_email_body(msg)
                                 info = _parse_ebay_sold_email(body) if body else {}
+
+                                # Skip if already seen in this batch (same email matches multiple queries)
+                                sold_key = (product_name[:30].lower().strip(), info.get('order_number', ''))
+                                if sold_key in seen_sold:
+                                    continue
+                                seen_sold.add(sold_key)
 
                                 # Skip if already tracked (check order + name for multi-item orders)
                                 if info.get('order_number'):
@@ -1841,6 +1852,7 @@ def _auto_scan_gmail():
                                     )
                                     db.session.add(listing)
                                     _pending_sales.append({'product_name': product_name, 'team': team, 'profit': round(sold_price - fees, 2)})
+                                    db.session.flush()  # Make visible to subsequent queries
                             except Exception as e:
                                 log.warning(f"Auto-scan sold error: {e}")
 
@@ -1876,10 +1888,15 @@ def _auto_scan_gmail():
                                               'selling tips', 'newsletter', 'account', 'verification',
                                               'email preferences', 'privacy', 'copyright', 'unsubscribe']
                                 body_is_valid = body_name and len(body_name) > 8 and not any(jw in body_name.lower() for jw in junk_words)
-                                if subj_name and '...' in subject:
-                                    product_name = body_name if body_is_valid and len(body_name) > len(subj_name) else subj_name
+                                # ALWAYS prefer body_name when it's longer — eBay subjects are often truncated
+                                if body_is_valid and len(body_name) > len(subj_name) + 3:
+                                    product_name = body_name
+                                elif subj_name:
+                                    product_name = subj_name
+                                elif body_is_valid:
+                                    product_name = body_name
                                 else:
-                                    product_name = subj_name or (body_name if body_is_valid else '')
+                                    product_name = ''
                                 if not product_name:
                                     continue
                                 if any(jw in product_name.lower() for jw in junk_words):
