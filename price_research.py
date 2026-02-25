@@ -1103,7 +1103,14 @@ def _get_email_body(msg):
 
 def _strip_html(body):
     """Strip HTML tags and normalize whitespace for regex parsing."""
-    text = re.sub(r'<[^>]+>', ' ', body)
+    # Remove <style>...</style> blocks (CSS content would leak as text)
+    text = re.sub(r'<style[^>]*>.*?</style>', ' ', body, flags=re.DOTALL | re.IGNORECASE)
+    # Remove <script>...</script> blocks
+    text = re.sub(r'<script[^>]*>.*?</script>', ' ', text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove MSO conditional comments
+    text = re.sub(r'<!--\[if[^]]*\]>.*?<!\[endif\]-->', ' ', text, flags=re.DOTALL)
+    # Strip remaining HTML tags
+    text = re.sub(r'<[^>]+>', ' ', text)
     return re.sub(r'\s+', ' ', text)
 
 
@@ -1138,11 +1145,15 @@ def _parse_ebay_listed_email(body):
 
     product_name = ''
 
+    # Strip <style> and <script> blocks from body before parsing
+    clean_body = re.sub(r'<style[^>]*>.*?</style>', '', body, flags=re.DOTALL | re.IGNORECASE)
+    clean_body = re.sub(r'<script[^>]*>.*?</script>', '', clean_body, flags=re.DOTALL | re.IGNORECASE)
+
     # 1. eBay listed emails put the product name inside <span class="linkStyledText">
     #    wrapped in MSO conditional comments, within an <a href="ebay.com/itm/..."> link.
     #    IMPORTANT: linkStyledText is used in MULTIPLE places (product + footer), so we
     #    must scope the search to inside the ebay.com/itm anchor tag only.
-    itm_block = re.search(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>(.*?)</a>', body, re.DOTALL | re.IGNORECASE)
+    itm_block = re.search(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>(.*?)</a>', clean_body, re.DOTALL | re.IGNORECASE)
     if itm_block:
         block_html = itm_block.group(1)
         # Look for linkStyledText span within this block
