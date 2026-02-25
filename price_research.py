@@ -1196,8 +1196,17 @@ def _parse_ebay_listed_email(body):
             if 'eBay' not in alt and 'logo' not in alt.lower():
                 product_name = alt
 
+    # Final cleanup: strip common noise prefixes from any extraction method
     if product_name:
-        info['product_name_from_body'] = product_name
+        import html as _html_mod
+        product_name = _html_mod.unescape(product_name)
+        # Strip "is live" or "is now listed" prefixes that leak from regex
+        product_name = re.sub(r'^(?:is live|is now listed|is listed)\s*', '', product_name, flags=re.IGNORECASE).strip()
+        # Strip leading/trailing special chars, hair spaces, etc.
+        product_name = re.sub(r'^[\s\u200a\u200b\u2002\u2003\u2009\u202f]+', '', product_name)
+        product_name = product_name.strip().rstrip('.')
+        if len(product_name) > 5:
+            info['product_name_from_body'] = product_name
     return info
 
 
