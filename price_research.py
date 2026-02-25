@@ -453,13 +453,13 @@ INSTRUCTIONS:
 4. For each source, give the ACTUAL current retail price. If not sure, give your best estimate and mark estimated=true.
 5. ESTIMATE SHIPPING: For each product, estimate the approximate weight in ounces, dimensions in inches (L x W x H), and best package type (padded_envelope, small_box, medium_box, large_box).
 
-CRITICAL PRICING RULE:
-- The recommended_price should be competitive but not excessively discounted
-- Use the MEDIAN price across all sources as the baseline (not the lowest)
-- Apply a modest {aggressiveness} discount (12-20% for conservative) below the median
-- The goal: undercut TikTok Shop by a small margin, not slash prices dramatically
-- Example: If median is $20 and TikTok Shop is $18, recommend around $15-16
+CRITICAL PRICING RULES:
+- TikTok Shop prices are typically 20-40% BELOW Amazon/retail. They are NOT 50%+ below. If your TikTok estimate is less than half the Amazon price, you are underestimating — revise upward.
+- For the "lowest_price" field: use the MEDIAN price across ALL sources, not the actual lowest. We want competitive pricing, not fire-sale pricing.
+- The recommended_price should undercut this median by a {aggressiveness} discount (17-25% for conservative)
+- Example: If Amazon=$35, Walmart=$30, TikTok=$25, eBay=$22, median is ~$28. Conservative recommendation = $28 * 0.80 = $22.40
 - These are zero-cost products, so any price is pure profit minus eBay fees and shipping
+- NEVER recommend a price below $10 for ANY product unless it genuinely sells for under $12 everywhere
 
 RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, ONLY raw JSON):
 {{
