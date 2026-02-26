@@ -1773,6 +1773,12 @@ def _auto_scan_gmail():
                 import imaplib
                 import email as _email
                 from datetime import timedelta
+                import ssl
+
+                def _is_connection_error(err):
+                    """Check if error indicates a dead IMAP connection."""
+                    err_str = str(err).lower()
+                    return any(k in err_str for k in ['eof', 'ssl', 'socket', 'broken pipe', 'connection reset', 'timed out'])
 
                 mail = imaplib.IMAP4_SSL('imap.gmail.com')
                 mail.login(gmail_user, gmail_pass)
@@ -1874,6 +1880,9 @@ def _auto_scan_gmail():
                                     _pending_sales.append({'product_name': product_name, 'team': team, 'profit': round(sold_price - fees, 2)})
                                     db.session.flush()  # Make visible to subsequent queries
                             except Exception as e:
+                                if _is_connection_error(e):
+                                    log.warning(f"Auto-scan sold: connection lost ({e}), skipping remaining")
+                                    break
                                 log.warning(f"Auto-scan sold error: {e}")
 
                     db.session.flush()
@@ -1956,6 +1965,9 @@ def _auto_scan_gmail():
                                 db.session.add(listing)
                                 db.session.flush()  # Make visible to subsequent queries
                             except Exception as e:
+                                if _is_connection_error(e):
+                                    log.warning(f"Auto-scan listed: connection lost ({e}), skipping remaining")
+                                    break
                                 log.warning(f"Auto-scan listed error: {e}")
 
                     # ── SHIPPING LABEL EMAILS ──
@@ -1991,6 +2003,9 @@ def _auto_scan_gmail():
                                         listing.ebay_fees = round(price * 0.13, 2)
                                         listing.profit = round(price - listing.ebay_fees - listing.shipping_cost, 2)
                         except Exception as e:
+                            if _is_connection_error(e):
+                                log.warning(f"Auto-scan shipping: connection lost ({e}), skipping remaining")
+                                break
                             log.warning(f"Auto-scan shipping error: {e}")
 
                     # ── CLEANUP: merge duplicates ──
