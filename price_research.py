@@ -1823,26 +1823,42 @@ def _auto_scan_gmail():
                                 info = _parse_ebay_sold_email(body) if body else {}
 
                                 # Skip if already seen in this batch (same email matches multiple queries)
-                                sold_key = (product_name[:30].lower().strip(), info.get('order_number', ''))
+                                sold_key = (product_name[:20].lower().strip(), info.get('order_number', ''))
                                 if sold_key in seen_sold:
                                     continue
                                 seen_sold.add(sold_key)
 
-                                # Skip if already tracked (check order + name for multi-item orders)
-                                if info.get('order_number'):
-                                    if EbayListing.query.filter_by(order_number=info['order_number']).filter(
-                                        EbayListing.product_name.ilike(f'%{product_name[:40]}%')
-                                    ).first():
+                                # Skip if already tracked — multi-tier dedup
+                                order_num = info.get('order_number', '')
+                                name_prefix = product_name[:25].lower().strip()
+
+                                # Tier 1: exact order_number match (any product with same order + similar name)
+                                if order_num:
+                                    existing_by_order = EbayListing.query.filter_by(order_number=order_num).all()
+                                    for ebo in existing_by_order:
+                                        if ebo.product_name[:25].lower().strip() == name_prefix:
+                                            # Fill in missing data
+                                            if info.get('buyer_name') and not ebo.buyer_name:
+                                                ebo.buyer_name = info['buyer_name']
+                                            if info.get('sold_price') and not ebo.sold_price:
+                                                ebo.sold_price = info['sold_price']
+                                                ebo.ebay_fees = round(ebo.sold_price * 0.13, 2)
+                                                ebo.profit = round(ebo.sold_price - ebo.ebay_fees - (ebo.shipping_cost or 0), 2)
+                                            break
+                                    else:
+                                        existing_by_order = None  # No match found
+                                    if existing_by_order and any(ebo.product_name[:25].lower().strip() == name_prefix for ebo in existing_by_order):
                                         continue
 
+                                # Tier 2: name-based match (sold status, shorter prefix for broader match)
                                 existing = EbayListing.query.filter(
-                                    EbayListing.product_name.ilike(f'%{product_name[:40]}%'),
+                                    EbayListing.product_name.ilike(f'%{product_name[:25]}%'),
                                     EbayListing.status == 'sold'
                                 ).first()
                                 if existing:
                                     # Fill in missing data on existing sold entry
-                                    if info.get('order_number') and not existing.order_number:
-                                        existing.order_number = info['order_number']
+                                    if order_num and not existing.order_number:
+                                        existing.order_number = order_num
                                     if info.get('buyer_name') and not existing.buyer_name:
                                         existing.buyer_name = info['buyer_name']
                                     if info.get('sold_price') and not existing.sold_price:
@@ -1852,7 +1868,7 @@ def _auto_scan_gmail():
                                     continue
 
                                 active = EbayListing.query.filter(
-                                    EbayListing.product_name.ilike(f'%{product_name[:40]}%'),
+                                    EbayListing.product_name.ilike(f'%{product_name[:25]}%'),
                                     EbayListing.status == 'listed'
                                 ).first()
 
@@ -2042,6 +2058,23 @@ def _auto_scan_gmail():
                             to_delete.append(listed)
                         else:
                             seen_active.add(key)
+                    # Remove duplicate sold-to-sold items (keep the one with most data)
+                    seen_sold_cleanup = {}
+                    for sold in sold_items:
+                        # Key by order_number + name prefix, or just name prefix
+                        key = (sold.order_number or '') + '|' + sold.product_name[:25].lower().strip()
+                        if key in seen_sold_cleanup:
+                            prev = seen_sold_cleanup[key]
+                            # Keep whichever has more data (shipping cost, buyer, etc)
+                            prev_score = sum([bool(prev.shipping_cost), bool(prev.buyer_name), bool(prev.tracking_number), bool(prev.order_number)])
+                            sold_score = sum([bool(sold.shipping_cost), bool(sold.buyer_name), bool(sold.tracking_number), bool(sold.order_number)])
+                            if sold_score > prev_score:
+                                to_delete.append(prev)
+                                seen_sold_cleanup[key] = sold
+                            else:
+                                to_delete.append(sold)
+                        else:
+                            seen_sold_cleanup[key] = sold
                     for item in to_delete:
                         db.session.delete(item)
 
