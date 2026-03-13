@@ -283,12 +283,13 @@ class EbayListing(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     product_name = db.Column(db.String(300), default='')
     product_details = db.Column(db.String(500), default='')
-    status = db.Column(db.String(20), default='listed')  # listed, sold, shipped
+    status = db.Column(db.String(20), default='listed')  # listed, sold, shipped, cancelled, returned, refunded, removed
     list_price = db.Column(db.Float, default=0)
     sold_price = db.Column(db.Float, default=0)
     shipping_cost = db.Column(db.Float, default=0)
     ebay_fees = db.Column(db.Float, default=0)
     profit = db.Column(db.Float, default=0)
+    refund_amount = db.Column(db.Float, default=0)    # Partial or full refund amount
     team = db.Column(db.String(20), default='thoard')
     notes = db.Column(db.Text, default='')
     research_id = db.Column(db.Integer, nullable=True)
@@ -298,6 +299,8 @@ class EbayListing(db.Model):
     buyer_address = db.Column(db.String(300), default='')
     tracking_number = db.Column(db.String(100), default='')
     shipping_service = db.Column(db.String(50), default='')
+    cancel_id = db.Column(db.String(50), default='')    # eBay cancel ID
+    return_id = db.Column(db.String(50), default='')    # eBay return ID
     weight_oz = db.Column(db.Float, nullable=True)
     length_in = db.Column(db.Float, nullable=True)
     width_in = db.Column(db.Float, nullable=True)
@@ -334,6 +337,9 @@ class EbayListing(db.Model):
             'package_type': self.package_type or '',
             'listed_at': self.listed_at.isoformat() if self.listed_at else None,
             'sold_at': self.sold_at.isoformat() if self.sold_at else None,
+            'refund_amount': self.refund_amount or 0,
+            'cancel_id': self.cancel_id or '',
+            'return_id': self.return_id or '',
         }
 
 
@@ -392,6 +398,28 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         log.warning(f"Shipping column migration note: {e}")
+
+    # Add cancel/return/refund columns if missing (safe migrations)
+    try:
+        inspector = db.inspect(db.engine)
+        ebay_cols = [c['name'] for c in inspector.get_columns('ebay_listings')]
+        new_cols = {
+            'refund_amount': 'FLOAT DEFAULT 0',
+            'cancel_id': "VARCHAR(50) DEFAULT ''",
+            'return_id': "VARCHAR(50) DEFAULT ''",
+        }
+        for col_name, col_type in new_cols.items():
+            if col_name not in ebay_cols:
+                try:
+                    db.session.execute(text(f"ALTER TABLE ebay_listings ADD COLUMN {col_name} {col_type}"))
+                    db.session.commit()
+                    log.info(f"Migration: added '{col_name}' column to ebay_listings")
+                except Exception as col_err:
+                    db.session.rollback()
+                    log.warning(f"Migration note for {col_name}: {col_err}")
+    except Exception as e:
+        db.session.rollback()
+        log.warning(f"Cancel/return column migration note: {e}")
 
     # Add new columns if missing (safe migrations)
     try:
@@ -1229,6 +1257,166 @@ def _parse_ebay_shipping_email(body):
     return info
 
 
+def _parse_ebay_cancel_email(body):
+    """Parse eBay cancellation email for order number, product name, buyer, cancel ID.
+    Handles both 'You successfully canceled an order' and 'A buyer wants to cancel an order'.
+    """
+    info = {}
+    text = _strip_html(body)
+    import html as _html_mod
+
+    # Order number: "Order number\n15-14349-95337" or "Order number: 15-14349-95337"
+    m = re.search(r'Order number\s*:?\s*([\d\-]+)', text, re.IGNORECASE)
+    if m: info['order_number'] = m.group(1).strip()
+
+    # Cancel ID: "Cancel ID:\n5432939127" or "Cancel ID: 5432939127"
+    m = re.search(r'Cancel ID\s*:?\s*(\d+)', text, re.IGNORECASE)
+    if m: info['cancel_id'] = m.group(1).strip()
+
+    # Buyer ID: "Buyer ID:\nlau_580619"
+    m = re.search(r'Buyer ID\s*:?\s*(\S+)', text, re.IGNORECASE)
+    if m: info['buyer_name'] = m.group(1).strip()
+
+    # Product name from linked text (e.g. <a>Von Dutch Unisex Trucker Hat...</a>)
+    clean_body = re.sub(r'<style[^>]*>.*?</style>', '', body, flags=re.DOTALL | re.IGNORECASE)
+    clean_body = re.sub(r'<script[^>]*>.*?</script>', '', clean_body, flags=re.DOTALL | re.IGNORECASE)
+    # Look for product link near "Order number"
+    m = re.search(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>(.*?)</a>', clean_body, re.DOTALL | re.IGNORECASE)
+    if m:
+        raw = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+        raw = _html_mod.unescape(raw)
+        if len(raw) > 5:
+            info['product_name'] = raw
+
+    return info
+
+
+def _parse_ebay_refund_email(body):
+    """Parse eBay refund email for order number, product name, refund amount.
+    Handles both 'Order has been refunded' and 'processing your refund request'.
+    """
+    info = {}
+    text = _strip_html(body)
+    import html as _html_mod
+
+    # Order number from subject or body: "Order 18-14302-08208 has been refunded"
+    m = re.search(r'Order\s+([\d\-]+)', text, re.IGNORECASE)
+    if m: info['order_number'] = m.group(1).strip()
+
+    # Refund amount: "Total refunded\n-$30.00" or "Refund\n-$7.00" or "$30.00"
+    m = re.search(r'Total refunded\s*[-]?\s*\$?([\d,]+\.?\d*)', text, re.IGNORECASE)
+    if m:
+        info['refund_amount'] = float(m.group(1).replace(',', ''))
+    else:
+        # Fallback: "Your refund of $30.00 is in process"
+        m = re.search(r'refund of \$?([\d,]+\.?\d*)', text, re.IGNORECASE)
+        if m: info['refund_amount'] = float(m.group(1).replace(',', ''))
+
+    # Amount paid: "Amount paid\n$80.00"
+    m = re.search(r'Amount paid\s*\$?([\d,]+\.?\d*)', text, re.IGNORECASE)
+    if m: info['amount_paid'] = float(m.group(1).replace(',', ''))
+
+    # Order total: "Order total\n$50.00"
+    m = re.search(r'Order total\s*\$?([\d,]+\.?\d*)', text, re.IGNORECASE)
+    if m: info['order_total'] = float(m.group(1).replace(',', ''))
+
+    # Refund ID: "Refund ID: 5186159736" or "Refund ID\n5186159736"
+    m = re.search(r'Refund ID\s*:?\s*(\d+)', text, re.IGNORECASE)
+    if m: info['refund_id'] = m.group(1).strip()
+
+    # Buyer: "refund buyer 123anthonyred" or "musicwh77 has been refunded"
+    m = re.search(r'refund buyer (\S+)', text, re.IGNORECASE)
+    if m: info['buyer_name'] = m.group(1).strip()
+    if not info.get('buyer_name'):
+        m = re.search(r'(\S+) has been refunded', text, re.IGNORECASE)
+        if m: info['buyer_name'] = m.group(1).strip()
+
+    # Product name from body — look for linked product text near refund breakdown
+    clean_body = re.sub(r'<style[^>]*>.*?</style>', '', body, flags=re.DOTALL | re.IGNORECASE)
+    clean_body = re.sub(r'<script[^>]*>.*?</script>', '', clean_body, flags=re.DOTALL | re.IGNORECASE)
+    m = re.search(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>(.*?)</a>', clean_body, re.DOTALL | re.IGNORECASE)
+    if m:
+        raw = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+        raw = _html_mod.unescape(raw)
+        if len(raw) > 5:
+            info['product_name'] = raw
+    if not info.get('product_name'):
+        # Fallback: text between "Refund breakdown" and price
+        m = re.search(r'Refund breakdown\s+(.*?)\s+\$[\d,]+', text, re.DOTALL | re.IGNORECASE)
+        if m:
+            candidate = m.group(1).strip()
+            # Clean up — take the last meaningful line
+            lines = [l.strip() for l in candidate.split('\n') if l.strip() and len(l.strip()) > 5]
+            if lines:
+                name = lines[-1]
+                # Remove "Refund" label if it's the last line
+                if name.lower() == 'refund':
+                    name = lines[-2] if len(lines) > 1 else ''
+                if len(name) > 5:
+                    info['product_name'] = name
+
+    return info
+
+
+def _parse_ebay_return_email(body):
+    """Parse eBay return email for return ID, order number, product name, buyer.
+    Handles 'Return XXXXXXXXXX: Return approved' and 'item has been returned'.
+    """
+    info = {}
+    text = _strip_html(body)
+    import html as _html_mod
+
+    # Return ID: "Return ID:\n5314091609" or from subject
+    m = re.search(r'Return ID\s*:?\s*(\d+)', text, re.IGNORECASE)
+    if m: info['return_id'] = m.group(1).strip()
+
+    # Order number: "Order number:\n20-14298-65293"
+    m = re.search(r'Order number\s*:?\s*([\d\-]+)', text, re.IGNORECASE)
+    if m: info['order_number'] = m.group(1).strip()
+
+    # Buyer ID: "Buyer ID:\n2007lorine"
+    m = re.search(r'Buyer ID\s*:?\s*(\S+)', text, re.IGNORECASE)
+    if m: info['buyer_name'] = m.group(1).strip()
+    if not info.get('buyer_name'):
+        # "The buyer 2007lorine is returning"
+        m = re.search(r'buyer (\S+) is returning', text, re.IGNORECASE)
+        if m: info['buyer_name'] = m.group(1).strip()
+
+    # Product name from linked text
+    clean_body = re.sub(r'<style[^>]*>.*?</style>', '', body, flags=re.DOTALL | re.IGNORECASE)
+    clean_body = re.sub(r'<script[^>]*>.*?</script>', '', clean_body, flags=re.DOTALL | re.IGNORECASE)
+    m = re.search(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>(.*?)</a>', clean_body, re.DOTALL | re.IGNORECASE)
+    if m:
+        raw = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+        raw = _html_mod.unescape(raw)
+        if len(raw) > 5:
+            info['product_name'] = raw
+
+    return info
+
+
+def _parse_ebay_removal_email(body):
+    """Parse eBay policy removal email for product names.
+    Handles 'We removed some of your listings'.
+    """
+    info = {}
+    import html as _html_mod
+
+    # Product names from linked text (may be multiple)
+    clean_body = re.sub(r'<style[^>]*>.*?</style>', '', body, flags=re.DOTALL | re.IGNORECASE)
+    clean_body = re.sub(r'<script[^>]*>.*?</script>', '', clean_body, flags=re.DOTALL | re.IGNORECASE)
+    product_names = []
+    for m in re.finditer(r'<a[^>]*href="[^"]*ebay\.com/itm[^"]*"[^>]*>(.*?)</a>', clean_body, re.DOTALL | re.IGNORECASE):
+        raw = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+        raw = _html_mod.unescape(raw)
+        if len(raw) > 5:
+            product_names.append(raw)
+    if product_names:
+        info['product_names'] = product_names
+
+    return info
+
+
 def _decode_subject(msg):
     """Decode email subject."""
     from email.header import decode_header
@@ -2023,6 +2211,185 @@ def _auto_scan_gmail():
                                 log.warning(f"Auto-scan shipping: connection lost ({e}), skipping remaining")
                                 break
                             log.warning(f"Auto-scan shipping error: {e}")
+
+                    # ── CANCELLED ORDER EMAILS ──
+                    for search_q in ['canceled an order', 'cancel an order']:
+                        try:
+                            _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
+                        except Exception as e:
+                            if _is_connection_error(e):
+                                log.warning(f"Auto-scan cancel search: connection lost")
+                                break
+                            continue
+                        for num in (msgs[0].split() if msgs[0] else []):
+                            try:
+                                _, msg_data = mail.fetch(num, '(RFC822)')
+                                msg = _email.message_from_bytes(msg_data[0][1])
+                                body = _get_email_body(msg)
+                                info = _parse_ebay_cancel_email(body) if body else {}
+                                order_num = info.get('order_number', '')
+                                product_name = info.get('product_name', '')
+                                if not order_num and not product_name:
+                                    continue
+
+                                # Find matching sold listing
+                                listing = None
+                                if order_num:
+                                    listing = EbayListing.query.filter_by(
+                                        order_number=order_num, team=team
+                                    ).filter(EbayListing.status.in_(['sold', 'shipped'])).first()
+                                if not listing and product_name:
+                                    listing = EbayListing.query.filter(
+                                        EbayListing.product_name.ilike(f'%{product_name[:25]}%'),
+                                        EbayListing.team == team,
+                                        EbayListing.status.in_(['sold', 'shipped'])
+                                    ).first()
+                                if listing and listing.status != 'cancelled':
+                                    log.info(f"Auto-scan: cancelling '{listing.product_name}' (order {order_num})")
+                                    listing.status = 'cancelled'
+                                    listing.cancel_id = info.get('cancel_id', '')
+                                    listing.profit = 0
+                                    listing.sold_price = 0
+                                    listing.ebay_fees = 0
+                                    db.session.flush()
+                            except Exception as e:
+                                if _is_connection_error(e):
+                                    log.warning(f"Auto-scan cancel: connection lost ({e}), skipping remaining")
+                                    break
+                                log.warning(f"Auto-scan cancel error: {e}")
+
+                    # ── REFUND EMAILS ──
+                    for search_q in ['has been refunded', 'refund request']:
+                        try:
+                            _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
+                        except Exception as e:
+                            if _is_connection_error(e):
+                                log.warning(f"Auto-scan refund search: connection lost")
+                                break
+                            continue
+                        for num in (msgs[0].split() if msgs[0] else []):
+                            try:
+                                _, msg_data = mail.fetch(num, '(RFC822)')
+                                msg = _email.message_from_bytes(msg_data[0][1])
+                                body = _get_email_body(msg)
+                                info = _parse_ebay_refund_email(body) if body else {}
+                                order_num = info.get('order_number', '')
+                                product_name = info.get('product_name', '')
+                                refund_amt = info.get('refund_amount', 0)
+                                if not refund_amt and not order_num:
+                                    continue
+
+                                # Find matching sold listing
+                                listing = None
+                                if order_num:
+                                    listing = EbayListing.query.filter_by(
+                                        order_number=order_num, team=team
+                                    ).filter(EbayListing.status.in_(['sold', 'shipped'])).first()
+                                if not listing and product_name:
+                                    listing = EbayListing.query.filter(
+                                        EbayListing.product_name.ilike(f'%{product_name[:25]}%'),
+                                        EbayListing.team == team,
+                                        EbayListing.status.in_(['sold', 'shipped'])
+                                    ).first()
+                                if listing and not listing.refund_amount:
+                                    sold_price = listing.sold_price or 0
+                                    # Full refund vs partial refund
+                                    if refund_amt >= sold_price * 0.9:
+                                        log.info(f"Auto-scan: full refund on '{listing.product_name}' (${refund_amt})")
+                                        listing.status = 'refunded'
+                                        listing.refund_amount = refund_amt
+                                        listing.profit = 0
+                                    else:
+                                        log.info(f"Auto-scan: partial refund on '{listing.product_name}' (${refund_amt} of ${sold_price})")
+                                        listing.refund_amount = refund_amt
+                                        # Recalculate profit: sold - refund - fees - shipping
+                                        net_price = sold_price - refund_amt
+                                        listing.ebay_fees = round(net_price * 0.13, 2)
+                                        listing.profit = round(net_price - listing.ebay_fees - (listing.shipping_cost or 0), 2)
+                                    db.session.flush()
+                            except Exception as e:
+                                if _is_connection_error(e):
+                                    log.warning(f"Auto-scan refund: connection lost ({e}), skipping remaining")
+                                    break
+                                log.warning(f"Auto-scan refund error: {e}")
+
+                    # ── RETURN EMAILS ──
+                    for search_q in ['Return approved', 'is returning this item', 'item has been returned']:
+                        try:
+                            _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "{search_q}" SINCE {since_date})')
+                        except Exception as e:
+                            if _is_connection_error(e):
+                                log.warning(f"Auto-scan return search: connection lost")
+                                break
+                            continue
+                        for num in (msgs[0].split() if msgs[0] else []):
+                            try:
+                                _, msg_data = mail.fetch(num, '(RFC822)')
+                                msg = _email.message_from_bytes(msg_data[0][1])
+                                subject = _decode_subject(msg)
+                                body = _get_email_body(msg)
+                                info = _parse_ebay_return_email(body) if body else {}
+                                order_num = info.get('order_number', '')
+                                product_name = info.get('product_name', '')
+                                # Extract return ID from subject: "Return 5314091609: Return approved"
+                                return_id = info.get('return_id', '')
+                                if not return_id:
+                                    m = re.search(r'Return\s+(\d{8,})', subject)
+                                    if m: return_id = m.group(1)
+                                if not order_num and not product_name:
+                                    continue
+
+                                # Find matching sold listing
+                                listing = None
+                                if order_num:
+                                    listing = EbayListing.query.filter_by(
+                                        order_number=order_num, team=team
+                                    ).filter(EbayListing.status.in_(['sold', 'shipped'])).first()
+                                if not listing and product_name:
+                                    listing = EbayListing.query.filter(
+                                        EbayListing.product_name.ilike(f'%{product_name[:25]}%'),
+                                        EbayListing.team == team,
+                                        EbayListing.status.in_(['sold', 'shipped'])
+                                    ).first()
+                                if listing and listing.status != 'returned':
+                                    log.info(f"Auto-scan: return on '{listing.product_name}' (return {return_id})")
+                                    listing.status = 'returned'
+                                    listing.return_id = return_id
+                                    listing.profit = 0
+                                    db.session.flush()
+                            except Exception as e:
+                                if _is_connection_error(e):
+                                    log.warning(f"Auto-scan return: connection lost ({e}), skipping remaining")
+                                    break
+                                log.warning(f"Auto-scan return error: {e}")
+
+                    # ── POLICY REMOVAL EMAILS ──
+                    try:
+                        _, msgs = mail.search(None, f'(FROM "{from_filter}" SUBJECT "removed some of your listings" SINCE {since_date})')
+                        for num in (msgs[0].split() if msgs[0] else []):
+                            try:
+                                _, msg_data = mail.fetch(num, '(RFC822)')
+                                msg = _email.message_from_bytes(msg_data[0][1])
+                                body = _get_email_body(msg)
+                                info = _parse_ebay_removal_email(body) if body else {}
+                                for pname in info.get('product_names', []):
+                                    listing = EbayListing.query.filter(
+                                        EbayListing.product_name.ilike(f'%{pname[:25]}%'),
+                                        EbayListing.team == team,
+                                        EbayListing.status == 'listed'
+                                    ).first()
+                                    if listing:
+                                        log.info(f"Auto-scan: policy removal of '{listing.product_name}'")
+                                        listing.status = 'removed'
+                                        db.session.flush()
+                            except Exception as e:
+                                if _is_connection_error(e):
+                                    log.warning(f"Auto-scan removal: connection lost ({e}), skipping remaining")
+                                    break
+                                log.warning(f"Auto-scan removal error: {e}")
+                    except Exception as e:
+                        if not _is_connection_error(e):
+                            log.warning(f"Auto-scan removal search error: {e}")
 
                     # ── CLEANUP: merge duplicates ──
                     db.session.flush()

@@ -4,9 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>PriceBlade — Smart Pricing</title>
-    <meta name="description"
-        content="AI-powered price research for product resellers. Multi-source pricing intelligence.">
+    <title>FlipTracker — eBay Sales Tracker</title>
+    <meta name="description" content="Track your eBay sales, cancellations, refunds, and returns in real-time.">
     <meta name="theme-color" content="#0a0a0f">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -723,14 +722,11 @@
     <div class="header">
         <div class="header-inner">
             <div class="logo">
-                <div class="logo-icon">🔪</div>
-                <div class="logo-text">Price<span>Blade</span></div>
+                <div class="logo-icon">📊</div>
+                <div class="logo-text">Flip<span>Tracker</span></div>
             </div>
             <div class="header-nav">
-                <button class="nav-btn active" onclick="showView('research')" id="nav-research">🔍</button>
-                <button class="nav-btn" onclick="showView('listings')" id="nav-listings">📦</button>
-                <button class="nav-btn" onclick="showView('shipping')" id="nav-shipping">📐</button>
-                <button class="nav-btn" onclick="showView('history')" id="nav-history">📋</button>
+                <button class="nav-btn active" onclick="showView('listings')" id="nav-listings">📦</button>
                 <button class="nav-btn" onclick="showView('dashboard')" id="nav-dashboard">📊</button>
                 <button class="nav-btn" onclick="showView('settings')" id="nav-settings">⚙️</button>
             </div>
@@ -748,8 +744,8 @@
             </div>
         </div>
 
-        <!-- ═══ RESEARCH VIEW ═══ -->
-        <div class="view active" id="view-research">
+        <!-- ═══ RESEARCH VIEW (hidden) ═══ -->
+        <div class="view" id="view-research" style="display:none;">
             <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
                 <div id="uploadPrompt">
                     <div class="upload-icon">📸</div>
@@ -812,7 +808,7 @@
 
         <!-- ═══ SETTINGS VIEW ═══ -->
         <!-- ═══ LISTINGS VIEW ═══ -->
-        <div class="view" id="view-listings">
+        <div class="view active" id="view-listings">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <div class="section-title" style="margin:0;">📦 eBay Listings</div>
                 <div style="display:flex; gap:6px;">
@@ -858,6 +854,25 @@
                 <div class="empty-state">
                     <div class="empty-icon">💰</div>
                     <div class="empty-text">No sold items yet</div>
+                </div>
+            </div>
+
+            <!-- Cancelled / Returned / Refunded -->
+            <div class="section-title" style="font-size:13px; color:#ff6b6b; margin-top:16px;">🚫 Cancelled / Returned /
+                Refunded</div>
+            <div id="cancelledListings">
+                <div class="empty-state">
+                    <div class="empty-icon">✨</div>
+                    <div class="empty-text">No cancelled or returned items</div>
+                </div>
+            </div>
+
+            <!-- Removed by eBay -->
+            <div class="section-title" style="font-size:13px; color:#888; margin-top:16px;">🔴 Removed by eBay</div>
+            <div id="removedListings">
+                <div class="empty-state">
+                    <div class="empty-icon">🗑️</div>
+                    <div class="empty-text">No removed listings</div>
                 </div>
             </div>
         </div>
@@ -1612,6 +1627,57 @@
                         </div>`).join('');
                 } else {
                     soldDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">No sold items yet</div></div>';
+                }
+
+                // Cancelled / Returned / Refunded items
+                const cancelled = listings.filter(l => ['cancelled', 'returned', 'refunded'].includes(l.status));
+                const cancelledDiv = document.getElementById('cancelledListings');
+                if (cancelled.length) {
+                    const statusLabel = s => s === 'cancelled' ? '🚫 Cancelled' : s === 'returned' ? '↩️ Returned' : '💸 Refunded';
+                    const statusColor = s => s === 'cancelled' ? '#ff6b6b' : s === 'returned' ? '#ffa94d' : '#da77f2';
+                    cancelledDiv.innerHTML = cancelled.map(l => `
+                        <div class="history-item" style="cursor:pointer; flex-direction:column; border-left:3px solid ${statusColor(l.status)};" onclick="toggleListingDetail(this)">
+                            <div style="display:flex; align-items:center; width:100%;">
+                                <div style="flex:1; min-width:0;">
+                                    <div class="history-name">${escHtml(l.product_name.substring(0, 60))}</div>
+                                    <div class="history-meta">
+                                        <span style="color:${statusColor(l.status)}; font-weight:600;">${statusLabel(l.status)}</span>
+                                        ${l.sold_at ? ' • ' + new Date(l.sold_at).toLocaleDateString() : ''}
+                                        ${l.order_number ? ' • #' + escHtml(l.order_number) : ''}
+                                        ${l.buyer_name ? ' • ' + escHtml(l.buyer_name) : ''}
+                                    </div>
+                                </div>
+                                <div style="text-align:right;">
+                                    ${l.refund_amount ? `<div style="color:#da77f2; font-size:12px;">-$${l.refund_amount.toFixed(2)} refund</div>` : ''}
+                                    ${l.sold_price ? `<div style="color:var(--text-dim); font-size:12px; text-decoration:line-through;">$${l.sold_price.toFixed(2)}</div>` : ''}
+                                </div>
+                            </div>
+                            <div class="listing-detail" style="display:none; width:100%; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:12px; color:var(--text-secondary);">
+                                ${l.order_number ? `<div>🧾 Order: ${escHtml(l.order_number)}</div>` : ''}
+                                ${l.cancel_id ? `<div>🚫 Cancel ID: ${escHtml(l.cancel_id)}</div>` : ''}
+                                ${l.return_id ? `<div>↩️ Return ID: ${escHtml(l.return_id)}</div>` : ''}
+                                ${l.buyer_name ? `<div>👤 Buyer: ${escHtml(l.buyer_name)}</div>` : ''}
+                                <button onclick="event.stopPropagation(); deleteListing(${l.id})" style="margin-top:6px; background:none; border:1px solid var(--border); color:var(--text-dim); padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px;">🗑️ Delete</button>
+                            </div>
+                        </div>`).join('');
+                } else {
+                    cancelledDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">No cancelled or returned items</div></div>';
+                }
+
+                // Removed by eBay
+                const removed = listings.filter(l => l.status === 'removed');
+                const removedDiv = document.getElementById('removedListings');
+                if (removed.length) {
+                    removedDiv.innerHTML = removed.map(l => `
+                        <div class="history-item" style="border-left:3px solid #888;">
+                            <div style="flex:1; min-width:0;">
+                                <div class="history-name">${escHtml(l.product_name.substring(0, 60))}</div>
+                                <div class="history-meta" style="color:#888;">Removed by eBay policy</div>
+                            </div>
+                            <button onclick="event.stopPropagation(); deleteListing(${l.id})" style="background:none; border:none; color:var(--text-dim); font-size:14px; cursor:pointer;" title="Delete">🗑️</button>
+                        </div>`).join('');
+                } else {
+                    removedDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">🗑️</div><div class="empty-text">No removed listings</div></div>';
                 }
             } catch (err) {
                 console.error('Listings load error:', err);
