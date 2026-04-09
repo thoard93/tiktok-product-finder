@@ -32,7 +32,12 @@ def create_app():
         'DATABASE_URL', f'sqlite:///{db_path}'
     )
     flask_app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    flask_app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+    # SECRET_KEY must be stable across restarts — random fallback invalidates all sessions
+    secret = os.environ.get('SECRET_KEY')
+    if not secret:
+        secret = 'prism-dev-key-change-in-production-' + os.environ.get('DATABASE_URL', 'local')[:32]
+        print("WARNING: SECRET_KEY not set — using deterministic fallback. Set SECRET_KEY env var in production!")
+    flask_app.config['SECRET_KEY'] = secret
 
     # Fix Render's postgres:// URL
     if flask_app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):

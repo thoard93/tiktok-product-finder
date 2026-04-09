@@ -684,6 +684,22 @@ def serve_logo():
     return send_from_directory('pwa', 'vantage_logo.png')
 
 
+@products_bp.route('/favicon.ico')
+def favicon():
+    """Serve favicon — uses the manifest SVG icon as fallback."""
+    return Response(
+        '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/>
+        </linearGradient></defs>
+        <rect width="32" height="32" rx="6" fill="#0a0a0f"/>
+        <path d="M16 4L28 26H4Z" fill="url(#g)" opacity="0.9"/>
+        </svg>''',
+        mimetype='image/svg+xml',
+        headers={'Cache-Control': 'public, max-age=86400'}
+    )
+
+
 @products_bp.route('/')
 # @login_required - REMOVED to allow Health Checks (GET /) to pass with 200 OK
 def index():
@@ -722,10 +738,17 @@ def vantage_v2_page():
 
 @products_bp.route('/pwa/<path:filename>')
 def pwa_files(filename):
+    # Static assets (CSS, JS, images, fonts, manifests) — always public, never auth-gated.
+    # Blocking these behind auth causes 302 redirects instead of actual files,
+    # which breaks styling/scripts on every page.
+    static_prefixes = ('css/', 'js/', 'img/', 'fonts/', 'icons/')
+    static_extensions = ('.css', '.js', '.png', '.jpg', '.svg', '.ico', '.woff', '.woff2', '.json', '.webmanifest')
+    if filename.startswith(static_prefixes) or filename.endswith(static_extensions):
+        return send_from_directory('pwa', filename)
     # Allow login.html without auth
     if filename in ['login.html']:
         return send_from_directory('pwa', filename)
-    # Other PWA files need auth check
+    # Other PWA files (HTML pages) need auth check
     if not session.get('user_id'):
         return redirect('/login')
     return send_from_directory('pwa', filename)
