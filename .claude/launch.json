@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "PRISM Flask App",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["main.py"],
+      "port": 5000
+    },
+    {
+      "name": "Discord Bot",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["discord_bot.py"],
+      "port": 0
+    },
+    {
+      "name": "Gunicorn (Production)",
+      "runtimeExecutable": "gunicorn",
+      "runtimeArgs": ["main:app", "--workers", "1", "--threads", "4", "--timeout", "120", "--bind", "0.0.0.0:5000"],
+      "port": 5000
+    }
+  ]
+}
