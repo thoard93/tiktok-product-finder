@@ -12,5 +12,9 @@ __pycache__/
 # Database
 *.db
 
+# Cached API responses
+copilot_*.json
+temp.html
+
 # Environment
 .env

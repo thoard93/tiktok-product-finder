@@ -1,917 +1,699 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vantage | TikTok Shop Intelligence</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="/pwa/css/main.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        midnight: '#020617',
-                        slate: {
-                            800: '#1e293b',
-                            900: '#0f172a',
-                            950: '#020617',
-                        },
-                        primary: '#2563eb',
-                    }
-                }
-            }
-        }
-    </script>
+    <title>PRISM | Product Research Intelligence</title>
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+        /* ── Page-specific overrides ── */
+        body { display: flex; min-height: 100vh; }
+
+        /* Main area */
+        .main { flex:1; display:flex; flex-direction:column; min-height:100vh; }
+
+        /* Header bar */
+        .top-bar { position:sticky; top:0; z-index:30; height:56px; background:rgba(10,10,15,0.85);
+            backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid var(--prism-border);
+            display:flex; align-items:center; padding:0 var(--sp-6); gap:var(--sp-4); }
+
+        /* KPI row */
+        .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:var(--sp-4); }
+
+        /* Filter bar */
+        .filter-bar { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-3); padding:var(--sp-4) 0; }
+        .filter-input { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-md);
+            padding:var(--sp-2) var(--sp-3); padding-left:32px; font-size:var(--text-sm); color:var(--prism-text);
+            outline:none; transition:border-color 120ms; min-width:0; }
+        .filter-input:focus { border-color:var(--prism-accent); box-shadow:0 0 0 3px var(--prism-accent-glow); }
+        .filter-input::placeholder { color:var(--prism-text-faint); }
+        .filter-select { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-md);
+            padding:var(--sp-2) var(--sp-8) var(--sp-2) var(--sp-3); font-size:var(--text-sm); color:var(--prism-text);
+            appearance:none; cursor:pointer; outline:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b6b80' viewBox='0 0 16 16'%3E%3Cpath d='M8 11.5l-5-5h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat:no-repeat; background-position:right 10px center; }
+        .filter-select:focus { border-color:var(--prism-accent); }
+
+        .toggle-pill { display:flex; align-items:center; gap:var(--sp-2); padding:var(--sp-1) var(--sp-3);
+            border-radius:var(--radius-full); border:1px solid var(--prism-border); font-size:var(--text-xs);
+            font-weight:600; color:var(--prism-text-muted); cursor:pointer; user-select:none; transition:all 120ms; }
+        .toggle-pill.active { background:var(--prism-accent-glow); color:var(--prism-accent-text); border-color:rgba(124,58,237,0.3); }
+        .toggle-dot { width:8px; height:8px; border-radius:50%; background:var(--prism-text-faint); transition:background 120ms; }
+        .toggle-pill.active .toggle-dot { background:var(--prism-accent); }
+
+        /* Product table */
+        .products-table { width:100%; border-collapse:collapse; font-size:var(--text-sm); }
+        .products-table thead { position:sticky; top:0; z-index:5; }
+        .products-table th { text-align:left; padding:var(--sp-3) var(--sp-3); font-size:10px; font-weight:700;
+            color:var(--prism-text-faint); text-transform:uppercase; letter-spacing:0.06em;
+            border-bottom:1px solid var(--prism-border); background:var(--prism-surface); cursor:pointer;
+            white-space:nowrap; user-select:none; transition:color 120ms; }
+        .products-table th:hover { color:var(--prism-text-muted); }
+        .products-table th.sorted { color:var(--prism-accent-text); }
+        .products-table th .sort-arrow { margin-left:4px; font-size:8px; opacity:0.5; }
+        .products-table th.sorted .sort-arrow { opacity:1; color:var(--prism-accent); }
+        .products-table td { padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--prism-border);
+            vertical-align:middle; white-space:nowrap; }
+        .products-table tbody tr { transition:background 80ms; cursor:pointer; }
+        .products-table tbody tr:hover { background:var(--prism-surface-2); }
+
+        .product-thumb { width:40px; height:40px; border-radius:var(--radius-md); object-fit:cover;
+            background:var(--prism-surface-2); flex-shrink:0; }
+        .product-info { display:flex; align-items:center; gap:var(--sp-3); min-width:0; }
+        .product-name { font-weight:600; color:var(--prism-text); max-width:220px; overflow:hidden;
+            text-overflow:ellipsis; white-space:nowrap; font-size:var(--text-sm); }
+        .product-seller { font-size:var(--text-xs); color:var(--prism-text-muted); max-width:140px;
+            overflow:hidden; text-overflow:ellipsis; }
+
+        .spark-bar { display:inline-flex; align-items:flex-end; gap:1px; height:18px; }
+        .spark-bar span { display:block; width:3px; border-radius:1px; background:var(--prism-accent); opacity:0.5; }
+        .spark-bar span:last-child { opacity:1; }
+
+        .velocity-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 8px;
+            border-radius:var(--radius-full); font-size:10px; font-weight:700; }
+        .velocity-high { background:var(--prism-success-glow); color:var(--prism-success); }
+        .velocity-mid  { background:var(--prism-warning-glow); color:var(--prism-warning); }
+        .velocity-low  { background:var(--prism-surface-2); color:var(--prism-text-faint); }
+
+        .status-dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+        .status-active  { background:var(--prism-success); }
+        .status-sold    { background:var(--prism-warning); }
+        .status-dead    { background:var(--prism-error); }
+
+        /* Right panel */
+        .right-panel { width:300px; flex-shrink:0; border-left:1px solid var(--prism-border);
+            background:var(--prism-surface); overflow-y:auto; display:flex; flex-direction:column; }
+        .right-section { padding:var(--sp-4) var(--sp-4); border-bottom:1px solid var(--prism-border); }
+        .right-section-title { font-size:var(--text-xs); font-weight:700; color:var(--prism-text-faint);
+            text-transform:uppercase; letter-spacing:0.06em; margin-bottom:var(--sp-3); display:flex;
+            align-items:center; gap:var(--sp-2); }
+        .mini-card { display:flex; align-items:center; gap:var(--sp-3); padding:var(--sp-2); border-radius:var(--radius-md);
+            transition:background 80ms; cursor:pointer; }
+        .mini-card:hover { background:var(--prism-surface-2); }
+        .mini-thumb { width:32px; height:32px; border-radius:var(--radius-sm); object-fit:cover;
+            background:var(--prism-surface-2); flex-shrink:0; }
+        .mini-name { font-size:var(--text-xs); font-weight:600; color:var(--prism-text); overflow:hidden;
+            text-overflow:ellipsis; white-space:nowrap; max-width:160px; }
+        .mini-stat { font-size:10px; color:var(--prism-text-muted); }
+
+        /* Content layout */
+        .content-wrap { display:flex; flex:1; overflow:hidden; }
+        .content-main { flex:1; overflow-y:auto; padding:var(--sp-6); min-width:0; }
+        .content-main::-webkit-scrollbar { width:5px; }
+
+        /* Skeleton loaders */
+        .skel { background:var(--prism-surface-2); border-radius:var(--radius-md); position:relative; overflow:hidden; }
+        .skel::after { content:''; position:absolute; inset:0;
+            background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.03) 50%,transparent 100%);
+            background-size:200% 100%; animation:shimmer 1.8s ease-in-out infinite; }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+        .skel-row { display:flex; gap:var(--sp-3); padding:var(--sp-3); border-bottom:1px solid var(--prism-border); }
+
+        /* Empty state */
+        .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
+            padding:var(--sp-16) var(--sp-6); color:var(--prism-text-faint); }
+        .empty-icon { width:64px; height:64px; margin-bottom:var(--sp-4); opacity:0.3; animation:emptyFloat 3s ease-in-out infinite; }
+        @keyframes emptyFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+
+        /* Pagination */
+        .pagination { display:flex; align-items:center; justify-content:center; gap:var(--sp-4);
+            padding:var(--sp-6) 0; border-top:1px solid var(--prism-border); margin-top:var(--sp-6); }
+        .page-btn { width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+            border-radius:var(--radius-md); border:1px solid var(--prism-border); background:var(--prism-surface);
+            color:var(--prism-text-muted); cursor:pointer; transition:all 120ms; font-size:var(--text-sm); }
+        .page-btn:hover:not(:disabled) { border-color:var(--prism-accent); color:var(--prism-accent-text); }
+        .page-btn:disabled { opacity:0.3; cursor:default; }
+
+        /* Mobile bottom nav */
+        .mobile-nav { display:none; position:fixed; bottom:0; left:0; right:0; z-index:50;
+            background:var(--prism-surface); border-top:1px solid var(--prism-border);
+            padding:var(--sp-2) var(--sp-2) calc(var(--sp-2) + env(safe-area-inset-bottom, 0px));
+            display:none; grid-template-columns:repeat(5,1fr); }
+        .mob-tab { display:flex; flex-direction:column; align-items:center; gap:2px; padding:var(--sp-1) 0;
+            font-size:9px; font-weight:600; color:var(--prism-text-faint); text-decoration:none; transition:color 120ms; }
+        .mob-tab i { font-size:16px; }
+        .mob-tab.active { color:var(--prism-accent-text); }
+
+        /* Toast */
+        .toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); padding:var(--sp-2) var(--sp-5);
+            border-radius:var(--radius-lg); font-size:var(--text-sm); font-weight:600; z-index:200;
+            backdrop-filter:blur(12px); animation:toastIn 0.3s ease; }
+        .toast-info { background:rgba(6,182,212,0.15); border:1px solid rgba(6,182,212,0.3); color:var(--prism-cyan); }
+        .toast-error { background:rgba(244,63,94,0.15); border:1px solid rgba(244,63,94,0.3); color:var(--prism-error); }
+        @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .right-panel { display:none; }
+        }
+        @media (max-width: 767px) {
+            .mobile-nav { display:grid; }
+            .content-main { padding:var(--sp-4); padding-bottom:80px; }
+            .kpi-grid { grid-template-columns:repeat(2,1fr); }
+            .top-bar { padding:0 var(--sp-4); }
+            .filter-bar { gap:var(--sp-2); }
+            .products-table { font-size:12px; }
+            .product-name { max-width:140px; }
+            .hide-mobile { display:none !important; }
+        }
+        @media (max-width: 480px) {
+            .kpi-grid { gap:var(--sp-2); }
         }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-
-        .card-image-gradient::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(to top, rgba(5, 7, 10, 0.8) 0%, transparent 40%);
-        }
-
-        .active-tab {
-            background: rgba(6, 182, 212, 0.1);
-            color: #06b6d4;
-            border-bottom: 2px solid #06b6d4;
-        }
     </style>
 </head>
 
-<body class="flex h-screen overflow-hidden bg-slate-950 text-slate-200">
+<body>
+    <div id="prism-nav"></div>
 
-    <!-- Sidebar (Desktop) -->
-    <aside class="hidden md:flex flex-col w-72 bg-slate-900 border-r border-white/5 z-30">
-        <div class="p-8">
-            <div class="flex items-center gap-3 group cursor-pointer"
-                onclick="sessionStorage.clear(); window.location.href='/'">
-                <div
-                    class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center relative overflow-hidden shrink-0 shadow-lg shadow-primary/20">
-                    <img src="/vantage_logo.png" class="w-full h-full object-cover p-1.5"
-                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                    <span style="display:none" class="text-xl h-full w-full items-center justify-center">V</span>
-                </div>
-                <div>
-                    <h1 class="font-heading font-bold text-xl tracking-tight text-white">Vantage</h1>
-                    <p class="text-[9px] text-primary font-bold tracking-widest uppercase opacity-80">Intelligence
-                        Platform</p>
-                </div>
-            </div>
-        </div>
-
-        <nav class="flex-1 px-3 space-y-1 overflow-y-auto no-scrollbar">
-            <div class="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">Main Menu
-            </div>
-            <a href="/" class="sidebar-link active">
-                <i class="fas fa-grid-2 w-5 text-sm"></i>
-                <span>Dashboard</span>
-            </a>
-            <a href="/scanner" id="sidebarScannerLink" class="sidebar-link hidden">
-                <i class="fas fa-sync-alt w-5 text-sm"></i>
-                <span>Sync Center</span>
-            </a>
-            <a href="/brand-hunter" class="sidebar-link">
-                <i class="fas fa-bullseye w-5 text-sm"></i>
-                <span>Brand Hunter</span>
-            </a>
-            <a href="/vantage-v2" class="sidebar-link">
-                <i class="fas fa-rocket w-5 text-sm"></i>
-                <span>Growth Hub (v2)</span>
-            </a>
-
-            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">
-                Configuration</div>
-            <a href="/admin" class="sidebar-link">
-                <i class="fas fa-shield-alt w-5 text-sm"></i>
-                <span>Terminal</span>
-            </a>
-            <a href="/settings" class="sidebar-link">
-                <i class="fas fa-sliders-h w-5 text-sm"></i>
-                <span>Settings</span>
-            </a>
-        </nav>
-
-        <div class="p-4 border-t border-white/5">
-            <div class="bg-slate-800/50 rounded-2xl p-3 flex items-center gap-3 border border-white/5">
-                <div
-                    class="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center overflow-hidden shrink-0">
-                    <img id="userAvatar" src="" class="w-full h-full object-cover"
-                        onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
-                </div>
-                <div class="flex-1 min-w-0">
-                    <p id="userName" class="text-sm font-bold text-white truncate">Loading...</p>
-                    <p class="text-[10px] text-cyan-400 font-bold uppercase tracking-wider">Pro Operator</p>
-                </div>
-            </div>
-        </div>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-950">
-        <!-- Dashboard Header -->
-        <header
-            class="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md sticky top-0 z-20">
-            <div class="flex items-center gap-8 flex-1">
-                <h2 class="font-heading font-bold text-lg text-white whitespace-nowrap hidden lg:block">Market Insights
-                </h2>
-
-                <div class="relative flex-1 max-w-xl group">
-                    <i
-                        class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-focus-within:text-primary"></i>
-                    <input type="text" id="globalSearch" placeholder="Search by SKU, Brand, or Keyword..."
-                        class="w-full bg-slate-950/50 border border-white/5 rounded-xl py-2 pl-11 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 transition-all placeholder:text-slate-600 shadow-inner"
-                        onkeyup="searchProducts(this.value)">
-                </div>
-            </div>
-
-            <div class="flex items-center gap-4">
-                <a href="/scanner" class="btn-premium py-2 px-4 text-xs hidden sm:flex">
-                    <i class="fas fa-bolt text-[10px]"></i>
-                    <span>Sync Center</span>
-                </a>
-                <div class="md:hidden">
-                    <button onclick="toggleSidebar()"
-                        class="bg-slate-900 p-2 rounded-lg text-white border border-white/5">
-                        <i class="fas fa-bars"></i>
+    <!-- Main -->
+    <div class="main">
+        <!-- Top bar -->
+        <header class="top-bar">
+            <button class="prism-nav-hamburger" onclick="prismNav.toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <div style="flex:1; display:flex; align-items:center; gap:var(--sp-4)">
+                <h2 id="greeting" class="font-display" style="font-size:var(--text-lg); font-weight:700; color:var(--prism-text); white-space:nowrap;">Good morning</h2>
+                <div style="margin-left:auto; display:flex; align-items:center; gap:var(--sp-3)">
+                    <span id="lastSync" style="font-size:var(--text-xs); color:var(--prism-text-faint)"></span>
+                    <button onclick="triggerSync()" class="prism-btn prism-btn-primary prism-btn-sm" id="syncBtn">
+                        <i class="fas fa-arrows-rotate" style="font-size:11px"></i>
+                        <span class="hide-mobile">Sync Now</span>
                     </button>
                 </div>
             </div>
         </header>
 
-        <!-- Dynamic Content -->
-        <div class="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar pb-32">
+        <!-- Content area -->
+        <div class="content-wrap">
+            <div class="content-main" id="scrollArea">
 
-            <!-- Global Stats Ribbon -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-8">
-                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl relative overflow-hidden group">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Total
-                        Intelligence</p>
-                    <div class="text-2xl font-heading font-bold text-white flex items-baseline gap-2">
-                        <span id="statTotal">--</span>
-                        <span class="text-[10px] text-slate-500 font-normal uppercase tracking-tighter">SKUs</span>
+                <!-- KPI Row -->
+                <div class="kpi-grid" style="margin-bottom:var(--sp-6)" id="kpiGrid">
+                    <div class="prism-stat-card" data-color="violet">
+                        <div class="prism-stat-label">Total Products</div>
+                        <div class="prism-stat-value" id="kpiTotal">
+                            <span class="skel" style="display:inline-block;width:60px;height:28px"></span>
+                        </div>
                     </div>
-                </div>
-                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl relative overflow-hidden group">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">High
-                        Performers</p>
-                    <div class="text-2xl font-heading font-bold text-primary flex items-baseline gap-2">
-                        <span id="statAdWinners">--</span>
-                        <div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+                    <div class="prism-stat-card" data-color="cyan">
+                        <div class="prism-stat-label">Active Products</div>
+                        <div class="prism-stat-value" id="kpiActive">
+                            <span class="skel" style="display:inline-block;width:60px;height:28px"></span>
+                        </div>
                     </div>
-                </div>
-                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl relative overflow-hidden group">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">
-                        Opportunity Gems</p>
-                    <div class="text-2xl font-heading font-bold text-emerald-500">
-                        <span id="statGems">--</span>
+                    <div class="prism-stat-card" data-color="emerald">
+                        <div class="prism-stat-label">Avg Commission</div>
+                        <div class="prism-stat-value" id="kpiCommission">
+                            <span class="skel" style="display:inline-block;width:60px;height:28px"></span>
+                        </div>
                     </div>
-                </div>
-                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl relative overflow-hidden group">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Real-time
-                        Uptime</p>
-                    <div class="text-2xl font-heading font-bold text-emerald-400 flex items-center gap-2">
-                        Operational
-                        <div class="flex gap-0.5">
-                            <span class="w-1 h-3 bg-emerald-500/30 rounded-full"></span>
-                            <span class="w-1 h-4 bg-emerald-500/50 rounded-full"></span>
-                            <span class="w-1 h-5 bg-emerald-500 rounded-full animate-bounce"></span>
+                    <div class="prism-stat-card" data-color="gold">
+                        <div class="prism-stat-label">Est. Total GMV</div>
+                        <div class="prism-stat-value" id="kpiGmv">
+                            <span class="skel" style="display:inline-block;width:80px;height:28px"></span>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Filters & Controls -->
-            <div class="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center mb-8">
-                <!-- Filter Tabs -->
-                <div class="flex flex-wrap gap-2 w-full xl:w-auto">
-                    <button onclick="applyFilter('all', this)"
-                        class="filter-tab active-tab px-4 py-2 rounded-xl text-xs font-bold transition-all border border-transparent whitespace-nowrap bg-primary text-white shadow-lg shadow-primary/25">
-                        All Intelligence
-                    </button>
-                    <button onclick="applyFilter('high_spend', this)"
-                        class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
-                        <i class="fas fa-fire mr-1.5 text-orange-500"></i> High Ad Spend
-                    </button>
-                    <button onclick="applyFilter('gems', this)"
-                        class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
-                        <i class="fas fa-gem mr-1.5 text-emerald-500"></i> Opportunity Gems
-                    </button>
-                    <button onclick="applyFilter('caked', this)"
-                        class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
-                        <i class="fas fa-cake-candles mr-1.5 text-rose-400"></i> Caked Picks
-                    </button>
-                    <button onclick="applyFilter('favorites', this)"
-                        class="filter-tab px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all whitespace-nowrap">
-                        <i class="fas fa-star mr-1.5 text-amber-500"></i> Watchlist
-                    </button>
-                </div>
-
-                <!-- Sort & Search -->
-                <div class="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-                    <div class="relative group w-full sm:w-64">
-                        <i
-                            class="fas fa-sort-amount-down absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-hover:text-primary"></i>
-                        <select onchange="updateSort(this.value)"
-                            class="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 appearance-none cursor-pointer transition-all hover:border-white/20 font-medium">
-                            <option value="gem_score">Sort: Opportunity Score</option>
-                            <option value="ad_spend_7d">Sort: Highest 7D Ad Spend</option>
-                            <option value="sales_7d">Sort: 7D Volume</option>
-                            <option value="video_count_alltime">Sort: Highest Videos (All-Time)</option>
-                            <option value="vids_asc">Sort: Least Videos</option>
-                            <option value="price_desc">Sort: Highest Price</option>
-                            <option value="price_asc">Sort: Lowest Price</option>
-                            <option value="first_seen">Sort: Recently Discovered</option>
-                        </select>
-                        <i
-                            class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
+                <!-- Filter bar -->
+                <div class="filter-bar" id="filterBar">
+                    <div style="position:relative; flex:1; min-width:180px; max-width:300px">
+                        <i class="fas fa-search" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--prism-text-faint); font-size:11px"></i>
+                        <input type="text" class="filter-input" style="width:100%" placeholder="Search products..." id="searchInput" oninput="debounceSearch()">
                     </div>
 
-                    <!-- Commission filter removed per user request -->
+                    <select class="filter-select" id="sortSelect" onchange="updateSort(this.value)">
+                        <option value="gem_score">Opportunity Score</option>
+                        <option value="sales_7d">7D Sales</option>
+                        <option value="ad_spend_7d">7D Ad Spend</option>
+                        <option value="commission">Commission %</option>
+                        <option value="video_count_alltime">Videos (All-time)</option>
+                        <option value="vids_asc">Least Videos</option>
+                        <option value="price_desc">Price High</option>
+                        <option value="price_asc">Price Low</option>
+                        <option value="first_seen">Newest</option>
+                    </select>
 
-                    <div class="relative w-full sm:w-64 group">
-                        <i
-                            class="fas fa-tag absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-focus-within:text-primary"></i>
-                        <input type="text" placeholder="Filter by Brand..."
-                            class="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 transition-all placeholder:text-slate-600 shadow-inner"
-                            onkeyup="searchBrands(this.value)">
+                    <select class="filter-select" id="categorySelect" onchange="updateCategory(this.value)">
+                        <option value="">All Categories</option>
+                        <option value="Beauty">Beauty</option>
+                        <option value="Home">Home & Garden</option>
+                        <option value="Health">Health</option>
+                        <option value="Fashion">Fashion</option>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Food">Food & Beverage</option>
+                        <option value="Sports">Sports & Outdoors</option>
+                        <option value="Pet">Pet Supplies</option>
+                    </select>
+
+                    <div style="display:flex; align-items:center; gap:var(--sp-2); flex-shrink:0">
+                        <label style="font-size:var(--text-xs); color:var(--prism-text-faint); white-space:nowrap">Min Comm</label>
+                        <input type="range" min="0" max="50" value="0" id="commSlider" oninput="updateCommFilter(this.value)" style="width:80px; accent-color:var(--prism-accent)">
+                        <span id="commValue" style="font-size:var(--text-xs); color:var(--prism-text-muted); min-width:28px">0%</span>
                     </div>
+
+                    <div class="hide-mobile" style="display:flex; align-items:center; gap:var(--sp-2); flex-shrink:0">
+                        <label style="font-size:var(--text-xs); color:var(--prism-text-faint); white-space:nowrap">Min Sales</label>
+                        <input type="number" min="0" value="" placeholder="0" id="salesMinInput" class="filter-input" style="width:70px; padding-left:var(--sp-2)" oninput="updateMinSales(this.value)">
+                    </div>
+
+                    <div class="toggle-pill" id="toggleGems" onclick="toggleFilter('gems')">
+                        <span class="toggle-dot"></span> Gems Only
+                    </div>
+                    <div class="toggle-pill" id="toggleVelocity" onclick="toggleFilter('velocity')">
+                        <span class="toggle-dot"></span> High Velocity
+                    </div>
+                </div>
+
+                <!-- Products Table -->
+                <div class="prism-card-flush" style="overflow-x:auto">
+                    <table class="products-table" id="productsTable">
+                        <thead>
+                            <tr>
+                                <th style="width:260px" onclick="sortBy('product_name')">Product <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('seller_name')">Seller <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('price_desc')" style="text-align:right">Price <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('sales_7d')" style="text-align:right">7D Sales <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('gmv')" class="hide-mobile" style="text-align:right">GMV <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('video_count_alltime')" class="hide-mobile" style="text-align:right">Videos <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('influencer_count')" class="hide-mobile" style="text-align:right">Creators <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('commission')" style="text-align:right">Comm <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('ad_spend_7d')" class="hide-mobile" style="text-align:right">Ad Spend <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th class="hide-mobile" style="text-align:right">Velocity</th>
+                                <th style="width:40px">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- skeleton rows -->
+                        </tbody>
+                    </table>
+                    <!-- Empty state (hidden by default) -->
+                    <div class="empty-state" id="emptyState" style="display:none">
+                        <svg class="empty-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="8" y="16" width="48" height="36" rx="4" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <line x1="8" y1="28" x2="56" y2="28" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="32" cy="42" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
+                        </svg>
+                        <div style="font-size:var(--text-lg); font-weight:700; margin-bottom:var(--sp-2)">No products found</div>
+                        <div style="font-size:var(--text-sm)">Try adjusting your filters or search query</div>
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination" id="pagination">
+                    <button class="page-btn" id="btnPrev" onclick="changePage(-1)" disabled>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span id="pageInfo" style="font-size:var(--text-sm); font-weight:600; color:var(--prism-text-muted)">Page 1</span>
+                    <button class="page-btn" id="btnNext" onclick="changePage(1)">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
                 </div>
             </div>
 
-            <!-- Intelligence Grid -->
-            <div id="productGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 md:gap-8">
-                <!-- Loading Sequence -->
-                <div class="col-span-full py-32 flex flex-col items-center justify-center space-y-6">
-                    <div class="w-16 h-16 relative">
-                        <div class="absolute inset-0 border-4 border-cyan-500/20 rounded-full"></div>
-                        <div
-                            class="absolute inset-0 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin">
-                        </div>
+            <!-- Right panel -->
+            <aside class="right-panel" id="rightPanel">
+                <div class="right-section">
+                    <div class="right-section-title">
+                        <i class="fas fa-fire" style="color:var(--prism-warning)"></i> Top Movers
                     </div>
-                    <p class="font-heading font-bold text-xl text-slate-400 tracking-widest uppercase animate-pulse">
-                        Loading Insights...</p>
+                    <div id="moversCards" class="stagger-children"></div>
                 </div>
-            </div>
-
-            <!-- Navigation Controls -->
-            <div class="flex justify-center items-center gap-8 mt-12 py-12 border-t border-white/5">
-                <button id="btnPrev" onclick="changePage(-1)"
-                    class="glass p-4 rounded-2xl text-slate-400 hover:text-cyan-400 disabled:opacity-20 transition-all group">
-                    <i class="fas fa-chevron-left group-hover:-translate-x-1 transition-transform"></i>
-                </button>
-                <div id="pageIndicator"
-                    class="font-heading font-bold text-white tracking-widest uppercase text-sm md:text-base">Page
-                    01</div>
-                <button id="btnNext" onclick="changePage(1)"
-                    class="glass p-4 rounded-2xl text-slate-400 hover:text-cyan-400 disabled:opacity-20 transition-all group">
-                    <i class="fas fa-chevron-right group-hover:translate-x-1 transition-transform"></i>
-                </button>
-            </div>
+                <div class="right-section">
+                    <div class="right-section-title">
+                        <i class="fas fa-gem" style="color:var(--prism-cyan)"></i> Hidden Gems
+                    </div>
+                    <div id="gemsCards" class="stagger-children"></div>
+                </div>
+                <div class="right-section">
+                    <div class="right-section-title">
+                        <i class="fas fa-cake-candles" style="color:var(--prism-error)"></i> Caked Picks
+                    </div>
+                    <div id="cakedCards" class="stagger-children"></div>
+                </div>
+            </aside>
         </div>
-        </div>
+    </div>
 
-        <!-- Import Modal Overlay -->
-        <div id="importModal"
-            class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] hidden flex items-center justify-center p-6"
-            onclick="if(event.target===this) this.classList.add('hidden')">
-            <div class="glass-card w-full max-w-xl p-6 md:p-8 relative animate-float">
-                <div class="absolute top-6 right-6 cursor-pointer text-slate-500 hover:text-white"
-                    onclick="document.getElementById('importModal').classList.add('hidden')">
-                    <i class="fas fa-times text-xl"></i>
+    <!-- Mobile bottom nav -->
+    <nav class="mobile-nav" id="mobileNav">
+        <a href="/" class="mob-tab active"><i class="fas fa-chart-line"></i><span>Home</span></a>
+        <a href="/" class="mob-tab" onclick="applyFilter('all');return false;"><i class="fas fa-box-open"></i><span>Products</span></a>
+        <a href="/brand-hunter" class="mob-tab"><i class="fas fa-crosshairs"></i><span>Brands</span></a>
+        <a href="/price/index.html" class="mob-tab"><i class="fas fa-tags"></i><span>Flips</span></a>
+        <a href="/settings" class="mob-tab"><i class="fas fa-sliders-h"></i><span>Settings</span></a>
+    </nav>
+
+    <script>
+    /* ====================================================================
+       STATE
+       ==================================================================== */
+    let curPage = parseInt(sessionStorage.getItem('prism_page')) || 1;
+    let curFilter = JSON.parse(sessionStorage.getItem('prism_filter')) || { sort_by: 'gem_score' };
+    let searchTimer = null;
+    let currentUser = null;
+    let totalProducts = 0;
+
+    window.addEventListener('prism-user-loaded', (e) => {
+        currentUser = e.detail;
+        document.getElementById('greeting').textContent = `${getGreetingPrefix()}, ${currentUser.discord_username || 'Operator'}`;
+    });
+
+    /* ====================================================================
+       INIT
+       ==================================================================== */
+    document.addEventListener('DOMContentLoaded', async () => {
+        setGreeting();
+        showSkeletonRows(12);
+
+        // Restore filter UI state
+        if (curFilter.sort_by) document.getElementById('sortSelect').value = curFilter.sort_by;
+        if (curFilter.search) document.getElementById('searchInput').value = curFilter.search;
+
+        loadStats();
+        loadProducts(curPage);
+        loadRightPanel();
+    });
+
+    function setGreeting() {
+        document.getElementById('greeting').textContent = getGreetingPrefix();
+    }
+
+    function getGreetingPrefix() {
+        const h = new Date().getHours();
+        if (h < 12) return 'Good morning';
+        if (h < 18) return 'Good afternoon';
+        return 'Good evening';
+    }
+
+    /* ====================================================================
+       DATA FETCHING
+       ==================================================================== */
+    async function fetchJSON(url, opts) {
+        const res = await fetch(url, opts);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+    }
+
+    async function loadStats() {
+        try {
+            const data = await fetchJSON('/api/stats');
+            if (!data.success) return;
+            const s = data.stats;
+            totalProducts = s.total_products || 0;
+            document.getElementById('kpiTotal').textContent = fmtNum(s.total_products || 0);
+            document.getElementById('kpiActive').textContent = fmtNum(s.ad_winners || 0);
+            document.getElementById('kpiGmv').textContent = '$' + fmtKMB(s.hidden_gems * 4200 || 0); // estimated
+
+            // Avg commission requires a product fetch — approximate from stats
+            document.getElementById('kpiCommission').textContent = '--';
+
+            // Update once products load
+        } catch(e) { console.warn('Stats error', e); }
+    }
+
+    async function loadProducts(page) {
+        curPage = page;
+        sessionStorage.setItem('prism_page', curPage);
+        sessionStorage.setItem('prism_filter', JSON.stringify(curFilter));
+
+        showSkeletonRows(12);
+        document.getElementById('emptyState').style.display = 'none';
+
+        const params = new URLSearchParams({ page, limit: 30, ...curFilter });
+
+        try {
+            const data = await fetchJSON(`/api/products?${params}`);
+            const products = data.products || [];
+            const total = data.count || data.total || 0;
+            const totalPages = Math.ceil(total / 30);
+
+            renderTable(products);
+
+            // Compute avg commission from loaded products
+            const comms = products.filter(p => p.commission_rate > 0).map(p => p.commission_rate);
+            if (comms.length) {
+                const avg = comms.reduce((a,b) => a+b, 0) / comms.length;
+                document.getElementById('kpiCommission').textContent = (avg * 100).toFixed(1) + '%';
+            }
+
+            // Pagination
+            document.getElementById('pageInfo').textContent = `Page ${page} of ${totalPages || 1}`;
+            document.getElementById('btnPrev').disabled = page <= 1;
+            document.getElementById('btnNext').disabled = page >= totalPages;
+
+            // Last sync
+            if (products.length && products[0].last_updated) {
+                const d = new Date(products[0].last_updated);
+                document.getElementById('lastSync').textContent = `Last sync: ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+            }
+        } catch(e) {
+            document.getElementById('tableBody').innerHTML =
+                `<tr><td colspan="11" style="text-align:center; padding:var(--sp-10); color:var(--prism-error)">
+                    <i class="fas fa-exclamation-triangle" style="margin-right:8px"></i>Failed to load products: ${e.message}
+                </td></tr>`;
+        }
+    }
+
+    async function loadRightPanel() {
+        // Top Movers
+        loadMiniSection('/api/analytics/movers-shakers?limit=5', 'moversCards');
+        // Hidden Gems
+        loadMiniSection('/api/products?gems_only=true&limit=5&sort_by=gem_score', 'gemsCards');
+        // Caked Picks
+        loadMiniSection('/api/products?caked_only=true&limit=5&sort_by=sales_7d', 'cakedCards');
+    }
+
+    async function loadMiniSection(url, containerId) {
+        const el = document.getElementById(containerId);
+        el.innerHTML = Array(3).fill(0).map(() =>
+            `<div class="mini-card"><div class="skel" style="width:32px;height:32px;border-radius:6px"></div><div style="flex:1"><div class="skel" style="height:12px;width:80%;margin-bottom:4px"></div><div class="skel" style="height:10px;width:50%"></div></div></div>`
+        ).join('');
+
+        try {
+            const data = await fetchJSON(url);
+            const products = data.products || [];
+            if (!products.length) {
+                el.innerHTML = '<div style="font-size:var(--text-xs); color:var(--prism-text-faint); padding:var(--sp-3)">No data yet</div>';
+                return;
+            }
+            el.innerHTML = products.slice(0, 5).map(p => `
+                <div class="mini-card" onclick="window.location.href='/product/${p.product_id}'">
+                    <img class="mini-thumb" src="/api/image-proxy/${p.product_id}" onerror="this.style.display='none'" loading="lazy">
+                    <div style="min-width:0; flex:1">
+                        <div class="mini-name">${esc(p.product_name || 'Unknown')}</div>
+                        <div class="mini-stat">${fmtKMB(p.sales_7d||0)} sales &middot; $${fmtKMB(p.gmv||0)}</div>
+                    </div>
                 </div>
+            `).join('');
+        } catch(e) {
+            el.innerHTML = '<div style="font-size:var(--text-xs); color:var(--prism-error)">Load failed</div>';
+        }
+    }
 
-                <h3 class="font-heading font-bold text-2xl mb-2 text-white">Manual Import</h3>
-                <p class="text-slate-400 mb-8 text-sm">Paste a TikTok product link or SPU ID to integrate it into your
-                    insights.</p>
+    /* ====================================================================
+       RENDER TABLE
+       ==================================================================== */
+    function renderTable(products) {
+        const tbody = document.getElementById('tableBody');
+        if (!products.length) {
+            tbody.innerHTML = '';
+            document.getElementById('emptyState').style.display = '';
+            return;
+        }
+        document.getElementById('emptyState').style.display = 'none';
 
-                <textarea id="importInput" class="input-premium w-full h-32 mb-6 font-mono text-sm leading-relaxed"
-                    placeholder="https://shop.tiktok.com/pdp/..."></textarea>
+        tbody.innerHTML = products.map(p => {
+            const vel = p.sales_velocity || (p.sales_7d / Math.max(p.video_count_alltime || p.video_count || 1, 1));
+            const velClass = vel >= 50 ? 'velocity-high' : vel >= 15 ? 'velocity-mid' : 'velocity-low';
+            const velLabel = vel >= 50 ? 'Hot' : vel >= 15 ? 'Warm' : 'Low';
+            const comm = p.commission_rate ? (p.commission_rate * 100).toFixed(0) + '%' : '--';
+            const commColor = (p.commission_rate||0) >= 0.15 ? 'color:var(--prism-success)' : (p.commission_rate||0) > 0 ? 'color:var(--prism-warning)' : '';
+            const statusCls = p.product_status === 'sold' ? 'status-sold' : p.product_status === 'dead' ? 'status-dead' : 'status-active';
+            const sparkBars = genSparkBars(p.sales_7d || 0);
 
-                <div class="flex gap-4">
-                    <button onclick="document.getElementById('importModal').classList.add('hidden')"
-                        class="flex-1 glass border-white/5 hover:bg-white/5 text-slate-400 py-4 rounded-2xl font-bold transition-all">Abort</button>
-                    <button onclick="runImport()" id="importBtn"
-                        class="flex-1 btn-premium justify-center py-4 text-lg">Initiate Scan</button>
-                </div>
-            </div>
-        </div>
-        <!-- Batch Scan Modal -->
-        <div id="batchModal"
-            class="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[100] hidden flex flex-col p-6 animate-in fade-in zoom-in duration-300"
-            onclick="if(event.target===this) this.classList.add('hidden')">
-
-            <div class="max-w-4xl w-full mx-auto flex flex-col h-full space-y-6">
-                <!-- Modal Header -->
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="font-heading font-bold text-3xl text-white">Batch Product Lookup</h3>
-                        <p class="text-slate-500 text-sm mt-1">Mass preview stats for up to 50 TikTok URLs.</p>
-                    </div>
-                    <button onclick="document.getElementById('batchModal').classList.add('hidden')"
-                        class="glass p-3 rounded-2xl text-slate-400 hover:text-white">
-                        <i class="fas fa-times text-xl"></i>
-                    </button>
-                </div>
-
-                <!-- Input Area -->
-                <div class="glass-card p-6 border-white/5">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Product
-                        URLs
-                        (One per line)</label>
-                    <textarea id="batchUrls" rows="6" class="input-premium w-full font-mono text-xs leading-relaxed"
-                        placeholder="https://shop.tiktok.com/pdp/123...\nhttps://v.tiktok.com/t/ZTxxx/..."></textarea>
-
-                    <div class="mt-4 flex justify-end">
-                        <button onclick="runBatchLookup(this)" id="batchBtn" class="btn-premium px-8 py-3">
-                            <i class="fas fa-search mr-2"></i> Execute Search
-                        </button>
-                    </div>
-                </div>
-
-                <!-- System Results -->
-                <div class="glass-card flex-1 overflow-hidden border border-white/5 flex flex-col bg-black/40">
-                    <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3">
-                        <div class="flex gap-1.5">
-                            <div class="w-2.5 h-2.5 rounded-full bg-rose-500/40"></div>
-                            <div class="w-2.5 h-2.5 rounded-full bg-amber-500/40"></div>
-                            <div class="w-2.5 h-2.5 rounded-full bg-emerald-500/40"></div>
-                        </div>
-                        <span class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Processing
-                            Results</span>
-                    </div>
-                    <div id="batchTerminal"
-                        class="flex-1 overflow-y-auto p-6 font-mono text-[11px] space-y-1.5 text-slate-400 no-scrollbar">
-                        <div class="flex gap-4">
-                            <span class="text-slate-600 font-bold">></span>
-                            <span>Awaiting URLs...</span>
+            return `<tr onclick="window.location.href='/product/${p.product_id}'" data-id="${p.product_id}">
+                <td>
+                    <div class="product-info">
+                        <img class="product-thumb" src="/api/image-proxy/${p.product_id}" loading="lazy" width="40" height="40" onerror="this.style.display='none'">
+                        <div style="min-width:0">
+                            <div class="product-name">${esc(p.product_name || 'Unknown')}</div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- AI Chat Interface -->
-        <button onclick="toggleAIChat()"
-            class="fixed bottom-24 right-8 w-14 h-14 bg-cyan-600 rounded-full shadow-2xl flex items-center justify-center text-white z-50 hover:scale-110 active:scale-95 transition-all group">
-            <i class="fas fa-robot text-xl group-hover:rotate-12 transition-transform"></i>
-            <span class="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-midnight"></span>
-        </button>
-
-        <div id="aiChatOverlay"
-            class="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] hidden flex flex-col md:flex-row justify-end p-0 md:p-6"
-            onclick="toggleAIChat()">
-            <div class="w-full max-w-lg glass border-l md:border border-white/10 flex flex-col h-full animate-in slide-in-from-right duration-300"
-                onclick="event.stopPropagation()">
-                <div
-                    class="p-6 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-cyan-900/10 to-transparent">
-                    <div class="flex items-center gap-4">
-                        <div
-                            class="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 border border-cyan-500/20">
-                            <i class="fas fa-robot text-xl"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-heading font-bold text-lg text-white">Vantage AI</h3>
-                            <div class="flex items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <p class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Expert
-                                    Analyst Online</p>
-                            </div>
-                        </div>
+                </td>
+                <td><span class="product-seller">${esc(p.seller_name || '--')}</span></td>
+                <td style="text-align:right; font-weight:600">$${(p.price||0).toFixed(2)}</td>
+                <td style="text-align:right">
+                    <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px">
+                        <span style="font-weight:600">${fmtKMB(p.sales_7d||0)}</span>
+                        <span class="spark-bar">${sparkBars}</span>
                     </div>
-                    <button onclick="toggleAIChat()"
-                        class="glass w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 hover:text-white transition-colors">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
+                </td>
+                <td class="hide-mobile" style="text-align:right; font-weight:600">$${fmtKMB(p.gmv||0)}</td>
+                <td class="hide-mobile" style="text-align:right">${fmtKMB(p.video_count_alltime||p.video_count||0)}</td>
+                <td class="hide-mobile" style="text-align:right">${fmtKMB(p.influencer_count||0)}</td>
+                <td style="text-align:right; font-weight:600; ${commColor}">${comm}</td>
+                <td class="hide-mobile" style="text-align:right">$${fmtKMB(p.ad_spend||0)}</td>
+                <td class="hide-mobile" style="text-align:right">
+                    <span class="velocity-badge ${velClass}">${vel.toFixed(1)} ${velLabel}</span>
+                </td>
+                <td style="text-align:center"><span class="status-dot ${statusCls}" title="${p.product_status||'active'}"></span></td>
+            </tr>`;
+        }).join('');
+    }
 
-                <div id="chatMessages" class="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
-                    <div class="flex gap-4">
-                        <div
-                            class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
-                            <i class="fas fa-robot text-xs"></i>
-                        </div>
-                        <div
-                            class="glass p-4 rounded-2xl rounded-tl-none text-sm text-slate-300 leading-relaxed max-w-[85%]">
-                            Hello! I'm **Vantage AI**. I've indexed your product database and I'm ready to help you find
-                            your next winner.
-                            <br><br>
-                            Try asking:
-                            <ul class="mt-2 space-y-1 list-disc list-inside opacity-70">
-                                <li>"Find me products with >$10k spend and few videos"</li>
-                                <li>"Which brands are scaling the hardest right now?"</li>
-                                <li>"Analyze the best ROAS items in my list"</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+    function showSkeletonRows(n) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = Array(n).fill(0).map(() =>
+            `<tr>
+                <td><div style="display:flex;align-items:center;gap:12px"><div class="skel" style="width:40px;height:40px;border-radius:8px"></div><div class="skel" style="width:140px;height:14px"></div></div></td>
+                <td><div class="skel" style="width:80px;height:12px"></div></td>
+                <td style="text-align:right"><div class="skel" style="width:50px;height:12px;margin-left:auto"></div></td>
+                <td style="text-align:right"><div class="skel" style="width:50px;height:12px;margin-left:auto"></div></td>
+                <td class="hide-mobile" style="text-align:right"><div class="skel" style="width:50px;height:12px;margin-left:auto"></div></td>
+                <td class="hide-mobile" style="text-align:right"><div class="skel" style="width:40px;height:12px;margin-left:auto"></div></td>
+                <td class="hide-mobile" style="text-align:right"><div class="skel" style="width:40px;height:12px;margin-left:auto"></div></td>
+                <td style="text-align:right"><div class="skel" style="width:35px;height:12px;margin-left:auto"></div></td>
+                <td class="hide-mobile" style="text-align:right"><div class="skel" style="width:50px;height:12px;margin-left:auto"></div></td>
+                <td class="hide-mobile" style="text-align:right"><div class="skel" style="width:50px;height:16px;border-radius:9999px;margin-left:auto"></div></td>
+                <td style="text-align:center"><div class="skel" style="width:7px;height:7px;border-radius:50%;margin:0 auto"></div></td>
+            </tr>`
+        ).join('');
+    }
 
-                <div class="p-6 border-t border-white/5 bg-black/40">
-                    <div class="relative group">
-                        <input type="text" id="chatInput" placeholder="Ask Vantage anything..."
-                            class="w-full bg-black/60 border border-white/10 rounded-2xl py-4 pl-6 pr-14 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-slate-600"
-                            onkeyup="if(event.key === 'Enter') sendChatMessage()">
-                        <button onclick="sendChatMessage()"
-                            class="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-cyan-600 rounded-xl text-white flex items-center justify-center hover:bg-cyan-500 transition-all shadow-lg active:scale-95 shadow-cyan-500/10">
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+    /* ====================================================================
+       FILTERS & SORT
+       ==================================================================== */
+    function updateSort(val) {
+        curFilter.sort_by = val;
+        loadProducts(1);
+    }
 
-        <script>
-            let curPage = parseInt(sessionStorage.getItem('vantage_page')) || 1;
-            let curFilter = JSON.parse(sessionStorage.getItem('vantage_filter')) || { sort_by: 'gem_score' };
-            let searchTimeout;
+    function sortBy(field) {
+        document.getElementById('sortSelect').value = field;
+        updateSort(field);
+    }
 
-            function formatKMB(num) {
-                if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
-                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-                if (num >= 1000) return Math.round(num / 1000) + 'K';
-                return Math.round(num).toString();
+    function updateCategory(val) {
+        if (val) curFilter.search = val;
+        else delete curFilter.search;
+        loadProducts(1);
+    }
+
+    function updateCommFilter(val) {
+        document.getElementById('commValue').textContent = val + '%';
+        curFilter.min_commission = val > 0 ? val : undefined;
+        loadProducts(1);
+    }
+
+    function updateMinSales(val) {
+        curFilter.min_sales = val > 0 ? val : undefined;
+        loadProducts(1);
+    }
+
+    function debounceSearch() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            const q = document.getElementById('searchInput').value.trim();
+            if (q) curFilter.search = q;
+            else delete curFilter.search;
+            loadProducts(1);
+        }, 400);
+    }
+
+    function toggleFilter(type) {
+        const el = document.getElementById(type === 'gems' ? 'toggleGems' : 'toggleVelocity');
+        el.classList.toggle('active');
+
+        if (type === 'gems') {
+            curFilter.gems_only = el.classList.contains('active') ? 'true' : undefined;
+        } else {
+            // High velocity = min sales velocity via sorting + min_sales
+            if (el.classList.contains('active')) {
+                curFilter.sort_by = 'gem_score';
+                curFilter.min_sales = 50;
+                document.getElementById('sortSelect').value = 'gem_score';
+            } else {
+                delete curFilter.min_sales;
             }
+        }
+        // Clean undefined keys
+        Object.keys(curFilter).forEach(k => { if (curFilter[k] === undefined) delete curFilter[k]; });
+        loadProducts(1);
+    }
 
-            function showToast(msg, type = 'info') {
-                const toast = document.createElement('div');
-                toast.className = `fixed bottom-24 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl font-bold text-sm z-[200] animate-in fade-in slide-in-from-bottom duration-300 shadow-2xl backdrop-blur-xl border ${type === 'error' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-                    }`;
-                toast.textContent = msg;
-                document.body.appendChild(toast);
-                setTimeout(() => {
-                    toast.classList.add('fade-out');
-                    setTimeout(() => toast.remove(), 500);
-                }, 3000);
-            }
+    function applyFilter(type, el) {
+        // Reset toggles
+        document.getElementById('toggleGems').classList.remove('active');
+        document.getElementById('toggleVelocity').classList.remove('active');
 
-            async function loadDashboard() {
-                try {
-                    const meRes = await fetch('/api/me');
-                    if (meRes.ok) {
-                        const me = await meRes.json();
-                        const user = me.user || {};
-                        document.getElementById('userName').textContent = user.discord_username || 'Operator';
-                        if (user.discord_avatar) document.getElementById('userAvatar').src = `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.discord_avatar}.png`;
+        const savedSort = curFilter.sort_by || 'gem_score';
+        if (type === 'gems') curFilter = { gems_only: 'true' };
+        else if (type === 'caked') curFilter = { caked_only: 'true' };
+        else if (type === 'high_spend') curFilter = { high_ad_spend: 'true' };
+        else if (type === 'favorites') curFilter = { favorites_only: 'true' };
+        else curFilter = {};
+        curFilter.sort_by = savedSort;
+        loadProducts(1);
+    }
 
-                        // Restore UI state from stored filter
-                        if (curFilter.sort_by) {
-                            const sortSelect = document.querySelector('select[onchange="updateSort(this.value)"]');
-                            if (sortSelect) sortSelect.value = curFilter.sort_by;
-                        }
+    function changePage(delta) { loadProducts(curPage + delta); }
 
-                        // Restore active tab
-                        const activeTabType = sessionStorage.getItem('vantage_tab_type') || 'all';
-                        const tabs = document.querySelectorAll('.filter-tab');
-                        tabs.forEach(tab => {
-                            tab.classList.remove('active-tab', 'text-white');
-                            if (tab.getAttribute('onclick').includes(`'${activeTabType}'`)) {
-                                tab.classList.add('active-tab');
-                            }
-                        });
+    /* ====================================================================
+       SYNC
+       ==================================================================== */
+    async function triggerSync() {
+        const btn = document.getElementById('syncBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:11px"></i> Syncing...';
+        try {
+            await fetchJSON('/api/scan/partner_opportunity', { method: 'POST' });
+            showToast('Sync triggered — results in a few minutes');
+        } catch(e) {
+            showToast('Sync failed: ' + e.message, 'error');
+        }
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-arrows-rotate" style="font-size:11px"></i> <span class="hide-mobile">Sync Now</span>';
+    }
 
-                        // Admin Protection UI
-                        if (user.is_admin) {
-                            document.getElementById('sidebarScannerLink').classList.remove('hidden');
-                            document.querySelectorAll('.mobile-nav-item[href="/scanner"]').forEach(el => el.classList.remove('hidden'));
-                        }
-                    }
-                    loadProducts(curPage);
-                    loadStats();
-                } catch (e) { console.error("Global Init Error", e); }
-            }
+    /* ====================================================================
+       UTILITIES
+       ==================================================================== */
+    function fmtKMB(n) {
+        if (n >= 1e9) return (n/1e9).toFixed(1)+'B';
+        if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+        if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+        return Math.round(n).toString();
+    }
 
-            async function loadStats() {
-                try {
-                    const res = await fetch('/api/stats');
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.success && data.stats) {
-                            const s = data.stats;
-                            document.getElementById('statTotal').textContent = s.total_products || 0;
-                            document.getElementById('statAdWinners').textContent = s.ad_winners || 0;
-                            document.getElementById('statGems').textContent = s.hidden_gems || 0;
-                        }
-                    }
-                } catch (e) { }
-            }
+    function fmtNum(n) { return Number(n).toLocaleString(); }
 
-            async function loadProducts(page) {
-                curPage = page;
-                sessionStorage.setItem('vantage_page', curPage);
-                sessionStorage.setItem('vantage_filter', JSON.stringify(curFilter));
+    function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
 
-                const params = new URLSearchParams({ page: page, limit: 24, ...curFilter });
-                if (curFilter.search) params.set('search', curFilter.search);
+    function genSparkBars(sales) {
+        // Generate 5 bars representing relative height
+        const max = Math.max(sales, 1);
+        const heights = [0.2, 0.4, 0.5, 0.7, 1.0].map(f => Math.max(3, Math.round(f * 16)));
+        return heights.map(h => `<span style="height:${h}px"></span>`).join('');
+    }
 
-                // Loading state
-                document.getElementById('productGrid').innerHTML = `
-                <div class="col-span-full py-32 flex flex-col items-center justify-center space-y-6">
-                    <div class="w-12 h-12 relative">
-                        <div class="absolute inset-0 border-2 border-cyan-500/20 rounded-full"></div>
-                        <div class="absolute inset-0 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                </div>`;
+    function showToast(msg, type = 'info') {
+        const t = document.createElement('div');
+        t.className = `toast toast-${type}`;
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+    }
 
-                try {
-                    const res = await fetch(`/api/products?${params.toString()}`);
-                    const data = await res.json();
-                    renderGrid(data.products || []);
-
-                    const totalPages = Math.ceil((data.count || 0) / 24);
-                    document.getElementById('pageIndicator').innerText = `Sector ${String(page).padStart(2, '0')}`;
-                    document.getElementById('btnPrev').disabled = page <= 1;
-                    document.getElementById('btnNext').disabled = page >= totalPages;
-                } catch (e) {
-                    let errorMsg = "UPLINK DISCONNECTED";
-                    if (e.message && e.message !== "Failed to fetch") errorMsg = e.message;
-                    document.getElementById('productGrid').innerHTML = `<div class="col-span-full text-center text-rose-400 font-bold p-12 glass rounded-3xl">PROTOCOL FAILURE: ${errorMsg}<br><span class="text-xs text-slate-500 mt-2 block">Ensure server is running and database is migrated.</span></div>`;
-                }
-            }
-
-            function renderGrid(products) {
-                const grid = document.getElementById('productGrid');
-                grid.innerHTML = '';
-
-                if (products.length === 0) {
-                    grid.innerHTML = `<div class="col-span-full text-center text-slate-500 font-bold py-20 uppercase tracking-widest border border-dashed border-white/5 rounded-3xl bg-slate-900/50">Zero Intelligence Found</div>`;
-                    return;
-                }
-
-                products.forEach(p => {
-                    const card = document.createElement('div');
-                    card.className = 'bg-slate-900 border border-white/5 rounded-2xl group flex flex-col relative cursor-pointer overflow-hidden transition-all hover:border-white/10 hover:shadow-2xl shadow-black/50';
-                    card.onclick = (e) => {
-                        if (!e.target.closest('a') && !e.target.closest('button'))
-                            window.location.href = `/product/${p.product_id}`;
-                    };
-
-                    const imgUrl = `/api/image-proxy/${p.product_id}`;
-                    const ttLink = p.product_url || `https://shop.tiktok.com/view/product/${p.product_id}?region=US&locale=en-US`;
-
-                    card.innerHTML = `
-                    <div class="relative aspect-[4/3] overflow-hidden bg-slate-950">
-                        <img src="${imgUrl}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" loading="lazy" onerror="this.src='/vantage_logo.png'">
-                        
-                        <div class="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-                            ${p.gmv > 10000 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-emerald-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">💰 High Volume</span>' : ''}
-                            ${p.is_favorite ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">⭐ Watchlist</span>' : ''}
-                            ${p.video_count < 30 && p.video_count > 0 ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary/90 text-white shadow-lg backdrop-blur-md border border-white/10">💎 Opportunity</span>' : ''}
-                            ${(p.gmv_30d >= 50000 && p.gmv_30d <= 200000 && p.influencer_count <= 50) ? '<span class="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-rose-600/90 text-white shadow-lg backdrop-blur-md border border-white/10">🍰 Caked Pick</span>' : ''}
-                        </div>
-                        
-                        <div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
-
-                        <div class="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
-                            <a href="${ttLink}" target="_blank" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white text-black hover:bg-primary hover:text-white transition-colors shadow-lg" onclick="event.stopPropagation()">
-                                <i class="fab fa-tiktok text-sm"></i>
-                            </a>
-                        </div>
-                    </div>
-                    
-                    <div class="p-4 flex-1 flex flex-col pt-2">
-                        <div class="flex items-center gap-2 mb-2">
-                            <div class="w-1.5 h-1.5 rounded-full ${p.seller_name && p.seller_name !== 'Unknown' ? 'bg-primary' : 'bg-slate-700'}"></div>
-                            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[150px]">${p.seller_name || 'Restricted Info'}</span>
-                        </div>
-                        <h3 class="font-bold text-slate-200 text-sm line-clamp-2 min-h-[2.5rem] mb-4 leading-snug group-hover:text-white transition-colors font-heading">${p.product_name}</h3>
-                        
-                        <div class="mt-auto grid grid-cols-4 gap-2">
-                            <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">7D Sales</p>
-                                <p class="text-xs font-bold text-white tracking-wide">${((p.sales_7d || 0)).toLocaleString()}</p>
-                            </div>
-                            <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">7D Ad Spend</p>
-                                <p class="text-xs font-bold ${p.ad_spend > 5000 ? 'text-emerald-400' : 'text-primary-light'} tracking-wide">$${formatKMB(p.ad_spend || 0)}</p>
-                            </div>
-                            <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Videos</p>
-                                <p class="text-xs font-bold ${(() => { const vc = p.video_count_alltime || p.video_count || 0; return vc < 50 ? 'text-emerald-400' : vc <= 120 ? 'text-amber-400' : vc > 200 ? 'text-rose-400' : 'text-slate-400'; })()} tracking-wide">${formatKMB(p.video_count_alltime || p.video_count || 0)}</p>
-                            </div>
-                            <div class="bg-slate-950 p-2 rounded-xl border border-white/5">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">Comm.</p>
-                                <p class="text-xs font-bold ${(p.commission_rate || 0) >= 0.15 ? 'text-emerald-400' : (p.commission_rate || 0) > 0 ? 'text-amber-400' : 'text-slate-500'} tracking-wide">${p.commission_rate ? Math.round(p.commission_rate * 100) + '%' : 'N/A'}</p>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                    grid.appendChild(card);
-                });
-            }
-
-            function applyFilter(type, el) {
-                document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active-tab', 'text-white'));
-                el.classList.add('active-tab');
-
-                // Preserve sort_by when switching tabs
-                const savedSort = curFilter.sort_by || 'sales_7d';
-
-                if (type === 'gems') curFilter = { gems_only: 'true' };
-                else if (type === 'caked') curFilter = { caked_only: 'true' };
-                else if (type === 'high_spend') curFilter = { high_ad_spend: 'true' };
-                else if (type === 'favorites') curFilter = { favorites_only: 'true' };
-                else if (type === 'all') curFilter = { min_videos: 0 };
-
-                curFilter.sort_by = savedSort;
-                sessionStorage.setItem('vantage_tab_type', type);
-                loadProducts(1);
-            }
-
-            function updateSort(val) {
-                curFilter.sort_by = val;
-                loadProducts(1);
-            }
-
-            function updateCommissionFilter(val) {
-                curFilter.min_commission = val;
-                loadProducts(1);
-            }
-
-            function searchProducts(query) {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    curFilter.search = query.trim();
-                    loadProducts(1);
-                }, 500); // 500ms debounce
-            }
-
-            function searchBrands(query) { searchProducts(query); }
-
-            function changePage(delta) { loadProducts(curPage + delta); }
-
-            async function runImport() {
-                const input = document.getElementById('importInput').value;
-                if (!input) return;
-
-                const btn = document.getElementById('importBtn');
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
-                btn.disabled = true;
-
-                try {
-                    // Mocking a product list for manual import trigger
-                    const jsonBody = {
-                        json_data: JSON.stringify({ list: [{ product: { url: input } }] })
-                    };
-                    const res = await fetch('/api/scan/manual', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(jsonBody)
-                    });
-                    if (res.ok) {
-                        document.getElementById('importModal').classList.add('hidden');
-                        document.getElementById('importInput').value = '';
-                        loadProducts(1);
-                    } else alert('Link integration protocols failed.');
-                } catch (e) { alert('Critical link error: ' + e); }
-                finally {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }
-            }
-
-            async function syncOpportunities() {
-                const btn = event.currentTarget;
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
-                btn.disabled = true;
-
-                try {
-                    const res = await fetch('/api/scan/partner_opportunity', { method: 'POST' });
-                    const data = await res.json();
-                    if (data.success) {
-                        alert("Opportunity scan started! Please wait a few minutes for results to populate.");
-                    } else {
-                        alert("Trigger Failed: " + data.error);
-                    }
-                } catch (e) {
-                    alert("Network Error: " + e.message);
-                } finally {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }
-            }
-
-            document.addEventListener('DOMContentLoaded', loadDashboard);
-
-            function toggleSidebar() {
-                const aside = document.querySelector('aside');
-                if (aside.classList.contains('hidden')) {
-                    aside.classList.remove('hidden');
-                    aside.classList.add('fixed', 'inset-0', 'bg-midnight', 'z-50', 'animate-in', 'fade-in', 'duration-300');
-
-                    if (!document.getElementById('mobile-sidebar-close')) {
-                        const closeBtn = document.createElement('button');
-                        closeBtn.id = 'mobile-sidebar-close';
-                        closeBtn.className = 'absolute top-8 right-8 glass p-3 rounded-2xl border-white/5 text-white';
-                        closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                        closeBtn.onclick = toggleSidebar;
-                        aside.appendChild(closeBtn);
-                    }
-                } else {
-                    aside.classList.add('hidden');
-                    aside.classList.remove('fixed', 'inset-0', 'bg-midnight', 'z-50', 'animate-in', 'fade-in', 'duration-300');
-                    const closeBtn = document.getElementById('mobile-sidebar-close');
-                    if (closeBtn) closeBtn.remove();
-                }
-            }
-
-            // --- BATCH LOOKUP SYSTEM ---
-            function batchLog(msg, type = 'info') {
-                const term = document.getElementById('batchTerminal');
-                const entry = document.createElement('div');
-                entry.className = 'flex gap-4';
-
-                let color = 'text-slate-400';
-                if (type === 'success') color = 'text-emerald-400 font-bold';
-                if (type === 'error') color = 'text-rose-400 font-bold';
-                if (type === 'warn') color = 'text-amber-400 font-bold';
-
-                entry.innerHTML = `
-                <span class="text-slate-700 font-bold">></span>
-                <span class="${color}">[${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}] ${msg}</span>
-            `;
-                term.appendChild(entry);
-                term.scrollTop = term.scrollHeight;
-            }
-
-            async function runBatchLookup(btn) {
-                const urls = document.getElementById('batchUrls').value.trim();
-                if (!urls) return batchLog("RECON ABORTED: No target URLs provided.", "error");
-
-                btn.disabled = true;
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Scanning...';
-
-                const term = document.getElementById('batchTerminal');
-                term.innerHTML = '';
-                batchLog(`Initiating Batch Recon on ${urls.split('\n').length} vectors...`, "warn");
-
-                try {
-                    const res = await fetch('/api/lookup/batch', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ urls: urls })
-                    });
-
-                    const data = await res.json();
-                    if (data.success && data.products) {
-                        batchLog(`INTEL ACQUIRED: Successfully retrieved ${data.products.length} product datasets.`, "success");
-                        data.products.forEach(p => {
-                            batchLog(`  [FOUND] ${p.product_id} - ${p.product_name.substring(0, 40)}... | 7D: ${p.sales_7d}`, "info");
-                        });
-                    } else {
-                        batchLog(`UPLINK ERROR: ${data.error || "Unknown Failure"}`, "error");
-                    }
-                } catch (e) {
-                    batchLog(`SYSTEM CRITICAL: ${e.message}`, "error");
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }
-            }
-
-            async function purgeLowSignal() {
-                if (!confirm("⚠️ This will permanently delete ALL products with 0 or 1 total videos from your database. Proceed?")) return;
-
-                try {
-                    const btn = document.querySelector('button[onclick="purgeLowSignal()"]');
-                    const originalText = btn.innerHTML;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Purging...</span>';
-                    btn.disabled = true;
-
-                    const res = await fetch('/api/admin/purge-low-signal', { method: 'POST' });
-                    const data = await res.json();
-
-                    if (data.success) {
-                        showToast(data.message || 'Purge complete!');
-                        loadProducts(1); // Refresh grid
-                    } else {
-                        showToast('Purge failed: ' + data.error, 'error');
-                    }
-
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                } catch (err) {
-                    console.error('Purge error:', err);
-                    showToast('API Error during purge', 'error');
-                }
-            }
-
-            // --- AI CHAT SYSTEM ---
-            function toggleAIChat() {
-                const overlay = document.getElementById('aiChatOverlay');
-                overlay.classList.toggle('hidden');
-                if (!overlay.classList.contains('hidden')) {
-                    document.getElementById('chatInput').focus();
-                }
-            }
-
-            async function sendChatMessage() {
-                const input = document.getElementById('chatInput');
-                const message = input.value.trim();
-                if (!message) return;
-
-                const container = document.getElementById('chatMessages');
-
-                // Add user message
-                const userDiv = document.createElement('div');
-                userDiv.className = 'flex justify-end';
-                userDiv.innerHTML = `
-                    <div class="bg-cyan-600/20 border border-cyan-500/20 p-4 rounded-2xl rounded-tr-none text-sm text-white max-w-[85%]">
-                        ${message}
-                    </div>
-                `;
-                container.appendChild(userDiv);
-
-                input.value = '';
-                container.scrollTop = container.scrollHeight;
-
-                // Typing indicator
-                const typingDiv = document.createElement('div');
-                typingDiv.id = 'aiTyping';
-                typingDiv.className = 'flex gap-4';
-                typingDiv.innerHTML = `
-                    <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
-                        <i class="fas fa-robot text-xs pulse"></i>
-                    </div>
-                    <div class="glass p-4 rounded-2xl rounded-tl-none text-sm text-slate-500 italic">
-                        Analyzing database...
-                    </div>
-                `;
-                container.appendChild(typingDiv);
-                container.scrollTop = container.scrollHeight;
-
-                try {
-                    const res = await fetch('/api/ai/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: message })
-                    });
-                    const data = await res.json();
-
-                    document.getElementById('aiTyping').remove();
-
-                    let aiResponse = "";
-                    if (data.success) {
-                        aiResponse = (data.response || "No response received.").replace(/\n/g, '<br>');
-                    } else {
-                        aiResponse = `<span class="text-rose-400 font-bold">Error: ${data.error || "Unknown system fault."}</span>`;
-                    }
-
-                    const aiDiv = document.createElement('div');
-                    aiDiv.className = 'flex gap-4 animate-in fade-in slide-in-from-left duration-300';
-                    aiDiv.innerHTML = `
-                        <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
-                            <i class="fas fa-robot text-xs"></i>
-                        </div>
-                        <div class="glass p-4 rounded-2xl rounded-tl-none text-sm text-slate-300 leading-relaxed max-w-[85%] prose prose-invert font-sans">
-                            ${aiResponse}
-                        </div>
-                    `;
-                    container.appendChild(aiDiv);
-                } catch (e) {
-                    if (document.getElementById('aiTyping')) document.getElementById('aiTyping').remove();
-                    const errDiv = document.createElement('div');
-                    errDiv.className = 'text-center text-rose-400 text-xs py-2 uppercase font-bold';
-                    errDiv.textContent = 'Connection Error: Unable to reach Vantage AI';
-                    container.appendChild(errDiv);
-                }
-
-                container.scrollTop = container.scrollHeight;
-            }
-        </script>
-
-        <!-- Mobile Bottom Navigation -->
-        <nav class="mobile-nav">
-            <a href="/" class="mobile-nav-item active">
-                <i class="fas fa-th-large"></i>
-                <span>Intel</span>
-            </a>
-            <a href="/scanner" class="mobile-nav-item">
-                <i class="fas fa-radar"></i>
-                <span>Scan</span>
-            </a>
-            <!-- Mobile Shops Disabled -->
-            <a href="/settings" class="mobile-nav-item">
-                <i class="fas fa-cog"></i>
-                <span>Setup</span>
-            </a>
-        </nav>
+    </script>
+    <script src="/pwa/js/prism-nav.js"></script>
 </body>
 
 </html>

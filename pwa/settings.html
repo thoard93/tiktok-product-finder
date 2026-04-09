@@ -1,390 +1,465 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings | Vantage</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="/pwa/css/main.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        midnight: '#020617',
-                        slate: {
-                            800: '#1e293b',
-                            900: '#0f172a',
-                            950: '#020617',
-                        },
-                        primary: '#2563eb',
-                    }
-                }
-            }
-        }
-    </script>
+    <title>Settings | PRISM</title>
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        .settings-bg {
-            position: fixed;
-            inset: 0;
-            z-index: -1;
-            background: #05070a;
-            overflow: hidden;
-        }
+        /* ── Layout ── */
+        body { display: flex; min-height: 100vh; }
 
-        .glow-orb {
-            position: absolute;
-            width: 800px;
-            height: 800px;
-            background: radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
-            filter: blur(100px);
-            top: -200px;
-            left: -200px;
-            animation: float-orb 25s infinite alternate;
-        }
+        /* ── Main area ── */
+        .main { flex:1; display:flex; flex-direction:column; min-height:100vh; }
 
-        @keyframes float-orb {
-            0% {
-                transform: translate(0, 0) scale(1);
-            }
+        /* ── Top bar ── */
+        .top-bar { position:sticky; top:0; z-index:30; height:56px; background:rgba(10,10,15,0.85);
+            backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid var(--prism-border);
+            display:flex; align-items:center; padding:0 var(--sp-6); gap:var(--sp-4); }
+        .top-bar-title { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-lg);
+            color:var(--prism-text); }
 
-            100% {
-                transform: translate(100px, 50px) scale(1.1);
-            }
+        /* ── Content ── */
+        .content-area { flex:1; overflow-y:auto; padding:var(--sp-6); }
+        .settings-container { max-width:700px; margin:0 auto; display:flex; flex-direction:column; gap:var(--sp-5); }
+
+        /* ── Cards ── */
+        .settings-card { background:var(--prism-surface); border:1px solid var(--prism-border);
+            border-radius:var(--radius-lg); padding:var(--sp-6); }
+        .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-5); }
+        .card-title { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-base);
+            color:var(--prism-text); display:flex; align-items:center; gap:var(--sp-2); }
+        .card-subtitle { font-size:var(--text-xs); color:var(--prism-text-muted); margin-top:var(--sp-1); }
+        .card-badge { background:var(--prism-accent-glow); color:var(--prism-accent-text); font-size:10px;
+            font-weight:700; padding:2px 8px; border-radius:var(--radius-full); }
+
+        /* ── Profile ── */
+        .profile-layout { display:flex; align-items:center; gap:var(--sp-5); }
+        .profile-avatar { width:64px; height:64px; border-radius:50%; background:var(--prism-surface-2);
+            overflow:hidden; flex-shrink:0; border:2px solid var(--prism-border); }
+        .profile-avatar img { width:100%; height:100%; object-fit:cover; }
+        .profile-name { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-lg);
+            color:var(--prism-text); display:flex; align-items:center; gap:var(--sp-2); }
+        .profile-id { font-size:var(--text-xs); color:var(--prism-text-muted); margin-top:2px; }
+        .admin-badge { background:var(--prism-accent); color:#fff; font-size:10px; font-weight:700;
+            padding:2px 8px; border-radius:var(--radius-full); text-transform:uppercase; letter-spacing:0.05em; }
+        .profile-meta { display:flex; gap:var(--sp-5); margin-top:var(--sp-4); padding-top:var(--sp-4);
+            border-top:1px solid var(--prism-border); }
+        .meta-item { display:flex; flex-direction:column; gap:2px; }
+        .meta-label { font-size:10px; font-weight:600; color:var(--prism-text-faint); text-transform:uppercase;
+            letter-spacing:0.06em; }
+        .meta-value { font-size:var(--text-sm); color:var(--prism-text); font-weight:500; }
+
+        /* ── Toggle rows ── */
+        .toggle-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0;
+            border-bottom:1px solid var(--prism-border); }
+        .toggle-row:last-child { border-bottom:none; }
+        .toggle-info { display:flex; flex-direction:column; gap:2px; }
+        .toggle-label { font-size:var(--text-sm); font-weight:500; color:var(--prism-text); }
+        .toggle-desc { font-size:var(--text-xs); color:var(--prism-text-muted); }
+        .toggle-switch { width:44px; height:24px; background:var(--prism-surface-2); border-radius:var(--radius-full);
+            position:relative; cursor:pointer; transition:background 0.2s; border:1px solid var(--prism-border);
+            flex-shrink:0; }
+        .toggle-switch.active { background:var(--prism-accent); border-color:var(--prism-accent); }
+        .toggle-switch::after { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px;
+            background:white; border-radius:50%; transition:transform 0.2s; }
+        .toggle-switch.active::after { transform:translateX(20px); }
+        .notif-note { font-size:var(--text-xs); color:var(--prism-text-faint); margin-top:var(--sp-3);
+            padding-top:var(--sp-3); border-top:1px solid var(--prism-border); }
+
+        /* ── Watchlist ── */
+        .watchlist-row { display:flex; align-items:center; gap:var(--sp-3); padding:var(--sp-3) 0;
+            border-bottom:1px solid var(--prism-border); }
+        .watchlist-row:last-child { border-bottom:none; }
+        .watchlist-img { width:40px; height:40px; border-radius:var(--radius-md); object-fit:cover;
+            background:var(--prism-surface-2); flex-shrink:0; }
+        .watchlist-info { flex:1; min-width:0; }
+        .watchlist-name { font-size:var(--text-sm); font-weight:600; color:var(--prism-text); overflow:hidden;
+            text-overflow:ellipsis; white-space:nowrap; }
+        .watchlist-price { font-size:var(--text-xs); color:var(--prism-cyan); font-weight:600; }
+        .watchlist-remove { background:none; border:1px solid var(--prism-border); color:var(--prism-text-muted);
+            width:28px; height:28px; border-radius:var(--radius-md); cursor:pointer; display:flex; align-items:center;
+            justify-content:center; transition:all 120ms; flex-shrink:0; font-size:12px; }
+        .watchlist-remove:hover { border-color:var(--prism-error); color:var(--prism-error);
+            background:rgba(239,68,68,0.1); }
+        .empty-state { text-align:center; padding:var(--sp-6) 0; color:var(--prism-text-faint);
+            font-size:var(--text-sm); }
+        .empty-state i { font-size:24px; margin-bottom:var(--sp-2); display:block; opacity:0.4; }
+
+        /* ── API Keys ── */
+        .api-key-display { display:flex; align-items:center; gap:var(--sp-3); background:var(--prism-surface-2);
+            border:1px solid var(--prism-border); border-radius:var(--radius-md); padding:var(--sp-3); margin-bottom:var(--sp-3); }
+        .api-key-value { flex:1; font-family:monospace; font-size:var(--text-sm); color:var(--prism-text);
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:0.05em; }
+        .btn { display:inline-flex; align-items:center; gap:var(--sp-2); padding:var(--sp-2) var(--sp-4);
+            border-radius:var(--radius-md); font-size:var(--text-sm); font-weight:600; cursor:pointer;
+            transition:all 120ms; border:1px solid transparent; }
+        .btn-ghost { background:transparent; border-color:var(--prism-border); color:var(--prism-text-muted); }
+        .btn-ghost:hover { border-color:var(--prism-accent); color:var(--prism-accent-text); }
+        .btn-accent { background:var(--prism-accent); color:#fff; border-color:var(--prism-accent); }
+        .btn-accent:hover { background:var(--prism-accent-hover); }
+        .api-note { font-size:var(--text-xs); color:var(--prism-text-faint); margin-top:var(--sp-2); }
+
+        /* ── About ── */
+        .about-header { display:flex; align-items:center; gap:var(--sp-3); margin-bottom:var(--sp-4); }
+        .about-logo { width:28px; height:28px; }
+        .about-name { font-family:'Cabinet Grotesk',sans-serif; font-weight:800; font-size:var(--text-lg);
+            color:var(--prism-text); letter-spacing:0.06em; }
+        .about-full-name { font-size:var(--text-sm); color:var(--prism-text-muted); margin-bottom:var(--sp-4); }
+        .about-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); }
+        .about-item { display:flex; flex-direction:column; gap:2px; }
+        .about-item-label { font-size:10px; font-weight:600; color:var(--prism-text-faint); text-transform:uppercase;
+            letter-spacing:0.06em; }
+        .about-item-value { font-size:var(--text-sm); color:var(--prism-text); font-weight:500; }
+        .about-footer { font-size:var(--text-xs); color:var(--prism-text-faint); margin-top:var(--sp-5);
+            padding-top:var(--sp-4); border-top:1px solid var(--prism-border); text-align:center; }
+
+        /* ── Toast ── */
+        .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); padding:var(--sp-2) var(--sp-5);
+            border-radius:var(--radius-lg); font-size:var(--text-sm); font-weight:600; z-index:200;
+            backdrop-filter:blur(12px); animation:toastIn 0.3s ease; pointer-events:none; }
+        .toast-info { background:rgba(6,182,212,0.15); border:1px solid rgba(6,182,212,0.3); color:var(--prism-cyan); }
+        @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+
+        /* ── Responsive ── */
+        @media (max-width: 767px) {
+            .main { margin-left:0; }
+            .content-area { padding:var(--sp-4); }
+            .settings-card { padding:var(--sp-4); }
+            .profile-layout { flex-direction:column; text-align:center; }
+            .profile-meta { flex-direction:column; gap:var(--sp-3); }
+            .about-grid { grid-template-columns:1fr; }
+            .top-bar { padding:0 var(--sp-4); }
         }
     </style>
 </head>
 
-<body class="flex justify-center min-h-screen p-6 overflow-y-auto bg-slate-950 text-slate-200">
-    <div class="settings-bg">
-        <div class="glow-orb"></div>
-    </div>
+<body>
+    <div id="prism-nav"></div>
 
-    <div
-        class="bg-slate-900 border border-white/5 rounded-2xl max-w-xl w-full p-8 md:p-12 relative animate-float mt-10 mb-10 shadow-2xl">
-
-        <div class="flex items-center gap-4 mb-10">
-            <div
-                class="w-12 h-12 rounded-2xl bg-slate-900 border border-white/5 flex items-center justify-center text-primary">
-                <i class="fas fa-cog text-xl"></i>
-            </div>
-            <div>
-                <h1 class="text-3xl font-heading font-bold text-white tracking-tight">System Settings</h1>
-                <p class="text-slate-400 text-sm font-medium">Manage your Vantage configuration</p>
-            </div>
+    <!-- Main Content -->
+    <div class="main">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <button class="prism-nav-hamburger" onclick="prismNav.toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <div class="top-bar-title">Settings</div>
         </div>
 
-        <div class="space-y-8">
-            <!-- TikTokCopilot Integration (PRIMARY) -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <label class="block text-[10px] font-bold text-cyan-400 uppercase tracking-[0.2em] ml-1">
-                        <i class="fas fa-gem mr-2"></i>TikTokCopilot Integration (NEW!)
-                    </label>
-                    <span
-                        class="badge-premium bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[9px]">PRIMARY</span>
+        <!-- Content -->
+        <div class="content-area">
+            <div class="settings-container">
+
+                <!-- Section 1: Profile -->
+                <div class="settings-card" id="profileCard">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fas fa-user" style="font-size:14px;color:var(--prism-accent-text)"></i> Profile</div>
+                    </div>
+                    <div class="profile-layout" id="profileContent">
+                        <div class="profile-avatar" id="profileAvatar">
+                            <i class="fas fa-user" style="font-size:24px;color:var(--prism-text-faint);display:flex;align-items:center;justify-content:center;width:100%;height:100%"></i>
+                        </div>
+                        <div>
+                            <div class="profile-name" id="profileName">Loading...</div>
+                            <div class="profile-id" id="profileId">--</div>
+                        </div>
+                    </div>
+                    <div class="profile-meta" id="profileMeta">
+                        <div class="meta-item">
+                            <span class="meta-label">Member Since</span>
+                            <span class="meta-value" id="memberSince">--</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Last Login</span>
+                            <span class="meta-value" id="lastLogin">--</span>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="space-y-3">
-                    <div class="relative group">
-                        <i class="fas fa-cookie absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="password" id="copilotCookie" placeholder="Paste TikTokCopilot Session Cookie..."
-                            class="input-premium w-full pl-11 border-cyan-500/30">
-                        <button onclick="togglePassword('copilotCookie')"
-                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
-                            <i class="fas fa-eye text-xs"></i>
+                <!-- Section 2: Notifications -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fas fa-bell" style="font-size:14px;color:var(--prism-accent-text)"></i> Notifications</div>
+                    </div>
+                    <div class="toggle-row">
+                        <div class="toggle-info">
+                            <div class="toggle-label">Discord DMs for Hot Products</div>
+                            <div class="toggle-desc">Get notified when high-velocity products are detected</div>
+                        </div>
+                        <div class="toggle-switch" id="toggleDiscord" onclick="toggleNotif('prism_notif_discord', this)"></div>
+                    </div>
+                    <div class="toggle-row">
+                        <div class="toggle-info">
+                            <div class="toggle-label">Email Digest (Weekly)</div>
+                            <div class="toggle-desc">Receive a weekly summary of top-performing products</div>
+                        </div>
+                        <div class="toggle-switch" id="toggleEmail" onclick="toggleNotif('prism_notif_email', this)"></div>
+                    </div>
+                    <div class="notif-note"><i class="fas fa-info-circle"></i> Notification preferences are stored locally</div>
+                </div>
+
+                <!-- Section 3: Watchlist -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fas fa-heart" style="font-size:14px;color:var(--prism-accent-text)"></i> Watchlist</div>
+                        <span class="card-badge" id="watchlistCount">0</span>
+                    </div>
+                    <div id="watchlistContent">
+                        <div class="empty-state">
+                            <i class="fas fa-heart"></i>
+                            Loading watchlist...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: API Keys -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title"><i class="fas fa-key" style="font-size:14px;color:var(--prism-accent-text)"></i> API Keys</div>
+                            <div class="card-subtitle">For developer access to the PRISM API</div>
+                        </div>
+                    </div>
+                    <div class="api-key-display" id="apiKeyDisplay">
+                        <span class="api-key-value" id="apiKeyValue">No API key generated</span>
+                        <button class="btn btn-ghost" id="copyKeyBtn" onclick="copyApiKey()" style="display:none">
+                            <i class="fas fa-copy"></i> Copy
                         </button>
                     </div>
-
-                    <div class="glass p-4 rounded-xl border border-cyan-500/20">
-                        <p class="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-2">How to get your
-                            cookie:</p>
-                        <ol class="text-[10px] text-slate-400 space-y-1 list-decimal ml-4">
-                            <li>Log in to <a href="https://www.tiktokcopilot.com" target="_blank"
-                                    class="text-cyan-400 hover:underline">TikTokCopilot.com</a></li>
-                            <li>Open DevTools (F12) -> <span class="text-white">Network</span> tab</li>
-                            <li>Refresh & find any <span class="text-white">api/trending</span> request</li>
-                            <li>Go to <span class="text-cyan-400 font-bold">Headers</span> tab</li>
-                            <li>Copy the entire <span class="text-white">Cookie</span> header value.</li>
-                        </ol>
-                    </div>
-
-                    <button onclick="testCopilotConnection()" id="btnTestCopilot"
-                        class="glass px-4 py-2 rounded-xl border-emerald-500/30 hover:border-emerald-400 text-emerald-400 flex items-center gap-2 text-xs font-bold transition-all">
-                        <i class="fas fa-plug"></i>
-                        Test Connection
+                    <button class="btn btn-accent" onclick="generateApiKey()">
+                        <i class="fas fa-plus"></i> Generate New Key
                     </button>
-
-                    <!-- Advanced: Sentry Headers (Collapsible) -->
-                    <details class="glass p-3 rounded-xl border border-slate-700/50 mt-3">
-                        <summary
-                            class="text-[10px] font-bold text-yellow-400 uppercase tracking-widest cursor-pointer hover:text-yellow-300">
-                            <i class="fas fa-fingerprint mr-2"></i>Advanced: Browser Fingerprint Headers
-                        </summary>
-                        <div class="mt-3 space-y-3">
-                            <p class="text-[9px] text-slate-400">Only update these if V2 is getting blocked. Copy from
-                                browser DevTools → Network → any tiktokcopilot.com request → Headers tab.</p>
-
-                            <div class="relative">
-                                <label class="text-[9px] text-slate-500 mb-1 block">sentry-trace header:</label>
-                                <input type="text" id="sentryTrace"
-                                    placeholder="e.g., d4de60086273456b81fac34910362f67-80e18f101afbb322-1"
-                                    class="input-premium w-full text-[11px] py-2">
-                            </div>
-
-                            <div class="relative">
-                                <label class="text-[9px] text-slate-500 mb-1 block">baggage header:</label>
-                                <textarea id="sentryBaggage" rows="2"
-                                    placeholder="sentry-environment=vercel-production,..."
-                                    class="input-premium w-full text-[11px] py-2 resize-none"></textarea>
-                            </div>
-                        </div>
-                    </details>
+                    <div class="api-note">API keys provide programmatic access to product data</div>
                 </div>
-            </div>
 
-            <!-- Telegram Notifications -->
-            <div class="space-y-4 pt-4 border-t border-white/5">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1">
-                    <i class="fab fa-telegram mr-2"></i>Telegram Notifications
-                </label>
-                <div class="space-y-3">
-                    <div class="relative group">
-                        <i class="fas fa-robot absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="text" id="telegramBotToken" placeholder="Bot Token (from @BotFather)..."
-                            class="input-premium w-full pl-11 border-white/5">
+                <!-- Section 5: About PRISM -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fas fa-info-circle" style="font-size:14px;color:var(--prism-accent-text)"></i> About PRISM</div>
                     </div>
-                    <div class="relative group">
-                        <i class="fas fa-hashtag absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                        <input type="text" id="telegramChatId" placeholder="Chat ID..."
-                            class="input-premium w-full pl-11 border-white/5">
+                    <div class="about-header">
+                        <svg class="about-logo" viewBox="0 0 32 32" fill="none">
+                            <defs><linearGradient id="sg2" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
+                            <polygon points="16,2 30,28 2,28" fill="url(#sg2)" opacity="0.9"/>
+                        </svg>
+                        <span class="about-name">PRISM</span>
                     </div>
+                    <div class="about-full-name">Product Research Intelligence &amp; Sales Monitor</div>
+                    <div class="about-grid">
+                        <div class="about-item">
+                            <span class="about-item-label">Version</span>
+                            <span class="about-item-value">v4.2.0</span>
+                        </div>
+                        <div class="about-item">
+                            <span class="about-item-label">Data Source</span>
+                            <span class="about-item-value">EchoTik (open.echotik.live)</span>
+                        </div>
+                        <div class="about-item">
+                            <span class="about-item-label">Last Sync</span>
+                            <span class="about-item-value" id="lastSync">--</span>
+                        </div>
+                        <div class="about-item">
+                            <span class="about-item-label">Built With</span>
+                            <span class="about-item-value">Flask, SQLAlchemy, Chart.js</span>
+                        </div>
+                    </div>
+                    <div class="about-footer">Built for resellers, by resellers. Data-driven product discovery.</div>
                 </div>
-            </div>
 
-            <!-- TikTok Partner Config (Legacy) -->
-            <div class="space-y-4 pt-4 border-t border-white/5 opacity-60">
-                <details>
-                    <summary
-                        class="cursor-pointer text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1 hover:text-slate-300 transition-colors">
-                        <i class="fas fa-chevron-right mr-2"></i>TikTok Partner Integration (Legacy)
-                    </summary>
-                    <div class="space-y-3 mt-4">
-                        <div class="relative group">
-                            <i
-                                class="fas fa-id-badge absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                            <input type="text" id="partnerId" placeholder="Paste Partner ID..."
-                                class="input-premium w-full pl-11 border-white/5">
-                        </div>
-                        <div class="relative group">
-                            <i
-                                class="fas fa-cookie absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs"></i>
-                            <input type="password" id="partnerCookie" placeholder="Paste TikTok Partner Cookie..."
-                                class="input-premium w-full pl-11 border-white/5">
-                            <button onclick="togglePassword('partnerCookie')"
-                                class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
-                                <i class="fas fa-eye text-xs"></i>
-                            </button>
-                        </div>
-                    </div>
-                </details>
             </div>
-
-            <div class="space-y-4 pt-4 border-t border-white/5">
-                <div class="flex items-center justify-between group">
-                    <div>
-                        <p class="text-sm font-bold text-white">Neural Animations</p>
-                        <p class="text-[10px] text-slate-500 uppercase tracking-widest">Enable glassmorphism
-                            micro-effects</p>
-                    </div>
-                    <div class="w-12 h-6 bg-cyan-500/20 rounded-full relative cursor-pointer border border-cyan-500/30">
-                        <div
-                            class="absolute right-1 top-1 w-4 h-4 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(6,182,212,0.8)]">
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="mt-12 flex items-center justify-between">
-            <a href="/"
-                class="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-[0.2em] transition-colors flex items-center gap-2">
-                <i class="fas fa-arrow-left text-[10px]"></i> Back to Dashboard
-            </a>
-            <button onclick="saveAllConfig()" class="btn-premium px-10 py-3 shadow-xl">
-                Save Settings
-            </button>
         </div>
     </div>
 
     <script>
-        function togglePassword(id) {
-            const el = document.getElementById(id);
-            const icon = el.nextElementSibling.querySelector('i');
-            if (el.type === 'password') {
-                el.type = 'text';
-                icon.classList.replace('fa-eye', 'fa-eye-slash');
-            } else {
-                el.type = 'password';
-                icon.classList.replace('fa-eye-slash', 'fa-eye');
-            }
-        }
-
-        async function loadConfig() {
-            try {
-                const res = await fetch('/api/admin/config');
-                const data = await res.json();
-                if (data.settings) {
-                    const copilot = data.settings.find(s => s.key === 'TIKTOK_COPILOT_COOKIE');
-                    if (copilot && copilot.value) document.getElementById('copilotCookie').value = copilot.value;
-
-                    const pc = data.settings.find(s => s.key === 'TIKTOK_PARTNER_COOKIE');
-                    if (pc && pc.value) document.getElementById('partnerCookie').value = pc.value;
-
-                    const pid = data.settings.find(s => s.key === 'TIKTOK_PARTNER_ID');
-                    if (pid && pid.value) document.getElementById('partnerId').value = pid.value;
-
-                    const tgBot = data.settings.find(s => s.key === 'TELEGRAM_BOT_TOKEN');
-                    if (tgBot && tgBot.value) document.getElementById('telegramBotToken').value = tgBot.value;
-
-                    const tgChat = data.settings.find(s => s.key === 'TELEGRAM_CHAT_ID');
-                    if (tgChat && tgChat.value) document.getElementById('telegramChatId').value = tgChat.value;
-                }
-            } catch (e) {
-                console.error('Failed to load config:', e);
-            }
-        }
-
-        async function testCopilotConnection() {
-            const btn = document.getElementById('btnTestCopilot');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/copilot/test');
-                const data = await res.json();
-                if (data.success) {
-                    showToast('✅ Connected! ' + data.message, 'success');
-                } else {
-                    showToast('❌ ' + data.error, 'error');
-                }
-            } catch (e) {
-                showToast('Network Error: ' + e.message, 'error');
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function saveAllConfig() {
-            const btn = document.querySelector('button[onclick="saveAllConfig()"]');
-            const copilotCookie = document.getElementById('copilotCookie').value.trim();
-            const ptCookie = document.getElementById('partnerCookie').value.trim();
-            const ptId = document.getElementById('partnerId').value.trim();
-            const tgBot = document.getElementById('telegramBotToken').value.trim();
-            const tgChat = document.getElementById('telegramChatId').value.trim();
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Saving...';
-
-            try {
-                const updates = [];
-
-                if (copilotCookie) {
-                    updates.push({
-                        key: 'TIKTOK_COPILOT_COOKIE',
-                        value: copilotCookie,
-                        description: 'TikTokCopilot Session Cookie for API Access'
-                    });
-                }
-
-                if (ptCookie) {
-                    updates.push({
-                        key: 'TIKTOK_PARTNER_COOKIE',
-                        value: ptCookie,
-                        description: 'TikTok Partner Center Cookie'
-                    });
-                }
-
-                if (ptId) {
-                    updates.push({
-                        key: 'TIKTOK_PARTNER_ID',
-                        value: ptId,
-                        description: 'TikTok Partner ID'
-                    });
-                }
-
-                if (tgBot) {
-                    updates.push({
-                        key: 'TELEGRAM_BOT_TOKEN',
-                        value: tgBot,
-                        description: 'Telegram Bot Token'
-                    });
-                }
-
-                if (tgChat) {
-                    updates.push({
-                        key: 'TELEGRAM_CHAT_ID',
-                        value: tgChat,
-                        description: 'Telegram Chat ID'
-                    });
-                }
-
-                // Sentry headers for browser fingerprint (V2 bypass)
-                const sentryTrace = document.getElementById('sentryTrace').value.trim();
-                const sentryBaggage = document.getElementById('sentryBaggage').value.trim();
-
-                if (sentryTrace) {
-                    updates.push({
-                        key: 'SENTRY_TRACE',
-                        value: sentryTrace,
-                        description: 'Sentry-trace header for V2 API bypass'
-                    });
-                }
-
-                if (sentryBaggage) {
-                    updates.push({
-                        key: 'SENTRY_BAGGAGE',
-                        value: sentryBaggage,
-                        description: 'Baggage header for V2 API bypass'
-                    });
-                }
-
-                for (const update of updates) {
-                    await fetch('/api/admin/config', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(update)
-                    });
-                }
-
-                showToast('Settings Saved Successfully! 💎');
-                setTimeout(() => location.reload(), 1000);
-            } catch (e) {
-                alert('Error: ' + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = 'Save Settings';
-            }
-        }
-
-        function showToast(msg, type = 'success') {
+        // ── Toast ──
+        function showToast(msg) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
             const t = document.createElement('div');
-            const bgColor = type === 'error' ? 'bg-rose-500/20 border-rose-500/30 text-rose-400' : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400';
-            t.className = `fixed bottom-8 left-1/2 -translate-x-1/2 glass px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest z-50 border ${bgColor}`;
+            t.className = 'toast toast-info';
             t.textContent = msg;
             document.body.appendChild(t);
-            setTimeout(() => t.remove(), 4000);
+            setTimeout(() => t.remove(), 2500);
         }
 
-        document.addEventListener('DOMContentLoaded', loadConfig);
+        // ── Notifications ──
+        function toggleNotif(key, el) {
+            el.classList.toggle('active');
+            localStorage.setItem(key, el.classList.contains('active') ? '1' : '0');
+        }
+
+        function loadNotifPrefs() {
+            if (localStorage.getItem('prism_notif_discord') === '1') {
+                document.getElementById('toggleDiscord').classList.add('active');
+            }
+            if (localStorage.getItem('prism_notif_email') === '1') {
+                document.getElementById('toggleEmail').classList.add('active');
+            }
+        }
+
+        // ── Profile (populated by prism-nav user event) ──
+        window.addEventListener('prism-user-loaded', (e) => {
+            const user = e.detail;
+
+            // Avatar
+            const avatarEl = document.getElementById('profileAvatar');
+            if (user.avatar_url) {
+                avatarEl.innerHTML = `<img src="${user.avatar_url}" alt="Avatar">`;
+            } else if (user.discord_id && user.discord_avatar) {
+                avatarEl.innerHTML = `<img src="https://cdn.discordapp.com/avatars/${user.discord_id}/${user.discord_avatar}.png" alt="Avatar">`;
+            }
+
+            // Name + badge
+            const nameEl = document.getElementById('profileName');
+            nameEl.textContent = user.username || user.discord_username || 'Unknown User';
+            if (user.is_admin) {
+                const badge = document.createElement('span');
+                badge.className = 'admin-badge';
+                badge.textContent = 'Admin';
+                nameEl.appendChild(badge);
+            }
+
+            // Discord ID
+            document.getElementById('profileId').textContent = user.discord_id ? `Discord ID: ${user.discord_id}` : '';
+
+            // Meta
+            if (user.created_at) {
+                document.getElementById('memberSince').textContent = new Date(user.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'short', day: 'numeric'
+                });
+            }
+            if (user.last_login) {
+                document.getElementById('lastLogin').textContent = new Date(user.last_login).toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+            }
+        });
+
+        // ── Watchlist ──
+        async function loadWatchlist() {
+            const container = document.getElementById('watchlistContent');
+            const countBadge = document.getElementById('watchlistCount');
+            try {
+                const res = await fetch('/api/products?favorites=true&limit=50');
+                if (!res.ok) throw new Error('Failed to load');
+                const data = await res.json();
+                const products = data.products || data || [];
+
+                countBadge.textContent = products.length;
+
+                if (products.length === 0) {
+                    container.innerHTML = `<div class="empty-state"><i class="fas fa-heart"></i>No products in your watchlist</div>`;
+                    return;
+                }
+
+                container.innerHTML = products.map(p => `
+                    <div class="watchlist-row">
+                        <img class="watchlist-img" src="${p.image_url || p.thumbnail || '/pwa/img/placeholder.png'}" alt="" loading="lazy" width="40" height="40"
+                             onerror="this.src='/pwa/img/placeholder.png'">
+                        <div class="watchlist-info">
+                            <div class="watchlist-name">${escapeHtml(p.name || p.product_name || 'Unnamed Product')}</div>
+                            <div class="watchlist-price">${p.price ? '$' + Number(p.price).toFixed(2) : '--'}</div>
+                        </div>
+                        <button class="watchlist-remove" onclick="removeFavorite('${p.id || p.product_id}')" title="Remove from watchlist">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-heart"></i>No products in your watchlist</div>`;
+                countBadge.textContent = '0';
+            }
+        }
+
+        async function removeFavorite(productId) {
+            try {
+                await fetch(`/api/favorite/${productId}`, { method: 'POST' });
+                showToast('Removed from watchlist');
+                loadWatchlist();
+            } catch (e) {
+                showToast('Failed to remove');
+            }
+        }
+
+        // ── API Keys ──
+        let currentApiKey = null;
+
+        async function generateApiKey() {
+            try {
+                // Placeholder: generate a local key for demo, or call an endpoint
+                const key = 'prism_' + crypto.randomUUID().replace(/-/g, '');
+                currentApiKey = key;
+                localStorage.setItem('prism_api_key', key);
+                renderApiKey();
+                showToast('API key generated');
+            } catch (e) {
+                showToast('Failed to generate key');
+            }
+        }
+
+        function renderApiKey() {
+            const val = document.getElementById('apiKeyValue');
+            const copyBtn = document.getElementById('copyKeyBtn');
+            if (currentApiKey) {
+                const masked = currentApiKey.substring(0, 10) + '••••••••••••••••••••';
+                val.textContent = masked;
+                copyBtn.style.display = '';
+            } else {
+                val.textContent = 'No API key generated';
+                copyBtn.style.display = 'none';
+            }
+        }
+
+        function copyApiKey() {
+            if (currentApiKey) {
+                navigator.clipboard.writeText(currentApiKey).then(() => showToast('API key copied'));
+            }
+        }
+
+        // ── Last Sync ──
+        async function loadLastSync() {
+            try {
+                const res = await fetch('/api/admin/config/LAST_ECHOTIK_SYNC');
+                if (!res.ok) throw new Error('No sync data');
+                const data = await res.json();
+                const val = data.value || data;
+                if (val) {
+                    document.getElementById('lastSync').textContent = new Date(val).toLocaleDateString('en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+                }
+            } catch (e) {
+                document.getElementById('lastSync').textContent = '--';
+            }
+        }
+
+        // ── Utilities ──
+        function escapeHtml(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        // ── Init ──
+        async function loadSettings() {
+            loadNotifPrefs();
+
+            // Load stored API key
+            currentApiKey = localStorage.getItem('prism_api_key') || null;
+            renderApiKey();
+
+            // Parallel loads
+            await Promise.allSettled([
+                loadWatchlist(),
+                loadLastSync()
+            ]);
+        }
+
+        loadSettings();
     </script>
+    <script src="/pwa/js/prism-nav.js"></script>
 </body>
 
 </html>

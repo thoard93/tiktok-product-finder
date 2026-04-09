@@ -1,1978 +1,1239 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>FlipTracker — eBay Sales Tracker</title>
-    <meta name="description" content="Track your eBay sales, cancellations, refunds, and returns in real-time.">
+    <title>FlipTracker by PRISM</title>
+    <meta name="description" content="eBay Sales Intelligence — track listings, sales, and profit in real-time.">
     <meta name="theme-color" content="#0a0a0f">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/price/manifest.json">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --bg-primary: #0a0a0f;
-            --bg-secondary: #111118;
-            --bg-card: #16161f;
-            --bg-card-hover: #1c1c28;
-            --border: #2a2a3a;
-            --text-primary: #f0f0f5;
-            --text-secondary: #8888a0;
-            --text-dim: #55556a;
-            --accent: #00ff88;
-            --accent-dim: rgba(0, 255, 136, 0.15);
-            --accent-glow: rgba(0, 255, 136, 0.3);
-            --danger: #ff4466;
-            --warning: #ffaa33;
-            --blue: #4488ff;
-            --green: #22cc66;
-            --radius: 16px;
-            --radius-sm: 10px;
-            --safe-top: env(safe-area-inset-top);
-            --safe-bottom: env(safe-area-inset-bottom);
+        body { display:flex; min-height:100vh; }
+
+        /* ── Main area ── */
+        .main { flex:1; display:flex; flex-direction:column; min-height:100vh; }
+
+        /* Top bar */
+        .top-bar { position:sticky; top:0; z-index:30; height:56px; background:rgba(10,10,15,0.85);
+            backdrop-filter:blur(16px); border-bottom:1px solid var(--border);
+            display:flex; align-items:center; padding:0 24px; gap:16px; }
+        .top-bar-title { font-family:var(--font-display); font-weight:700; font-size:1rem;
+            color:var(--text-primary); }
+        .top-bar-sub { font:var(--font-xs); color:var(--text-muted); }
+        .top-bar-right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+
+        /* Team selector */
+        .team-selector { display:flex; gap:4px; }
+        .team-pill { padding:6px 14px; border-radius:var(--radius-full); border:1px solid var(--border);
+            font:var(--font-xs); font-weight:600; color:var(--text-muted); cursor:pointer;
+            transition:all 0.15s; background:transparent; }
+        .team-pill.active { background:color-mix(in srgb, var(--accent) 12%, transparent);
+            border-color:color-mix(in srgb, var(--accent) 30%, transparent); color:var(--accent); }
+        .team-pill:hover:not(.active) { border-color:var(--text-muted); color:var(--text-secondary); }
+
+        /* Tab bar */
+        .tab-bar { display:flex; gap:0; border-bottom:1px solid var(--border);
+            padding:0 24px; background:var(--surface); }
+        .tab { padding:12px 20px; font:var(--font-sm); font-weight:600; color:var(--text-muted);
+            cursor:pointer; border-bottom:2px solid transparent; transition:all 0.15s;
+            white-space:nowrap; }
+        .tab:hover { color:var(--text-secondary); }
+        .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+        /* Content area */
+        .content { padding:24px; flex:1; overflow-y:auto; }
+        .tab-content { display:none; }
+        .tab-content.active { display:block; }
+
+        /* Summary bar */
+        .summary-bar { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+        .summary-item { display:flex; flex-direction:column; gap:2px; padding:16px 20px;
+            background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); flex:1; min-width:140px; }
+        .summary-label { font:var(--font-xs); font-weight:600; color:var(--text-muted);
+            text-transform:uppercase; letter-spacing:0.06em; }
+        .summary-value { font-family:var(--font-display); font-weight:700; font-size:1.5rem;
+            color:var(--text-primary); }
+        .summary-value.green { color:var(--green); }
+        .summary-value.accent { color:var(--accent); }
+
+        /* Listing card grid */
+        .listing-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
+        .listing-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+            padding:16px; transition:all 0.15s; position:relative; }
+        .listing-card:hover { border-color:color-mix(in srgb, var(--accent) 40%, transparent); }
+        .listing-card-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }
+        .listing-card-name { font:var(--font-sm); font-weight:600; color:var(--text-primary);
+            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; flex:1; }
+        .listing-card-price { font-family:var(--font-display); font-weight:700; font-size:1.25rem; color:var(--text-primary); }
+        .listing-card-meta { display:flex; gap:12px; flex-wrap:wrap; font:var(--font-xs); color:var(--text-muted); margin-bottom:12px; }
+        .listing-card-actions { display:flex; gap:8px; }
+        .listing-action { padding:6px 12px; border-radius:var(--radius-md); border:1px solid var(--border);
+            background:transparent; color:var(--text-secondary); font:var(--font-xs); font-weight:600;
+            cursor:pointer; transition:all 0.15s; }
+        .listing-action:hover { border-color:var(--accent); color:var(--text-primary); }
+        .listing-action.sold { border-color:color-mix(in srgb, var(--green) 30%, transparent); color:var(--green); }
+        .listing-action.sold:hover { background:color-mix(in srgb, var(--green) 8%, transparent); }
+        .listing-action.danger { color:var(--red); }
+        .listing-action.danger:hover { border-color:color-mix(in srgb, var(--red) 30%, transparent); }
+        .listing-detail-row { display:flex; gap:12px; flex-wrap:wrap; padding-top:12px; margin-top:12px;
+            border-top:1px solid var(--border); font:var(--font-xs); color:var(--text-muted); }
+        .listing-detail-row span { display:flex; align-items:center; gap:4px; }
+
+        /* Sold table */
+        .sold-table { width:100%; border-collapse:collapse; }
+        .sold-table th { text-align:left; font:var(--font-xs); font-weight:600; color:var(--text-muted);
+            text-transform:uppercase; letter-spacing:0.06em; padding:10px 12px; border-bottom:1px solid var(--border); }
+        .sold-table td { padding:12px; font:var(--font-sm); color:var(--text-secondary);
+            border-bottom:1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+        .sold-table tr:hover td { background:var(--surface); }
+        .sold-table .profit-pos { color:var(--green); font-weight:600; }
+        .sold-table .profit-neg { color:var(--red); font-weight:600; }
+
+        /* Cancel table */
+        .cancel-table { width:100%; border-collapse:collapse; }
+        .cancel-table th { text-align:left; font:var(--font-xs); font-weight:600; color:var(--text-muted);
+            text-transform:uppercase; letter-spacing:0.06em; padding:10px 12px; border-bottom:1px solid var(--border); }
+        .cancel-table td { padding:12px; font:var(--font-sm); color:var(--text-secondary);
+            border-bottom:1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+
+        /* Filter pills */
+        .filter-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; }
+        .filter-pill { padding:6px 14px; border-radius:var(--radius-full); border:1px solid var(--border);
+            font:var(--font-xs); font-weight:600; color:var(--text-muted); cursor:pointer;
+            transition:all 0.15s; background:transparent; }
+        .filter-pill.active { background:color-mix(in srgb, var(--accent) 12%, transparent);
+            border-color:color-mix(in srgb, var(--accent) 30%, transparent); color:var(--accent); }
+
+        /* Research view */
+        .upload-area { border:2px dashed var(--border); border-radius:var(--radius-xl); padding:40px 20px;
+            text-align:center; cursor:pointer; transition:all 0.3s; background:var(--surface); }
+        .upload-area:hover, .upload-area.dragover { border-color:var(--accent);
+            background:color-mix(in srgb, var(--accent) 5%, transparent); }
+        .upload-area.has-images { padding:16px; border-style:solid; }
+        .upload-icon { font-size:48px; margin-bottom:12px; opacity:0.6; }
+        .upload-title { font-family:var(--font-display); font-weight:700; font-size:1.1rem;
+            color:var(--text-primary); margin-bottom:4px; }
+        .upload-sub { font:var(--font-sm); color:var(--text-muted); }
+        .preview-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:8px; margin-top:12px; }
+        .preview-img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:var(--radius-md);
+            border:2px solid var(--border); }
+        .preview-wrapper { position:relative; display:inline-block; }
+        .preview-remove { position:absolute; top:-6px; right:-6px; background:var(--red); color:#fff;
+            border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;
+            display:flex; align-items:center; justify-content:center; }
+
+        .agg-selector { display:flex; gap:6px; margin-top:16px; }
+        .agg-pill { flex:1; padding:10px 8px; text-align:center; background:var(--surface);
+            border:1px solid var(--border); border-radius:var(--radius-md); color:var(--text-muted);
+            font:var(--font-xs); font-weight:600; cursor:pointer; transition:all 0.15s; }
+        .agg-pill.active { border-color:var(--accent); color:var(--accent);
+            background:color-mix(in srgb, var(--accent) 8%, transparent); }
+
+        .research-btn { width:100%; padding:14px; margin-top:16px; background:var(--accent); color:#fff;
+            border:none; border-radius:var(--radius-lg); font:var(--font-base); font-weight:700;
+            cursor:pointer; transition:all 0.2s; }
+        .research-btn:hover { filter:brightness(1.1); transform:translateY(-1px); }
+        .research-btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+        .research-btn.loading { background:var(--surface); color:var(--accent); border:2px solid var(--accent); }
+
+        .result-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+            padding:20px; margin-bottom:16px; animation:slideUp 0.4s ease; }
+        @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+        .product-badge { background:color-mix(in srgb, var(--accent) 12%, transparent); color:var(--accent);
+            padding:3px 10px; border-radius:var(--radius-full); font:var(--font-xs); font-weight:600; }
+        .recommendation { background:color-mix(in srgb, var(--accent) 6%, transparent);
+            border:1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+            border-radius:var(--radius-lg); padding:16px; margin-top:16px; text-align:center; }
+        .rec-label { font:var(--font-xs); font-weight:600; color:var(--text-muted); text-transform:uppercase;
+            letter-spacing:0.08em; margin-bottom:6px; }
+        .rec-price { font-family:var(--font-display); font-size:2.25rem; font-weight:800;
+            color:var(--accent); letter-spacing:-1px; }
+        .rec-discount { font:var(--font-sm); color:var(--text-muted); margin-top:4px; }
+        .rec-profit { display:inline-flex; align-items:center; gap:6px; margin-top:10px;
+            padding:6px 14px; background:color-mix(in srgb, var(--green) 10%, transparent);
+            border-radius:var(--radius-full); font:var(--font-sm); font-weight:600; color:var(--green); }
+
+        .price-table { width:100%; border-collapse:collapse; margin:16px 0; }
+        .price-table th { text-align:left; font:var(--font-xs); font-weight:600; color:var(--text-muted);
+            text-transform:uppercase; letter-spacing:0.05em; padding:8px 0; border-bottom:1px solid var(--border); }
+        .price-table td { padding:10px 0; font:var(--font-sm); border-bottom:1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+        .price-table td:last-child { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+        .estimated { opacity:0.6; font-style:italic; }
+        .estimated::after { content:' ~'; font-size:10px; }
+
+        .notes-box { background:var(--surface-2); border-left:3px solid var(--amber);
+            border-radius:0 var(--radius-md) var(--radius-md) 0; padding:12px 16px; margin-top:16px;
+            font:var(--font-sm); color:var(--text-muted); line-height:1.5; }
+
+        .copy-row { display:flex; gap:8px; margin-top:16px; }
+        .copy-btn { flex:1; padding:10px; background:var(--surface-2); border:1px solid var(--border);
+            border-radius:var(--radius-md); color:var(--text-primary); font:var(--font-sm);
+            font-weight:600; cursor:pointer; transition:all 0.15s; }
+        .copy-btn:hover { border-color:var(--accent); }
+        .copy-btn.copied { background:color-mix(in srgb, var(--accent) 10%, transparent);
+            border-color:var(--accent); color:var(--accent); }
+
+        .bundle-card { background:color-mix(in srgb, var(--cyan) 5%, transparent);
+            border:1px solid color-mix(in srgb, var(--cyan) 20%, transparent);
+            border-radius:var(--radius-lg); padding:20px; margin-top:16px; text-align:center; }
+        .bundle-label { font:var(--font-xs); font-weight:600; color:var(--cyan); text-transform:uppercase;
+            letter-spacing:0.08em; }
+        .bundle-price { font-family:var(--font-display); font-size:2rem; font-weight:800;
+            color:var(--cyan); margin:8px 0; }
+
+        /* History cards */
+        .history-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+            padding:14px 16px; margin-bottom:10px; display:flex; justify-content:space-between;
+            align-items:center; cursor:pointer; transition:all 0.15s; }
+        .history-card:hover { border-color:var(--accent); background:var(--surface-2); }
+        .history-name { font:var(--font-sm); font-weight:600; color:var(--text-primary); }
+        .history-meta { font:var(--font-xs); color:var(--text-muted); margin-top:4px; }
+        .history-price { font-family:var(--font-display); font-weight:700; font-size:1.1rem; color:var(--accent); }
+        .freshness-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-full);
+            font-size:10px; font-weight:600; margin-left:6px; }
+        .freshness-fresh { background:color-mix(in srgb, var(--green) 15%, transparent); color:var(--green); }
+        .freshness-stale { background:color-mix(in srgb, var(--amber) 15%, transparent); color:var(--amber); }
+        .freshness-old { background:color-mix(in srgb, var(--red) 15%, transparent); color:var(--red); }
+
+        /* Dashboard charts */
+        .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-xl);
+            padding:24px; }
+        .chart-card-title { font-family:var(--font-display); font-weight:700; font-size:1rem;
+            color:var(--text-primary); margin-bottom:16px; }
+        .chart-wrap { position:relative; height:260px; }
+        .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+
+        /* Floating add button */
+        .fab { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:50%;
+            background:var(--accent); color:#fff; border:none; font-size:24px; cursor:pointer;
+            box-shadow:0 4px 24px color-mix(in srgb, var(--accent) 40%, transparent);
+            transition:all 0.2s; z-index:50; display:flex; align-items:center; justify-content:center; }
+        .fab:hover { transform:translateY(-2px) scale(1.05); }
+
+        /* Add listing modal */
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100;
+            display:none; align-items:center; justify-content:center; padding:24px; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-xl);
+            padding:24px; width:100%; max-width:440px; }
+        .modal-title { font-family:var(--font-display); font-weight:700; font-size:1.1rem;
+            color:var(--text-primary); margin-bottom:16px; }
+        .modal input { width:100%; padding:10px 14px; border-radius:var(--radius-md);
+            border:1px solid var(--border); background:var(--bg); color:var(--text-primary);
+            font:var(--font-sm); margin-bottom:10px; outline:none; box-sizing:border-box; }
+        .modal input:focus { border-color:var(--accent); }
+        .modal-actions { display:flex; gap:10px; margin-top:16px; }
+
+        /* Search input */
+        .search-input { width:100%; padding:10px 16px; background:var(--surface); border:1px solid var(--border);
+            border-radius:var(--radius-md); color:var(--text-primary); font:var(--font-sm); margin-bottom:14px;
+            outline:none; transition:border-color 0.15s; box-sizing:border-box; }
+        .search-input:focus { border-color:var(--accent); }
+        .search-input::placeholder { color:var(--text-muted); }
+
+        /* Empty state */
+        .empty-state { text-align:center; padding:60px 20px; }
+        .empty-icon { font-size:48px; margin-bottom:16px; opacity:0.4; }
+        .empty-text { font:var(--font-sm); color:var(--text-muted); }
+
+        /* Spinner */
+        .spinner { display:inline-block; width:18px; height:18px; border:3px solid color-mix(in srgb, var(--accent) 20%, transparent);
+            border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite;
+            margin-right:8px; vertical-align:middle; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+
+        /* Mobile: bottom nav */
+        .mobile-nav { display:none; }
+        @media (max-width:768px) {
+            .tab-bar { overflow-x:auto; padding:0 16px; }
+            .tab { padding:10px 14px; font-size:0.8rem; }
+            .content { padding:16px; }
+            .listing-grid { grid-template-columns:1fr; }
+            .kpi-grid { grid-template-columns:repeat(2,1fr); }
+            .summary-bar { flex-direction:column; }
+            .fab { bottom:16px; right:16px; }
+            .sold-table { font-size:0.8rem; }
+            .sold-table th, .sold-table td { padding:8px 6px; }
+            .mobile-nav { display:flex; position:fixed; bottom:0; left:0; right:0;
+                background:var(--surface); border-top:1px solid var(--border);
+                padding:8px 0 calc(8px + env(safe-area-inset-bottom)); z-index:35;
+                justify-content:space-around; }
+            .mobile-nav-btn { display:flex; flex-direction:column; align-items:center; gap:2px;
+                color:var(--text-muted); font-size:10px; font-weight:600; background:none;
+                border:none; cursor:pointer; padding:4px 12px; }
+            .mobile-nav-btn.active { color:var(--accent); }
+            .mobile-nav-btn i { font-size:18px; }
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            min-height: 100dvh;
-            overflow-x: hidden;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        /* ─── Background Gradient ─── */
-        body::before {
-            content: '';
-            position: fixed;
-            top: -30%;
-            left: -20%;
-            width: 140%;
-            height: 60%;
-            background: radial-gradient(ellipse, rgba(0, 255, 136, 0.04) 0%, transparent 60%);
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        /* ─── Header ─── */
-        .header {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            padding: calc(var(--safe-top) + 12px) 20px 12px;
-            background: rgba(10, 10, 15, 0.85);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--border);
-        }
-
-        .header-inner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .logo-icon {
-            width: 30px;
-            height: 30px;
-            background: linear-gradient(135deg, var(--accent) 0%, #00cc66 100%);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            box-shadow: 0 4px 20px var(--accent-glow);
-        }
-
-        .logo-text {
-            font-weight: 800;
-            font-size: 17px;
-            letter-spacing: -0.5px;
-        }
-
-        .logo-text span {
-            color: var(--accent);
-        }
-
-        .header-nav {
-            display: flex;
-            gap: 4px;
-        }
-
-        .nav-btn {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 16px;
-            padding: 6px 8px;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .nav-btn.active {
-            color: var(--accent);
-            background: var(--accent-dim);
-        }
-
-        .nav-btn:hover {
-            color: var(--text-primary);
-        }
-
-        /* ─── Main Content ─── */
-        .main {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px 16px calc(var(--safe-bottom) + 20px);
-            position: relative;
-            z-index: 1;
-        }
-
-        .view {
-            display: none;
-        }
-
-        .view.active {
-            display: block;
-        }
-
-        /* ─── Upload Area ─── */
-        .upload-area {
-            border: 2px dashed var(--border);
-            border-radius: var(--radius);
-            padding: 40px 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: var(--bg-card);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .upload-area:hover,
-        .upload-area.dragover {
-            border-color: var(--accent);
-            background: var(--accent-dim);
-        }
-
-        .upload-area.has-images {
-            padding: 16px;
-            border-style: solid;
-            border-color: var(--border);
-        }
-
-        .upload-icon {
-            font-size: 48px;
-            margin-bottom: 12px;
-            opacity: 0.8;
-        }
-
-        .upload-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 6px;
-        }
-
-        .upload-sub {
-            color: var(--text-secondary);
-            font-size: 14px;
-        }
-
-        .preview-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .preview-img {
-            width: 100%;
-            aspect-ratio: 1;
-            object-fit: cover;
-            border-radius: var(--radius-sm);
-            border: 2px solid var(--border);
-        }
-
-        .preview-remove {
-            position: absolute;
-            top: -6px;
-            right: -6px;
-            background: var(--danger);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 22px;
-            height: 22px;
-            font-size: 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .preview-wrapper {
-            position: relative;
-            display: inline-block;
-        }
-
-        /* ─── Research Button ─── */
-        .research-btn {
-            width: 100%;
-            padding: 16px;
-            margin-top: 16px;
-            background: linear-gradient(135deg, var(--accent) 0%, #00cc66 100%);
-            color: #000;
-            border: none;
-            border-radius: var(--radius);
-            font-size: 17px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 24px var(--accent-glow);
-            letter-spacing: 0.3px;
-        }
-
-        .research-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 30px var(--accent-glow);
-        }
-
-        .research-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .research-btn.loading {
-            background: var(--bg-card);
-            color: var(--accent);
-            border: 2px solid var(--accent);
-        }
-
-        /* ─── Loading Spinner ─── */
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid var(--accent-dim);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 8px;
-            vertical-align: middle;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* ─── Results ─── */
-        .results {
-            margin-top: 24px;
-        }
-
-        .result-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
-            margin-bottom: 16px;
-            animation: slideUp 0.4s ease;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .product-header {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .product-badge {
-            background: var(--accent-dim);
-            color: var(--accent);
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        .product-name {
-            font-size: 17px;
-            font-weight: 700;
-            line-height: 1.3;
-        }
-
-        .product-details {
-            color: var(--text-secondary);
-            font-size: 13px;
-            margin-top: 4px;
-        }
-
-        /* ─── Price Table ─── */
-        .price-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 16px 0;
-        }
-
-        .price-table th {
-            text-align: left;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .price-table td {
-            padding: 10px 0;
-            font-size: 14px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-        }
-
-        .price-table td:last-child {
-            text-align: right;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .source-icon {
-            font-size: 16px;
-            margin-right: 8px;
-            vertical-align: middle;
-        }
-
-        .estimated {
-            opacity: 0.6;
-            font-style: italic;
-        }
-
-        .estimated::after {
-            content: ' ~';
-            font-size: 10px;
-        }
-
-        /* ─── Recommendation Box ─── */
-        .recommendation {
-            background: linear-gradient(135deg, rgba(0, 255, 136, 0.08) 0%, rgba(0, 204, 102, 0.04) 100%);
-            border: 1px solid rgba(0, 255, 136, 0.2);
-            border-radius: var(--radius-sm);
-            padding: 16px;
-            margin-top: 16px;
-            text-align: center;
-        }
-
-        .rec-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 6px;
-        }
-
-        .rec-price {
-            font-size: 36px;
-            font-weight: 800;
-            color: var(--accent);
-            text-shadow: 0 0 30px var(--accent-glow);
-            letter-spacing: -1px;
-        }
-
-        .rec-discount {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-top: 4px;
-        }
-
-        .rec-profit {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            margin-top: 10px;
-            padding: 6px 14px;
-            background: rgba(0, 255, 136, 0.1);
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--accent);
-        }
-
-        /* ─── Copy Buttons ─── */
-        .copy-row {
-            display: flex;
-            gap: 8px;
-            margin-top: 16px;
-        }
-
-        .copy-btn {
-            flex: 1;
-            padding: 12px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .copy-btn:hover {
-            background: var(--bg-card-hover);
-            border-color: var(--accent);
-        }
-
-        .copy-btn.copied {
-            background: var(--accent-dim);
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-
-        /* ─── Bundle Card ─── */
-        .bundle-card {
-            background: linear-gradient(135deg, rgba(68, 136, 255, 0.08) 0%, rgba(68, 136, 255, 0.03) 100%);
-            border: 1px solid rgba(68, 136, 255, 0.2);
-            border-radius: var(--radius);
-            padding: 20px;
-            margin-top: 16px;
-            text-align: center;
-        }
-
-        .bundle-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--blue);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .bundle-price {
-            font-size: 32px;
-            font-weight: 800;
-            color: var(--blue);
-            margin: 8px 0;
-        }
-
-        /* ─── History ─── */
-        .history-item {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px 16px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .history-item:hover {
-            background: var(--bg-card-hover);
-            border-color: var(--accent);
-        }
-
-        .history-name {
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .history-meta {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 4px;
-        }
-
-        .freshness-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 600;
-            margin-left: 6px;
-        }
-
-        .freshness-fresh {
-            background: rgba(0, 255, 136, 0.15);
-            color: var(--accent);
-        }
-
-        .freshness-stale {
-            background: rgba(255, 170, 51, 0.15);
-            color: var(--warning);
-        }
-
-        .freshness-old {
-            background: rgba(255, 68, 102, 0.15);
-            color: var(--danger);
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 12px 16px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 14px;
-            font-family: 'Inter', sans-serif;
-            margin-bottom: 14px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .search-input:focus {
-            border-color: var(--accent);
-        }
-
-        .search-input::placeholder {
-            color: var(--text-dim);
-        }
-
-        .history-price {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--accent);
-        }
-
-        /* ─── Settings ─── */
-        .settings-group {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
-            margin-bottom: 16px;
-        }
-
-        .settings-label {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 12px;
-        }
-
-        .radio-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .radio-option {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 16px;
-            background: var(--bg-secondary);
-            border: 2px solid var(--border);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .radio-option:hover {
-            border-color: var(--text-dim);
-        }
-
-        .radio-option.selected {
-            border-color: var(--accent);
-            background: var(--accent-dim);
-        }
-
-        .radio-dot {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 2px solid var(--text-dim);
-            position: relative;
-            flex-shrink: 0;
-        }
-
-        .radio-option.selected .radio-dot {
-            border-color: var(--accent);
-        }
-
-        .radio-option.selected .radio-dot::after {
-            content: '';
-            position: absolute;
-            top: 3px;
-            left: 3px;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--accent);
-        }
-
-        .radio-label {
-            font-weight: 600;
-            font-size: 15px;
-        }
-
-        .radio-desc {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 2px;
-        }
-
-        /* ─── Section Title ─── */
-        .section-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 14px;
-        }
-
-        /* ─── Notes ─── */
-        .notes-box {
-            background: var(--bg-secondary);
-            border-left: 3px solid var(--warning);
-            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-            padding: 12px 16px;
-            margin-top: 16px;
-            font-size: 13px;
-            color: var(--text-secondary);
-            line-height: 1.5;
-        }
-
-        /* ─── Empty State ─── */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-dim);
-        }
-
-        .empty-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .empty-text {
-            font-size: 15px;
-        }
-
-        /* ─── Aggressiveness Pill (inline on research view) ─── */
-        .agg-selector {
-            display: flex;
-            gap: 6px;
-            margin-top: 16px;
-        }
-
-        .agg-pill {
-            flex: 1;
-            padding: 10px 8px;
-            text-align: center;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            color: var(--text-secondary);
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .agg-pill.active {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: var(--accent-dim);
-        }
     </style>
 </head>
-
 <body>
 
-    <!-- Header -->
-    <div class="header">
-        <div class="header-inner">
-            <div class="logo">
-                <div class="logo-icon">📊</div>
-                <div class="logo-text">Flip<span>Tracker</span></div>
+<div id="prism-nav"></div>
+
+<!-- Main -->
+<div class="main">
+
+    <!-- Top bar -->
+    <div class="top-bar">
+        <button class="prism-nav-hamburger" onclick="prismNav.toggleSidebar()"><i class="fas fa-bars"></i></button>
+        <div>
+            <div class="top-bar-title">FlipTracker</div>
+            <div class="top-bar-sub">eBay Sales Intelligence</div>
+        </div>
+        <div class="top-bar-right">
+            <div class="team-selector">
+                <button class="team-pill active" id="team-thoard" onclick="selectTeam('thoard')">Thoard</button>
+                <button class="team-pill" id="team-reol" onclick="selectTeam('reol')">Reol</button>
             </div>
-            <div class="header-nav">
-                <button class="nav-btn active" onclick="showView('listings')" id="nav-listings">📦</button>
-                <button class="nav-btn" onclick="showView('dashboard')" id="nav-dashboard">📊</button>
-                <button class="nav-btn" onclick="showView('settings')" id="nav-settings">⚙️</button>
-            </div>
+            <button class="btn btn-ghost btn-sm" id="scanGmailBtn" onclick="scanGmail()">
+                <i class="fas fa-envelope"></i> Scan Gmail
+            </button>
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="main">
+    <!-- Tab bar -->
+    <div class="tab-bar">
+        <div class="tab active" data-tab="listings" onclick="switchTab('listings')">Active Listings</div>
+        <div class="tab" data-tab="sold" onclick="switchTab('sold')">Sold & Settled</div>
+        <div class="tab" data-tab="cancelled" onclick="switchTab('cancelled')">Cancelled / Returns</div>
+        <div class="tab" data-tab="research" onclick="switchTab('research')">Price Research</div>
+        <div class="tab" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</div>
+    </div>
 
-        <!-- Team Selector -->
-        <div style="display:flex; justify-content:center; gap:8px; padding:8px 16px 0;">
-            <div class="agg-pill active" id="team-thoard" onclick="selectTeam('thoard', this)" style="font-size:13px;">
-                👤 Thoard</div>
-            <div class="agg-pill" id="team-reol" onclick="selectTeam('reol', this)" style="font-size:13px;">👤 Reol
+    <!-- Content -->
+    <div class="content">
+
+        <!-- ══ TAB 1: Active Listings ══ -->
+        <div class="tab-content active" id="tc-listings">
+            <div class="summary-bar" id="listingSummary">
+                <div class="summary-item"><span class="summary-label">Active Listings</span><span class="summary-value accent" id="sumActive">0</span></div>
+                <div class="summary-item"><span class="summary-label">Total Value</span><span class="summary-value" id="sumValue">$0</span></div>
+                <div class="summary-item"><span class="summary-label">Projected Profit</span><span class="summary-value green" id="sumProfit">$0</span></div>
+            </div>
+            <div class="listing-grid" id="activeListingsGrid">
+                <div class="empty-state"><div class="empty-icon"><i class="fas fa-box-open"></i></div><div class="empty-text">No active listings</div></div>
             </div>
         </div>
 
-        <!-- ═══ RESEARCH VIEW (hidden) ═══ -->
-        <div class="view" id="view-research" style="display:none;">
-            <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
-                <div id="uploadPrompt">
-                    <div class="upload-icon">📸</div>
-                    <div class="upload-title">Upload Product Images</div>
-                    <div class="upload-sub">Tap to select or drag & drop • Singles or bundles</div>
-                </div>
-                <div class="preview-grid" id="previewGrid"></div>
+        <!-- ══ TAB 2: Sold & Settled ══ -->
+        <div class="tab-content" id="tc-sold">
+            <div class="filter-pills" id="soldFilters">
+                <button class="filter-pill active" onclick="filterSold('week', this)">This Week</button>
+                <button class="filter-pill" onclick="filterSold('month', this)">This Month</button>
+                <button class="filter-pill" onclick="filterSold('all', this)">All Time</button>
             </div>
-            <input type="file" id="fileInput" accept="image/*" multiple hidden>
-
-            <!-- Aggressiveness Quick Select -->
-            <div class="agg-selector">
-                <div class="agg-pill active" data-level="conservative" onclick="setAgg(this)">🛡️ Conservative</div>
-                <div class="agg-pill" data-level="balanced" onclick="setAgg(this)">⚖️ Balanced</div>
-                <div class="agg-pill" data-level="aggressive" onclick="setAgg(this)">⚡ Aggressive</div>
+            <div class="summary-bar" id="soldSummary">
+                <div class="summary-item"><span class="summary-label">Total Revenue</span><span class="summary-value" id="soldRevenue">$0</span></div>
+                <div class="summary-item"><span class="summary-label">Total Profit</span><span class="summary-value green" id="soldProfit">$0</span></div>
+                <div class="summary-item"><span class="summary-label">Avg Margin</span><span class="summary-value" id="soldMargin">0%</span></div>
+                <div class="summary-item"><span class="summary-label">eBay Fees Paid</span><span class="summary-value" style="color:var(--red);" id="soldFees">$0</span></div>
             </div>
-
-            <button class="research-btn" id="researchBtn" onclick="runResearch()" disabled>
-                🔍 Research Pricing
-            </button>
-
-            <div class="results" id="results"></div>
-        </div>
-
-        <!-- ═══ SHIPPING CALCULATOR VIEW ═══ -->
-        <div class="view" id="view-shipping">
-            <div class="section-title">📐 Shipping Calculator</div>
-            <div class="upload-area" id="shipUploadArea" onclick="document.getElementById('shipFileInput').click()"
-                style="margin-bottom:12px;">
-                <div id="shipUploadPrompt">
-                    <div class="upload-icon">📦</div>
-                    <div class="upload-title">Upload Product Photo</div>
-                    <div class="upload-sub">Get AI-estimated weight & dimensions for eBay shipping labels</div>
-                </div>
-                <div id="shipPreview" style="display:none; text-align:center;">
-                    <img id="shipPreviewImg"
-                        style="max-width:200px; max-height:200px; border-radius:12px; border:2px solid var(--border);">
-                </div>
-            </div>
-            <input type="file" id="shipFileInput" accept="image/*" hidden>
-            <button class="research-btn" id="shipEstimateBtn" onclick="runShippingEstimate()" disabled
-                style="margin-bottom:16px;">
-                📐 Estimate Shipping
-            </button>
-            <div id="shipResults"></div>
-        </div>
-
-        <!-- ═══ HISTORY VIEW ═══ -->
-        <div class="view" id="view-history">
-            <div class="section-title">Recent Research</div>
-            <input type="text" class="search-input" id="historySearch" placeholder="🔍 Search products..."
-                oninput="filterHistory()">
-            <div id="historyList">
-                <div class="empty-state">
-                    <div class="empty-icon">📋</div>
-                    <div class="empty-text">No research history yet.<br>Start by uploading product images.</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══ SETTINGS VIEW ═══ -->
-        <!-- ═══ LISTINGS VIEW ═══ -->
-        <div class="view active" id="view-listings">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <div class="section-title" style="margin:0;">📦 eBay Listings</div>
-                <div style="display:flex; gap:6px;">
-                    <button class="copy-btn" onclick="scanGmail()" id="scanGmailBtn" style="font-size:12px;">📧 Scan
-                        Gmail</button>
-                    <button class="copy-btn" onclick="showAddListing()" style="font-size:12px;">+ Add</button>
-                </div>
-            </div>
-
-            <!-- Add Listing Form (hidden by default) -->
-            <div id="addListingForm"
-                style="display:none; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:12px;">
-                <input id="newListingName" placeholder="Product name"
-                    style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text-primary); margin-bottom:8px; box-sizing:border-box;">
-                <div style="display:flex; gap:8px; margin-bottom:8px;">
-                    <input id="newListingPrice" type="number" step="0.01" placeholder="List price"
-                        style="flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text-primary);">
-                    <input id="newListingShipping" type="number" step="0.01" placeholder="Ship cost"
-                        style="flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text-primary);">
-                </div>
-                <input id="newListingNotes" placeholder="Notes (optional)"
-                    style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text-primary); margin-bottom:8px; box-sizing:border-box;">
-                <div style="display:flex; gap:8px;">
-                    <button class="research-btn" style="flex:1; padding:10px;" onclick="addListing()">✅ Add
-                        Listing</button>
-                    <button class="copy-btn" style="flex:1; padding:10px;"
-                        onclick="document.getElementById('addListingForm').style.display='none'">Cancel</button>
-                </div>
-            </div>
-
-            <!-- Active Listings -->
-            <div class="section-title" style="font-size:13px; color:var(--accent);">🟢 Active</div>
-            <div id="activeListings">
-                <div class="empty-state">
-                    <div class="empty-icon">📦</div>
-                    <div class="empty-text">No active listings</div>
-                </div>
-            </div>
-
-            <!-- Sold Items -->
-            <div class="section-title" style="font-size:13px; color:var(--green); margin-top:16px;">✅ Sold</div>
-            <div id="soldListings">
-                <div class="empty-state">
-                    <div class="empty-icon">💰</div>
-                    <div class="empty-text">No sold items yet</div>
-                </div>
-            </div>
-
-            <!-- Cancelled / Returned / Refunded -->
-            <div class="section-title" style="font-size:13px; color:#ff6b6b; margin-top:16px;">🚫 Cancelled / Returned /
-                Refunded</div>
-            <div id="cancelledListings">
-                <div class="empty-state">
-                    <div class="empty-icon">✨</div>
-                    <div class="empty-text">No cancelled or returned items</div>
-                </div>
-            </div>
-
-            <!-- Removed by eBay -->
-            <div class="section-title" style="font-size:13px; color:#888; margin-top:16px;">🔴 Removed by eBay</div>
-            <div id="removedListings">
-                <div class="empty-state">
-                    <div class="empty-icon">🗑️</div>
-                    <div class="empty-text">No removed listings</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══ DASHBOARD VIEW ═══ -->
-        <div class="view" id="view-dashboard">
-            <div class="section-title">📊 Dashboard</div>
-            <div id="dashboardStats" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
-                <div class="result-card" style="text-align:center; padding:16px;">
-                    <div style="color:var(--text-dim); font-size:12px;">Items Sold</div>
-                    <div id="stat-sold" style="font-size:28px; font-weight:700; color:var(--text-primary);">0</div>
-                </div>
-                <div class="result-card" style="text-align:center; padding:16px;">
-                    <div style="color:var(--text-dim); font-size:12px;">Active</div>
-                    <div id="stat-active" style="font-size:28px; font-weight:700; color:var(--accent);">0</div>
-                </div>
-                <div class="result-card" style="text-align:center; padding:16px;">
-                    <div style="color:var(--text-dim); font-size:12px;">Total Revenue</div>
-                    <div id="stat-revenue" style="font-size:24px; font-weight:700; color:var(--text-primary);">$0</div>
-                </div>
-                <div class="result-card" style="text-align:center; padding:16px;">
-                    <div style="color:var(--text-dim); font-size:12px;">Net Profit</div>
-                    <div id="stat-profit" style="font-size:24px; font-weight:700; color:var(--green);">$0</div>
-                </div>
-                <div class="result-card" style="text-align:center; padding:16px;">
-                    <div style="color:var(--text-dim); font-size:12px;">Avg Profit/Item</div>
-                    <div id="stat-avg" style="font-size:24px; font-weight:700; color:var(--text-primary);">$0</div>
-                </div>
-                <div class="result-card" style="text-align:center; padding:16px;">
-                    <div style="color:var(--text-dim); font-size:12px;">Researches</div>
-                    <div id="stat-research" style="font-size:28px; font-weight:700; color:var(--blue);">0</div>
-                </div>
-            </div>
-
-            <div class="settings-label" style="margin-top:16px;">📊 Profit by Timeframe</div>
-            <div id="timeframeStats" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
-
-            <div style="display:flex; gap:8px; margin-top:16px;">
-                <button class="copy-btn" onclick="exportCSV()" style="flex:1;">📥 Export CSV</button>
-                <button class="copy-btn" onclick="loadDashboard()" style="flex:1;">🔄 Refresh</button>
-            </div>
-
-            <div class="settings-group" style="margin-top:16px;">
-                <div class="settings-label">📧 Gmail Integration</div>
-                <div style="color:var(--text-dim); font-size:13px; margin-top:4px;" id="gmailStatus">Checking...</div>
-            </div>
-        </div>
-
-        <!-- ═══ SETTINGS VIEW ═══ -->
-        <div class="view" id="view-settings">
-            <div class="section-title">Pricing Strategy</div>
-            <div class="settings-group">
-                <div class="settings-label">Default Aggressiveness</div>
-                <div class="radio-group" id="settingsRadios">
-                    <div class="radio-option selected" onclick="selectSetting(this, 'conservative')">
-                        <div class="radio-dot"></div>
-                        <div>
-                            <div class="radio-label">🛡️ Conservative</div>
-                            <div class="radio-desc">25–35% off • Protect margins</div>
-                        </div>
-                    </div>
-                    <div class="radio-option" onclick="selectSetting(this, 'balanced')">
-                        <div class="radio-dot"></div>
-                        <div>
-                            <div class="radio-label">⚖️ Balanced</div>
-                            <div class="radio-desc">32–40% off • Good balance of speed & profit</div>
-                        </div>
-                    </div>
-                    <div class="radio-option" onclick="selectSetting(this, 'aggressive')">
-                        <div class="radio-dot"></div>
-                        <div>
-                            <div class="radio-label">⚡ Aggressive</div>
-                            <div class="radio-desc">40–48% off • Move inventory fast</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="settings-group">
-                <div class="settings-label">Discount Ladder</div>
-                <table class="price-table">
-                    <tr>
-                        <th>Market Price</th>
-                        <th style="text-align:right">Discount Range</th>
-                    </tr>
-                    <tr>
-                        <td>Under $15</td>
-                        <td style="text-align:right">25 – 40% off</td>
-                    </tr>
-                    <tr>
-                        <td>$15 – $30</td>
-                        <td style="text-align:right">30 – 42% off</td>
-                    </tr>
-                    <tr>
-                        <td>$30 – $60</td>
-                        <td style="text-align:right">28 – 40% off</td>
-                    </tr>
-                    <tr>
-                        <td>$60 – $100</td>
-                        <td style="text-align:right">32 – 44% off</td>
-                    </tr>
-                    <tr>
-                        <td>Over $100</td>
-                        <td style="text-align:right">35 – 48% off</td>
-                    </tr>
+            <div style="overflow-x:auto;">
+                <table class="sold-table" id="soldTable">
+                    <thead><tr><th>Product</th><th>Sold Price</th><th>Shipping</th><th>Fees</th><th>Profit</th><th>Sold Date</th></tr></thead>
+                    <tbody id="soldBody"></tbody>
                 </table>
             </div>
+            <button class="btn btn-ghost" style="margin-top:16px;" onclick="exportCSV()"><i class="fas fa-download"></i> Export CSV</button>
+        </div>
 
-            <div class="settings-group" style="text-align:center; color: var(--text-dim); font-size: 12px;">
-                PriceBlade v2.0 • Powered by Grok 4.1<br>
-                Built for zero-cost TikTok sample reselling
+        <!-- ══ TAB 3: Cancelled / Returned / Refunded ══ -->
+        <div class="tab-content" id="tc-cancelled">
+            <div class="summary-bar" id="cancelSummary">
+                <div class="summary-item"><span class="summary-label">Total Lost</span><span class="summary-value" style="color:var(--red);" id="cancelLost">$0</span></div>
+                <div class="summary-item"><span class="summary-label">Avg Loss / Return</span><span class="summary-value" style="color:var(--red);" id="cancelAvg">$0</span></div>
+                <div class="summary-item"><span class="summary-label">Total Items</span><span class="summary-value" id="cancelCount">0</span></div>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="cancel-table" id="cancelTable">
+                    <thead><tr><th>Product</th><th>Status</th><th>Amount</th><th>Reason</th><th>Date</th></tr></thead>
+                    <tbody id="cancelBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══ TAB 4: Price Research ══ -->
+        <div class="tab-content" id="tc-research">
+            <div style="max-width:640px;">
+                <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                    <div id="uploadPrompt">
+                        <div class="upload-icon"><i class="fas fa-camera"></i></div>
+                        <div class="upload-title">Upload Product Images</div>
+                        <div class="upload-sub">Tap to select or drag & drop</div>
+                    </div>
+                    <div class="preview-grid" id="previewGrid"></div>
+                </div>
+                <input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+                <div class="agg-selector">
+                    <div class="agg-pill active" data-level="conservative" onclick="setAgg(this)">Conservative</div>
+                    <div class="agg-pill" data-level="balanced" onclick="setAgg(this)">Balanced</div>
+                    <div class="agg-pill" data-level="aggressive" onclick="setAgg(this)">Aggressive</div>
+                </div>
+
+                <button class="research-btn" id="researchBtn" onclick="runResearch()" disabled>
+                    <i class="fas fa-search-dollar"></i> Research Pricing
+                </button>
+
+                <div id="results" style="margin-top:24px;"></div>
+            </div>
+
+            <!-- Research History -->
+            <div style="max-width:640px; margin-top:32px;">
+                <h3 style="font-family:var(--font-display); font-weight:700; font-size:1rem; color:var(--text-primary); margin-bottom:12px;">Research History</h3>
+                <input type="text" class="search-input" id="historySearch" placeholder="Search products..." oninput="filterHistory()">
+                <div id="historyList">
+                    <div class="empty-state"><div class="empty-icon"><i class="fas fa-clipboard-list"></i></div><div class="empty-text">No research history yet</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══ TAB 5: Dashboard ══ -->
+        <div class="tab-content" id="tc-dashboard">
+            <div class="kpi-grid" id="dashKpis">
+                <div class="stat-card" data-color="green"><span class="stat-label">Total Profit (All-Time)</span><span class="stat-value" id="dkProfit">$0</span></div>
+                <div class="stat-card" data-color="cyan"><span class="stat-label">This Month Profit</span><span class="stat-value" id="dkMonthProfit">$0</span></div>
+                <div class="stat-card" data-color="violet"><span class="stat-label">Best Selling</span><span class="stat-value" id="dkBestSeller" style="font-size:0.85rem;">--</span></div>
+                <div class="stat-card" data-color="amber"><span class="stat-label">Best Margin</span><span class="stat-value" id="dkBestMargin" style="font-size:0.85rem;">--</span></div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:2fr 1fr; gap:20px; margin-bottom:24px;">
+                <div class="chart-card">
+                    <div class="chart-card-title">Daily Revenue (Last 30 Days)</div>
+                    <div class="chart-wrap"><canvas id="revenueChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-card-title">Profit Breakdown</div>
+                    <div class="chart-wrap"><canvas id="profitPieChart"></canvas></div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px;">
+                <div class="stat-card"><span class="stat-label">Items Sold</span><span class="stat-value" id="dkSold">0</span></div>
+                <div class="stat-card"><span class="stat-label">Active</span><span class="stat-value" id="dkActive">0</span></div>
+                <div class="stat-card"><span class="stat-label">Total Revenue</span><span class="stat-value" id="dkRevenue">$0</span></div>
+                <div class="stat-card"><span class="stat-label">Avg Profit/Item</span><span class="stat-value" id="dkAvg">$0</span></div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn btn-ghost" onclick="exportCSV()"><i class="fas fa-download"></i> Export CSV</button>
+                <button class="btn btn-ghost" onclick="loadDashboard()"><i class="fas fa-sync"></i> Refresh</button>
+            </div>
+
+            <div style="margin-top:20px; padding:16px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);">
+                <div style="font:var(--font-sm); font-weight:600; color:var(--text-primary); margin-bottom:8px;"><i class="fas fa-envelope"></i> Gmail Integration</div>
+                <div id="gmailStatus" style="font:var(--font-xs); color:var(--text-muted);">Checking...</div>
             </div>
         </div>
 
     </div>
+</div>
 
-    <script>
-        // ─── State ───
-        let uploadedImages = [];
-        let currentAgg = 'conservative';
-        let currentTeam = localStorage.getItem('priceblade_team') || 'thoard';
+<!-- Floating Add Button -->
+<button class="fab" onclick="showAddModal()" title="Add Listing">+</button>
 
-        // Restore team pill on load
-        (function () {
-            document.querySelectorAll('[id^="team-"]').forEach(p => p.classList.remove('active'));
-            const pill = document.getElementById('team-' + currentTeam);
-            if (pill) pill.classList.add('active');
-        })();
+<!-- Add Listing Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <div class="modal-title">Add New Listing</div>
+        <input id="newListingName" placeholder="Product name">
+        <div style="display:flex; gap:10px;">
+            <input id="newListingPrice" type="number" step="0.01" placeholder="List price">
+            <input id="newListingShipping" type="number" step="0.01" placeholder="Shipping cost">
+        </div>
+        <input id="newListingNotes" placeholder="Notes (optional)">
+        <div class="modal-actions">
+            <button class="research-btn" style="flex:1;" onclick="addListing()">Add Listing</button>
+            <button class="copy-btn" style="flex:1;" onclick="closeAddModal()">Cancel</button>
+        </div>
+    </div>
+</div>
 
-        function selectTeam(team, btn) {
-            currentTeam = team;
-            localStorage.setItem('priceblade_team', team);
-            document.querySelectorAll('[id^="team-"]').forEach(p => p.classList.remove('active'));
-            btn.classList.add('active');
-            // Reload whatever view is currently active
-            const activeView = document.querySelector('.view.active');
-            if (activeView) {
-                const viewName = activeView.id.replace('view-', '');
-                if (viewName === 'history') loadHistory();
-                else if (viewName === 'listings') loadListings();
-                else if (viewName === 'dashboard') loadDashboard();
-                else if (viewName === 'settings') loadSettings();
-            }
-        }
+<!-- Mobile bottom nav -->
+<nav class="mobile-nav">
+    <button class="mobile-nav-btn active" data-tab="listings" onclick="switchTab('listings')"><i class="fas fa-tags"></i>Listings</button>
+    <button class="mobile-nav-btn" data-tab="sold" onclick="switchTab('sold')"><i class="fas fa-receipt"></i>Sold</button>
+    <button class="mobile-nav-btn" data-tab="research" onclick="switchTab('research')"><i class="fas fa-search"></i>Research</button>
+    <button class="mobile-nav-btn" data-tab="dashboard" onclick="switchTab('dashboard')"><i class="fas fa-chart-bar"></i>Stats</button>
+</nav>
 
-        // ─── View Navigation ───
-        function showView(name) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('view-' + name).classList.add('active');
-            document.getElementById('nav-' + name).classList.add('active');
-            if (name === 'history') loadHistory();
-            if (name === 'settings') loadSettings();
-            if (name === 'listings') loadListings();
-            if (name === 'dashboard') loadDashboard();
-        }
+<script>
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+let uploadedImages = [];
+let currentAgg = 'conservative';
+let currentTeam = localStorage.getItem('priceblade_team') || 'thoard';
+let _historyData = [];
+let _listingsData = [];
+let _soldFilter = 'week';
+let revenueChart = null, profitPieChart = null;
 
-        // ─── File Upload ───
-        const fileInput = document.getElementById('fileInput');
-        const uploadArea = document.getElementById('uploadArea');
+// Restore team pill
+(function() {
+    document.querySelectorAll('.team-pill').forEach(p => p.classList.remove('active'));
+    const pill = document.getElementById('team-' + currentTeam);
+    if (pill) pill.classList.add('active');
+})();
 
-        fileInput.addEventListener('change', handleFiles);
+// ══════════════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════════════
+function switchTab(name) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.mobile-nav-btn').forEach(n => n.classList.remove('active'));
 
-        uploadArea.addEventListener('dragover', e => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
+    const tc = document.getElementById('tc-' + name);
+    if (tc) tc.classList.add('active');
+    document.querySelectorAll(`.tab[data-tab="${name}"]`).forEach(t => t.classList.add('active'));
+    document.querySelectorAll(`.mobile-nav-btn[data-tab="${name}"]`).forEach(n => n.classList.add('active'));
+
+    if (name === 'listings') loadListings();
+    if (name === 'sold') loadListings();
+    if (name === 'cancelled') loadListings();
+    if (name === 'research') loadHistory();
+    if (name === 'dashboard') loadDashboard();
+    if (typeof prismNav !== 'undefined') prismNav.closeSidebar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TEAM
+// ══════════════════════════════════════════════════════════════════
+function selectTeam(team) {
+    currentTeam = team;
+    localStorage.setItem('priceblade_team', team);
+    document.querySelectorAll('.team-pill').forEach(p => p.classList.remove('active'));
+    document.getElementById('team-' + team).classList.add('active');
+    // Reload current tab
+    const activeTab = document.querySelector('.tab-content.active');
+    if (activeTab) {
+        const name = activeTab.id.replace('tc-', '');
+        switchTab(name);
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ADD LISTING MODAL
+// ══════════════════════════════════════════════════════════════════
+function showAddModal() {
+    document.getElementById('addModal').classList.add('open');
+    document.getElementById('newListingName').focus();
+}
+function closeAddModal() {
+    document.getElementById('addModal').classList.remove('open');
+}
+
+async function addListing() {
+    const name = document.getElementById('newListingName').value.trim();
+    if (!name) return alert('Enter a product name');
+    try {
+        await fetch('/price/api/listings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                product_name: name,
+                list_price: parseFloat(document.getElementById('newListingPrice').value) || 0,
+                shipping_cost: parseFloat(document.getElementById('newListingShipping').value) || 0,
+                notes: document.getElementById('newListingNotes').value.trim(),
+                team: currentTeam,
+            })
         });
-        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
-        uploadArea.addEventListener('drop', e => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            handleFiles({ target: { files: e.dataTransfer.files } });
-        });
+        closeAddModal();
+        document.getElementById('newListingName').value = '';
+        document.getElementById('newListingPrice').value = '';
+        document.getElementById('newListingShipping').value = '';
+        document.getElementById('newListingNotes').value = '';
+        loadListings();
+    } catch (err) { alert('Failed to add: ' + err.message); }
+}
 
-        function handleFiles(e) {
-            const files = Array.from(e.target.files);
-            files.forEach(file => {
-                if (!file.type.startsWith('image/')) return;
-                compressImage(file).then(dataUrl => {
-                    uploadedImages.push(dataUrl);
-                    updatePreviews();
-                });
-            });
-            // Reset input so same file can be re-selected
-            fileInput.value = '';
-        }
+// ══════════════════════════════════════════════════════════════════
+// LISTINGS
+// ══════════════════════════════════════════════════════════════════
+async function loadListings() {
+    try {
+        const resp = await fetch(`/price/api/listings?team=${currentTeam}`);
+        _listingsData = await resp.json();
+        renderActiveListings();
+        renderSoldListings();
+        renderCancelledListings();
+    } catch (err) { console.error('Listings load error:', err); }
+}
 
-        // Compress image client-side to prevent browser crashes on large photos
-        function compressImage(file, maxDim = 1600, quality = 0.7) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    let w = img.width, h = img.height;
-                    if (w > maxDim || h > maxDim) {
-                        const ratio = Math.min(maxDim / w, maxDim / h);
-                        w = Math.round(w * ratio);
-                        h = Math.round(h * ratio);
-                    }
-                    const canvas = document.createElement('canvas');
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
-                    resolve(canvas.toDataURL('image/jpeg', quality));
-                    URL.revokeObjectURL(img.src);
-                };
-                img.src = URL.createObjectURL(file);
-            });
-        }
+function renderActiveListings() {
+    const active = _listingsData.filter(l => l.status === 'listed');
+    const grid = document.getElementById('activeListingsGrid');
 
-        function updatePreviews() {
-            const grid = document.getElementById('previewGrid');
-            const prompt = document.getElementById('uploadPrompt');
-            const btn = document.getElementById('researchBtn');
-            const area = document.getElementById('uploadArea');
+    // Summary
+    const totalValue = active.reduce((s, l) => s + (l.list_price || 0), 0);
+    const projProfit = active.reduce((s, l) => s + Math.max(0, (l.list_price || 0) - (l.shipping_cost || 0) - ((l.list_price || 0) * 0.13)), 0);
+    document.getElementById('sumActive').textContent = active.length;
+    document.getElementById('sumValue').textContent = '$' + totalValue.toFixed(2);
+    document.getElementById('sumProfit').textContent = '$' + projProfit.toFixed(2);
 
-            if (uploadedImages.length > 0) {
-                prompt.style.display = 'none';
-                area.classList.add('has-images');
-                grid.innerHTML = uploadedImages.map((img, i) => `
-            <div class="preview-wrapper">
-                <img src="${img}" class="preview-img" alt="Product ${i + 1}">
-                <button class="preview-remove" onclick="event.stopPropagation(); removeImage(${i})">✕</button>
+    if (!active.length) {
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon"><i class="fas fa-box-open"></i></div><div class="empty-text">No active listings. Tap + to add one.</div></div>';
+        return;
+    }
+
+    grid.innerHTML = active.map(l => {
+        const daysActive = l.listed_at ? Math.ceil((Date.now() - new Date(l.listed_at)) / 86400000) : 0;
+        return `<div class="listing-card">
+            <div class="listing-card-header">
+                <span class="listing-card-name">${escHtml(l.product_name)}</span>
+                <span class="listing-card-price">$${(l.list_price || 0).toFixed(2)}</span>
             </div>
-        `).join('');
-                btn.disabled = false;
-            } else {
-                prompt.style.display = 'block';
-                area.classList.remove('has-images');
-                grid.innerHTML = '';
-                btn.disabled = true;
-            }
-        }
-
-        function removeImage(idx) {
-            uploadedImages.splice(idx, 1);
-            updatePreviews();
-        }
-
-        // ─── Aggressiveness ───
-        function setAgg(el) {
-            document.querySelectorAll('.agg-pill').forEach(p => p.classList.remove('active'));
-            el.classList.add('active');
-            currentAgg = el.dataset.level;
-        }
-
-        // ─── Research ───
-        let _researchTimer = null;
-        let _researchStart = 0;
-
-        async function runResearch() {
-            const btn = document.getElementById('researchBtn');
-            btn.disabled = true;
-            btn.classList.add('loading');
-            _researchStart = Date.now();
-            _researchTimer = setInterval(() => {
-                const elapsed = Math.round((Date.now() - _researchStart) / 1000);
-                btn.innerHTML = `<span class="spinner"></span> Researching... ${elapsed}s`;
-            }, 1000);
-            btn.innerHTML = '<span class="spinner"></span> Researching... 0s';
-
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '';
-
-            try {
-                const resp = await fetch('/price/api/research', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        images: uploadedImages,
-                        aggressiveness: currentAgg,
-                        team: currentTeam
-                    })
-                });
-                const data = await resp.json();
-
-                if (data.error) {
-                    resultsDiv.innerHTML = `<div class="result-card" style="border-color: var(--danger);">
-                <div style="color: var(--danger); font-weight: 600;">❌ Error</div>
-                <div style="color: var(--text-secondary); margin-top: 8px;">${data.error}</div>
-                ${data.raw ? `<div style="color: var(--text-dim); margin-top: 8px; font-size: 12px;">${data.raw}</div>` : ''}
-            </div>`;
-                    return;
-                }
-
-                renderResults(data);
-            } catch (err) {
-                resultsDiv.innerHTML = `<div class="result-card" style="border-color: var(--danger);">
-            <div style="color: var(--danger); font-weight: 600;">❌ Network Error</div>
-            <div style="color: var(--text-secondary); margin-top: 8px;">${err.message}</div>
+            <div class="listing-card-meta">
+                <span><i class="fas fa-clock"></i> ${daysActive}d active</span>
+                <span class="badge badge-green" style="font-size:10px;">Listed</span>
+                ${l.ebay_item_id ? `<span><i class="fas fa-barcode"></i> ${escHtml(l.ebay_item_id)}</span>` : ''}
+            </div>
+            ${l.notes ? `<div style="font:var(--font-xs); color:var(--text-muted); margin-bottom:8px;">${escHtml(l.notes)}</div>` : ''}
+            ${l.order_number ? `<div class="listing-detail-row"><span><i class="fas fa-file-invoice"></i> ${escHtml(l.order_number)}</span>${l.buyer_name ? `<span><i class="fas fa-user"></i> ${escHtml(l.buyer_name)}</span>` : ''}${l.tracking_number ? `<span><i class="fas fa-truck"></i> ${escHtml(l.tracking_number)}</span>` : ''}</div>` : ''}
+            <div class="listing-card-actions">
+                <button class="listing-action sold" onclick="markSold(${l.id})"><i class="fas fa-check"></i> Mark Sold</button>
+                <button class="listing-action" onclick="editListing(${l.id})"><i class="fas fa-pen"></i> Edit</button>
+                <button class="listing-action danger" onclick="deleteListing(${l.id})"><i class="fas fa-trash"></i></button>
+            </div>
         </div>`;
-            } finally {
-                clearInterval(_researchTimer);
-                const elapsed = Math.round((Date.now() - _researchStart) / 1000);
-                btn.disabled = false;
-                btn.classList.remove('loading');
-                btn.innerHTML = `🔍 Research Pricing (last: ${elapsed}s)`;
+    }).join('');
+}
+
+function renderSoldListings() {
+    const sold = _listingsData.filter(l => l.status === 'sold');
+    const now = new Date();
+    let filtered = sold;
+
+    if (_soldFilter === 'week') {
+        const weekAgo = new Date(now - 7 * 86400000);
+        filtered = sold.filter(l => l.sold_at && new Date(l.sold_at) >= weekAgo);
+    } else if (_soldFilter === 'month') {
+        const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        filtered = sold.filter(l => l.sold_at && new Date(l.sold_at) >= monthAgo);
+    }
+
+    // Summary
+    const totalRev = filtered.reduce((s, l) => s + (l.sold_price || l.list_price || 0), 0);
+    const totalProfit = filtered.reduce((s, l) => s + (l.profit || 0), 0);
+    const totalFees = filtered.reduce((s, l) => s + (l.ebay_fees || 0), 0);
+    const avgMargin = totalRev > 0 ? (totalProfit / totalRev * 100) : 0;
+
+    document.getElementById('soldRevenue').textContent = '$' + totalRev.toFixed(2);
+    document.getElementById('soldProfit').textContent = '$' + totalProfit.toFixed(2);
+    document.getElementById('soldProfit').style.color = totalProfit >= 0 ? 'var(--green)' : 'var(--red)';
+    document.getElementById('soldMargin').textContent = avgMargin.toFixed(1) + '%';
+    document.getElementById('soldFees').textContent = '$' + totalFees.toFixed(2);
+
+    const tbody = document.getElementById('soldBody');
+    if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-muted);">No sold items in this period</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.sort((a, b) => new Date(b.sold_at || 0) - new Date(a.sold_at || 0)).map(l => `<tr>
+        <td style="font-weight:600; color:var(--text-primary);">${escHtml((l.product_name || '').substring(0, 50))}</td>
+        <td>$${(l.sold_price || l.list_price || 0).toFixed(2)}</td>
+        <td>$${(l.shipping_cost || 0).toFixed(2)}</td>
+        <td style="color:var(--red);">$${(l.ebay_fees || 0).toFixed(2)}</td>
+        <td class="${(l.profit || 0) >= 0 ? 'profit-pos' : 'profit-neg'}">${(l.profit || 0) >= 0 ? '+' : ''}$${(l.profit || 0).toFixed(2)}</td>
+        <td>${l.sold_at ? new Date(l.sold_at).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : '--'}</td>
+    </tr>`).join('');
+}
+
+function filterSold(filter, btn) {
+    _soldFilter = filter;
+    document.querySelectorAll('#soldFilters .filter-pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderSoldListings();
+}
+
+function renderCancelledListings() {
+    const cancelled = _listingsData.filter(l => ['cancelled', 'returned', 'refunded'].includes(l.status));
+    const totalLost = cancelled.reduce((s, l) => s + (l.refund_amount || l.sold_price || 0), 0);
+    const avgLoss = cancelled.length ? totalLost / cancelled.length : 0;
+
+    document.getElementById('cancelLost').textContent = '$' + totalLost.toFixed(2);
+    document.getElementById('cancelAvg').textContent = '$' + avgLoss.toFixed(2);
+    document.getElementById('cancelCount').textContent = cancelled.length;
+
+    const tbody = document.getElementById('cancelBody');
+    if (!cancelled.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-muted);">No cancelled or returned items</td></tr>';
+        return;
+    }
+
+    const statusLabel = s => s === 'cancelled' ? 'Cancelled' : s === 'returned' ? 'Returned' : 'Refunded';
+    const statusColor = s => s === 'cancelled' ? 'var(--red)' : s === 'returned' ? 'var(--amber)' : 'var(--violet)';
+
+    tbody.innerHTML = cancelled.map(l => `<tr>
+        <td style="font-weight:600; color:var(--text-primary);">${escHtml((l.product_name || '').substring(0, 50))}</td>
+        <td><span class="badge" style="background:color-mix(in srgb, ${statusColor(l.status)} 12%, transparent); color:${statusColor(l.status)}; font-size:10px;">${statusLabel(l.status)}</span></td>
+        <td>${l.refund_amount ? '-$' + l.refund_amount.toFixed(2) : l.sold_price ? '$' + l.sold_price.toFixed(2) : '--'}</td>
+        <td style="color:var(--text-muted);">${l.cancel_id ? 'Cancel #' + escHtml(l.cancel_id) : l.return_id ? 'Return #' + escHtml(l.return_id) : '--'}</td>
+        <td>${l.sold_at ? new Date(l.sold_at).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : '--'}</td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LISTING ACTIONS
+// ══════════════════════════════════════════════════════════════════
+async function markSold(id) {
+    const price = prompt('Sale price? (leave blank to use list price)');
+    try {
+        const body = { status: 'sold' };
+        if (price) body.sold_price = parseFloat(price);
+        await fetch(`/price/api/listings/${id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        loadListings();
+    } catch (err) { alert('Failed: ' + err.message); }
+}
+
+async function editListing(id) {
+    const listing = _listingsData.find(l => l.id === id);
+    if (!listing) return;
+    const newPrice = prompt('New list price:', listing.list_price || 0);
+    if (newPrice === null) return;
+    try {
+        await fetch(`/price/api/listings/${id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ list_price: parseFloat(newPrice) || 0 })
+        });
+        loadListings();
+    } catch (err) { alert('Failed: ' + err.message); }
+}
+
+async function deleteListing(id) {
+    if (!confirm('Delete this listing?')) return;
+    try {
+        await fetch(`/price/api/listings/${id}`, { method: 'DELETE' });
+        loadListings();
+    } catch (err) { alert('Failed: ' + err.message); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GMAIL
+// ══════════════════════════════════════════════════════════════════
+async function scanGmail() {
+    const btn = document.getElementById('scanGmailBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+    try {
+        const resp = await fetch('/price/api/gmail/scan', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ team: currentTeam })
+        });
+        const data = await resp.json();
+        if (data.error) {
+            alert('Gmail: ' + data.error);
+        } else {
+            alert(`${data.summary}\nNew listings: ${data.new_listings.length}\nNew sales: ${data.new_sales.length}\nShipping updates: ${(data.updated_shipping || []).length}`);
+            if (data.new_sales.length > 0 && Notification.permission === 'granted') {
+                data.new_sales.forEach(s => {
+                    new Notification('Item Sold!', { body: s.product_name || 'A product was sold' });
+                });
             }
+            loadListings();
         }
+    } catch (err) { alert('Gmail scan failed: ' + err.message); }
+    finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-envelope"></i> Scan Gmail';
+    }
+}
 
-        function resetResearch() {
-            uploadedImages = [];
-            updatePreviews();
-            document.getElementById('results').innerHTML = '';
-            document.getElementById('researchBtn').innerHTML = '🔍 Research Pricing';
+// ══════════════════════════════════════════════════════════════════
+// FILE UPLOAD + RESEARCH
+// ══════════════════════════════════════════════════════════════════
+const fileInput = document.getElementById('fileInput');
+const uploadArea = document.getElementById('uploadArea');
+
+fileInput.addEventListener('change', handleFiles);
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => { e.preventDefault(); uploadArea.classList.remove('dragover'); handleFiles({ target: { files: e.dataTransfer.files } }); });
+
+function handleFiles(e) {
+    Array.from(e.target.files).forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+        compressImage(file).then(dataUrl => { uploadedImages.push(dataUrl); updatePreviews(); });
+    });
+    fileInput.value = '';
+}
+
+function compressImage(file, maxDim = 1600, quality = 0.7) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) { const r = Math.min(maxDim / w, maxDim / h); w = Math.round(w * r); h = Math.round(h * r); }
+            const c = document.createElement('canvas'); c.width = w; c.height = h;
+            c.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(c.toDataURL('image/jpeg', quality));
+            URL.revokeObjectURL(img.src);
+        };
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+function updatePreviews() {
+    const grid = document.getElementById('previewGrid');
+    const prompt = document.getElementById('uploadPrompt');
+    const btn = document.getElementById('researchBtn');
+    const area = document.getElementById('uploadArea');
+
+    if (uploadedImages.length > 0) {
+        prompt.style.display = 'none'; area.classList.add('has-images');
+        grid.innerHTML = uploadedImages.map((img, i) => `<div class="preview-wrapper"><img src="${img}" class="preview-img" alt="Product ${i + 1}"><button class="preview-remove" onclick="event.stopPropagation(); removeImage(${i})">x</button></div>`).join('');
+        btn.disabled = false;
+    } else {
+        prompt.style.display = 'block'; area.classList.remove('has-images');
+        grid.innerHTML = ''; btn.disabled = true;
+    }
+}
+
+function removeImage(idx) { uploadedImages.splice(idx, 1); updatePreviews(); }
+
+function setAgg(el) {
+    document.querySelectorAll('.agg-pill').forEach(p => p.classList.remove('active'));
+    el.classList.add('active'); currentAgg = el.dataset.level;
+}
+
+let _researchTimer = null, _researchStart = 0;
+
+async function runResearch() {
+    const btn = document.getElementById('researchBtn');
+    btn.disabled = true; btn.classList.add('loading');
+    _researchStart = Date.now();
+    _researchTimer = setInterval(() => {
+        btn.innerHTML = `<span class="spinner"></span> Researching... ${Math.round((Date.now() - _researchStart) / 1000)}s`;
+    }, 1000);
+    btn.innerHTML = '<span class="spinner"></span> Researching... 0s';
+
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = '';
+
+    try {
+        const resp = await fetch('/price/api/research', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: uploadedImages, aggressiveness: currentAgg, team: currentTeam })
+        });
+        const data = await resp.json();
+        if (data.error) {
+            resultsDiv.innerHTML = `<div class="result-card" style="border-color:var(--red);"><div style="color:var(--red); font-weight:600;">Error</div><div style="color:var(--text-muted); margin-top:8px;">${data.error}</div>${data.raw ? `<div style="color:var(--text-muted); margin-top:8px; font-size:12px;">${data.raw}</div>` : ''}</div>`;
+            return;
         }
+        renderResults(data);
+    } catch (err) {
+        resultsDiv.innerHTML = `<div class="result-card" style="border-color:var(--red);"><div style="color:var(--red); font-weight:600;">Network Error</div><div style="color:var(--text-muted); margin-top:8px;">${err.message}</div></div>`;
+    } finally {
+        clearInterval(_researchTimer);
+        const elapsed = Math.round((Date.now() - _researchStart) / 1000);
+        btn.disabled = false; btn.classList.remove('loading');
+        btn.innerHTML = `<i class="fas fa-search-dollar"></i> Research Pricing (last: ${elapsed}s)`;
+    }
+}
 
-        function renderResults(data) {
-            const resultsDiv = document.getElementById('results');
-            let html = '';
+function resetResearch() {
+    uploadedImages = []; updatePreviews();
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('researchBtn').innerHTML = '<i class="fas fa-search-dollar"></i> Research Pricing';
+}
 
-            // Render each product
-            (data.products || []).forEach((product, idx) => {
-                const priceData = (data.prices || [])[idx] || {};
-                const sources = priceData.sources || {};
+function renderResults(data) {
+    const resultsDiv = document.getElementById('results');
+    let html = '';
 
-                html += `<div class="result-card">
-            <div class="product-header">
+    (data.products || []).forEach((product, idx) => {
+        const priceData = (data.prices || [])[idx] || {};
+        const sources = priceData.sources || {};
+
+        html += `<div class="result-card">
+            <div style="display:flex; align-items:flex-start; gap:12px; margin-bottom:16px;">
                 <div style="flex:1">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                        <span class="product-badge">${product.confidence === 'high' ? '✅ High' : product.confidence === 'medium' ? '🔶 Medium' : '⚠️ Low'} Confidence</span>
-                        ${data.is_bundle ? '<span class="product-badge" style="background:rgba(68,136,255,0.15); color:var(--blue);">📦 Bundle Item</span>' : ''}
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
+                        <span class="product-badge">${product.confidence === 'high' ? 'High' : product.confidence === 'medium' ? 'Medium' : 'Low'} Confidence</span>
+                        ${data.is_bundle ? '<span class="product-badge" style="background:color-mix(in srgb, var(--cyan) 12%, transparent); color:var(--cyan);">Bundle Item</span>' : ''}
                     </div>
-                    <div class="product-name">${escHtml(product.name)}</div>
-                    <div class="product-details">${escHtml(product.brand)} • ${escHtml(product.details)} • ${escHtml(product.condition)}</div>
+                    <div style="font:var(--font-base); font-weight:700; color:var(--text-primary);">${escHtml(product.name)}</div>
+                    <div style="font:var(--font-xs); color:var(--text-muted); margin-top:4px;">${escHtml(product.brand)} &bull; ${escHtml(product.details)} &bull; ${escHtml(product.condition)}</div>
                 </div>
             </div>
-
             <table class="price-table">
                 <tr><th>Source</th><th style="text-align:right">Price</th></tr>
-                ${renderSourceRow('⚫ TikTok Shop', sources.tiktok_shop)}
-                ${renderSourceRow('🟠 Amazon', sources.amazon)}
-                ${renderSourceRow('🔵 Walmart', sources.walmart)}
-                ${renderSourceRow('🟢 Google', sources.google_shopping)}
-                ${renderSourceRow('🔴 eBay Sold', sources.ebay_sold)}
+                ${renderSourceRow('TikTok Shop', sources.tiktok_shop)}
+                ${renderSourceRow('Amazon', sources.amazon)}
+                ${renderSourceRow('Walmart', sources.walmart)}
+                ${renderSourceRow('Google Shopping', sources.google_shopping)}
+                ${renderSourceRow('eBay Sold', sources.ebay_sold)}
             </table>
-
-            <div class="notes-box" style="border-color: var(--warning); margin-bottom:12px;">
-                ⚠️ TikTok prices are AI estimates —
-                <a href="https://www.tiktok.com/shop/search?q=${encodeURIComponent(product.name)}" target="_blank" style="color:var(--accent); text-decoration:underline;">verify on TikTok Shop →</a>
+            <div class="notes-box" style="margin-bottom:12px;">
+                TikTok prices are AI estimates &mdash;
+                <a href="https://www.tiktok.com/shop/search?q=${encodeURIComponent(product.name)}" target="_blank" style="color:var(--accent); text-decoration:underline;">verify on TikTok Shop</a>
             </div>
-
-            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:13px;">
-                <div style="color:var(--text-dim); margin-bottom:4px;">📦 Shipping Estimate (USPS Ground Advantage)</div>
+            <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 14px; margin-bottom:12px; font:var(--font-xs);">
+                <div style="color:var(--text-muted); margin-bottom:4px;">Shipping Estimate (USPS Ground)</div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>${priceData.shipping_estimate ?
-                        `~${priceData.shipping_estimate.weight_oz || 12}oz • ${priceData.shipping_estimate.length_in || '?'}×${priceData.shipping_estimate.width_in || '?'}×${priceData.shipping_estimate.height_in || '?'} • ${(priceData.shipping_estimate.package_type || 'small_box').replace('_', ' ')}` :
-                        '~12oz (default estimate)'
-                    }</span>
-                    <strong style="color:var(--accent);" id="ship-cost-${idx}">$${safePrice(priceData.shipping_cost || 5.15)}</strong>
+                    <span>${priceData.shipping_estimate ? `~${priceData.shipping_estimate.weight_oz || 12}oz &bull; ${priceData.shipping_estimate.length_in || '?'}x${priceData.shipping_estimate.width_in || '?'}x${priceData.shipping_estimate.height_in || '?'} &bull; ${(priceData.shipping_estimate.package_type || 'small_box').replace('_', ' ')}` : '~12oz (default)'}</span>
+                    <strong style="color:var(--green);" id="ship-cost-${idx}">$${safePrice(priceData.shipping_cost || 5.15)}</strong>
                 </div>
             </div>
-
-            <div class="agg-selector" style="margin:12px 0 0 0;">
-                <div class="agg-pill active" data-tier="conservative" onclick="switchTier('conservative', ${idx}, this)">🛡️ Conservative</div>
-                <div class="agg-pill" data-tier="balanced" onclick="switchTier('balanced', ${idx}, this)">⚖️ Balanced</div>
-                <div class="agg-pill" data-tier="aggressive" onclick="switchTier('aggressive', ${idx}, this)">⚡ Aggressive</div>
+            <div class="agg-selector" style="margin:12px 0 0;">
+                <div class="agg-pill active" data-tier="conservative" onclick="switchTier('conservative', ${idx}, this)">Conservative</div>
+                <div class="agg-pill" data-tier="balanced" onclick="switchTier('balanced', ${idx}, this)">Balanced</div>
+                <div class="agg-pill" data-tier="aggressive" onclick="switchTier('aggressive', ${idx}, this)">Aggressive</div>
             </div>
-
             <div class="recommendation" id="rec-${idx}">
                 <div class="rec-label">Recommended Price</div>
                 <div class="rec-price" id="rec-price-${idx}">$${safePrice(priceData.recommended_price)}</div>
                 <div class="rec-discount" id="rec-discount-${idx}">${escHtml(priceData.discount_applied || '')}</div>
-                <div class="rec-profit" id="rec-profit-${idx}">💰 Est. Profit: $${safePrice(priceData.estimated_profit)}</div>
+                <div class="rec-profit" id="rec-profit-${idx}">Est. Profit: $${safePrice(priceData.estimated_profit)}</div>
             </div>
-
             <div class="copy-row">
-                <button class="copy-btn" id="copy-price-${idx}" onclick="copyText(document.getElementById('rec-price-${idx}').textContent.replace('$',''), this)">📋 Copy Price</button>
-                <button class="copy-btn" onclick="copyAll(${idx}, this)">📋 Copy All</button>
+                <button class="copy-btn" id="copy-price-${idx}" onclick="copyText(document.getElementById('rec-price-${idx}').textContent.replace('$',''), this)">Copy Price</button>
+                <button class="copy-btn" onclick="copyAll(${idx}, this)">Copy All</button>
             </div>
         </div>`;
-            });
+    });
 
-            // Bundle recommendation
-            if (data.bundle_recommendation) {
-                const br = data.bundle_recommendation;
-                html += `<div class="bundle-card">
-            <div class="bundle-label">📦 Bundle Recommendation</div>
-            <div style="font-size:13px; color:var(--text-secondary); margin:8px 0;">
-                Individual total: $${br.individual_total.toFixed(2)} → ${br.bundle_discount}
-            </div>
+    if (data.bundle_recommendation) {
+        const br = data.bundle_recommendation;
+        html += `<div class="bundle-card">
+            <div class="bundle-label">Bundle Recommendation</div>
+            <div style="font:var(--font-sm); color:var(--text-muted); margin:8px 0;">Individual total: $${br.individual_total.toFixed(2)} &rarr; ${br.bundle_discount}</div>
             <div class="bundle-price">$${br.bundle_price.toFixed(2)}</div>
-            <div class="rec-profit" style="background:rgba(68,136,255,0.1); color:var(--blue);">
-                💰 Bundle Profit: $${br.bundle_profit.toFixed(2)}
+            <div class="rec-profit" style="background:color-mix(in srgb, var(--cyan) 10%, transparent); color:var(--cyan);">Bundle Profit: $${br.bundle_profit.toFixed(2)}</div>
+            <div class="copy-row" style="margin-top:12px;"><button class="copy-btn" onclick="copyText('${br.bundle_price.toFixed(2)}', this)">Copy Bundle Price</button></div>
+        </div>`;
+    }
+    if (data.notes) html += `<div class="notes-box">${escHtml(data.notes)}</div>`;
+    html += `<button class="research-btn" style="margin-top:16px; background:var(--surface); color:var(--text-primary); border:1px solid var(--border);" onclick="resetResearch()"><i class="fas fa-redo"></i> New Research</button>`;
+    resultsDiv.innerHTML = html;
+    window._lastResults = data;
+}
+
+function renderSourceRow(label, source) {
+    if (!source || source.price == null) return '';
+    const price = parseFloat(source.price) || 0;
+    const cls = source.estimated ? ' class="estimated"' : '';
+    let badge = '';
+    if (source.verified) badge = ' <span style="font-size:10px; color:var(--green);">Verified</span>';
+    else if (source.estimated) badge = ' <span style="font-size:10px; color:var(--amber);">Est</span>';
+    return `<tr><td>${label}${badge}</td><td${cls} style="text-align:right">$${price.toFixed(2)}</td></tr>`;
+}
+
+function safePrice(val) { return (parseFloat(val) || 0).toFixed(2); }
+
+function switchTier(tier, productIdx, btn) {
+    btn.parentElement.querySelectorAll('.agg-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const data = window._lastResults;
+    if (!data || !data.pricing_tiers || !data.pricing_tiers[tier]) return;
+    const priceInfo = data.pricing_tiers[tier].prices[productIdx];
+    if (!priceInfo) return;
+    const pe = document.getElementById(`rec-price-${productIdx}`);
+    const de = document.getElementById(`rec-discount-${productIdx}`);
+    const pr = document.getElementById(`rec-profit-${productIdx}`);
+    if (pe) pe.textContent = `$${safePrice(priceInfo.recommended_price)}`;
+    if (de) de.textContent = priceInfo.discount_applied || '';
+    if (pr) pr.textContent = `Est. Profit: $${safePrice(priceInfo.estimated_profit)}`;
+    if (data.pricing_tiers[tier].bundle_recommendation) {
+        const br = data.pricing_tiers[tier].bundle_recommendation;
+        const bc = document.querySelector('.bundle-card');
+        if (bc) bc.innerHTML = `<div class="bundle-label">Bundle Recommendation</div><div style="font:var(--font-sm); color:var(--text-muted); margin:8px 0;">Individual total: $${safePrice(br.individual_total)} &rarr; ${br.bundle_discount}</div><div class="bundle-price">$${safePrice(br.bundle_price)}</div><div class="rec-profit" style="background:color-mix(in srgb, var(--cyan) 10%, transparent); color:var(--cyan);">Bundle Profit: $${safePrice(br.bundle_profit)}</div><div class="copy-row" style="margin-top:12px;"><button class="copy-btn" onclick="copyText('${safePrice(br.bundle_price)}', this)">Copy Bundle Price</button></div>`;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// COPY FUNCTIONS
+// ══════════════════════════════════════════════════════════════════
+function copyText(text, btn) {
+    navigator.clipboard.writeText(text);
+    btn.classList.add('copied'); btn.textContent = 'Copied!';
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy Price'; }, 2000);
+}
+
+function copyAll(idx, btn) {
+    const data = window._lastResults; if (!data) return;
+    const product = data.products[idx]; const prices = data.prices[idx];
+    const text = `${product.name}\nBrand: ${product.brand}\n${product.details}\n\nRecommended: $${prices.recommended_price.toFixed(2)}\nEst. Profit: $${prices.estimated_profit.toFixed(2)}\n${prices.discount_applied}`;
+    navigator.clipboard.writeText(text);
+    btn.classList.add('copied'); btn.textContent = 'Copied!';
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy All'; }, 2000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HISTORY
+// ══════════════════════════════════════════════════════════════════
+async function loadHistory() {
+    try {
+        const resp = await fetch(`/price/api/history?limit=50&team=${currentTeam}`);
+        _historyData = await resp.json();
+        renderHistory(_historyData);
+    } catch (err) { console.error('History load error:', err); }
+}
+
+function filterHistory() {
+    const q = document.getElementById('historySearch').value.toLowerCase().trim();
+    if (!q) return renderHistory(_historyData);
+    renderHistory(_historyData.filter(item => (item.products || []).some(p => ((p.name || '') + (p.brand || '')).toLowerCase().includes(q))));
+}
+
+function renderHistory(items) {
+    const list = document.getElementById('historyList');
+    if (!items.length) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fas fa-clipboard-list"></i></div><div class="empty-text">No results found</div></div>';
+        return;
+    }
+
+    let html = items.map((item, idx) => {
+        const products = item.products || [];
+        const name = products.length ? products[0].name : 'Unknown Product';
+        const date = new Date(item.created_at).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+        const days = item.days_ago || 0;
+        let badge = '';
+        if (item.freshness === 'fresh') badge = '<span class="freshness-badge freshness-fresh">Fresh</span>';
+        else if (item.freshness === 'stale') badge = `<span class="freshness-badge freshness-stale">${days}d ago</span>`;
+        else badge = `<span class="freshness-badge freshness-old">${days}d ago</span>`;
+        return `<div class="history-card" onclick="showHistoryDetail(${idx})">
+            <div style="flex:1; min-width:0;">
+                <div class="history-name">${escHtml(name.substring(0, 50))}${badge}</div>
+                <div class="history-meta">${date} &bull; ${item.aggressiveness} &bull; ${item.is_bundle ? 'Bundle' : 'Single'}</div>
             </div>
-            <div class="copy-row" style="margin-top:12px;">
-                <button class="copy-btn" onclick="copyText('${br.bundle_price.toFixed(2)}', this)">📋 Copy Bundle Price</button>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div class="history-price">$${(item.recommended_price || 0).toFixed(2)}</div>
+                <button onclick="event.stopPropagation(); deleteHistoryItem(${item.id}, ${idx})" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px;" title="Delete"><i class="fas fa-trash-alt"></i></button>
             </div>
         </div>`;
+    }).join('');
+
+    if (items.length > 1) {
+        html += `<button class="btn btn-ghost" style="width:100%; margin-top:12px;" onclick="clearAllHistory()"><i class="fas fa-trash"></i> Clear All History</button>`;
+    }
+    list.innerHTML = html;
+}
+
+async function deleteHistoryItem(id, idx) {
+    if (!confirm('Delete this research?')) return;
+    try {
+        await fetch(`/price/api/history/${id}`, { method: 'DELETE' });
+        _historyData.splice(idx, 1); renderHistory(_historyData);
+    } catch (err) { alert('Failed to delete: ' + err.message); }
+}
+
+async function clearAllHistory() {
+    if (!confirm('Delete ALL research history?')) return;
+    try {
+        for (const item of _historyData) await fetch(`/price/api/history/${item.id}`, { method: 'DELETE' });
+        _historyData = []; renderHistory(_historyData);
+    } catch (err) { alert('Failed to clear: ' + err.message); }
+}
+
+function showHistoryDetail(idx) {
+    const item = _historyData[idx]; if (!item) return;
+    const list = document.getElementById('historyList');
+    const products = item.products || [];
+
+    let html = `<button class="btn btn-ghost" style="margin-bottom:16px; width:100%;" onclick="renderHistory(_historyData)"><i class="fas fa-arrow-left"></i> Back to History</button>`;
+
+    products.forEach((product, pidx) => {
+        const priceData = (item.prices || [])[pidx] || {};
+        const sources = priceData.sources || {};
+        html += `<div class="result-card">
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
+                <span class="product-badge">${product.confidence === 'high' ? 'High' : product.confidence === 'medium' ? 'Medium' : 'Low'} Confidence</span>
+                ${item.is_bundle ? '<span class="product-badge" style="background:color-mix(in srgb, var(--cyan) 12%, transparent); color:var(--cyan);">Bundle</span>' : ''}
+            </div>
+            <div style="font:var(--font-base); font-weight:700; color:var(--text-primary);">${escHtml(product.name)}</div>
+            <div style="font:var(--font-xs); color:var(--text-muted); margin-top:4px;">${escHtml(product.brand)} &bull; ${escHtml(product.details)} &bull; ${escHtml(product.condition)}</div>
+            <table class="price-table">
+                <tr><th>Source</th><th style="text-align:right">Price</th></tr>
+                ${renderSourceRow('TikTok Shop', sources.tiktok_shop)}
+                ${renderSourceRow('Amazon', sources.amazon)}
+                ${renderSourceRow('Walmart', sources.walmart)}
+                ${renderSourceRow('Google Shopping', sources.google_shopping)}
+                ${renderSourceRow('eBay Sold', sources.ebay_sold)}
+            </table>
+            <div class="recommendation">
+                <div class="rec-label">Recommended Price</div>
+                <div class="rec-price">$${safePrice(priceData.recommended_price)}</div>
+                <div class="rec-discount">${escHtml(priceData.discount_applied || '')}</div>
+                <div class="rec-profit">Est. Profit: $${safePrice(priceData.estimated_profit)}</div>
+            </div>
+            <div class="copy-row"><button class="copy-btn" onclick="copyText('${safePrice(priceData.recommended_price)}', this)">Copy Price</button></div>
+        </div>`;
+    });
+    list.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+async function loadDashboard() {
+    try {
+        const resp = await fetch(`/price/api/dashboard?team=${currentTeam}`);
+        const data = await resp.json();
+        const s = data.team || {};
+
+        // KPIs
+        document.getElementById('dkProfit').textContent = '$' + (s.total_profit || 0).toFixed(2);
+        document.getElementById('dkMonthProfit').textContent = '$' + ((s.last_30d || {}).profit || 0).toFixed(2);
+        document.getElementById('dkSold').textContent = s.items_sold || 0;
+        document.getElementById('dkActive').textContent = s.active_listings || 0;
+        document.getElementById('dkRevenue').textContent = '$' + (s.total_revenue || 0).toFixed(2);
+        document.getElementById('dkAvg').textContent = '$' + (s.avg_profit || 0).toFixed(2);
+
+        // Best selling & best margin
+        const sold = _listingsData.filter(l => l.status === 'sold');
+        if (sold.length) {
+            const bestSeller = sold.reduce((a, b) => (b.sold_price || 0) > (a.sold_price || 0) ? b : a, sold[0]);
+            document.getElementById('dkBestSeller').textContent = (bestSeller.product_name || 'Unknown').substring(0, 25);
+            const bestMargin = sold.reduce((a, b) => {
+                const marginB = (b.sold_price || 0) > 0 ? ((b.profit || 0) / (b.sold_price || 1)) : 0;
+                const marginA = (a.sold_price || 0) > 0 ? ((a.profit || 0) / (a.sold_price || 1)) : 0;
+                return marginB > marginA ? b : a;
+            }, sold[0]);
+            document.getElementById('dkBestMargin').textContent = (bestMargin.product_name || 'Unknown').substring(0, 25);
+        }
+
+        // Revenue chart
+        renderRevenueChart(sold);
+
+        // Profit pie
+        renderProfitPie(s);
+
+        // Gmail status
+        try {
+            const scanResp = await fetch(`/price/api/gmail/new-sales?team=${currentTeam}`);
+            const scanData = await scanResp.json();
+            document.getElementById('gmailStatus').innerHTML = scanData.last_scan ? `Last auto-scan: ${new Date(scanData.last_scan).toLocaleTimeString()}` : 'Auto-scan active (every 5 min)';
+        } catch { document.getElementById('gmailStatus').innerHTML = 'Gmail scanning enabled'; }
+
+    } catch (err) { console.error('Dashboard error:', err); }
+}
+
+function renderRevenueChart(sold) {
+    const ctx = document.getElementById('revenueChart').getContext('2d');
+    if (revenueChart) revenueChart.destroy();
+
+    // Build last 30 days
+    const days = [];
+    const revenues = [];
+    for (let i = 29; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        days.push(d.toLocaleDateString('en-US', { month:'short', day:'numeric' }));
+        const dayRev = sold.filter(l => l.sold_at && l.sold_at.startsWith(key)).reduce((s, l) => s + (l.sold_price || 0), 0);
+        revenues.push(dayRev);
+    }
+
+    revenueChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: days,
+            datasets: [{
+                label: 'Revenue',
+                data: revenues,
+                backgroundColor: 'rgba(124, 58, 237, 0.6)',
+                borderColor: '#7c3aed',
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false },
+                tooltip: { backgroundColor:'rgba(10,10,15,0.95)', cornerRadius:8, borderColor:'rgba(255,255,255,0.1)', borderWidth:1 } },
+            scales: {
+                y: { grid: { color:'rgba(255,255,255,0.04)' }, ticks: { color:'#666', callback: v => '$' + v } },
+                x: { grid: { display:false }, ticks: { color:'#666', maxRotation:0, autoSkip:true, maxTicksLimit:8 } }
             }
-
-            // Notes
-            if (data.notes) {
-                html += `<div class="notes-box">💡 ${escHtml(data.notes)}</div>`;
-            }
-
-            // Reset button
-            html += `<button class="research-btn" style="margin-top:16px; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border); box-shadow:none;" onclick="resetResearch()">🔄 New Research</button>`;
-
-            resultsDiv.innerHTML = html;
-
-            // Store data globally for copy-all
-            window._lastResults = data;
         }
+    });
+}
 
-        function renderSourceRow(label, source) {
-            if (!source || source.price == null) return '';
-            const price = parseFloat(source.price) || 0;
-            const cls = source.estimated ? ' class="estimated"' : '';
-            let badge = '';
-            if (source.verified) {
-                badge = ' <span style="font-size:10px; color:var(--accent);">✅ Verified</span>';
-            } else if (source.estimated) {
-                badge = ' <span style="font-size:10px; color:var(--warning);">⚠️ Est</span>';
-            }
-            return `<tr>
-        <td>${label}${badge}</td>
-        <td${cls} style="text-align:right">$${price.toFixed(2)}</td>
-    </tr>`;
-        }
+function renderProfitPie(stats) {
+    const ctx = document.getElementById('profitPieChart').getContext('2d');
+    if (profitPieChart) profitPieChart.destroy();
 
-        function safePrice(val) {
-            return (parseFloat(val) || 0).toFixed(2);
-        }
+    const rev = stats.total_revenue || 0;
+    const profit = stats.total_profit || 0;
+    const fees = rev * 0.13; // eBay ~13%
+    const shipping = rev * 0.08; // estimate
+    const costOfGoods = rev - profit - fees - shipping;
 
-        function switchTier(tier, productIdx, btn) {
-            // Update pill active state
-            const pills = btn.parentElement.querySelectorAll('.agg-pill');
-            pills.forEach(p => p.classList.remove('active'));
-            btn.classList.add('active');
-
-            // Get tier data from stored results
-            const data = window._lastResults;
-            if (!data || !data.pricing_tiers || !data.pricing_tiers[tier]) return;
-
-            const tierData = data.pricing_tiers[tier];
-            const priceInfo = tierData.prices[productIdx];
-            if (!priceInfo) return;
-
-            // Update recommendation in-place
-            const priceEl = document.getElementById(`rec-price-${productIdx}`);
-            const discountEl = document.getElementById(`rec-discount-${productIdx}`);
-            const profitEl = document.getElementById(`rec-profit-${productIdx}`);
-
-            if (priceEl) priceEl.textContent = `$${safePrice(priceInfo.recommended_price)}`;
-            if (discountEl) discountEl.textContent = priceInfo.discount_applied || '';
-            if (profitEl) profitEl.textContent = `💰 Est. Profit: $${safePrice(priceInfo.estimated_profit)}`;
-
-            // Update bundle if exists
-            if (tierData.bundle_recommendation) {
-                const br = tierData.bundle_recommendation;
-                const bundleCard = document.querySelector('.bundle-card');
-                if (bundleCard) {
-                    bundleCard.innerHTML = `
-                        <div class="bundle-label">📦 Bundle Recommendation</div>
-                        <div style="font-size:13px; color:var(--text-secondary); margin:8px 0;">
-                            Individual total: $${safePrice(br.individual_total)} → ${br.bundle_discount}
-                        </div>
-                        <div class="bundle-price">$${safePrice(br.bundle_price)}</div>
-                        <div class="rec-profit" style="background:rgba(68,136,255,0.1); color:var(--blue);">
-                            💰 Bundle Profit: $${safePrice(br.bundle_profit)}
-                        </div>
-                        <div class="copy-row" style="margin-top:12px;">
-                            <button class="copy-btn" onclick="copyText('${safePrice(br.bundle_price)}', this)">📋 Copy Bundle Price</button>
-                        </div>`;
-                }
+    profitPieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Profit', 'eBay Fees', 'Shipping', 'Cost'],
+            datasets: [{
+                data: [Math.max(0, profit), Math.max(0, fees), Math.max(0, shipping), Math.max(0, costOfGoods)],
+                backgroundColor: ['#22c55e', '#ef4444', '#f59e0b', '#6b7280'],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, cutout: '60%',
+            plugins: {
+                legend: { position:'bottom', labels: { color:'#888', font: { size:11 }, padding:12, usePointStyle:true } },
+                tooltip: { backgroundColor:'rgba(10,10,15,0.95)', cornerRadius:8 }
             }
         }
+    });
+}
 
-        // ─── Copy Functions ───
-        function copyText(text, btn) {
-            navigator.clipboard.writeText(text);
-            btn.classList.add('copied');
-            btn.textContent = '✅ Copied!';
-            setTimeout(() => {
-                btn.classList.remove('copied');
-                btn.textContent = '📋 Copy Price';
-            }, 2000);
-        }
+function exportCSV() { window.open(`/price/api/export/csv?team=${currentTeam}`, '_blank'); }
 
-        function copyAll(idx, btn) {
-            const data = window._lastResults;
-            if (!data) return;
-            const product = data.products[idx];
-            const prices = data.prices[idx];
-            const text = `${product.name}\nBrand: ${product.brand}\n${product.details}\n\nRecommended: $${prices.recommended_price.toFixed(2)}\nEst. Profit: $${prices.estimated_profit.toFixed(2)}\n${prices.discount_applied}`;
-            navigator.clipboard.writeText(text);
-            btn.classList.add('copied');
-            btn.textContent = '✅ Copied!';
-            setTimeout(() => {
-                btn.classList.remove('copied');
-                btn.textContent = '📋 Copy All';
-            }, 2000);
-        }
+// ══════════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════════════════════════════════
+if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 
-        // ─── History ───
-        let _historyData = [];
-
-        async function loadHistory() {
-            try {
-                const resp = await fetch(`/price/api/history?limit=50&team=${currentTeam}`);
-                _historyData = await resp.json();
-                renderHistory(_historyData);
-            } catch (err) {
-                console.error('History load error:', err);
-            }
-        }
-
-        function filterHistory() {
-            const q = document.getElementById('historySearch').value.toLowerCase().trim();
-            if (!q) return renderHistory(_historyData);
-            const filtered = _historyData.filter(item => {
-                const products = item.products || [];
-                return products.some(p => (p.name || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q));
+async function pollNewSales() {
+    try {
+        const resp = await fetch(`/price/api/gmail/new-sales?team=${currentTeam}`);
+        const data = await resp.json();
+        if (data.new_sales && data.new_sales.length > 0 && Notification.permission === 'granted') {
+            data.new_sales.forEach(s => {
+                new Notification('Item Sold!', {
+                    body: `${s.product_name}${s.profit ? ' - Profit: $' + s.profit.toFixed(2) : ''}`,
+                    tag: 'sale-' + s.product_name,
+                });
             });
-            renderHistory(filtered);
         }
+    } catch { /* silent */ }
+}
+setInterval(pollNewSales, 60000);
 
-        function renderHistory(items) {
-            const list = document.getElementById('historyList');
-            if (!items.length) {
-                list.innerHTML = `<div class="empty-state">
-                    <div class="empty-icon">📋</div>
-                    <div class="empty-text">No results found.</div>
-                </div>`;
-                return;
-            }
+// ══════════════════════════════════════════════════════════════════
+// UTILITY
+// ══════════════════════════════════════════════════════════════════
+function escHtml(s) { return s ? s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''; }
 
-            let html = items.map((item, idx) => {
-                const products = item.products || [];
-                const name = products.length ? products[0].name : 'Unknown Product';
-                const date = new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-                const days = item.days_ago || 0;
-                let badge = '';
-                if (item.freshness === 'fresh') {
-                    badge = '<span class="freshness-badge freshness-fresh">🟢 Fresh</span>';
-                } else if (item.freshness === 'stale') {
-                    badge = `<span class="freshness-badge freshness-stale">🟡 ${days}d ago</span>`;
-                } else {
-                    badge = `<span class="freshness-badge freshness-old">🔴 ${days}d ago</span>`;
-                }
-                return `<div class="history-item" onclick="showHistoryDetail(${idx})">
-                    <div style="flex:1; min-width:0;">
-                        <div class="history-name">${escHtml(name.substring(0, 50))}${badge}</div>
-                        <div class="history-meta">${date} • ${item.aggressiveness} • ${item.is_bundle ? '📦 Bundle' : 'Single'}</div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <div class="history-price">$${(item.recommended_price || 0).toFixed(2)}</div>
-                        <button onclick="event.stopPropagation(); deleteHistoryItem(${item.id}, ${idx})" style="background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:4px 6px; border-radius:6px;" title="Delete">🗑️</button>
-                        <span style="color:var(--text-dim); font-size:16px;">›</span>
-                    </div>
-                </div>`;
-            }).join('');
-
-            // Clear All button
-            if (items.length > 1) {
-                html += `<button onclick="clearAllHistory()" style="width:100%; margin-top:12px; padding:12px; background:transparent; border:1px solid var(--border); color:var(--text-dim); border-radius:12px; font-size:13px; cursor:pointer;">🗑️ Clear All History</button>`;
-            }
-
-            list.innerHTML = html;
-        }
-
-        async function deleteHistoryItem(id, idx) {
-            if (!confirm('Delete this research?')) return;
-            try {
-                await fetch(`/price/api/history/${id}`, { method: 'DELETE' });
-                _historyData.splice(idx, 1);
-                renderHistory(_historyData);
-            } catch (err) {
-                alert('Failed to delete: ' + err.message);
-            }
-        }
-
-        async function clearAllHistory() {
-            if (!confirm('Delete ALL research history? This cannot be undone.')) return;
-            try {
-                for (const item of _historyData) {
-                    await fetch(`/price/api/history/${item.id}`, { method: 'DELETE' });
-                }
-                _historyData = [];
-                renderHistory(_historyData);
-            } catch (err) {
-                alert('Failed to clear: ' + err.message);
-            }
-        }
-
-        function showHistoryDetail(idx) {
-            const item = _historyData[idx];
-            if (!item) return;
-
-            const list = document.getElementById('historyList');
-            const products = item.products || [];
-            const name = products.length ? products[0].name : 'Unknown Product';
-
-            // Build detail view using the stored data
-            let html = `<button class="copy-btn" style="margin-bottom:16px; width:100%;" onclick="renderHistory(_historyData)">← Back to History</button>`;
-
-            // Render each product with full breakdown
-            products.forEach((product, pidx) => {
-                const priceData = (item.prices || [])[pidx] || {};
-                const sources = priceData.sources || {};
-
-                html += `<div class="result-card">
-                    <div class="product-header">
-                        <div style="flex:1">
-                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-                                <span class="product-badge">${product.confidence === 'high' ? '✅ High' : product.confidence === 'medium' ? '🔶 Medium' : '⚠️ Low'} Confidence</span>
-                                ${item.is_bundle ? '<span class="product-badge" style="background:rgba(68,136,255,0.15); color:var(--blue);">📦 Bundle</span>' : ''}
-                            </div>
-                            <div class="product-name">${escHtml(product.name)}</div>
-                            <div class="product-details">${escHtml(product.brand)} • ${escHtml(product.details)} • ${escHtml(product.condition)}</div>
-                        </div>
-                    </div>
-
-                    <table class="price-table">
-                        <tr><th>Source</th><th style="text-align:right">Price</th></tr>
-                        ${renderSourceRow('⚫ TikTok Shop', sources.tiktok_shop)}
-                        ${renderSourceRow('🟠 Amazon', sources.amazon)}
-                        ${renderSourceRow('🔵 Walmart', sources.walmart)}
-                        ${renderSourceRow('🟢 Google', sources.google_shopping)}
-                        ${renderSourceRow('🔴 eBay Sold', sources.ebay_sold)}
-                    </table>
-
-                    <div class="notes-box" style="border-color: var(--warning); margin-bottom:12px;">
-                        ⚠️ TikTok prices are AI estimates —
-                        <a href="https://www.tiktok.com/shop/search?q=${encodeURIComponent(product.name)}" target="_blank" style="color:var(--accent); text-decoration:underline;">verify on TikTok Shop →</a>
-                    </div>
-
-                    <div class="recommendation">
-                        <div class="rec-label">Recommended Price</div>
-                        <div class="rec-price">$${safePrice(priceData.recommended_price)}</div>
-                        <div class="rec-discount">${escHtml(priceData.discount_applied || '')}</div>
-                        <div class="rec-profit">💰 Est. Profit: $${safePrice(priceData.estimated_profit)}</div>
-                    </div>
-
-                    <div class="copy-row">
-                        <button class="copy-btn" onclick="copyText('${safePrice(priceData.recommended_price)}', this)">📋 Copy Price</button>
-                    </div>
-                </div>`;
-            });
-
-            list.innerHTML = html;
-        }
-
-        // ─── Settings ───
-        async function loadSettings() {
-            try {
-                const resp = await fetch('/price/api/settings');
-                const data = await resp.json();
-                document.querySelectorAll('#settingsRadios .radio-option').forEach(opt => {
-                    opt.classList.remove('selected');
-                });
-                const active = document.querySelector(`#settingsRadios .radio-option[onclick*="${data.aggressiveness}"]`);
-                if (active) active.classList.add('selected');
-            } catch (err) {
-                console.error('Settings load error:', err);
-            }
-        }
-
-        async function selectSetting(el, level) {
-            document.querySelectorAll('#settingsRadios .radio-option').forEach(o => o.classList.remove('selected'));
-            el.classList.add('selected');
-
-            // Also update the pills on research view
-            document.querySelectorAll('.agg-pill').forEach(p => p.classList.remove('active'));
-            const pill = document.querySelector(`.agg-pill[data-level="${level}"]`);
-            if (pill) pill.classList.add('active');
-            currentAgg = level;
-
-            try {
-                await fetch('/price/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ aggressiveness: level })
-                });
-            } catch (err) {
-                console.error('Settings save error:', err);
-            }
-        }
-
-        // ─── Listings ───
-        async function loadListings() {
-            try {
-                const resp = await fetch(`/price/api/listings?team=${currentTeam}`);
-                const listings = await resp.json();
-                window._listingsData = listings;
-                const active = listings.filter(l => l.status === 'listed');
-                const sold = listings.filter(l => l.status === 'sold');
-
-                const activeDiv = document.getElementById('activeListings');
-                if (active.length) {
-                    activeDiv.innerHTML = active.map(l => `
-                        <div class="history-item" style="cursor:pointer; flex-direction:column;" onclick="toggleListingDetail(this)">
-                            <div style="display:flex; align-items:center; width:100%;">
-                                <div style="flex:1; min-width:0;">
-                                    <div class="history-name">${escHtml(l.product_name.substring(0, 60))}</div>
-                                    <div class="history-meta">${l.listed_at ? new Date(l.listed_at).toLocaleDateString() : ''}</div>
-                                </div>
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    <div class="history-price" style="color:${l.list_price ? 'var(--accent)' : 'var(--text-dim)'};">$${(l.list_price || 0).toFixed(2)}</div>
-                                    <button onclick="event.stopPropagation(); markSold(${l.id})" style="background:none; border:none; font-size:14px; cursor:pointer;" title="Mark Sold">✅</button>
-                                    <button onclick="event.stopPropagation(); deleteListing(${l.id})" style="background:none; border:none; color:var(--text-dim); font-size:14px; cursor:pointer;" title="Delete">🗑️</button>
-                                    <span style="color:var(--text-dim); font-size:12px;">▼</span>
-                                </div>
-                            </div>
-                            <div class="listing-detail" style="display:none; width:100%; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:12px; color:var(--text-secondary);">
-                                ${l.ebay_item_id ? `<div>📦 Item: ${escHtml(l.ebay_item_id)}</div>` : ''}
-                                ${l.order_number ? `<div>🧾 Order: ${escHtml(l.order_number)}</div>` : ''}
-                                ${l.buyer_name ? `<div>👤 Buyer: ${escHtml(l.buyer_name)}</div>` : ''}
-                                ${l.tracking_number ? `<div>📬 Tracking: ${escHtml(l.tracking_number)}</div>` : ''}
-                                ${l.shipping_service ? `<div>🚚 ${escHtml(l.shipping_service)}</div>` : ''}
-                                ${l.shipping_cost ? `<div>💵 Shipping: $${l.shipping_cost.toFixed(2)}</div>` : ''}
-                                ${l.weight_oz ? `<div style="margin-top:6px; padding:8px 10px; background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.15); border-radius:8px;">📐 <strong>${l.weight_oz}oz</strong> • ${l.length_in || '?'}×${l.width_in || '?'}×${l.height_in || '?'}" • ${(l.package_type || 'box').replace('_', ' ')}</div>` : ''}
-                                ${l.notes ? `<div>📝 ${escHtml(l.notes)}</div>` : ''}
-                                <div style="margin-top:4px; color:var(--text-dim);">eBay Fees (est): $${(l.ebay_fees || 0).toFixed(2)}</div>
-                            </div>
-                        </div>`).join('');
-                } else {
-                    activeDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">No active listings</div></div>';
-                }
-
-                const soldDiv = document.getElementById('soldListings');
-                if (sold.length) {
-                    soldDiv.innerHTML = sold.map(l => `
-                        <div class="history-item" style="cursor:pointer; flex-direction:column; border-left:3px solid var(--green);" onclick="toggleListingDetail(this)">
-                            <div style="display:flex; align-items:center; width:100%;">
-                                <div style="flex:1; min-width:0;">
-                                    <div class="history-name">${escHtml(l.product_name.substring(0, 60))}</div>
-                                    <div class="history-meta">${l.sold_at ? 'Sold ' + new Date(l.sold_at).toLocaleDateString() : ''} ${l.order_number ? '• #' + escHtml(l.order_number) : ''} ${l.buyer_name ? '• ' + escHtml(l.buyer_name) : ''}</div>
-                                </div>
-                                <div style="text-align:right;">
-                                    <div class="history-price">$${(l.sold_price || l.list_price || 0).toFixed(2)}</div>
-                                    <div style="color:${l.profit >= 0 ? 'var(--green)' : 'var(--danger)'}; font-size:12px; font-weight:600;">${l.profit >= 0 ? '+' : ''}$${(l.profit || 0).toFixed(2)}</div>
-                                </div>
-                            </div>
-                            <div class="listing-detail" style="display:none; width:100%; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:12px; color:var(--text-secondary);">
-                                ${l.order_number ? `<div>🧾 Order: ${escHtml(l.order_number)}</div>` : ''}
-                                ${l.buyer_name ? `<div>👤 Buyer: ${escHtml(l.buyer_name)}</div>` : ''}
-                                ${l.buyer_address ? `<div>📍 ${escHtml(l.buyer_address)}</div>` : ''}
-                                ${l.tracking_number ? `<div>📬 Tracking: ${escHtml(l.tracking_number)}</div>` : ''}
-                                ${l.shipping_service ? `<div>🚚 ${escHtml(l.shipping_service)}</div>` : ''}
-                                <div style="margin-top:6px; display:flex; gap:16px; flex-wrap:wrap;">
-                                    <span>Sold: <strong>$${(l.sold_price || 0).toFixed(2)}</strong></span>
-                                    <span>Fees: <strong style="color:var(--danger);">-$${(l.ebay_fees || 0).toFixed(2)}</strong></span>
-                                    <span>Ship: <strong style="color:var(--danger);">-$${(l.shipping_cost || 0).toFixed(2)}</strong></span>
-                                    <span>Profit: <strong style="color:var(--green);">$${(l.profit || 0).toFixed(2)}</strong></span>
-                                </div>
-                                ${l.weight_oz ? `<div style="margin-top:6px; padding:8px 10px; background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.15); border-radius:8px;">📐 <strong>${l.weight_oz}oz</strong> • ${l.length_in || '?'}×${l.width_in || '?'}×${l.height_in || '?'}" • ${(l.package_type || 'box').replace('_', ' ')}</div>` : ''}
-                                ${l.ebay_item_id ? `<div style="margin-top:4px;">📦 Item: ${escHtml(l.ebay_item_id)}</div>` : ''}
-                                ${l.notes ? `<div>📝 ${escHtml(l.notes)}</div>` : ''}
-                            </div>
-                        </div>`).join('');
-                } else {
-                    soldDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">No sold items yet</div></div>';
-                }
-
-                // Cancelled / Returned / Refunded items
-                const cancelled = listings.filter(l => ['cancelled', 'returned', 'refunded'].includes(l.status));
-                const cancelledDiv = document.getElementById('cancelledListings');
-                if (cancelled.length) {
-                    const statusLabel = s => s === 'cancelled' ? '🚫 Cancelled' : s === 'returned' ? '↩️ Returned' : '💸 Refunded';
-                    const statusColor = s => s === 'cancelled' ? '#ff6b6b' : s === 'returned' ? '#ffa94d' : '#da77f2';
-                    cancelledDiv.innerHTML = cancelled.map(l => `
-                        <div class="history-item" style="cursor:pointer; flex-direction:column; border-left:3px solid ${statusColor(l.status)};" onclick="toggleListingDetail(this)">
-                            <div style="display:flex; align-items:center; width:100%;">
-                                <div style="flex:1; min-width:0;">
-                                    <div class="history-name">${escHtml(l.product_name.substring(0, 60))}</div>
-                                    <div class="history-meta">
-                                        <span style="color:${statusColor(l.status)}; font-weight:600;">${statusLabel(l.status)}</span>
-                                        ${l.sold_at ? ' • ' + new Date(l.sold_at).toLocaleDateString() : ''}
-                                        ${l.order_number ? ' • #' + escHtml(l.order_number) : ''}
-                                        ${l.buyer_name ? ' • ' + escHtml(l.buyer_name) : ''}
-                                    </div>
-                                </div>
-                                <div style="text-align:right;">
-                                    ${l.refund_amount ? `<div style="color:#da77f2; font-size:12px;">-$${l.refund_amount.toFixed(2)} refund</div>` : ''}
-                                    ${l.sold_price ? `<div style="color:var(--text-dim); font-size:12px; text-decoration:line-through;">$${l.sold_price.toFixed(2)}</div>` : ''}
-                                </div>
-                            </div>
-                            <div class="listing-detail" style="display:none; width:100%; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:12px; color:var(--text-secondary);">
-                                ${l.order_number ? `<div>🧾 Order: ${escHtml(l.order_number)}</div>` : ''}
-                                ${l.cancel_id ? `<div>🚫 Cancel ID: ${escHtml(l.cancel_id)}</div>` : ''}
-                                ${l.return_id ? `<div>↩️ Return ID: ${escHtml(l.return_id)}</div>` : ''}
-                                ${l.buyer_name ? `<div>👤 Buyer: ${escHtml(l.buyer_name)}</div>` : ''}
-                                <button onclick="event.stopPropagation(); deleteListing(${l.id})" style="margin-top:6px; background:none; border:1px solid var(--border); color:var(--text-dim); padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px;">🗑️ Delete</button>
-                            </div>
-                        </div>`).join('');
-                } else {
-                    cancelledDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">No cancelled or returned items</div></div>';
-                }
-
-                // Removed by eBay
-                const removed = listings.filter(l => l.status === 'removed');
-                const removedDiv = document.getElementById('removedListings');
-                if (removed.length) {
-                    removedDiv.innerHTML = removed.map(l => `
-                        <div class="history-item" style="border-left:3px solid #888;">
-                            <div style="flex:1; min-width:0;">
-                                <div class="history-name">${escHtml(l.product_name.substring(0, 60))}</div>
-                                <div class="history-meta" style="color:#888;">Removed by eBay policy</div>
-                            </div>
-                            <button onclick="event.stopPropagation(); deleteListing(${l.id})" style="background:none; border:none; color:var(--text-dim); font-size:14px; cursor:pointer;" title="Delete">🗑️</button>
-                        </div>`).join('');
-                } else {
-                    removedDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">🗑️</div><div class="empty-text">No removed listings</div></div>';
-                }
-            } catch (err) {
-                console.error('Listings load error:', err);
-            }
-        }
-
-        function toggleListingDetail(el) {
-            const detail = el.querySelector('.listing-detail');
-            if (detail) {
-                detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
-                const arrow = el.querySelector('span:last-child');
-                if (arrow && (arrow.textContent === '▼' || arrow.textContent === '▲')) {
-                    arrow.textContent = detail.style.display === 'none' ? '▼' : '▲';
-                }
-            }
-        }
-
-        function showAddListing() {
-            document.getElementById('addListingForm').style.display = 'block';
-            document.getElementById('newListingName').focus();
-        }
-
-        // ─── Shipping Calculator ───
-        let shipImage = null;
-
-        document.getElementById('shipFileInput').addEventListener('change', function (e) {
-            const file = e.target.files[0];
-            if (!file || !file.type.startsWith('image/')) return;
-            // Compress image to avoid sending 5MB+ raw photos
-            compressImage(file, 1200, 0.8).then(dataUrl => {
-                shipImage = dataUrl;
-                document.getElementById('shipUploadPrompt').style.display = 'none';
-                const preview = document.getElementById('shipPreview');
-                preview.style.display = 'block';
-                document.getElementById('shipPreviewImg').src = shipImage;
-                document.getElementById('shipEstimateBtn').disabled = false;
-            });
-            e.target.value = ''; // Allow re-selecting same file
-        });
-
-        async function runShippingEstimate() {
-            if (!shipImage) return;
-            const btn = document.getElementById('shipEstimateBtn');
-            const resultsDiv = document.getElementById('shipResults');
-            btn.disabled = true;
-            btn.classList.add('loading');
-            btn.innerHTML = '<div class="spinner"></div> Analyzing product...';
-            resultsDiv.innerHTML = '';
-
-            try {
-                const resp = await fetch('/price/api/shipping-estimate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: shipImage })
-                });
-                const data = await resp.json();
-
-                if (data.error) {
-                    resultsDiv.innerHTML = `<div class="result-card" style="border-color: var(--danger);"><div style="color: var(--danger); font-weight: 600;">❌ ${data.error}</div></div>`;
-                    return;
-                }
-
-                resultsDiv.innerHTML = `
-                    <div class="result-card" style="border-color: var(--accent);">
-                        <div class="product-header">
-                            <div style="flex:1">
-                                <div class="product-name">${escHtml(data.product_name || 'Product')}</div>
-                            </div>
-                        </div>
-
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0;">
-                            <div style="background:var(--bg-secondary); padding:14px; border-radius:10px; text-align:center;">
-                                <div style="color:var(--text-dim); font-size:11px; margin-bottom:4px;">⚖️ Weight</div>
-                                <div style="font-size:22px; font-weight:700; color:var(--accent);">${data.weight_oz || '?'}oz</div>
-                                <div style="color:var(--text-dim); font-size:11px; margin-top:2px;">${((data.weight_oz || 0) / 16).toFixed(1)} lbs</div>
-                            </div>
-                            <div style="background:var(--bg-secondary); padding:14px; border-radius:10px; text-align:center;">
-                                <div style="color:var(--text-dim); font-size:11px; margin-bottom:4px;">📏 Dimensions</div>
-                                <div style="font-size:22px; font-weight:700; color:var(--text-primary);">${data.length_in || '?'}×${data.width_in || '?'}×${data.height_in || '?'}</div>
-                                <div style="color:var(--text-dim); font-size:11px; margin-top:2px;">inches (L×W×H)</div>
-                            </div>
-                        </div>
-
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
-                            <div style="background:var(--bg-secondary); padding:14px; border-radius:10px; text-align:center;">
-                                <div style="color:var(--text-dim); font-size:11px; margin-bottom:4px;">📦 Package Type</div>
-                                <div style="font-size:16px; font-weight:600; color:var(--text-primary);">${(data.package_type || 'small_box').replace('_', ' ')}</div>
-                            </div>
-                            <div style="background:var(--bg-secondary); padding:14px; border-radius:10px; text-align:center;">
-                                <div style="color:var(--text-dim); font-size:11px; margin-bottom:4px;">💵 USPS Cost</div>
-                                <div style="font-size:22px; font-weight:700; color:var(--green);">$${(data.usps_cost_calculated || data.usps_cost_estimate || 5.15).toFixed(2)}</div>
-                            </div>
-                        </div>
-
-                        ${data.notes ? `<div class="notes-box">${escHtml(data.notes)}</div>` : ''}
-
-                        <div class="copy-row" style="flex-wrap:wrap;">
-                            <button class="copy-btn" onclick="copyText('${data.weight_oz || ''}', this)">📋 Weight</button>
-                            <button class="copy-btn" onclick="copyText('${data.length_in || ''}x${data.width_in || ''}x${data.height_in || ''}', this)">📋 Dimensions</button>
-                            <button class="copy-btn" onclick="copyText('${(data.usps_cost_calculated || data.usps_cost_estimate || 5.15).toFixed(2)}', this)">📋 Ship Cost</button>
-                        </div>
-                    </div>
-                `;
-            } catch (err) {
-                resultsDiv.innerHTML = `<div class="result-card" style="border-color: var(--danger);"><div style="color: var(--danger);">❌ ${err.message}</div></div>`;
-            } finally {
-                btn.disabled = false;
-                btn.classList.remove('loading');
-                btn.innerHTML = '📐 Estimate Shipping';
-            }
-        }
-
-        async function addListing() {
-            const name = document.getElementById('newListingName').value.trim();
-            if (!name) return alert('Enter a product name');
-            try {
-                await fetch('/price/api/listings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        product_name: name,
-                        list_price: parseFloat(document.getElementById('newListingPrice').value) || 0,
-                        shipping_cost: parseFloat(document.getElementById('newListingShipping').value) || 0,
-                        notes: document.getElementById('newListingNotes').value.trim(),
-                        team: currentTeam,
-                    })
-                });
-                document.getElementById('addListingForm').style.display = 'none';
-                document.getElementById('newListingName').value = '';
-                document.getElementById('newListingPrice').value = '';
-                document.getElementById('newListingShipping').value = '';
-                document.getElementById('newListingNotes').value = '';
-                loadListings();
-            } catch (err) {
-                alert('Failed to add: ' + err.message);
-            }
-        }
-
-        async function markSold(id) {
-            const price = prompt('Sale price? (leave blank to use list price)');
-            try {
-                const body = { status: 'sold' };
-                if (price) body.sold_price = parseFloat(price);
-                await fetch(`/price/api/listings/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                loadListings();
-            } catch (err) {
-                alert('Failed: ' + err.message);
-            }
-        }
-
-        async function deleteListing(id) {
-            if (!confirm('Delete this listing?')) return;
-            try {
-                await fetch(`/price/api/listings/${id}`, { method: 'DELETE' });
-                loadListings();
-            } catch (err) {
-                alert('Failed: ' + err.message);
-            }
-        }
-
-        // ─── Gmail Scan ───
-        async function scanGmail() {
-            const btn = document.getElementById('scanGmailBtn');
-            btn.disabled = true;
-            btn.textContent = '⏳ Scanning...';
-            try {
-                const resp = await fetch('/price/api/gmail/scan', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ team: currentTeam })
-                });
-                const data = await resp.json();
-                if (data.error) {
-                    alert('Gmail: ' + data.error);
-                } else {
-                    const msg = `${data.summary}\n` +
-                        `New listings: ${data.new_listings.length}\n` +
-                        `New sales: ${data.new_sales.length}\n` +
-                        `Shipping updates: ${(data.updated_shipping || []).length}`;
-                    alert(msg);
-
-                    // Push notification for new sales
-                    if (data.new_sales.length > 0 && Notification.permission === 'granted') {
-                        data.new_sales.forEach(s => {
-                            new Notification('💰 Item Sold!', {
-                                body: s.product_name || 'A product was sold',
-                                icon: '🔪',
-                            });
-                        });
-                    }
-
-                    loadListings();
-                }
-            } catch (err) {
-                alert('Gmail scan failed: ' + err.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '📧 Scan Gmail';
-            }
-        }
-
-        // ─── Dashboard ───
-        async function loadDashboard() {
-            try {
-                const resp = await fetch(`/price/api/dashboard?team=${currentTeam}`);
-                const data = await resp.json();
-                const stats = data.team || {};
-                document.getElementById('stat-sold').textContent = stats.items_sold || 0;
-                document.getElementById('stat-active').textContent = stats.active_listings || 0;
-                document.getElementById('stat-revenue').textContent = '$' + (stats.total_revenue || 0).toFixed(2);
-                document.getElementById('stat-profit').textContent = '$' + (stats.total_profit || 0).toFixed(2);
-                document.getElementById('stat-avg').textContent = '$' + (stats.avg_profit || 0).toFixed(2);
-                document.getElementById('stat-research').textContent = stats.research_count || 0;
-
-                // Time-frame profit cards
-                const tfDiv = document.getElementById('timeframeStats');
-                if (tfDiv) {
-                    const tf = [
-                        { label: 'Today', data: stats.today || {} },
-                        { label: 'Yesterday', data: stats.yesterday || {} },
-                        { label: 'Last 7 Days', data: stats.last_7d || {} },
-                        { label: 'Last 30 Days', data: stats.last_30d || {} },
-                    ];
-                    tfDiv.innerHTML = tf.map(t => `
-                        <div style="flex:1; min-width:120px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center;">
-                            <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px;">${t.label}</div>
-                            <div style="font-size:20px; font-weight:700; color:${t.data.profit >= 0 ? 'var(--green)' : 'var(--danger)'}; margin:4px 0;">$${(t.data.profit || 0).toFixed(2)}</div>
-                            <div style="font-size:11px; color:var(--text-secondary);">${t.data.sales || 0} sales • $${(t.data.revenue || 0).toFixed(2)}</div>
-                        </div>
-                    `).join('');
-                }
-
-                // Gmail status
-                const gmailEl = document.getElementById('gmailStatus');
-                try {
-                    const scanResp = await fetch(`/price/api/gmail/new-sales?team=${currentTeam}`);
-                    const scanData = await scanResp.json();
-                    if (scanData.last_scan) {
-                        gmailEl.innerHTML = `📧 Last auto-scan: ${new Date(scanData.last_scan).toLocaleTimeString()}`;
-                    } else {
-                        gmailEl.innerHTML = `📧 Auto-scan active (every 5 min)`;
-                    }
-                } catch (e) {
-                    gmailEl.innerHTML = `📧 Gmail scanning enabled`;
-                }
-            } catch (err) {
-                console.error('Dashboard error:', err);
-            }
-        }
-
-        function exportCSV() {
-            window.open(`/price/api/export/csv?team=${currentTeam}`, '_blank');
-        }
-
-        // ─── Push Notification Permission ───
-        function requestNotificationPermission() {
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission();
-            }
-        }
-
-        // ─── Auto Push Notification Polling ───
-        async function pollNewSales() {
-            try {
-                const resp = await fetch(`/price/api/gmail/new-sales?team=${currentTeam}`);
-                const data = await resp.json();
-                if (data.new_sales && data.new_sales.length > 0 && Notification.permission === 'granted') {
-                    data.new_sales.forEach(s => {
-                        new Notification('💰 Item Sold!', {
-                            body: `${s.product_name}${s.profit ? ' • Profit: $' + s.profit.toFixed(2) : ''}`,
-                            icon: '🔪',
-                            tag: 'sale-' + s.product_name,
-                        });
-                    });
-                }
-            } catch (e) { /* silent */ }
-        }
-
-        // Poll every 60 seconds for new sales
-        setInterval(pollNewSales, 60000);
-
-        // ─── Utility ───
-        function escHtml(s) {
-            if (!s) return '';
-            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-
-        // ─── Init ───
-        loadSettings();
-        requestNotificationPermission();
-    </script>
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+loadListings();
+</script>
+<script>
+window.prismSubNav = [
+    { label: 'Active Listings', icon: 'fas fa-tags', key: 'listings' },
+    { label: 'Sold & Settled', icon: 'fas fa-receipt', key: 'sold' },
+    { label: 'Cancelled / Returns', icon: 'fas fa-undo', key: 'cancelled' },
+    { label: 'Price Research', icon: 'fas fa-search-dollar', key: 'research' },
+    { label: 'Analytics', icon: 'fas fa-chart-bar', key: 'dashboard' }
+];
+window.prismSubNavCallback = function(key) { switchTab(key); };
+</script>
+<script src="/pwa/js/prism-nav.js"></script>
 </body>
-
 </html>

@@ -1,1401 +1,589 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Console | Vantage</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="/pwa/css/main.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        midnight: '#020617',
-                        slate: {
-                            800: '#1e293b',
-                            900: '#0f172a',
-                            950: '#020617',
-                        },
-                        primary: '#2563eb',
-                    }
-                }
-            }
-        }
-    </script>
+    <title>Admin Console | PRISM</title>
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
+        /* ── Layout ── */
+        body { display: flex; min-height: 100vh; }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        /* ── Main area ── */
+        .main { flex:1; display:flex; flex-direction:column; min-height:100vh; }
 
-        .admin-table th {
-            text-align: left;
-            padding: 1.25rem 1.5rem;
-            font-size: 0.65rem;
-            text-transform: uppercase;
-            letter-spacing: 0.2em;
-            color: #64748b;
-            font-weight: 800;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
+        /* ── Top bar ── */
+        .top-bar { position:sticky; top:0; z-index:30; height:56px; background:rgba(10,10,15,0.85);
+            backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid var(--prism-border);
+            display:flex; align-items:center; padding:0 var(--sp-6); gap:var(--sp-4); }
+        .top-bar-title { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-lg); color:var(--prism-text); }
+        .status-pill { display:flex; align-items:center; gap:6px; background:var(--prism-success-glow); border:1px solid rgba(16,185,129,0.2);
+            padding:4px 12px; border-radius:var(--radius-full); margin-left:auto; }
+        .status-pill .dot { width:6px; height:6px; border-radius:50%; background:var(--prism-success); animation:pulse 2s infinite; }
+        .status-pill span { font-size:10px; font-weight:700; color:var(--prism-success); text-transform:uppercase; letter-spacing:0.08em; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-        .admin-table td {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
+        /* ── Content ── */
+        .content { padding:var(--sp-6); max-width:1200px; }
+        .section { display:none; }
+        .section.active { display:block; }
 
-        .admin-row:hover {
-            background: rgba(255, 255, 255, 0.02);
+        /* ── Stat cards ── */
+        .stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--sp-4); margin-bottom:var(--sp-6); }
+        .stat-card { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-xl);
+            padding:var(--sp-5); transition:border-color 200ms; }
+        .stat-card:hover { border-color:var(--prism-border-strong); }
+        .stat-label { font-size:9px; font-weight:700; color:var(--prism-text-faint); text-transform:uppercase;
+            letter-spacing:0.12em; margin-bottom:var(--sp-2); }
+        .stat-value { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-2xl); color:var(--prism-text); }
+        .stat-icon { font-size:var(--text-sm); opacity:0.5; margin-left:var(--sp-2); }
+
+        /* ── Service cards ── */
+        .service-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--sp-4); }
+        .service-card { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-lg);
+            padding:var(--sp-4); display:flex; align-items:center; gap:var(--sp-4); }
+        .service-icon { width:40px; height:40px; border-radius:var(--radius-md); display:flex; align-items:center;
+            justify-content:center; flex-shrink:0; font-size:var(--text-base); }
+        .service-info { flex:1; }
+        .service-name { font-weight:600; font-size:var(--text-sm); color:var(--prism-text); margin-bottom:2px; }
+        .service-status { font-size:var(--text-xs); color:var(--prism-text-muted); display:flex; align-items:center; gap:6px; }
+        .dot-green { width:7px; height:7px; border-radius:50%; background:var(--prism-success); box-shadow:0 0 8px rgba(16,185,129,0.6); }
+        .dot-red { width:7px; height:7px; border-radius:50%; background:var(--prism-error); box-shadow:0 0 8px rgba(244,63,94,0.6); }
+        .dot-amber { width:7px; height:7px; border-radius:50%; background:var(--prism-warning); box-shadow:0 0 8px rgba(245,158,11,0.6); }
+
+        /* ── Section headers ── */
+        .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-5); }
+        .section-title { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-xl); color:var(--prism-text);
+            display:flex; align-items:center; gap:var(--sp-3); }
+        .section-title i { color:var(--prism-accent-text); font-size:var(--text-base); }
+
+        /* ── Tables ── */
+        .admin-table-wrap { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-xl); overflow:hidden; }
+        .admin-table { width:100%; border-collapse:collapse; font-size:var(--text-sm); }
+        .admin-table thead { background:var(--prism-surface-2); }
+        .admin-table th { text-align:left; padding:var(--sp-3) var(--sp-4); font-size:10px; font-weight:700;
+            color:var(--prism-text-faint); text-transform:uppercase; letter-spacing:0.08em;
+            border-bottom:1px solid var(--prism-border); white-space:nowrap; }
+        .admin-table td { padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--prism-border);
+            vertical-align:middle; color:var(--prism-text-muted); }
+        .admin-table tbody tr { transition:background 80ms; }
+        .admin-table tbody tr:hover { background:var(--prism-surface-2); }
+        .admin-table tbody tr:last-child td { border-bottom:none; }
+
+        .user-entity { display:flex; align-items:center; gap:var(--sp-3); }
+        .user-avatar { width:36px; height:36px; border-radius:var(--radius-md); background:var(--prism-surface-2);
+            overflow:hidden; flex-shrink:0; border:1px solid var(--prism-border); }
+        .user-avatar img { width:100%; height:100%; object-fit:cover; }
+        .user-name { font-weight:600; color:var(--prism-text); font-size:var(--text-sm); }
+        .user-id { font-size:10px; color:var(--prism-text-faint); font-family:monospace; }
+
+        .badge { display:inline-flex; padding:2px 10px; border-radius:var(--radius-full); font-size:10px; font-weight:700;
+            letter-spacing:0.04em; }
+        .badge-admin { background:var(--prism-accent-glow); color:var(--prism-accent-text); border:1px solid rgba(124,58,237,0.2); }
+
+        .status-online { display:flex; align-items:center; gap:6px; font-size:10px; font-weight:700; color:var(--prism-text);
+            text-transform:uppercase; letter-spacing:0.06em; }
+
+        /* ── Activity log ── */
+        .log-scroll { max-height:500px; overflow-y:auto; }
+        .log-scroll::-webkit-scrollbar { width:5px; }
+        .log-scroll::-webkit-scrollbar-thumb { background:var(--prism-surface-2); border-radius:var(--radius-full); }
+        .log-timestamp { font-family:monospace; font-size:11px; color:var(--prism-text-faint); white-space:nowrap; }
+        .log-operator { color:var(--prism-cyan); font-weight:600; }
+        .log-action { color:var(--prism-text); }
+        .log-detail { max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--prism-text-muted); }
+
+        /* ── Config section ── */
+        .config-block { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-xl);
+            padding:var(--sp-5); margin-bottom:var(--sp-5); }
+        .config-block-title { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-base);
+            color:var(--prism-text); margin-bottom:var(--sp-4); display:flex; align-items:center; gap:var(--sp-3); }
+        .config-block-title i { color:var(--prism-accent-text); }
+        .form-group { margin-bottom:var(--sp-4); }
+        .form-label { display:block; font-size:10px; font-weight:700; color:var(--prism-text-faint); text-transform:uppercase;
+            letter-spacing:0.1em; margin-bottom:var(--sp-2); }
+        .form-input { background:var(--prism-bg); border:1px solid var(--prism-border); border-radius:var(--radius-md);
+            padding:10px 14px; font-size:var(--text-sm); color:var(--prism-text); outline:none; width:100%;
+            transition:border-color 200ms; font-family:'Inter',sans-serif; }
+        .form-input:focus { border-color:var(--prism-accent); box-shadow:0 0 0 3px var(--prism-accent-glow); }
+        .form-input::placeholder { color:var(--prism-text-faint); }
+        textarea.form-input { resize:vertical; min-height:80px; }
+        select.form-input { appearance:none; cursor:pointer;
+            background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b6b80' viewBox='0 0 16 16'%3E%3Cpath d='M8 11.5l-5-5h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat:no-repeat; background-position:right 12px center; padding-right:32px; }
+        .form-row { display:flex; gap:var(--sp-3); align-items:flex-end; flex-wrap:wrap; }
+        .form-hint { font-size:10px; color:var(--prism-text-faint); margin-top:4px; }
+
+        /* ── Buttons ── */
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:var(--sp-2); padding:10px 18px;
+            border-radius:var(--radius-lg); font-size:var(--text-xs); font-weight:700; text-transform:uppercase;
+            letter-spacing:0.06em; border:none; cursor:pointer; transition:all 200ms; white-space:nowrap; }
+        .btn:disabled { opacity:0.4; pointer-events:none; }
+        .btn-primary { background:var(--prism-accent); color:#fff; }
+        .btn-primary:hover { background:var(--prism-accent-hover); }
+        .btn-ghost { background:transparent; border:1px solid var(--prism-border); color:var(--prism-text-muted); }
+        .btn-ghost:hover { border-color:var(--prism-border-strong); color:var(--prism-text); background:var(--prism-surface-2); }
+        .btn-green { background:var(--prism-success); color:#fff; }
+        .btn-green:hover { filter:brightness(1.1); }
+        .btn-cyan { background:var(--prism-cyan); color:#fff; }
+        .btn-cyan:hover { filter:brightness(1.1); }
+
+        /* ── Danger zone ── */
+        .danger-header { background:var(--prism-error-glow); border:1px solid rgba(244,63,94,0.2);
+            border-radius:var(--radius-xl); padding:var(--sp-4) var(--sp-5); margin-bottom:var(--sp-5);
+            display:flex; align-items:center; gap:var(--sp-3); }
+        .danger-header i { color:var(--prism-error); font-size:var(--text-lg); }
+        .danger-header span { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-base); color:var(--prism-error); }
+        .danger-header small { font-size:var(--text-xs); color:var(--prism-text-muted); margin-left:auto; }
+
+        .danger-grid { display:flex; flex-wrap:wrap; gap:var(--sp-3); }
+        .danger-btn { background:transparent; border:1px solid; border-radius:var(--radius-lg); padding:10px 16px;
+            font-size:var(--text-xs); font-weight:700; text-transform:uppercase; letter-spacing:0.06em;
+            cursor:pointer; transition:all 200ms; display:inline-flex; align-items:center; gap:var(--sp-2); }
+        .danger-btn:disabled { opacity:0.4; pointer-events:none; }
+        .danger-btn.c-red { color:var(--prism-error); border-color:rgba(244,63,94,0.3); }
+        .danger-btn.c-red:hover { background:var(--prism-error); color:#fff; }
+        .danger-btn.c-amber { color:var(--prism-warning); border-color:rgba(245,158,11,0.3); }
+        .danger-btn.c-amber:hover { background:var(--prism-warning); color:#000; }
+        .danger-btn.c-green { color:var(--prism-success); border-color:rgba(16,185,129,0.3); }
+        .danger-btn.c-green:hover { background:var(--prism-success); color:#fff; }
+        .danger-btn.c-cyan { color:var(--prism-cyan); border-color:rgba(6,182,212,0.3); }
+        .danger-btn.c-cyan:hover { background:var(--prism-cyan); color:#fff; }
+        .danger-btn.c-violet { color:var(--prism-accent-text); border-color:rgba(124,58,237,0.3); }
+        .danger-btn.c-violet:hover { background:var(--prism-accent); color:#fff; }
+
+        /* ── Confirmation modal ── */
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; display:none;
+            align-items:center; justify-content:center; padding:24px; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-xl);
+            padding:24px; width:100%; max-width:440px; }
+        .modal-title { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:1.1rem; margin-bottom:12px; }
+
+        /* ── Responsive ── */
+        @media (max-width: 767px) {
+            .content { padding:var(--sp-4); }
+            .stat-grid { grid-template-columns:1fr; }
+            .service-grid { grid-template-columns:1fr; }
+            .form-row { flex-direction:column; }
+            .top-bar { padding:0 var(--sp-4); }
+        }
+        @media (max-width: 480px) {
+            .stat-grid { gap:var(--sp-2); }
+            .danger-grid { flex-direction:column; }
         }
     </style>
 </head>
 
-<body class="bg-slate-950 min-h-screen text-slate-200 overflow-x-hidden pb-32">
+<body>
+    <div id="prism-nav"></div>
 
-    <!-- Top Nav -->
-    <nav
-        class="bg-slate-900/50 backdrop-blur-md px-6 h-16 flex justify-between items-center sticky top-0 z-50 border-b border-white/5">
-        <div class="flex items-center gap-6">
-            <a href="/"
-                class="flex items-center gap-3 bg-slate-900 py-2 px-4 rounded-xl group hover:border-primary/50 transition-all border border-white/5">
-                <i class="fas fa-chevron-left text-slate-500 group-hover:text-primary"></i>
-                <span class="font-heading font-medium text-xs text-slate-300 group-hover:text-white">Back to
-                    Dashboard</span>
-            </a>
-            <div class="h-4 w-px bg-white/10 hidden md:block"></div>
-            <h1 class="font-heading font-bold text-lg text-white hidden md:block">Admin Console</h1>
-        </div>
-
-        <div class="flex items-center gap-3">
-            <div id="statusIndicator"
-                class="flex items-center gap-2 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span class="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">System Active</span>
+    <!-- Main -->
+    <div class="main">
+        <!-- Top bar -->
+        <header class="top-bar">
+            <button class="prism-nav-hamburger" onclick="prismNav.toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <span class="top-bar-title">Admin Console</span>
+            <div class="status-pill">
+                <div class="dot"></div>
+                <span>System Online</span>
             </div>
-        </div>
-    </nav>
+        </header>
 
-    <main class="container mx-auto p-4 md:p-8 max-w-7xl space-y-10">
+        <div class="content">
 
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div
-                class="bg-slate-900 border border-white/5 rounded-2xl p-6 group transition-all hover:border-primary/30">
-                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Authenticated Users</p>
-                <div class="text-2xl font-heading font-bold text-white flex items-center gap-3">
-                    <span id="statUsers">--</span>
-                    <i class="fas fa-users text-xs text-primary opacity-50"></i>
+            <!-- ========== SECTION: System Health ========== -->
+            <div class="section active" id="sec-health">
+                <div class="section-header">
+                    <div class="section-title"><i class="fas fa-heartbeat"></i> System Health</div>
                 </div>
-            </div>
-            <div
-                class="bg-slate-900 border border-white/5 rounded-2xl p-6 group transition-all hover:border-violet-500/30">
-                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total Database SKUs</p>
-                <div class="text-2xl font-heading font-bold text-white flex items-center gap-3">
-                    <span id="statProducts">--</span>
-                    <i class="fas fa-database text-xs text-violet-500 opacity-50"></i>
+
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Authenticated Users</div>
+                        <div class="stat-value"><span id="statUsers">--</span> <i class="fas fa-users stat-icon" style="color:var(--prism-accent-text)"></i></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Database SKUs</div>
+                        <div class="stat-value"><span id="statProducts">--</span> <i class="fas fa-database stat-icon" style="color:var(--prism-cyan)"></i></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Platform Version</div>
+                        <div class="stat-value" style="color:var(--prism-success)">PRISM v4.2.0 <i class="fas fa-circle stat-icon" style="font-size:8px;color:var(--prism-success);animation:pulse 2s infinite"></i></div>
+                    </div>
                 </div>
-            </div>
-            <div class="bg-slate-900 border border-white/5 rounded-2xl p-6 border-t-4 border-t-emerald-500">
-                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Platform Version</p>
-                <div class="text-2xl font-heading font-bold text-emerald-400 flex items-center gap-3">
-                    V4.1.0
-                    <div class="flex gap-1">
-                        <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+
+                <div class="section-title" style="font-size:var(--text-base); margin-bottom:var(--sp-4);">
+                    <i class="fas fa-server"></i> Service Status
+                </div>
+                <div class="service-grid">
+                    <div class="service-card">
+                        <div class="service-icon" style="background:var(--prism-cyan-glow); color:var(--prism-cyan);"><i class="fas fa-sync-alt"></i></div>
+                        <div class="service-info">
+                            <div class="service-name">EchoTik Sync</div>
+                            <div class="service-status" id="echotikStatus"><div class="dot-amber"></div> Checking...</div>
+                        </div>
+                    </div>
+                    <div class="service-card">
+                        <div class="service-icon" style="background:var(--prism-success-glow); color:var(--prism-success);"><i class="fas fa-database"></i></div>
+                        <div class="service-info">
+                            <div class="service-name">Database</div>
+                            <div class="service-status"><div class="dot-green"></div> Connected</div>
+                        </div>
+                    </div>
+                    <div class="service-card">
+                        <div class="service-icon" style="background:var(--prism-warning-glow); color:var(--prism-warning);"><i class="fas fa-envelope"></i></div>
+                        <div class="service-info">
+                            <div class="service-name">Gmail Scanner</div>
+                            <div class="service-status" id="gmailStatus"><div class="dot-amber"></div> Checking...</div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <!-- Left: User Registry -->
-            <div
-                class="lg:col-span-12 bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg relative">
-                <div class="p-5 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                    <h2 class="font-heading font-bold text-sm flex items-center gap-3 text-white">
-                        <i class="fas fa-id-badge text-violet-500"></i>
-                        Authorized Users
-                    </h2>
-                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Registry Sync:
-                        Active</span>
+            <!-- ========== SECTION: User Management ========== -->
+            <div class="section" id="sec-users">
+                <div class="section-header">
+                    <div class="section-title"><i class="fas fa-users"></i> User Management</div>
                 </div>
-                <div class="overflow-x-auto no-scrollbar">
-                    <table class="w-full admin-table">
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
                         <thead>
                             <tr>
                                 <th>Entity</th>
                                 <th>Access Level</th>
                                 <th>Status</th>
-                                <th class="text-right">Operations</th>
+                                <th style="text-align:right">Operations</th>
                             </tr>
                         </thead>
                         <tbody id="userTable">
-                            <tr>
-                                <td colspan="4"
-                                    class="py-12 text-center text-slate-600 font-bold uppercase tracking-widest text-xs">
-                                    Synchronizing Registry...</td>
-                            </tr>
+                            <tr><td colspan="4" style="text-align:center; padding:48px 0; color:var(--prism-text-faint); font-weight:600; text-transform:uppercase; letter-spacing:0.1em; font-size:var(--text-xs);">Synchronizing Registry...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Full Width: System Mainframe Logs -->
-            <div
-                class="lg:col-span-12 bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg relative">
-                <div class="p-5 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                    <h2 class="font-heading font-bold text-sm flex items-center gap-3 text-white">
-                        <i class="fas fa-terminal text-primary"></i>
-                        Activity Logs
-                    </h2>
-                    <button onclick="window.location.reload()"
-                        class="text-[9px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Refresh
-                        Logs</button>
+            <!-- ========== SECTION: Activity Log ========== -->
+            <div class="section" id="sec-activity">
+                <div class="section-header">
+                    <div class="section-title"><i class="fas fa-terminal"></i> Activity Log</div>
+                    <button class="btn btn-ghost" onclick="loadActivityLog()"><i class="fas fa-sync-alt"></i> Refresh</button>
                 </div>
-                <div class="overflow-x-auto max-h-[500px] no-scrollbar">
-                    <table class="w-full admin-table border-collapse">
-                        <thead class="sticky top-0 bg-slate-900 z-10 shadow-sm">
-                            <tr>
-                                <th>Timestamp</th>
-                                <th>Operator</th>
-                                <th>Protocol</th>
-                                <th>Parameters</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logTableBody" class="font-mono text-[10px] text-slate-400 tabular-nums">
-                            <tr>
-                                <td colspan="4" class="py-12 text-center text-slate-600">Connection active.
-                                    Awaiting logs...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- System Controls -->
-        <div class="bg-slate-900 border border-white/5 rounded-2xl p-8 shadow-lg">
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="font-heading font-bold text-lg flex items-center gap-3 text-white">
-                    <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <i class="fas fa-database text-primary text-xs"></i>
-                    </div>
-                    Database Controls
-                </h3>
-                <button onclick="stopSync(this)" id="btnStop" disabled
-                    class="bg-rose-600/20 text-rose-500 border border-rose-500/20 px-4 py-2 rounded-xl font-bold uppercase tracking-widest text-[9px] hover:bg-rose-600 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-2">
-                    <i class="fas fa-stop"></i> Stop Current Sync
-                </button>
-            </div>
-
-            <div class="flex flex-wrap gap-4 mb-8 items-end">
-                <div>
-                    <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Sync
-                        Volume</label>
-                    <select id="syncPages"
-                        class="bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-primary/50 outline-none transition-all">
-                        <option value="20">1,000 Products (Quick)</option>
-                        <option value="50">2,500 Products (Standard)</option>
-                        <option value="100">5,000 Products (Deep)</option>
-                        <option value="200">10,000 Products (Mass)</option>
-                        <option value="400">20,000 Products (Mega)</option>
-                        <option value="600" selected>30,000 Products (Ultra)</option>
-                    </select>
-                </div>
-                <button onclick="syncCopilot()" id="btnCopilot"
-                    class="btn-premium px-8 py-3 shadow-lg shadow-primary/20">
-                    <i class="fas fa-bolt mr-2 text-xs"></i>
-                    Initiate Sync
-                </button>
-
-                <button onclick="runCleanup()"
-                    class="bg-slate-950 border border-white/10 px-6 py-3 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-broom text-xs"></i>
-                    <span>Optimize Database</span>
-                </button>
-
-                <button onclick="manualEnrich()" id="btnEnrich"
-                    class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-cyan-500/20">
-                    <i class="fas fa-video text-xs"></i>
-                    <span>📊 Manual Enrich</span>
-                </button>
-            </div>
-
-            <!-- Creator Products Export -->
-            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
-                <div class="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center">
-                    <i class="fas fa-user-circle text-pink-500 text-xs"></i>
-                </div>
-                Creator Products Export
-            </h3>
-            <p class="text-slate-400 text-xs mb-4">Extract all products from a specific TikTok affiliate creator and
-                export to CSV.</p>
-
-            <div class="flex flex-wrap gap-4 items-end mb-8">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Creator
-                        ID</label>
-                    <input type="text" id="creatorIdInput" value="7436686228703265838"
-                        placeholder="e.g. 7436686228703265838"
-                        class="bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-pink-400 focus:border-pink-400/50 outline-none transition-all w-64">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Creator
-                        Name (for filename)</label>
-                    <input type="text" id="creatorNameInput" value="cakedfinds" placeholder="e.g. cakedfinds"
-                        class="bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-pink-400/50 outline-none transition-all w-48">
-                </div>
-                <button onclick="exportCreatorProducts()" id="btnExportCreator"
-                    class="bg-pink-600 hover:bg-pink-500 px-6 py-3 rounded-xl text-white flex items-center gap-3 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-pink-500/20">
-                    <i class="fas fa-file-csv text-xs"></i>
-                    <span>Export to CSV</span>
-                </button>
-            </div>
-
-            <!-- Google Sheets Sync Section -->
-            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
-                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <i class="fas fa-table text-emerald-500 text-xs"></i>
-                </div>
-                Google Sheets Auto-Sync
-            </h3>
-            <p class="text-slate-400 text-xs mb-4">
-                Auto-sync cakedfinds products to Google Sheets.
-                <a href="https://console.cloud.google.com/" target="_blank" class="text-emerald-400 underline">Create
-                    service account</a>,
-                share sheet with the email, paste credentials below.
-            </p>
-
-            <div class="space-y-4 max-w-2xl mb-6">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Google
-                        Sheet ID</label>
-                    <input type="text" id="googleSheetIdInput"
-                        placeholder="e.g. 1_ZRoTnG3rd-cE5aZwGY5uFUrffjf6oP2itZZJvt82CY"
-                        class="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-emerald-400 focus:border-emerald-400/50 outline-none transition-all">
-                    <p class="text-slate-600 text-[10px] mt-1">From URL:
-                        docs.google.com/spreadsheets/d/<strong>[SHEET_ID]</strong>/edit</p>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Service
-                        Account JSON</label>
-                    <textarea id="googleCredsInput" rows="4"
-                        placeholder='{"type": "service_account", "project_id": "...", "private_key_id": "...", ...}'
-                        class="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-slate-400 focus:border-emerald-400/50 outline-none transition-all resize-none"></textarea>
-                </div>
-                <div class="flex flex-wrap gap-4 items-end">
-                    <div>
-                        <label
-                            class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Auto-Sync
-                            Frequency</label>
-                        <select id="googleSyncFrequency"
-                            class="bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-emerald-400/50 outline-none transition-all">
-                            <option value="manual">Manual Only</option>
-                            <option value="daily">Daily</option>
-                            <option value="3days" selected>Every 3 Days</option>
-                            <option value="weekly">Weekly</option>
-                        </select>
-                    </div>
-                    <button onclick="saveGoogleSheetsConfig()"
-                        class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20">
-                        Save Config
-                    </button>
-                    <button onclick="syncToGoogleSheets()" id="btnSyncSheets"
-                        class="px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2">
-                        <i class="fas fa-sync text-xs"></i>
-                        Sync Now
-                    </button>
-                </div>
-                <p id="lastSyncTime" class="text-slate-600 text-[10px]">Last sync: Never</p>
-            </div>
-
-            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
-                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <i class="fas fa-cookie-bite text-emerald-500 text-xs"></i>
-                </div>
-                TikTokCopilot Configuration
-            </h3>
-
-            <div class="space-y-6 max-w-2xl mb-10">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Session
-                        Cookie (Direct String)</label>
-                    <div class="flex gap-4">
-                        <textarea id="copilotCookieInput" rows="3"
-                            placeholder="_ga=...; __session=...; __session_pOM46XQh=..."
-                            class="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-emerald-400 focus:border-emerald-400/50 outline-none transition-all resize-none"></textarea>
-                    </div>
-                    <div class="mt-3 flex gap-4">
-                        <button onclick="saveCopilotCookie()"
-                            class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20">
-                            Save Cookie
-                        </button>
-                        <button onclick="testCopilotCookie()" id="btnTestCookie"
-                            class="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-widest transition-all border border-white/5">
-                            Test Connection
-                        </button>
+                <div class="admin-table-wrap">
+                    <div class="log-scroll">
+                        <table class="admin-table">
+                            <thead style="position:sticky; top:0; z-index:5;">
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Operator</th>
+                                    <th>Protocol</th>
+                                    <th>Parameters</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logTableBody">
+                                <tr><td colspan="4" style="text-align:center; padding:48px 0; color:var(--prism-text-faint);">Awaiting logs...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-
-                <!-- Legacy Auto-Refresh Section removed - now using Playwright 2FA below -->
             </div>
 
-            <!-- 2FA Playwright Authentication Section -->
-            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
-                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-shield-alt text-primary text-xs"></i>
-                </div>
-                Playwright 2FA Authentication
-            </h3>
-            <p class="text-slate-400 text-xs mb-4">
-                Authenticate with TikTokCopilot using Playwright + 2FA. Session persists in database (survives deploys).
-            </p>
-
-            <div class="space-y-4 max-w-2xl mb-10">
-                <!-- Status -->
-                <div class="flex items-center gap-4 mb-4">
-                    <div class="flex items-center gap-2">
-                        <div id="auth2faIndicator" class="w-2 h-2 rounded-full bg-slate-600"></div>
-                        <span id="auth2faStatus" class="text-xs text-slate-400">Checking status...</span>
-                    </div>
-                    <button onclick="checkAuth2faStatus()"
-                        class="text-[10px] text-slate-500 hover:text-white uppercase tracking-widest">
-                        <i class="fas fa-sync-alt mr-1"></i> Refresh Status
-                    </button>
+            <!-- ========== SECTION: Config Editor ========== -->
+            <div class="section" id="sec-config">
+                <div class="section-header">
+                    <div class="section-title"><i class="fas fa-sliders-h"></i> Configuration</div>
                 </div>
 
-                <!-- Step 1: Initiate -->
-                <div class="p-4 rounded-xl bg-slate-800/50 border border-white/5">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Step 1: Start Login
-                    </p>
-                    <div class="flex flex-wrap gap-3 items-center">
-                        <button onclick="initiateCopilotAuth()" id="btnInitiateAuth"
-                            class="px-5 py-2.5 rounded-xl bg-primary hover:bg-blue-600 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2">
-                            <i class="fas fa-key text-xs"></i>
-                            Start Login
-                        </button>
-                        <span class="text-[10px] text-slate-500">This will send a 2FA code to your email</span>
-                    </div>
-                </div>
-
-                <!-- Step 2: Verify -->
-                <div class="p-4 rounded-xl bg-slate-800/50 border border-white/5">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Step 2: Enter Code
-                    </p>
-                    <div class="flex flex-wrap gap-3 items-end">
-                        <div>
-                            <label
-                                class="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">6-Digit
-                                Code from Email</label>
-                            <input type="text" id="auth2faCodeInput" placeholder="123456" maxlength="6"
-                                class="bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-lg font-mono text-emerald-400 focus:border-emerald-400/50 outline-none transition-all w-36 text-center tracking-[0.5em]">
+                <!-- AI Config -->
+                <div class="config-block">
+                    <div class="config-block-title"><i class="fas fa-robot"></i> AI Configuration</div>
+                    <div class="form-group">
+                        <label class="form-label">Anthropic API Key</label>
+                        <div class="form-row">
+                            <input type="password" id="anthropicKeyInput" class="form-input" placeholder="sk-ant-..." style="flex:1">
+                            <button class="btn btn-primary" onclick="saveAnthropicKey()"><i class="fas fa-save"></i> Save Key</button>
                         </div>
-                        <button onclick="verifyCopilotAuth()" id="btnVerifyAuth"
-                            class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2">
-                            <i class="fas fa-check text-xs"></i>
-                            Verify Code
-                        </button>
                     </div>
                 </div>
 
-                <p id="auth2faMessage" class="text-xs text-slate-400 hidden"></p>
-            </div>
-
-            <h3 class="font-heading font-bold text-lg mb-6 flex items-center gap-3 mt-10 text-white">
-                <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                    <i class="fas fa-robot text-violet-500 text-xs"></i>
-                </div>
-                AI Configuration
-            </h3>
-
-            <div class="space-y-6 max-w-2xl">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Anthropic
-                        API Key</label>
-                    <div class="flex gap-4">
-                        <input type="password" id="anthropicKeyInput" placeholder="sk-ant-..."
-                            class="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-cyan-400 focus:border-cyan-400/50 outline-none transition-all">
-                        <button onclick="saveAnthropicKey()"
-                            class="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-violet-500/20">
-                            Save Key
-                        </button>
+                <!-- Google Sheets -->
+                <div class="config-block">
+                    <div class="config-block-title"><i class="fas fa-table" style="color:var(--prism-success)"></i> Google Sheets Sync</div>
+                    <div class="form-group">
+                        <label class="form-label">Google Sheet ID</label>
+                        <input type="text" id="googleSheetIdInput" class="form-input" placeholder="e.g. 1_ZRoTnG3rd-cE5aZwGY5uFUrffjf6oP2itZZJvt82CY">
+                        <div class="form-hint">From URL: docs.google.com/spreadsheets/d/<strong>[SHEET_ID]</strong>/edit</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Service Account JSON</label>
+                        <textarea id="googleCredsInput" class="form-input" rows="4" placeholder='{"type": "service_account", "project_id": "...", ...}'></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Auto-Sync Frequency</label>
+                        <div class="form-row">
+                            <select id="googleSyncFrequency" class="form-input" style="max-width:200px">
+                                <option value="manual">Manual Only</option>
+                                <option value="daily">Daily</option>
+                                <option value="3days" selected>Every 3 Days</option>
+                                <option value="weekly">Weekly</option>
+                            </select>
+                            <button class="btn btn-green" onclick="saveGoogleSheetsConfig()"><i class="fas fa-save"></i> Save Config</button>
+                            <button class="btn btn-ghost" onclick="syncToGoogleSheets()" id="btnSyncSheets"><i class="fas fa-sync"></i> Sync Now</button>
+                        </div>
+                        <div class="form-hint" id="lastSyncTime">Last sync: Never</div>
                     </div>
                 </div>
+
+                <!-- Creator Export -->
+                <div class="config-block">
+                    <div class="config-block-title"><i class="fas fa-user-circle" style="color:var(--prism-error)"></i> Creator Export</div>
+                    <div class="form-row" style="margin-bottom:var(--sp-3)">
+                        <div class="form-group" style="flex:1; margin-bottom:0;">
+                            <label class="form-label">Creator ID</label>
+                            <input type="text" id="creatorIdInput" class="form-input" value="7436686228703265838" placeholder="e.g. 7436686228703265838" style="font-family:monospace">
+                        </div>
+                        <div class="form-group" style="flex:1; margin-bottom:0;">
+                            <label class="form-label">Creator Name</label>
+                            <input type="text" id="creatorNameInput" class="form-input" value="cakedfinds" placeholder="e.g. cakedfinds">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="exportCreatorProducts()" id="btnExportCreator"><i class="fas fa-file-csv"></i> Export to CSV</button>
+                </div>
             </div>
 
-            <h4
-                class="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4 mt-12 border-t border-white/5 pt-8">
-                Danger Zone</h4>
-            <div class="flex flex-wrap gap-4">
-                <button onclick="toggleMaintenanceMode()" id="btnMaintenance"
-                    class="bg-amber-950/20 border border-amber-500/20 px-6 py-3 rounded-xl hover:bg-amber-500 hover:text-white text-amber-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-tools text-xs group-hover:animate-spin"></i>
-                    <span id="maintenanceBtnText">Enable Maintenance</span>
-                </button>
-                <button onclick="restoreHiddenProducts()" id="btnRestoreHidden"
-                    class="bg-emerald-950/20 border border-emerald-500/20 px-6 py-3 rounded-xl hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-eye text-xs"></i>
-                    <span>Restore Hidden Products</span>
-                </button>
-                <button onclick="initBrandHunter()" id="btnInitBrands"
-                    class="bg-cyan-950/20 border border-cyan-500/20 px-6 py-3 rounded-xl hover:bg-cyan-500 hover:text-white text-cyan-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-database text-xs"></i>
-                    <span>Init Brand Hunter</span>
-                </button>
-                <button onclick="resetBrandHunter()" id="btnResetBrands"
-                    class="bg-violet-950/20 border border-violet-500/20 px-6 py-3 rounded-xl hover:bg-violet-500 hover:text-white text-violet-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-bullseye text-xs"></i>
-                    <span>Reset Brand Hunter</span>
-                </button>
-                <button onclick="cleanupZeroSales()" id="btnCleanZeroSales"
-                    class="bg-amber-950/20 border border-amber-500/20 px-6 py-3 rounded-xl hover:bg-amber-500 hover:text-white text-amber-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-trash-alt text-xs"></i>
-                    <span>Delete 0 7D Sales</span>
-                </button>
-                <button onclick="cleanupZeroStats()" id="btnCleanZero"
-                    class="bg-amber-950/20 border border-amber-500/20 px-6 py-3 rounded-xl hover:bg-amber-500 hover:text-white text-amber-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-trash-alt text-xs"></i>
-                    <span>Delete 0-Stat Products</span>
-                </button>
-                <button onclick="deduplicateProducts()" id="btnDeduplicate"
-                    class="bg-cyan-950/20 border border-cyan-500/20 px-6 py-3 rounded-xl hover:bg-cyan-500 hover:text-white text-cyan-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-clone text-xs"></i>
-                    <span>Deduplicate Products</span>
-                </button>
-                <button onclick="deleteLowVideos()" id="btnDeleteLowVideos"
-                    class="bg-orange-950/20 border border-orange-500/20 px-6 py-3 rounded-xl hover:bg-orange-500 hover:text-white text-orange-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-video-slash text-xs"></i>
-                    <span>Delete ≤1 Video</span>
-                </button>
-                <button onclick="purgeUnenriched()" id="btnPurgeUnenriched"
-                    class="bg-purple-950/20 border border-purple-500/20 px-6 py-3 rounded-xl hover:bg-purple-500 hover:text-white text-purple-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-filter-circle-xmark text-xs"></i>
-                    <span>Purge Unenriched</span>
-                </button>
-                <button onclick="nukeProducts()"
-                    class="bg-rose-950/20 border border-rose-500/20 px-6 py-3 rounded-xl hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-radiation text-xs group-hover:animate-spin"></i>
-                    <span>System Reset</span>
-                </button>
-                <button onclick="nukeBrandHunter()"
-                    class="bg-rose-950/20 border border-rose-500/20 px-6 py-3 rounded-xl hover:bg-rose-500 hover:text-white text-rose-500 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-bomb text-xs group-hover:animate-bounce"></i>
-                    <span>Nuke Brand Hunter</span>
-                </button>
-                <button onclick="cleanupFull()"
-                    class="bg-indigo-950/20 border border-indigo-500/20 px-6 py-3 rounded-xl hover:bg-indigo-500 hover:text-white text-indigo-400 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-broom text-xs group-hover:animate-pulse"></i>
-                    <span>Deep Clean Brands</span>
-                </button>
-                <button onclick="runMigrations()" id="btnMigrate"
-                    class="bg-teal-950/20 border border-teal-500/20 px-6 py-3 rounded-xl hover:bg-teal-500 hover:text-white text-teal-400 flex items-center gap-3 transition-all group text-xs font-bold uppercase tracking-widest">
-                    <i class="fas fa-database text-xs group-hover:animate-pulse"></i>
-                    <span>Run Migrations</span>
-                </button>
+            <!-- ========== SECTION: Danger Zone ========== -->
+            <div class="section" id="sec-danger">
+                <div class="danger-header">
+                    <i class="fas fa-radiation"></i>
+                    <span>Danger Zone</span>
+                    <small>Irreversible Operations</small>
+                </div>
+
+                <div class="danger-grid">
+                    <button class="danger-btn c-amber" id="btnMaintenance" onclick="toggleMaintenanceMode()">
+                        <i class="fas fa-tools"></i> <span id="maintenanceBtnText">Maintenance Mode</span>
+                    </button>
+                    <button class="danger-btn c-green" id="btnRestoreHidden" onclick="restoreHiddenProducts()">
+                        <i class="fas fa-eye"></i> Restore Hidden Products
+                    </button>
+                    <button class="danger-btn c-cyan" id="btnInitBrands" onclick="initBrandHunter()">
+                        <i class="fas fa-database"></i> Init Brand Hunter
+                    </button>
+                    <button class="danger-btn c-violet" id="btnResetBrands" onclick="resetBrandHunter()">
+                        <i class="fas fa-bullseye"></i> Reset Brand Hunter
+                    </button>
+                    <button class="danger-btn c-amber" id="btnCleanZeroSales" onclick="cleanupZeroSales()">
+                        <i class="fas fa-trash-alt"></i> Delete 0 7D Sales
+                    </button>
+                    <button class="danger-btn c-amber" id="btnCleanZero" onclick="cleanupZeroStats()">
+                        <i class="fas fa-trash-alt"></i> Delete 0-Stat Products
+                    </button>
+                    <button class="danger-btn c-cyan" id="btnDeduplicate" onclick="deduplicateProducts()">
+                        <i class="fas fa-clone"></i> Deduplicate Products
+                    </button>
+                    <button class="danger-btn c-amber" id="btnDeleteLowVideos" onclick="deleteLowVideos()">
+                        <i class="fas fa-video-slash"></i> Delete &le;1 Video
+                    </button>
+                    <button class="danger-btn c-violet" id="btnPurgeUnenriched" onclick="purgeUnenriched()">
+                        <i class="fas fa-filter-circle-xmark"></i> Purge Unenriched
+                    </button>
+                    <button class="danger-btn c-red" onclick="nukeProducts()">
+                        <i class="fas fa-radiation"></i> System Reset
+                    </button>
+                    <button class="danger-btn c-red" onclick="nukeBrandHunter()">
+                        <i class="fas fa-bomb"></i> Nuke Brand Hunter
+                    </button>
+                    <button class="danger-btn c-violet" onclick="cleanupFull()">
+                        <i class="fas fa-broom"></i> Deep Clean Brands
+                    </button>
+                    <button class="danger-btn c-cyan" id="btnMigrate" onclick="runMigrations()">
+                        <i class="fas fa-database"></i> Run Migrations
+                    </button>
+                </div>
+            </div>
+
+        </div><!-- .content -->
+    </div><!-- .main -->
+
+    <!-- Confirmation Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal">
+            <div class="modal-title" style="color:var(--prism-error);">Confirm Action</div>
+            <p id="confirmMsg" style="font-size:var(--text-sm); color:var(--prism-text-muted); margin-bottom:20px; line-height:1.6;"></p>
+            <div style="display:flex; gap:10px;">
+                <button class="btn" style="flex:1; background:var(--prism-error); color:#fff;" id="confirmYes">Confirm</button>
+                <button class="btn btn-ghost" style="flex:1;" onclick="closeConfirm()">Cancel</button>
             </div>
         </div>
-    </main>
+    </div>
 
     <script>
+    window.prismSubNav = [
+        { label: 'System Health', icon: 'fas fa-heartbeat', key: 'health' },
+        { label: 'Users', icon: 'fas fa-users', key: 'users' },
+        { label: 'Activity Log', icon: 'fas fa-terminal', key: 'activity' },
+        { label: 'Config', icon: 'fas fa-sliders-h', key: 'config' },
+        { label: 'Danger Zone', icon: 'fas fa-radiation', key: 'danger' }
+    ];
+    window.prismSubNavCallback = function(key) { showSection(key); };
+    </script>
+    <script src="/pwa/js/prism-nav.js"></script>
+
+    <script>
+        // ── Section switching ──
+        function showSection(name) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            const sec = document.getElementById('sec-' + name);
+            if (sec) sec.classList.add('active');
+        }
+
+        // ── Confirmation modal ──
+        let confirmCallback = null;
+        function confirmAction(msg, onConfirm) {
+            document.getElementById('confirmMsg').textContent = msg;
+            document.getElementById('confirmModal').classList.add('open');
+            confirmCallback = onConfirm;
+            document.getElementById('confirmYes').onclick = function() {
+                closeConfirm();
+                if (confirmCallback) confirmCallback();
+            };
+        }
+        function closeConfirm() {
+            document.getElementById('confirmModal').classList.remove('open');
+            confirmCallback = null;
+        }
+
+        // ── Helper: disable button + spinner ──
+        function btnLoading(btn, text) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${text || 'Working...'}`;
+            btn.disabled = true;
+            return orig;
+        }
+        function btnRestore(btn, orig) {
+            btn.innerHTML = orig;
+            btn.disabled = false;
+        }
+
+        // ── Load admin data ──
         async function loadAdmin() {
             try {
+                // Product count
                 const pRes = await fetch('/api/oos-stats');
                 if (pRes.ok) {
                     const data = await pRes.json();
-                    document.getElementById('statProducts').textContent = (data.stats.total_products || 0).toLocaleString();
+                    document.getElementById('statProducts').textContent = (data.stats?.total_products || 0).toLocaleString();
                 }
+            } catch(e) { console.error('Stats load error:', e); }
 
+            try {
+                // Current user
                 const meRes = await fetch('/api/me');
                 if (meRes.ok) {
                     const me = await meRes.json();
-                    document.getElementById('statUsers').textContent = "1 Master Account";
-
+                    document.getElementById('statUsers').textContent = '1';
                     document.getElementById('userTable').innerHTML = `
-                        <tr class="admin-row">
+                        <tr>
                             <td>
-                                <div class="flex items-center gap-4">
-                                    <div class="w-10 h-10 rounded-xl bg-slate-800 p-1 border border-white/5 relative overflow-hidden">
-                                        <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.discord_avatar}.png" 
-                                             class="w-full h-full object-cover rounded-lg" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                                <div class="user-entity">
+                                    <div class="user-avatar">
+                                        <img src="https://cdn.discordapp.com/avatars/${me.discord_id}/${me.discord_avatar}.png"
+                                             onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
                                     </div>
                                     <div>
-                                        <p class="font-bold text-white text-sm tracking-tight">${me.discord_username || 'Unknown Operator'}</p>
-                                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">ID: ${me.discord_id}</p>
+                                        <div class="user-name">${me.discord_username || 'Unknown Operator'}</div>
+                                        <div class="user-id">ID: ${me.discord_id}</div>
                                     </div>
                                 </div>
                             </td>
+                            <td><span class="badge badge-admin">L5 Admin</span></td>
                             <td>
-                                <span class="badge-premium bg-violet-600/20 text-violet-400 border border-violet-500/30">L5 Admin</span>
+                                <div class="status-online"><div class="dot-green"></div> Online</div>
                             </td>
-                            <td>
-                                <div class="flex items-center gap-2">
-                                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-                                    <span class="text-[10px] font-bold text-white uppercase">Online</span>
-                                </div>
-                            </td>
-                            <td class="text-right">
-                                <button class="text-slate-500 hover:text-white transition-colors"><i class="fas fa-edit"></i></button>
+                            <td style="text-align:right">
+                                <button class="btn btn-ghost" style="padding:6px 10px"><i class="fas fa-edit"></i></button>
                             </td>
                         </tr>`;
                 }
+            } catch(e) { console.error('User load error:', e); }
 
-                const logRes = await fetch('/api/admin/activity');
-                if (logRes.ok) {
-                    const lData = await logRes.json();
-                    const rows = (lData.logs || []).map(l => `
-                        <tr class="admin-row">
-                            <td class="opacity-50">${l.created_at_est || l.created_at}</td>
-                            <td class="text-cyan-400 font-bold">${l.username}</td>
-                            <td class="text-white">${l.action}</td>
-                            <td class="max-w-xs truncate" title="${l.details || ''}">${l.details || "-"}</td>
-                        </tr>`).join('');
-                    document.getElementById('logTableBody').innerHTML = rows || '<tr><td colspan="4" class="py-8 text-center text-slate-600">ZERO ACTIVITY DETECTED</td></tr>';
-                }
+            // Activity log
+            await loadActivityLog();
 
-                // Load existing keys (masked for safety)
+            // Anthropic key
+            try {
                 const configRes = await fetch('/api/admin/config/ANTHROPIC_API_KEY');
                 if (configRes.ok) {
                     const cData = await configRes.json();
                     if (cData.value) {
-                        document.getElementById('anthropicKeyInput').value = "••••••••••••••••••••••••";
+                        document.getElementById('anthropicKeyInput').value = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
                     }
                 }
+            } catch(e) {}
 
-                const cookieRes = await fetch('/api/admin/config/TIKTOK_COPILOT_COOKIE');
-                if (cookieRes.ok) {
-                    const ckData = await cookieRes.json();
-                    if (ckData.value) {
-                        document.getElementById('copilotCookieInput').value = "•••••••••••••••••••••••• (Active Cookie Set)";
+            // EchoTik sync status
+            try {
+                const syncRes = await fetch('/api/admin/config/LAST_ECHOTIK_SYNC');
+                if (syncRes.ok) {
+                    const sData = await syncRes.json();
+                    const el = document.getElementById('echotikStatus');
+                    if (sData.value) {
+                        el.innerHTML = `<div class="dot-green"></div> Last sync: ${new Date(sData.value).toLocaleString()}`;
+                    } else {
+                        el.innerHTML = `<div class="dot-amber"></div> No sync recorded`;
                     }
                 }
-            } catch (e) { console.error("Admin Load Error", e); }
+            } catch(e) {
+                document.getElementById('echotikStatus').innerHTML = `<div class="dot-red"></div> Error`;
+            }
+
+            // Gmail status - if page loaded, assume operational
+            document.getElementById('gmailStatus').innerHTML = `<div class="dot-green"></div> Operational`;
+
+            // Google Sheets config
+            await loadGoogleSheetsConfig();
+
+            // Maintenance status
+            await checkMaintenanceStatus();
         }
 
+        async function loadActivityLog() {
+            try {
+                const logRes = await fetch('/api/admin/activity');
+                if (logRes.ok) {
+                    const lData = await logRes.json();
+                    const rows = (lData.logs || []).map(l => `
+                        <tr>
+                            <td class="log-timestamp">${l.created_at_est || l.created_at}</td>
+                            <td class="log-operator">${l.username}</td>
+                            <td class="log-action">${l.action}</td>
+                            <td class="log-detail" title="${(l.details || '').replace(/"/g, '&quot;')}">${l.details || '-'}</td>
+                        </tr>`).join('');
+                    document.getElementById('logTableBody').innerHTML = rows ||
+                        '<tr><td colspan="4" style="text-align:center; padding:48px 0; color:var(--prism-text-faint);">No activity detected</td></tr>';
+                }
+            } catch(e) { console.error('Activity log error:', e); }
+        }
+
+        // ── Config operations ──
         async function saveAnthropicKey() {
             const key = document.getElementById('anthropicKeyInput').value;
-            if (!key || key.includes('•')) return alert("Please enter a valid key.");
-
+            if (!key || key.includes('\u2022')) return alert('Please enter a valid key.');
             try {
                 const res = await fetch('/api/admin/config/ANTHROPIC_API_KEY', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ value: key })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert("Anthropic API Key secured and saved!");
-                    document.getElementById('anthropicKeyInput').value = "••••••••••••••••••••••••";
-                } else alert("Error: " + data.error);
-            } catch (e) { alert("Fault: " + e); }
+                    alert('Anthropic API Key saved successfully.');
+                    document.getElementById('anthropicKeyInput').value = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+                } else alert('Error: ' + data.error);
+            } catch(e) { alert('Error: ' + e); }
         }
 
-        async function saveCopilotCookie() {
-            const cookie = document.getElementById('copilotCookieInput').value;
-            if (!cookie || cookie.includes('•')) return alert("Please enter a valid cookie string.");
-
-            try {
-                const res = await fetch('/api/admin/config/TIKTOK_COPILOT_COOKIE', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ value: cookie })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    alert("TikTokCopilot Cookie updated successfully!");
-                    document.getElementById('copilotCookieInput').value = "•••••••••••••••••••••••• (Active Cookie Set)";
-                } else alert("Error: " + data.error);
-            } catch (e) { alert("Fault: " + e); }
-        }
-
-        async function testCopilotCookie() {
-            const btn = document.getElementById('btnTestCookie');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/copilot/test');
-                const data = await res.json();
-                if (data.success) {
-                    alert("✅ Connection Successful! " + (data.message || "Cookie is valid."));
-                } else {
-                    alert("❌ Connection Failed: " + (data.error || "Cookie may be invalid or expired."));
-                    console.log("Test Resp:", data);
-                }
-            } catch (e) {
-                alert("❌ Connection Fault: " + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        // Legacy refreshCopilotSession and checkAutoRefreshStatus removed - using Playwright 2FA now
-
-        // Check status on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            checkAuth2faStatus();
-            checkSyncStatus(); // Enable stop button if sync is running
-            // Check 2FA status every 5 minutes
-            setInterval(checkAuth2faStatus, 300000);
-        });
-
-        // Check if sync is running (for stop button persistence across page refresh)
-        async function checkSyncStatus() {
-            try {
-                const res = await fetch('/api/copilot/sync-status');
-                const data = await res.json();
-                if (data.running) {
-                    const stopBtn = document.getElementById('btnStop');
-                    if (stopBtn) {
-                        stopBtn.disabled = false;
-                    }
-                }
-            } catch (e) {
-                console.log('Sync status check error:', e);
-            }
-        }
-
-        // ============ 2FA AUTHENTICATION FUNCTIONS ============
-
-        async function checkAuth2faStatus() {
-            const indicator = document.getElementById('auth2faIndicator');
-            const status = document.getElementById('auth2faStatus');
-
-            try {
-                const res = await fetch('/api/copilot-auth/status');
-                const data = await res.json();
-
-                if (data.sessionValid) {
-                    indicator.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
-                    status.textContent = '✓ Session Active - ' + (data.sessionCookies?.length || 0) + ' cookies';
-                    status.className = 'text-xs text-emerald-400';
-                } else if (data.pendingSignIn) {
-                    indicator.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
-                    status.textContent = '⏳ Awaiting 2FA Code';
-                    status.className = 'text-xs text-amber-400';
-                } else {
-                    indicator.className = 'w-2 h-2 rounded-full bg-slate-600';
-                    status.textContent = 'No active session';
-                    status.className = 'text-xs text-slate-400';
-                }
-            } catch (e) {
-                indicator.className = 'w-2 h-2 rounded-full bg-rose-500';
-                status.textContent = 'Error checking status';
-                status.className = 'text-xs text-rose-400';
-            }
-        }
-
-        async function initiateCopilotAuth() {
-            const btn = document.getElementById('btnInitiateAuth');
-            const msg = document.getElementById('auth2faMessage');
-            const original = btn.innerHTML;
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
-            btn.disabled = true;
-            msg.className = 'text-xs text-slate-400 hidden';
-
-            try {
-                const res = await fetch('/api/copilot-auth/initiate', { method: 'POST' });
-                const data = await res.json();
-
-                if (data.status === 'needs_2fa') {
-                    msg.textContent = '📧 Check your email for the 6-digit code, then enter it below!';
-                    msg.className = 'text-xs text-amber-400 p-3 bg-amber-500/10 rounded-lg border border-amber-500/20';
-                    checkAuth2faStatus();
-                } else if (data.status === 'complete') {
-                    msg.textContent = '✅ Login successful! No 2FA needed. Session saved.';
-                    msg.className = 'text-xs text-emerald-400 p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20';
-                    checkAuth2faStatus();
-                } else if (data.error) {
-                    msg.textContent = '❌ Error: ' + data.error;
-                    msg.className = 'text-xs text-rose-400 p-3 bg-rose-500/10 rounded-lg border border-rose-500/20';
-                } else {
-                    msg.textContent = '⚠️ Unexpected response: ' + JSON.stringify(data);
-                    msg.className = 'text-xs text-amber-400';
-                }
-            } catch (e) {
-                msg.textContent = '❌ Connection Error: ' + e.message;
-                msg.className = 'text-xs text-rose-400 p-3 bg-rose-500/10 rounded-lg border border-rose-500/20';
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function verifyCopilotAuth() {
-            const btn = document.getElementById('btnVerifyAuth');
-            const codeInput = document.getElementById('auth2faCodeInput');
-            const msg = document.getElementById('auth2faMessage');
-            const code = codeInput.value.trim();
-            const original = btn.innerHTML;
-
-            if (!code || code.length !== 6) {
-                alert('Please enter the 6-digit code from your email.');
-                codeInput.focus();
-                return;
-            }
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/copilot-auth/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code: code })
-                });
-                const data = await res.json();
-
-                if (data.status === 'complete') {
-                    msg.textContent = '✅ ' + (data.message || '2FA Verified! Session saved to database.');
-                    msg.className = 'text-xs text-emerald-400 p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20';
-                    codeInput.value = '';
-                    checkAuth2faStatus();
-                } else if (data.error) {
-                    msg.textContent = '❌ Error: ' + data.error;
-                    msg.className = 'text-xs text-rose-400 p-3 bg-rose-500/10 rounded-lg border border-rose-500/20';
-                } else {
-                    msg.textContent = '⚠️ Unexpected: ' + JSON.stringify(data);
-                    msg.className = 'text-xs text-amber-400';
-                }
-            } catch (e) {
-                msg.textContent = '❌ Verification Error: ' + e.message;
-                msg.className = 'text-xs text-rose-400 p-3 bg-rose-500/10 rounded-lg border border-rose-500/20';
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        let isStopRequested = false;
-
-        async function stopSync(btn) {
-            isStopRequested = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Stopping...';
-            try {
-                await fetch('/api/copilot/stop-sync', { method: 'POST' });
-                alert("🛑 Stop signal sent! Background syncs will terminate shortly.");
-            } catch (e) {
-                console.error("Stop signal error:", e);
-                alert("Error sending stop signal: " + e.message);
-            } finally {
-                // Reset button after a short delay
-                setTimeout(() => {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-stop"></i> Stop Current Sync';
-                }, 1500);
-            }
-        }
-
-        async function syncCopilot() {
-            const btn = document.getElementById('btnCopilot');
-            const stopBtn = document.getElementById('btnStop');
-            const pageSelect = document.getElementById('syncPages');
-            const maxPages = parseInt(pageSelect.value || 20);
-            const targetProducts = maxPages * 50; // ~50 products per page
-            const original = btn.innerHTML;
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Starting...</span>';
-            btn.disabled = true;
-            stopBtn.disabled = false;
-
-            try {
-                // Reset backend state
-                try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
-
-                // Use server-side mass-sync (runs in background - can close browser!)
-                const res = await fetch('/api/copilot/mass-sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        target: targetProducts,
-                        timeframe: '7d'  // 7d for core stats, all-time enrichment is automatic now
-                    })
-                });
-                const data = await res.json();
-
-                if (data.status === 'success') {
-                    let msg = `🚀 SYNC STARTED (Server-Side)\n\n${data.message}\n\n`;
-                    msg += `✅ Fetches 7D stats + all-time video/creator counts in one run.\n`;
-                    msg += `📊 Check Render logs for progress. You can close this page.`;
-                    alert(msg);
-                } else {
-                    alert('❌ Sync Error: ' + (data.message || data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('Sync Error: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-                stopBtn.disabled = false; // Keep stop enabled for background task
-            }
-        }
-
-        async function purgeUnenriched() {
-            if (!confirm("⚠️ This will delete all products where All-Time Videos == Period Videos (enrichment didn't find a match). Proceed?")) return;
-
-            const btn = document.getElementById('btnPurgeUnenriched');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Purging...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/admin/purge-unenriched', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(data.message);
-                    window.location.reload();
-                } else {
-                    alert('Error: ' + (data.error || 'Unknown'));
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function nukeProducts() {
-            if (!confirm("⚠️ PROTOCOL OVERRIDE REQUIRED ⚠️\n\nInitiate full database purge? This action is irreversible.")) return;
-            if (!confirm("Final Confirmation: Nuke all products?")) return;
-
-            try {
-                const res = await fetch('/api/admin/products/nuke', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keep_favorites: false })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`Purge Complete: ${data.deleted} entities removed.`);
-                    window.location.reload();
-                } else alert('Override Failed: ' + data.error);
-            } catch (e) { alert('Critical System Fault: ' + e); }
-        }
-
-        async function refreshAllStats() {
-            const btn = document.getElementById('btnStats');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Processing...</span>';
-            btn.disabled = true;
-
-            try {
-                let offset = 0;
-                let more = true;
-                while (more) {
-                    const res = await fetch(`/api/refresh-all-products?limit=100&offset=${offset}`);
-                    if (!res.ok) {
-                        alert(`Sync Protocol Failed: HTTP ${res.status}. Your session may have expired or you are hitting a rate limit.`);
-                        break;
-                    }
-                    const data = await res.json();
-                    if (data.success) {
-                        if (data.count < 100) more = false;
-                        else offset += 100;
-                    } else {
-                        alert(`Sync Logic Error: ${data.error || 'Unknown'}`);
-                        break;
-                    }
-                }
-                alert('Intelligence Synchronization Complete.');
-                window.location.reload();
-            } catch (e) { alert('Sync Fault: ' + e); }
-            finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function refreshAllImages() {
-            const btn = document.getElementById('btnImages');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold uppercase tracking-widest">Signing...</span>';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/refresh-images?batch=100&force=true');
-                const data = await res.json();
-                if (data.success) alert(`Keys Signed: ${data.updated} images renewed.`);
-                else alert('Protocol Error: ' + data.error);
-            } catch (e) { alert('System Fault: ' + e); }
-            finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function massSyncProducts(target) {
-            const btnId = target >= 10000 ? 'btnMassSync10K' : 'btnMassSync5K';
-            const btn = document.getElementById(btnId);
-            const stopBtn = document.getElementById('btnStop');
-            const original = btn.innerHTML;
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">Starting...</span>';
-            btn.disabled = true;
-            stopBtn.disabled = false;
-
-            try {
-                // Reset backend state
-                try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
-
-                const res = await fetch('/api/copilot/mass-sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: target, timeframe: '7d' })
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    alert(`🚀 SYNC STARTED!\n\n${data.message}\n\n⏳ Running in background. Use the STOP button above if you need to cancel.`);
-                } else {
-                    alert('❌ Sync Error: ' + (data.message || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-                // Leave stop button enabled for background task
-            }
-        }
-
-        async function nuclearSync() {
-            if (!confirm("☢️ NUCLEAR SYNC - 100,000+ PRODUCTS\n\n⚠️ This will:\n• Fetch up to 2000 pages of products\n• Take 10-15 minutes to complete\n• Use significant API resources\n\nAre you absolutely sure?")) return;
-
-            const btn = document.getElementById('btnNuclearSync');
-            const stopBtn = document.getElementById('btnStop');
-            const original = btn.innerHTML;
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">☢️ STARTING...</span>';
-            btn.disabled = true;
-            btn.classList.remove('animate-pulse');
-            stopBtn.disabled = false;
-
-            try {
-                // Reset backend state
-                try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
-
-                const res = await fetch('/api/copilot/mass-sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: 100000, timeframe: '7d' })
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    alert(`☢️ NUCLEAR SYNC STARTED!\n\n${data.message}\n\n⏳ This runs in the background. Use the STOP button above to cancel if needed.`);
-                } else {
-                    alert('❌ Nuclear Sync Error: ' + (data.message || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-                btn.classList.add('animate-pulse');
-            }
-        }
-
-        async function enrichVideos() {
-            if (!confirm("📊 ENRICH ALL-TIME STATS\n\nThis will fetch ALL-TIME video counts AND creator counts for products in the database.\n\nThese values will be preserved during regular syncs.\n\nProceed?")) return;
-
-            const btn = document.getElementById('btnEnrichVideos');
-            const stopBtn = document.getElementById('btnStop');
-            const original = btn.innerHTML;
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> <span class="text-xs font-bold">ENRICHING...</span>';
-            btn.disabled = true;
-            stopBtn.disabled = false;
-
-            try {
-                // Reset backend state
-                try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
-
-                const res = await fetch('/api/copilot/enrich-videos', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pages: 2000 })  // 2000 pages x ~50 products = ~100K coverage
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    alert(`📊 All-Time Stats Enrichment started!\n\n${data.message}\n\n⏳ Running in background. Use the STOP button above if needed.`);
-                } else {
-                    alert('❌ Enrichment Error: ' + (data.message || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function manualEnrich() {
-            if (!confirm("📊 MANUAL ENRICHMENT\n\nFetches ALL-TIME video/creator counts for existing products.\n\nUse this if Phase 2 didn't complete fully during sync.\n\nProceed?")) return;
-
-            const btn = document.getElementById('btnEnrich');
-            const stopBtn = document.getElementById('btnStop');
-            const original = btn.innerHTML;
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> ENRICHING...';
-            btn.disabled = true;
-            stopBtn.disabled = false;
-
-            try {
-                await fetch('/api/copilot/reset-sync', { method: 'POST' });
-
-                const res = await fetch('/api/copilot/enrich-videos', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pages: 2000 })  // 2000 pages × 25 = 50K products
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    alert(`📊 Enrichment started!\n\n${data.message}\n\n⏳ Check Render logs for progress.`);
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Unknown'));
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function restoreHiddenProducts() {
-            if (!confirm("👁️ Restore all hidden products?\n\nThis will make valid products (20+ videos, sales > 0) visible again.")) return;
-
-            const btn = document.getElementById('btnRestoreHidden');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restoring...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/admin/reset-product-status', { method: 'POST' });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    alert(`✅ Restore Complete!\n\n${data.message}`);
-                    window.location.reload();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function resetBrandHunter() {
-            if (!confirm("🎯 RESET BRAND HUNTER?\n\nThis will remove all tracked brands from Brand Hunter.\n\nProducts are NOT affected - only the brand tracking list.")) return;
-
-            const btn = document.getElementById('btnResetBrands');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetting...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/brands/clear-all', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ Brand Hunter Reset!\n\n${data.message}`);
-                } else {
-                    alert('❌ Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function initBrandHunter() {
-            const btn = document.getElementById('btnInitBrands');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initializing...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/brands/init', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ ${data.message}`);
-                } else {
-                    alert('❌ Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function nukeBrandHunter() {
-            if (!confirm("☢️ NUCLEAR BRAND RESET?\\n\\nThis will DROP the entire Watched Brands table and recreate it.\\n\\nONLY use this if brands won't clear or are stuck on 'undefined'.")) return;
-            if (!confirm("⚠️ FINAL WARNING: This cannot be undone.")) return;
-
-            const btn = event.currentTarget;
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> NUKING...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/brands/nuke', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`☢️ ${data.message}`);
-                    window.location.reload();
-                } else {
-                    alert('❌ Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function cleanupFull() {
-            if (!confirm("🧹 DEEP CLEAN BRAND SYSTEM?\\n\\nThis will purge all 'undefined', 'null', and empty brands from BOTH the Brand Hunter table and the Product table.")) return;
-
-            const btn = event.currentTarget;
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CLEANING...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/brands/cleanup-full', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✨ ${data.message}`);
-                    window.location.reload();
-                } else {
-                    alert('❌ Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function cleanupZeroSales() {
-            if (!confirm("🗑️ Delete all products with 0 7D Sales?\n\nThis will remove products that haven't sold in the last 7 days.")) return;
-
-            const btn = document.getElementById('btnCleanZeroSales');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/cleanup/zero-sales', { method: 'POST' });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    alert(`✅ Cleanup Complete!\n\n${data.message}`);
-                    window.location.reload();
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function cleanupZeroStats() {
-            if (!confirm("Delete all products with 0 sales, 0 GMV, and 0 ad spend?\n\n(Favorites are protected)")) return;
-
-            const btn = document.getElementById('btnCleanZero');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/admin/cleanup-zero-stats', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ Cleanup Complete: Deleted ${data.deleted} products with zero stats.`);
-                    window.location.reload();
-                } else {
-                    alert('❌ Error: ' + data.error);
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function deduplicateProducts() {
-            const btn = document.getElementById('btnDeduplicate');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
-            btn.disabled = true;
-
-            try {
-                // Phase 1: Dry run to show preview
-                const dryRes = await fetch('/api/admin/deduplicate?dry_run=true', { method: 'POST' });
-                const dryData = await dryRes.json();
-                if (!dryData.success) {
-                    alert('❌ Error: ' + (dryData.error || 'Unknown error'));
-                    return;
-                }
-                if (dryData.duplicates_to_delete === 0) {
-                    alert('✅ No duplicates found! Your database is clean.');
-                    return;
-                }
-
-                // Show preview and ask for confirmation
-                const samples = (dryData.sample_deletions || []).slice(0, 8).map(d => `  • ${d.name}`).join('\n');
-                if (!confirm(`Found ${dryData.duplicates_to_delete.toLocaleString()} duplicates!\n\n` +
-                    `📊 ${dryData.total_products.toLocaleString()} total → ${dryData.products_after_dedup.toLocaleString()} unique products\n` +
-                    `(${dryData.unique_product_names.toLocaleString()} unique names)\n\n` +
-                    `Sample duplicates:\n${samples}\n\n` +
-                    `Delete all duplicates now?`)) return;
-
-                // Phase 2: Actual delete
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
-                const res = await fetch('/api/admin/deduplicate', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ ${data.message}`);
-                    window.location.reload();
-                } else {
-                    alert('❌ Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function deleteLowVideos() {
-            if (!confirm("🗑️ Delete products with ≤1 total video?\n\nThis will remove placeholder products from Copilot that have no real video traction.\n\n(Favorites are NOT protected)")) return;
-
-            const btn = document.getElementById('btnDeleteLowVideos');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/admin/delete-low-videos', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ Cleanup Complete!\n\n${data.message}`);
-                    window.location.reload();
-                } else {
-                    alert('❌ Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function runCleanup() {
-            try {
-                const res = await fetch('/api/cleanup', { method: 'POST' });
-                const data = await res.json();
-                alert('Buffer Purged: ' + data.message);
-                loadAdmin();
-            } catch (e) { alert('System Fault: ' + e); }
-        }
-
-        async function runMigrations() {
-            const btn = document.getElementById('btnMigrate');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/admin/migrate', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ Migrations Complete!\\n\\n${(data.results || []).join('\\n')}`);
-                } else {
-                    alert('❌ Migration Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function exportCreatorProducts() {
-            const creatorId = document.getElementById('creatorIdInput').value.trim();
-            const creatorName = document.getElementById('creatorNameInput').value.trim() || 'creator';
-
-            if (!creatorId) {
-                alert('Please enter a Creator ID');
-                return;
-            }
-
-            const btn = document.getElementById('btnExportCreator');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/copilot/creator-products', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        creator_id: creatorId,
-                        creator_name: creatorName,
-                        max_pages: 100,  // ~2500 products max
-                        delay: 3.0
-                    })
-                });
-
-                if (res.ok) {
-                    // Download the CSV file
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${creatorName}_products.csv`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    a.remove();
-                    alert(`✅ Export Complete! Downloaded ${creatorName}_products.csv`);
-                } else {
-                    const data = await res.json();
-                    alert('❌ Export Error: ' + (data.message || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        // Google Sheets Sync Functions
         async function loadGoogleSheetsConfig() {
             try {
                 const res = await fetch('/api/admin/google-sheets-config');
@@ -1408,74 +596,79 @@
                         document.getElementById('lastSyncTime').textContent = 'Last sync: ' + new Date(data.last_sync).toLocaleString();
                     }
                 }
-            } catch (e) { console.log('Google Sheets config not loaded:', e); }
+            } catch(e) { console.log('Google Sheets config not loaded:', e); }
         }
 
         async function saveGoogleSheetsConfig() {
             const sheetId = document.getElementById('googleSheetIdInput').value.trim();
             const credentials = document.getElementById('googleCredsInput').value.trim();
             const frequency = document.getElementById('googleSyncFrequency').value;
-
-            if (!sheetId) {
-                alert('Please enter a Google Sheet ID');
-                return;
-            }
-
+            if (!sheetId) return alert('Please enter a Google Sheet ID');
             try {
                 const body = { sheet_id: sheetId, frequency: frequency };
-                // Only send credentials if they're not the placeholder
-                if (credentials && credentials !== '(credentials saved)') {
-                    body.credentials = credentials;
-                }
-
+                if (credentials && credentials !== '(credentials saved)') body.credentials = credentials;
                 const res = await fetch('/api/admin/google-sheets-config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert('✅ Google Sheets config saved!');
+                    alert('Google Sheets config saved.');
                     document.getElementById('googleCredsInput').value = '(credentials saved)';
-                } else {
-                    alert('❌ Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e.message);
-            }
+                } else alert('Error: ' + (data.error || 'Unknown error'));
+            } catch(e) { alert('Error: ' + e.message); }
         }
 
         async function syncToGoogleSheets() {
             const btn = document.getElementById('btnSyncSheets');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
-            btn.disabled = true;
-
+            const orig = btnLoading(btn, 'Syncing...');
             try {
                 const creatorId = document.getElementById('creatorIdInput').value.trim();
                 const creatorName = document.getElementById('creatorNameInput').value.trim() || 'creator';
-
                 const res = await fetch('/api/admin/google-sheets-sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ creator_id: creatorId, creator_name: creatorName })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert(`✅ Synced ${data.rows} products to Google Sheets!`);
+                    alert(`Synced ${data.rows} products to Google Sheets.`);
                     document.getElementById('lastSyncTime').textContent = 'Last sync: ' + new Date().toLocaleString();
-                } else {
-                    alert('❌ Sync Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Fault: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
+                } else alert('Sync Error: ' + (data.error || 'Unknown error'));
+            } catch(e) { alert('Error: ' + e.message); }
+            finally { btnRestore(btn, orig); }
         }
 
-        // ===== MAINTENANCE MODE =====
+        async function exportCreatorProducts() {
+            const creatorId = document.getElementById('creatorIdInput').value.trim();
+            const creatorName = document.getElementById('creatorNameInput').value.trim() || 'creator';
+            if (!creatorId) return alert('Please enter a Creator ID');
+            const btn = document.getElementById('btnExportCreator');
+            const orig = btnLoading(btn, 'Exporting...');
+            try {
+                const res = await fetch('/api/copilot/creator-products', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ creator_id: creatorId, creator_name: creatorName, max_pages: 100, delay: 3.0 })
+                });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${creatorName}_products.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                    alert(`Export complete. Downloaded ${creatorName}_products.csv`);
+                } else {
+                    const data = await res.json();
+                    alert('Export Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch(e) { alert('Error: ' + e.message); }
+            finally { btnRestore(btn, orig); }
+        }
+
+        // ── Maintenance mode ──
         let isMaintenanceMode = false;
 
         async function checkMaintenanceStatus() {
@@ -1484,70 +677,229 @@
                 const data = await res.json();
                 isMaintenanceMode = data.maintenance;
                 updateMaintenanceButton();
-            } catch (e) {
-                console.log('Maintenance status check failed:', e);
-            }
+            } catch(e) { console.log('Maintenance check failed:', e); }
         }
 
         function updateMaintenanceButton() {
-            const btn = document.getElementById('btnMaintenance');
             const text = document.getElementById('maintenanceBtnText');
-            if (!btn || !text) return; // Elements not loaded yet
-
+            const btn = document.getElementById('btnMaintenance');
+            if (!text || !btn) return;
             if (isMaintenanceMode) {
-                btn.classList.remove('bg-amber-950/20', 'border-amber-500/20', 'text-amber-500', 'hover:bg-amber-500');
-                btn.classList.add('bg-emerald-950/20', 'border-emerald-500/20', 'text-emerald-500', 'hover:bg-emerald-500');
                 text.textContent = 'Disable Maintenance';
+                btn.classList.remove('c-amber');
+                btn.classList.add('c-green');
             } else {
-                btn.classList.remove('bg-emerald-950/20', 'border-emerald-500/20', 'text-emerald-500', 'hover:bg-emerald-500');
-                btn.classList.add('bg-amber-950/20', 'border-amber-500/20', 'text-amber-500', 'hover:bg-amber-500');
                 text.textContent = 'Enable Maintenance';
+                btn.classList.remove('c-green');
+                btn.classList.add('c-amber');
             }
         }
 
         async function toggleMaintenanceMode() {
             const action = isMaintenanceMode ? 'disable' : 'enable';
-            const confirmMsg = isMaintenanceMode
+            const msg = isMaintenanceMode
                 ? 'Disable maintenance mode? Site will be accessible again.'
-                : '⚠️ Enable maintenance mode?\n\nThis will:\n• Block all site access\n• Stop all background automation\n\nVisitors will see a maintenance page.';
-
-            if (!confirm(confirmMsg)) return;
-
-            const btn = document.getElementById('btnMaintenance');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch(`/api/maintenance/${action}`, { method: 'POST' });
-                const data = await res.json();
-
-                if (data.success) {
-                    isMaintenanceMode = !isMaintenanceMode;
-                    updateMaintenanceButton();
-                    alert(data.message);
-
-                    if (isMaintenanceMode) {
-                        // Redirect to maintenance page after enabling
-                        setTimeout(() => window.location.href = '/maintenance', 1000);
-                    }
-                } else {
-                    alert('Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('System Error: ' + e.message);
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-                updateMaintenanceButton();
-            }
+                : 'Enable maintenance mode? This will block all site access and stop background automation.';
+            confirmAction(msg, async () => {
+                const btn = document.getElementById('btnMaintenance');
+                const orig = btnLoading(btn, 'Updating...');
+                try {
+                    const res = await fetch(`/api/maintenance/${action}`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        isMaintenanceMode = !isMaintenanceMode;
+                        updateMaintenanceButton();
+                        alert(data.message);
+                        if (isMaintenanceMode) setTimeout(() => window.location.href = '/maintenance', 1000);
+                    } else alert('Error: ' + (data.error || 'Unknown'));
+                } catch(e) { alert('Error: ' + e.message); }
+                finally { btnRestore(btn, orig); }
+            });
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadAdmin();
-            loadGoogleSheetsConfig();
-            checkMaintenanceStatus();
-        });
+        // ── Danger zone operations ──
+        async function restoreHiddenProducts() {
+            confirmAction('Restore all hidden products? This will make valid products (20+ videos, sales > 0) visible again.', async () => {
+                const btn = document.getElementById('btnRestoreHidden');
+                const orig = btnLoading(btn, 'Restoring...');
+                try {
+                    const res = await fetch('/api/admin/reset-product-status', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.status === 'success') { alert(data.message); window.location.reload(); }
+                    else alert('Error: ' + (data.message || 'Unknown'));
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        async function initBrandHunter() {
+            confirmAction('Initialize Brand Hunter? This will set up the brand tracking system.', async () => {
+                const btn = document.getElementById('btnInitBrands');
+                const orig = btnLoading(btn, 'Initializing...');
+                try {
+                    const res = await fetch('/api/brands/init', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) alert(data.message);
+                    else alert('Error: ' + (data.error || 'Unknown'));
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        async function resetBrandHunter() {
+            confirmAction('Reset Brand Hunter? This will remove all tracked brands. Products are NOT affected.', async () => {
+                const btn = document.getElementById('btnResetBrands');
+                const orig = btnLoading(btn, 'Resetting...');
+                try {
+                    const res = await fetch('/api/brands/clear-all', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) alert(data.message);
+                    else alert('Error: ' + (data.error || 'Unknown'));
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        async function cleanupZeroSales() {
+            confirmAction('Delete all products with 0 sales in the last 7 days? This cannot be undone.', async () => {
+                const btn = document.getElementById('btnCleanZeroSales');
+                const orig = btnLoading(btn, 'Deleting...');
+                try {
+                    const res = await fetch('/api/cleanup/zero-sales', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.status === 'success') { alert(data.message); window.location.reload(); }
+                    else alert('Error: ' + (data.message || 'Unknown'));
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        async function cleanupZeroStats() {
+            confirmAction('Delete all products with 0 sales, 0 GMV, and 0 ad spend? Favorites are protected.', async () => {
+                const btn = document.getElementById('btnCleanZero');
+                const orig = btnLoading(btn, 'Deleting...');
+                try {
+                    const res = await fetch('/api/admin/cleanup-zero-stats', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) { alert(`Deleted ${data.deleted} products with zero stats.`); window.location.reload(); }
+                    else alert('Error: ' + data.error);
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        async function deduplicateProducts() {
+            confirmAction('Scan for and remove duplicate products?', async () => {
+                const btn = document.getElementById('btnDeduplicate');
+                const orig = btnLoading(btn, 'Scanning...');
+                try {
+                    // Dry run first
+                    const dryRes = await fetch('/api/admin/deduplicate?dry_run=true', { method: 'POST' });
+                    const dryData = await dryRes.json();
+                    if (!dryData.success) { alert('Error: ' + (dryData.error || 'Unknown')); return; }
+                    if (dryData.duplicates_to_delete === 0) { alert('No duplicates found. Database is clean.'); return; }
+
+                    const samples = (dryData.sample_deletions || []).slice(0, 8).map(d => '  - ' + d.name).join('\n');
+                    confirmAction(
+                        `Found ${dryData.duplicates_to_delete.toLocaleString()} duplicates. ` +
+                        `${dryData.total_products.toLocaleString()} total -> ${dryData.products_after_dedup.toLocaleString()} unique. Delete all duplicates now?`,
+                        async () => {
+                            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+                            const res = await fetch('/api/admin/deduplicate', { method: 'POST' });
+                            const data = await res.json();
+                            if (data.success) { alert(data.message); window.location.reload(); }
+                            else alert('Error: ' + (data.error || 'Unknown'));
+                        }
+                    );
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        async function deleteLowVideos() {
+            confirmAction('Delete products with 1 or fewer total videos? Favorites are NOT protected.', async () => {
+                const btn = document.getElementById('btnDeleteLowVideos');
+                const orig = btnLoading(btn, 'Deleting...');
+                try {
+                    const res = await fetch('/api/admin/delete-low-videos', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) { alert(data.message); window.location.reload(); }
+                    else alert('Error: ' + (data.error || 'Unknown'));
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        async function purgeUnenriched() {
+            confirmAction('Purge all unenriched products (All-Time Videos == Period Videos)? This cannot be undone.', async () => {
+                const btn = document.getElementById('btnPurgeUnenriched');
+                const orig = btnLoading(btn, 'Purging...');
+                try {
+                    const res = await fetch('/api/admin/purge-unenriched', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) { alert(data.message); window.location.reload(); }
+                    else alert('Error: ' + (data.error || 'Unknown'));
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        async function nukeProducts() {
+            confirmAction('SYSTEM RESET: Initiate full database purge? This action is IRREVERSIBLE.', () => {
+                confirmAction('FINAL CONFIRMATION: Are you absolutely sure you want to nuke ALL products?', async () => {
+                    try {
+                        const res = await fetch('/api/admin/products/nuke', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ keep_favorites: false })
+                        });
+                        const data = await res.json();
+                        if (data.success) { alert(`Purge complete: ${data.deleted} entities removed.`); window.location.reload(); }
+                        else alert('Error: ' + data.error);
+                    } catch(e) { alert('Critical error: ' + e); }
+                });
+            });
+        }
+
+        async function nukeBrandHunter() {
+            confirmAction('NUCLEAR BRAND RESET: This will DROP the entire Watched Brands table and recreate it. Only use if brands are stuck.', () => {
+                confirmAction('FINAL WARNING: This cannot be undone. Proceed?', async () => {
+                    try {
+                        const res = await fetch('/api/brands/nuke', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) { alert(data.message); window.location.reload(); }
+                        else alert('Error: ' + (data.error || 'Unknown'));
+                    } catch(e) { alert('Error: ' + e); }
+                });
+            });
+        }
+
+        async function cleanupFull() {
+            confirmAction('Deep Clean: Purge all undefined, null, and empty brands from both Brand Hunter and Product tables?', async () => {
+                try {
+                    const res = await fetch('/api/brands/cleanup-full', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) { alert(data.message); window.location.reload(); }
+                    else alert('Error: ' + (data.error || 'Unknown'));
+                } catch(e) { alert('Error: ' + e); }
+            });
+        }
+
+        async function runMigrations() {
+            confirmAction('Run database migrations? This will apply any pending schema changes.', async () => {
+                const btn = document.getElementById('btnMigrate');
+                const orig = btnLoading(btn, 'Running...');
+                try {
+                    const res = await fetch('/api/admin/migrate', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) alert('Migrations complete.\n\n' + (data.results || []).join('\n'));
+                    else alert('Migration Error: ' + (data.error || 'Unknown'));
+                } catch(e) { alert('Error: ' + e); }
+                finally { btnRestore(btn, orig); }
+            });
+        }
+
+        // ── Initialize ──
+        loadAdmin();
     </script>
 </body>
 

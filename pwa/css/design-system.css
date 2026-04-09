@@ -1,0 +1,1222 @@
+/*
+ * PRISM Design System
+ * Product Research Intelligence & Sales Monitor
+ *
+ * Dark-first SaaS intelligence platform.
+ * Linear meets a trading terminal.
+ *
+ * Fonts:
+ *   Display — Cabinet Grotesk (Fontshare)
+ *   Body    — Inter (Google Fonts)
+ */
+
+/* =========================================================================
+   0. Font Imports
+   ========================================================================= */
+
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* =========================================================================
+   1. Custom Properties — Dark Theme (default)
+   ========================================================================= */
+
+:root,
+[data-theme="dark"] {
+  /* --- Backgrounds --- */
+  --prism-bg:              #0a0a0f;
+  --prism-surface:         #111118;
+  --prism-surface-2:       #16161f;
+  --prism-surface-offset:  #1c1c28;
+
+  /* --- Borders --- */
+  --prism-border:          rgba(255, 255, 255, 0.07);
+  --prism-border-strong:   rgba(255, 255, 255, 0.12);
+  --prism-border-focus:    rgba(124, 58, 237, 0.5);
+
+  /* --- Text --- */
+  --prism-text:            #e8e8f0;
+  --prism-text-muted:      #6b6b80;
+  --prism-text-faint:      #3a3a50;
+
+  /* --- Accent — Electric Violet --- */
+  --prism-accent:          #7c3aed;
+  --prism-accent-hover:    #6d28d9;
+  --prism-accent-glow:     rgba(124, 58, 237, 0.15);
+  --prism-accent-text:     #a78bfa;
+
+  /* --- Secondary — Cyan --- */
+  --prism-cyan:            #06b6d4;
+  --prism-cyan-glow:       rgba(6, 182, 212, 0.15);
+
+  /* --- Semantic --- */
+  --prism-success:         #10b981;
+  --prism-success-glow:    rgba(16, 185, 129, 0.15);
+  --prism-warning:         #f59e0b;
+  --prism-warning-glow:    rgba(245, 158, 11, 0.15);
+  --prism-error:           #f43f5e;
+  --prism-error-glow:      rgba(244, 63, 94, 0.15);
+  --prism-gold:            #fbbf24;
+
+  /* --- Spacing (4px grid) --- */
+  --sp-0:  0;
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  20px;
+  --sp-6:  24px;
+  --sp-8:  32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* --- Fluid Type Scale --- */
+  --text-xs:   clamp(0.6875rem, 0.65rem + 0.15vw, 0.75rem);     /* 11-12 */
+  --text-sm:   clamp(0.75rem, 0.7rem + 0.2vw, 0.8125rem);       /* 12-13 */
+  --text-base: clamp(0.8125rem, 0.77rem + 0.2vw, 0.875rem);     /* 13-14 */
+  --text-md:   clamp(0.875rem, 0.83rem + 0.2vw, 0.9375rem);     /* 14-15 */
+  --text-lg:   clamp(1rem, 0.93rem + 0.3vw, 1.125rem);          /* 16-18 */
+  --text-xl:   clamp(1.125rem, 1.03rem + 0.4vw, 1.3125rem);     /* 18-21 */
+  --text-2xl:  clamp(1.375rem, 1.22rem + 0.6vw, 1.625rem);      /* 22-26 */
+  --text-3xl:  clamp(1.75rem, 1.52rem + 0.9vw, 2.25rem);        /* 28-36 */
+  --text-4xl:  clamp(2.25rem, 1.9rem + 1.4vw, 3rem);            /* 36-48 */
+
+  /* --- Radii --- */
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-full: 9999px;
+
+  /* --- Shadows --- */
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-glow-accent: 0 0 20px var(--prism-accent-glow), 0 0 60px rgba(124, 58, 237, 0.06);
+  --shadow-glow-cyan:   0 0 20px var(--prism-cyan-glow), 0 0 60px rgba(6, 182, 212, 0.06);
+
+  /* --- Transitions --- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 350ms;
+
+  /* --- Layout --- */
+  --sidebar-width:     272px;
+  --sidebar-collapsed:  64px;
+  --header-height:      56px;
+  --max-content:      1440px;
+}
+
+/* =========================================================================
+   2. Light Theme Override
+   ========================================================================= */
+
+[data-theme="light"] {
+  --prism-bg:              #f5f5f7;
+  --prism-surface:         #ffffff;
+  --prism-surface-2:       #f0f0f4;
+  --prism-surface-offset:  #e8e8ee;
+
+  --prism-border:          rgba(0, 0, 0, 0.08);
+  --prism-border-strong:   rgba(0, 0, 0, 0.14);
+  --prism-border-focus:    rgba(124, 58, 237, 0.4);
+
+  --prism-text:            #1a1a2e;
+  --prism-text-muted:      #6b6b80;
+  --prism-text-faint:      #a0a0b0;
+
+  --prism-accent-glow:     rgba(124, 58, 237, 0.1);
+  --prism-accent-text:     #6d28d9;
+
+  --prism-cyan-glow:       rgba(6, 182, 212, 0.1);
+  --prism-success-glow:    rgba(16, 185, 129, 0.1);
+  --prism-warning-glow:    rgba(245, 158, 11, 0.1);
+  --prism-error-glow:      rgba(244, 63, 94, 0.1);
+
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.1);
+  --shadow-glow-accent: 0 0 20px rgba(124, 58, 237, 0.08);
+  --shadow-glow-cyan:   0 0 20px rgba(6, 182, 212, 0.08);
+}
+
+/* =========================================================================
+   3. Base Reset
+   ========================================================================= */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--prism-bg);
+  color: var(--prism-text);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6,
+.font-display {
+  font-family: 'Cabinet Grotesk', 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--prism-text);
+}
+
+h1 { font-size: var(--text-4xl); }
+h2 { font-size: var(--text-3xl); }
+h3 { font-size: var(--text-2xl); }
+h4 { font-size: var(--text-xl); }
+h5 { font-size: var(--text-lg); }
+h6 { font-size: var(--text-md); font-weight: 600; }
+
+p { margin-bottom: var(--sp-4); }
+p:last-child { margin-bottom: 0; }
+
+a {
+  color: var(--prism-accent-text);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+a:hover { color: var(--prism-accent); }
+
+img, svg, video { display: block; max-width: 100%; }
+
+code, pre, kbd {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+  font-size: 0.9em;
+}
+
+code {
+  background: var(--prism-surface-2);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--prism-accent-text);
+}
+
+pre {
+  background: var(--prism-surface);
+  border: 1px solid var(--prism-border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  overflow-x: auto;
+}
+
+::selection {
+  background: var(--prism-accent);
+  color: #fff;
+}
+
+/* =========================================================================
+   4. Scrollbar
+   ========================================================================= */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--prism-text-faint) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--prism-text-faint);
+  border-radius: var(--radius-full);
+  transition: background var(--duration-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--prism-text-muted);
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* =========================================================================
+   5. Layout Utilities
+   ========================================================================= */
+
+.prism-container {
+  width: 100%;
+  max-width: var(--max-content);
+  margin: 0 auto;
+  padding-inline: var(--sp-6);
+}
+
+.prism-stack     { display: flex; flex-direction: column; }
+.prism-row       { display: flex; flex-direction: row; align-items: center; }
+.prism-grid      { display: grid; }
+.prism-center    { display: flex; align-items: center; justify-content: center; }
+
+.gap-1  { gap: var(--sp-1); }
+.gap-2  { gap: var(--sp-2); }
+.gap-3  { gap: var(--sp-3); }
+.gap-4  { gap: var(--sp-4); }
+.gap-6  { gap: var(--sp-6); }
+.gap-8  { gap: var(--sp-8); }
+
+/* =========================================================================
+   6. Sidebar Navigation
+   ========================================================================= */
+
+.prism-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--prism-surface);
+  border-right: 1px solid var(--prism-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+  overflow: hidden;
+}
+
+/* Animated gradient accent line on the left edge */
+.prism-sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    var(--prism-accent)   0%,
+    var(--prism-cyan)    40%,
+    var(--prism-accent)  80%,
+    var(--prism-cyan)   100%
+  );
+  background-size: 100% 200%;
+  animation: prism-sidebar-glow 6s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+@keyframes prism-sidebar-glow {
+  0%, 100% { background-position: 0% 0%; }
+  50%      { background-position: 0% 100%; }
+}
+
+.prism-sidebar-brand {
+  padding: var(--sp-6) var(--sp-6) var(--sp-4);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  border-bottom: 1px solid var(--prism-border);
+}
+
+.prism-sidebar-brand-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--prism-accent), var(--prism-cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: var(--text-sm);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.prism-sidebar-brand-name {
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-weight: 800;
+  font-size: var(--text-lg);
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, var(--prism-text), var(--prism-text-muted));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.prism-sidebar-nav {
+  flex: 1;
+  padding: var(--sp-3) var(--sp-3);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.prism-sidebar-section {
+  padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--prism-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Sidebar link — also used as .sidebar-link for backward compat */
+.prism-sidebar-link,
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--prism-text-muted);
+  text-decoration: none;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+  cursor: pointer;
+  position: relative;
+}
+
+.prism-sidebar-link:hover,
+.sidebar-link:hover {
+  background: var(--prism-surface-2);
+  color: var(--prism-text);
+}
+
+.prism-sidebar-link.active,
+.sidebar-link.active {
+  background: var(--prism-accent-glow);
+  color: var(--prism-accent-text);
+}
+
+.prism-sidebar-link.active::before,
+.sidebar-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  background: var(--prism-accent);
+}
+
+.prism-sidebar-link i,
+.sidebar-link i {
+  width: 20px;
+  text-align: center;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.prism-sidebar-footer {
+  padding: var(--sp-4) var(--sp-4);
+  border-top: 1px solid var(--prism-border);
+  margin-top: auto;
+}
+
+/* =========================================================================
+   7. Header / Top Bar
+   ========================================================================= */
+
+.prism-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: var(--header-height);
+  background: rgba(10, 10, 15, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--prism-border);
+  display: flex;
+  align-items: center;
+  padding-inline: var(--sp-6);
+}
+
+[data-theme="light"] .prism-header {
+  background: rgba(245, 245, 247, 0.85);
+}
+
+/* =========================================================================
+   8. Cards
+   ========================================================================= */
+
+.prism-card {
+  background: var(--prism-surface);
+  border: 1px solid var(--prism-border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+
+.prism-card:hover {
+  border-color: var(--prism-border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.prism-card-flush {
+  background: var(--prism-surface);
+  border: 1px solid var(--prism-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* Gradient top-accent variant */
+.prism-card-accent {
+  position: relative;
+  overflow: hidden;
+}
+
+.prism-card-accent::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--prism-accent), var(--prism-cyan));
+}
+
+/* Glass card */
+.prism-card-glass {
+  background: rgba(17, 17, 24, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--prism-border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+}
+
+[data-theme="light"] .prism-card-glass {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* =========================================================================
+   9. Stat Cards
+   ========================================================================= */
+
+.prism-stat-card {
+  background: var(--prism-surface);
+  border: 1px solid var(--prism-border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  position: relative;
+  overflow: hidden;
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+
+.prism-stat-card:hover {
+  border-color: var(--prism-border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.prism-stat-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--prism-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.prism-stat-value {
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--prism-text);
+}
+
+.prism-stat-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+}
+
+.prism-stat-delta.up {
+  color: var(--prism-success);
+  background: var(--prism-success-glow);
+}
+
+.prism-stat-delta.down {
+  color: var(--prism-error);
+  background: var(--prism-error-glow);
+}
+
+/* Colored top-line variants */
+.prism-stat-card[data-color="violet"]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--prism-accent);
+}
+
+.prism-stat-card[data-color="cyan"]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--prism-cyan);
+}
+
+.prism-stat-card[data-color="emerald"]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--prism-success);
+}
+
+.prism-stat-card[data-color="gold"]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--prism-gold);
+}
+
+/* =========================================================================
+   10. Badges
+   ========================================================================= */
+
+.prism-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+/* Filled variants */
+.prism-badge-accent {
+  background: var(--prism-accent-glow);
+  color: var(--prism-accent-text);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+.prism-badge-cyan {
+  background: var(--prism-cyan-glow);
+  color: var(--prism-cyan);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+.prism-badge-success {
+  background: var(--prism-success-glow);
+  color: var(--prism-success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.prism-badge-warning {
+  background: var(--prism-warning-glow);
+  color: var(--prism-warning);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.prism-badge-error {
+  background: var(--prism-error-glow);
+  color: var(--prism-error);
+  border: 1px solid rgba(244, 63, 94, 0.2);
+}
+
+.prism-badge-gold {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--prism-gold);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.prism-badge-neutral {
+  background: var(--prism-surface-2);
+  color: var(--prism-text-muted);
+  border: 1px solid var(--prism-border);
+}
+
+/* Backward-compat badge classes */
+.badge          { display: inline-flex; align-items: center; gap: var(--sp-1);
+                  padding: 2px var(--sp-2); font-size: var(--text-xs); font-weight: 600;
+                  border-radius: var(--radius-full); white-space: nowrap; }
+.badge-new      { background: var(--prism-accent-glow); color: var(--prism-accent-text); }
+.badge-gem      { background: var(--prism-cyan-glow); color: var(--prism-cyan); }
+.badge-untapped { background: var(--prism-success-glow); color: var(--prism-success); }
+.badge-premium  { background: rgba(251, 191, 36, 0.12); color: var(--prism-gold); }
+
+/* =========================================================================
+   11. Buttons
+   ========================================================================= */
+
+.prism-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+  user-select: none;
+  text-decoration: none;
+}
+
+.prism-btn:active {
+  transform: scale(0.97);
+}
+
+.prism-btn:disabled,
+.prism-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* Primary — filled violet */
+.prism-btn-primary,
+.btn-premium {
+  background: var(--prism-accent);
+  color: #fff;
+  border-color: var(--prism-accent);
+}
+
+.prism-btn-primary:hover,
+.btn-premium:hover {
+  background: var(--prism-accent-hover);
+  border-color: var(--prism-accent-hover);
+  box-shadow: var(--shadow-glow-accent);
+}
+
+/* Secondary — outlined */
+.prism-btn-secondary {
+  background: transparent;
+  color: var(--prism-text);
+  border-color: var(--prism-border-strong);
+}
+
+.prism-btn-secondary:hover {
+  background: var(--prism-surface-2);
+  border-color: var(--prism-text-faint);
+}
+
+/* Ghost — no border, subtle bg on hover */
+.prism-btn-ghost {
+  background: transparent;
+  color: var(--prism-text-muted);
+  border-color: transparent;
+}
+
+.prism-btn-ghost:hover {
+  background: var(--prism-surface-2);
+  color: var(--prism-text);
+}
+
+/* Danger — red */
+.prism-btn-danger {
+  background: var(--prism-error);
+  color: #fff;
+  border-color: var(--prism-error);
+}
+
+.prism-btn-danger:hover {
+  background: #e11d48;
+  border-color: #e11d48;
+  box-shadow: 0 0 20px var(--prism-error-glow);
+}
+
+/* Cyan accent */
+.prism-btn-cyan {
+  background: var(--prism-cyan);
+  color: #0a0a0f;
+  border-color: var(--prism-cyan);
+}
+
+.prism-btn-cyan:hover {
+  background: #0891b2;
+  border-color: #0891b2;
+  box-shadow: var(--shadow-glow-cyan);
+}
+
+/* Size modifiers */
+.prism-btn-xs { padding: 2px var(--sp-2); font-size: var(--text-xs); border-radius: var(--radius-sm); }
+.prism-btn-sm { padding: var(--sp-1) var(--sp-3); font-size: var(--text-sm); }
+.prism-btn-lg { padding: var(--sp-3) var(--sp-6); font-size: var(--text-md); }
+.prism-btn-xl { padding: var(--sp-4) var(--sp-8); font-size: var(--text-lg); }
+
+/* Icon-only button */
+.prism-btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+.prism-btn-icon.prism-btn-xs { width: 28px; height: 28px; }
+.prism-btn-icon.prism-btn-sm { width: 32px; height: 32px; }
+.prism-btn-icon.prism-btn-lg { width: 44px; height: 44px; }
+
+/* =========================================================================
+   12. Form Inputs
+   ========================================================================= */
+
+.prism-input {
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--prism-surface);
+  color: var(--prism-text);
+  border: 1px solid var(--prism-border);
+  border-radius: var(--radius-md);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  outline: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.prism-input::placeholder {
+  color: var(--prism-text-faint);
+}
+
+.prism-input:focus {
+  border-color: var(--prism-accent);
+  box-shadow: 0 0 0 3px var(--prism-accent-glow);
+}
+
+.prism-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prism-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b6b80' viewBox='0 0 16 16'%3E%3Cpath d='M8 11.5l-5-5h10l-5 5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--sp-3) center;
+  padding-right: var(--sp-8);
+}
+
+/* =========================================================================
+   13. Tables
+   ========================================================================= */
+
+.prism-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.prism-table th {
+  text-align: left;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--prism-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--prism-border);
+  background: var(--prism-surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.prism-table td {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--prism-border);
+  color: var(--prism-text);
+  vertical-align: middle;
+}
+
+.prism-table tbody tr {
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.prism-table tbody tr:hover {
+  background: var(--prism-surface-2);
+}
+
+/* =========================================================================
+   14. Skeleton Loader
+   ========================================================================= */
+
+.prism-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--prism-surface-2);
+  border-radius: var(--radius-md);
+}
+
+.prism-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.03) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: prism-shimmer 1.8s ease-in-out infinite;
+}
+
+[data-theme="light"] .prism-skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.03) 40%,
+    rgba(0, 0, 0, 0.06) 50%,
+    rgba(0, 0, 0, 0.03) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
+@keyframes prism-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.prism-skeleton-text {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--sp-2);
+}
+
+.prism-skeleton-text:last-child {
+  width: 60%;
+}
+
+.prism-skeleton-heading {
+  height: 24px;
+  width: 50%;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--sp-4);
+}
+
+.prism-skeleton-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+}
+
+.prism-skeleton-card {
+  height: 160px;
+  border-radius: var(--radius-lg);
+}
+
+/* =========================================================================
+   15. Dividers & Separators
+   ========================================================================= */
+
+.prism-divider {
+  border: none;
+  border-top: 1px solid var(--prism-border);
+  margin: var(--sp-6) 0;
+}
+
+.prism-divider-vertical {
+  width: 1px;
+  align-self: stretch;
+  background: var(--prism-border);
+}
+
+/* =========================================================================
+   16. Tooltips & Popovers
+   ========================================================================= */
+
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.95);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--prism-surface-offset);
+  color: var(--prism-text);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--prism-border);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast), transform var(--duration-fast);
+  z-index: 100;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+/* =========================================================================
+   17. Animations & Transitions
+   ========================================================================= */
+
+@keyframes prism-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes prism-fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes prism-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes prism-slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes prism-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--prism-accent-glow); }
+  50%      { box-shadow: 0 0 20px 4px var(--prism-accent-glow); }
+}
+
+@keyframes prism-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-fade-in      { animation: prism-fade-in 0.3s var(--ease-out) both; }
+.animate-fade-in-up   { animation: prism-fade-in-up 0.4s var(--ease-out) both; }
+.animate-scale-in     { animation: prism-scale-in 0.25s var(--ease-out) both; }
+.animate-slide-right  { animation: prism-slide-in-right 0.3s var(--ease-out) both; }
+.animate-pulse-glow   { animation: prism-pulse-glow 2s ease-in-out infinite; }
+.animate-spin         { animation: prism-spin 1s linear infinite; }
+
+/* Stagger children */
+.stagger-children > * {
+  animation: prism-fade-in-up 0.4s var(--ease-out) both;
+}
+.stagger-children > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2)  { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3)  { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4)  { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5)  { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6)  { animation-delay: 250ms; }
+.stagger-children > *:nth-child(7)  { animation-delay: 300ms; }
+.stagger-children > *:nth-child(8)  { animation-delay: 350ms; }
+
+/* =========================================================================
+   18. Utility Classes
+   ========================================================================= */
+
+/* Text */
+.text-xs    { font-size: var(--text-xs); }
+.text-sm    { font-size: var(--text-sm); }
+.text-base  { font-size: var(--text-base); }
+.text-md    { font-size: var(--text-md); }
+.text-lg    { font-size: var(--text-lg); }
+.text-xl    { font-size: var(--text-xl); }
+.text-2xl   { font-size: var(--text-2xl); }
+.text-3xl   { font-size: var(--text-3xl); }
+.text-4xl   { font-size: var(--text-4xl); }
+
+.text-primary { color: var(--prism-text); }
+.text-muted   { color: var(--prism-text-muted); }
+.text-faint   { color: var(--prism-text-faint); }
+.text-accent  { color: var(--prism-accent-text); }
+.text-cyan    { color: var(--prism-cyan); }
+.text-success { color: var(--prism-success); }
+.text-warning { color: var(--prism-warning); }
+.text-error   { color: var(--prism-error); }
+.text-gold    { color: var(--prism-gold); }
+
+.font-display { font-family: 'Cabinet Grotesk', sans-serif; }
+.font-mono    { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+.font-normal   { font-weight: 400; }
+.font-medium   { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold     { font-weight: 700; }
+.font-black    { font-weight: 800; }
+
+.uppercase { text-transform: uppercase; letter-spacing: 0.06em; }
+.truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Background */
+.bg-surface   { background: var(--prism-surface); }
+.bg-surface-2 { background: var(--prism-surface-2); }
+.bg-offset    { background: var(--prism-surface-offset); }
+
+/* Border */
+.border-subtle { border: 1px solid var(--prism-border); }
+
+/* Interactive states */
+.hover-lift {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+.hover-glow {
+  transition: box-shadow var(--duration-base) var(--ease-out);
+}
+.hover-glow:hover {
+  box-shadow: var(--shadow-glow-accent);
+}
+
+/* Status dot */
+.prism-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.prism-dot-success { background: var(--prism-success); }
+.prism-dot-warning { background: var(--prism-warning); }
+.prism-dot-error   { background: var(--prism-error); }
+.prism-dot-accent  { background: var(--prism-accent); }
+
+.prism-dot-pulse {
+  position: relative;
+}
+
+.prism-dot-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--radius-full);
+  background: inherit;
+  opacity: 0.4;
+  animation: prism-pulse-ring 1.5s ease-out infinite;
+}
+
+@keyframes prism-pulse-ring {
+  0%   { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+/* =========================================================================
+   19. Responsive Breakpoints
+   ========================================================================= */
+
+/* Sidebar collapses below 768px */
+@media (max-width: 767px) {
+  .prism-sidebar {
+    transform: translateX(-100%);
+    transition: transform var(--duration-slow) var(--ease-out);
+  }
+
+  .prism-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .prism-main {
+    margin-left: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  .prism-main {
+    margin-left: var(--sidebar-width);
+  }
+}
+
+/* =========================================================================
+   20. Print
+   ========================================================================= */
+
+/* =========================================================================
+   20a. Content Visibility — render-on-demand for long lists
+   ========================================================================= */
+
+.prism-content-auto,
+.products-table tbody,
+.admin-table tbody,
+.sold-table tbody,
+.cancel-table tbody,
+.listing-grid,
+.results-grid,
+.brand-cards,
+.search-grid {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* =========================================================================
+   21. Print
+   ========================================================================= */
+
+@media print {
+  .prism-sidebar,
+  .prism-header { display: none !important; }
+  .prism-main   { margin-left: 0 !important; }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .prism-card,
+  .prism-stat-card {
+    border: 1px solid #ccc;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
