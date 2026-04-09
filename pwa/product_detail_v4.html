@@ -1,551 +1,895 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Analysis | Vantage</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="/pwa/css/main.css">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Product Detail | PRISM</title>
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        midnight: '#020617',
-                        slate: {
-                            800: '#1e293b',
-                            900: '#0f172a',
-                            950: '#020617',
-                        },
-                        primary: '#2563eb',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+        /* Page-specific overrides */
+        .detail-page { max-width: 1400px; margin: 0 auto; padding: var(--space-6); }
+
+        /* Back header */
+        .back-header {
+            display: flex; align-items: center; gap: var(--space-4);
+            padding: var(--space-4) 0; margin-bottom: var(--space-6);
+        }
+        .back-btn {
+            display: inline-flex; align-items: center; gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); color: var(--text-secondary);
+            font: var(--font-sm); font-weight: 500; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .back-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+        .back-breadcrumb { font: var(--font-xs); color: var(--text-muted); }
+
+        /* Two-column grid */
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-8);
+            align-items: start;
         }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+        /* Product image */
+        .product-image-wrap {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-xl); overflow: hidden;
+            position: relative; aspect-ratio: 1;
+        }
+        .product-image-wrap img {
+            width: 100%; height: 100%; object-fit: cover;
+            transition: opacity 0.3s;
+        }
+        .product-image-wrap .skeleton-img {
+            position: absolute; inset: 0;
+            background: var(--surface-2);
+            animation: shimmer 1.5s infinite;
+        }
+        .image-badges {
+            position: absolute; top: var(--space-3); left: var(--space-3);
+            display: flex; flex-direction: column; gap: var(--space-2);
         }
 
-        .detail-glass {
-            background: linear-gradient(135deg, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.1) 100%);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+        /* Product info card */
+        .product-info-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-xl); padding: var(--space-8);
+        }
+        .product-title {
+            font-family: var(--font-display); font-weight: 700;
+            font-size: clamp(1.5rem, 3vw, 2rem); color: var(--text-primary);
+            line-height: 1.3; margin-bottom: var(--space-2);
+        }
+        .product-category {
+            font: var(--font-xs); font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--accent); margin-bottom: var(--space-1);
+        }
+        .seller-row {
+            display: flex; align-items: center; gap: var(--space-3);
+            padding: var(--space-3) var(--space-4);
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); margin: var(--space-4) 0;
+        }
+        .seller-icon {
+            width: 36px; height: 36px; border-radius: var(--radius-md);
+            background: color-mix(in srgb, var(--accent) 10%, transparent);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--accent); font-size: 14px;
+        }
+        .seller-label { font: var(--font-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+        .seller-name { font: var(--font-sm); font-weight: 600; color: var(--text-primary); }
+        .seller-link { color: var(--accent); text-decoration: none; }
+        .seller-link:hover { text-decoration: underline; }
+
+        /* Price row */
+        .price-row {
+            display: flex; align-items: baseline; gap: var(--space-3);
+            flex-wrap: wrap; margin: var(--space-4) 0;
+        }
+        .price-current {
+            font-family: var(--font-display); font-weight: 700;
+            font-size: 2rem; color: var(--text-primary);
+        }
+        .price-original {
+            font: var(--font-base); color: var(--text-muted);
+            text-decoration: line-through;
+        }
+        .price-discount {
+            font: var(--font-sm); font-weight: 700;
+            color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent);
+            padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
         }
 
-        .chart-container {
-            position: relative;
-            height: 350px;
-            width: 100%;
+        /* Commission badge */
+        .commission-badge {
+            display: inline-flex; align-items: center; gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            background: color-mix(in srgb, var(--green) 12%, transparent);
+            border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
+            border-radius: var(--radius-lg); color: var(--green);
+            font-weight: 700; font-size: 0.95rem;
+        }
+        .commission-label {
+            font: var(--font-xs); font-weight: 600; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+
+        /* Action buttons */
+        .action-buttons {
+            display: flex; gap: var(--space-3); margin-top: var(--space-6);
+            flex-wrap: wrap;
+        }
+        .action-btn {
+            display: inline-flex; align-items: center; gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            background: var(--surface-2); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); color: var(--text-secondary);
+            font: var(--font-sm); font-weight: 500; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .action-btn:hover { border-color: var(--accent); color: var(--text-primary); background: var(--surface); }
+        .action-btn.active { border-color: var(--amber); color: var(--amber); }
+        .action-btn.refreshing { pointer-events: none; opacity: 0.6; }
+
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-4);
+        }
+
+        /* Chart section */
+        .chart-section {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-xl); padding: var(--space-6);
+        }
+        .chart-header {
+            display: flex; align-items: center; gap: var(--space-3);
+            margin-bottom: var(--space-6);
+        }
+        .chart-header-icon {
+            width: 32px; height: 32px; border-radius: var(--radius-md);
+            background: color-mix(in srgb, var(--accent) 10%, transparent);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--accent); font-size: 14px;
+        }
+        .chart-wrap { position: relative; height: 300px; }
+
+        /* AI insight */
+        .ai-section {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-xl); padding: var(--space-6);
+        }
+        .ai-response {
+            font: var(--font-sm); color: var(--text-secondary);
+            line-height: 1.7; white-space: pre-wrap;
+        }
+        .ai-response strong { color: var(--text-primary); }
+        .ai-cursor {
+            display: inline-block; width: 2px; height: 1em;
+            background: var(--accent); animation: blink 1s infinite;
+            vertical-align: text-bottom; margin-left: 2px;
+        }
+        @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+        .ai-skeleton { display: flex; flex-direction: column; gap: var(--space-3); }
+        .ai-skeleton span {
+            height: 12px; border-radius: var(--radius-sm);
+            background: var(--surface-2); animation: shimmer 1.5s infinite;
+        }
+        .ai-skeleton span:nth-child(1) { width: 90%; }
+        .ai-skeleton span:nth-child(2) { width: 75%; }
+        .ai-skeleton span:nth-child(3) { width: 60%; }
+
+        /* Similar products */
+        .similar-section {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-xl); padding: var(--space-6);
+        }
+        .similar-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: var(--space-4);
+        }
+        .similar-card {
+            background: var(--surface-2); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); overflow: hidden;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .similar-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .similar-card img {
+            width: 100%; aspect-ratio: 1; object-fit: cover;
+            background: var(--bg);
+        }
+        .similar-card-body { padding: var(--space-3); }
+        .similar-card-name {
+            font: var(--font-sm); font-weight: 600; color: var(--text-primary);
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+            overflow: hidden; margin-bottom: var(--space-1);
+        }
+        .similar-card-stats {
+            display: flex; justify-content: space-between;
+            font: var(--font-xs); color: var(--text-muted);
+        }
+        .similar-card-price { color: var(--text-primary); font-weight: 600; }
+        .similar-card-velocity { color: var(--cyan); }
+
+        /* Full-width sections below grid */
+        .below-grid {
+            grid-column: 1 / -1;
+            display: flex; flex-direction: column; gap: var(--space-6);
+        }
+
+        /* Metadata row */
+        .meta-row {
+            display: flex; gap: var(--space-4); flex-wrap: wrap;
+            margin: var(--space-3) 0;
+        }
+        .meta-tag {
+            font: var(--font-xs); color: var(--text-muted);
+            display: flex; align-items: center; gap: var(--space-1);
+        }
+        .meta-tag .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+        }
+
+        /* Loading state */
+        .page-loader {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 120px 0; gap: var(--space-4);
+        }
+        .page-loader .spinner {
+            width: 48px; height: 48px; border: 3px solid var(--border);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Error state */
+        .error-state {
+            text-align: center; padding: 80px var(--space-6);
+            max-width: 400px; margin: 0 auto;
+        }
+        .error-state svg { width: 64px; height: 64px; margin-bottom: var(--space-4); color: var(--red); }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .detail-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 640px) {
+            .detail-page { padding: var(--space-4); }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .action-buttons { flex-direction: column; }
+            .action-btn { justify-content: center; }
+            .similar-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
+<body>
 
-<body class="bg-slate-950 min-h-screen text-slate-200 overflow-x-hidden">
+<!-- Loading state -->
+<div id="loader" class="page-loader">
+    <div class="spinner"></div>
+    <p style="font: var(--font-sm); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Loading product data...</p>
+</div>
 
-    <!-- Top Navigation -->
-    <nav
-        class="bg-slate-900/50 backdrop-blur-md px-6 h-16 flex justify-between items-center sticky top-0 z-50 border-b border-white/5">
-        <div class="flex items-center gap-6">
-            <a href="/"
-                class="flex items-center gap-3 bg-slate-900 py-2 px-4 rounded-xl group hover:border-primary/50 transition-all border border-white/5">
-                <i class="fas fa-chevron-left text-slate-500 group-hover:text-primary transition-colors"></i>
-                <span class="font-heading font-medium text-xs text-slate-300 group-hover:text-white">Dashboard</span>
-            </a>
-            <div class="h-4 w-px bg-white/10 hidden md:block"></div>
-            <div class="hidden md:flex items-center gap-2">
-                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Operation:</span>
-                <span class="text-xs font-bold text-white tracking-widest uppercase" id="navOperation">Product
-                    Analysis</span>
+<!-- Error state (hidden) -->
+<div id="errorState" class="error-state" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/>
+    </svg>
+    <h2 style="font-family: var(--font-display); font-size: 1.25rem; color: var(--text-primary); margin-bottom: var(--space-2);">Product Not Found</h2>
+    <p id="errorMsg" style="font: var(--font-sm); color: var(--text-muted); margin-bottom: var(--space-6);"></p>
+    <a href="/" class="btn btn-primary">Back to Dashboard</a>
+</div>
+
+<!-- Main content (hidden until loaded) -->
+<div id="content" class="detail-page" style="display:none;">
+
+    <!-- Back header -->
+    <div class="back-header">
+        <a href="/" class="back-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            Dashboard
+        </a>
+        <span class="back-breadcrumb" id="breadcrumb">Products / ...</span>
+    </div>
+
+    <!-- Two-column grid -->
+    <div class="detail-grid">
+
+        <!-- LEFT COLUMN: Product Info -->
+        <div style="display:flex; flex-direction:column; gap:var(--space-6);">
+
+            <!-- Product Image -->
+            <div class="product-image-wrap">
+                <div class="skeleton-img" id="imgSkeleton"></div>
+                <img id="pImage" src="" alt="Product image" width="400" height="400" loading="lazy" onload="this.previousElementSibling.style.display='none'" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 400%22><rect fill=%22%2316161f%22 width=%22400%22 height=%22400%22/><text x=%2250%25%22 y=%2250%25%22 fill=%22%23555%22 font-size=%2216%22 text-anchor=%22middle%22 dy=%22.3em%22>No Image</text></svg>'; this.previousElementSibling.style.display='none'">
+                <div class="image-badges">
+                    <span id="badgeAd" class="badge badge-blue" style="display:none;">Ad Driven</span>
+                    <span id="badgeHot" class="badge badge-red" style="display:none;">Viral</span>
+                    <span id="badgeFav" class="badge badge-amber" style="display:none;">Watchlist</span>
+                </div>
             </div>
-        </div>
 
-        <div class="flex items-center gap-3">
-            <button onclick="enrichNow()" id="enrichBtn"
-                class="btn-premium py-2 px-5 text-xs shadow-lg shadow-primary/20">
-                <i class="fas fa-bolt mr-2 text-[10px]"></i>
-                <span>Sync Data</span>
-            </button>
-            <a id="extLink" href="#" target="_blank"
-                class="bg-slate-900 p-2.5 rounded-xl border border-white/5 hover:border-primary/50 hover:bg-white/5 transition-all text-slate-400 hover:text-white group">
-                <i class="fab fa-tiktok text-lg group-hover:scale-110 transition-transform"></i>
-            </a>
-        </div>
-    </nav>
+            <!-- Product Info Card -->
+            <div class="product-info-card">
+                <p class="product-category" id="pCategory"></p>
+                <h1 class="product-title" id="pTitle">--</h1>
 
-    <main class="container mx-auto p-4 md:p-8 max-w-7xl">
-        <div id="loader" class="text-center py-32">
-            <div class="w-16 h-16 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mx-auto mb-6">
-            </div>
-            <p class="font-heading font-bold text-xl text-slate-400 tracking-widest uppercase animate-pulse">Loading
-                Data Insights...</p>
-        </div>
+                <!-- Meta row -->
+                <div class="meta-row">
+                    <span class="meta-tag" id="metaStatus"><span class="dot" style="background:var(--green);"></span> Active</span>
+                    <span class="meta-tag" id="metaFirstSeen"></span>
+                    <span class="meta-tag" id="metaLastUpdated"></span>
+                    <span class="meta-tag" id="metaScanType"></span>
+                </div>
 
-        <div id="content" class="hidden space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <!-- Hero Section -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-                <!-- Left: Product Image & Basic Info -->
-                <div class="lg:col-span-5 space-y-6">
-                    <div
-                        class="bg-slate-900 border border-white/5 rounded-2xl p-2 relative group overflow-hidden shadow-2xl">
-                        <img id="pImage" src=""
-                            class="w-full rounded-xl object-cover aspect-square md:aspect-auto md:max-h-[600px]"
-                            onerror="this.src='https://placehold.co/600x600/05070a/white?text=No+Data'">
-
-                        <div class="absolute top-6 left-6 flex flex-col gap-2 z-20">
-                            <span id="badgeAd"
-                                class="hidden px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary text-white shadow-lg backdrop-blur-md">High
-                                Ad Activity</span>
-                            <span id="badgeHot"
-                                class="hidden px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-rose-500 text-white shadow-lg backdrop-blur-md">Viral
-                                Breakout</span>
-                        </div>
+                <!-- Seller -->
+                <div class="seller-row">
+                    <div class="seller-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                     </div>
-
-                    <div class="bg-slate-900 border border-white/5 rounded-2xl p-8 space-y-6 relative overflow-hidden">
-                        <div class="absolute top-0 right-0 p-8 opacity-5">
-                            <i class="fas fa-tag text-8xl"></i>
-                        </div>
-
-                        <div class="relative z-10">
-                            <p class="text-[10px] font-bold text-primary uppercase tracking-widest mb-2" id="pCategory">
-                                Market Analysis <span id="lblAge" class="text-slate-500 ml-2"></span>
-                            </p>
-                            <h1 id="pTitle" class="font-heading font-bold text-2xl text-white leading-snug">--</h1>
-                        </div>
-
-                        <div
-                            class="flex items-center gap-4 p-4 bg-slate-950 rounded-xl border border-white/5 relative z-10">
-                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <i class="fas fa-store text-primary text-sm"></i>
-                            </div>
-                            <div>
-                                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Verified Seller
-                                </p>
-                                <p id="pSeller" class="text-white font-bold tracking-tight text-sm">--</p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4 relative z-10">
-                            <div class="p-5 bg-slate-950 rounded-xl border border-white/5">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">List Price
-                                </p>
-                                <div class="text-2xl font-bold text-white tracking-tighter" id="pPrice">$0.00</div>
-                            </div>
-                            <div class="p-5 bg-slate-950 rounded-xl border border-white/5">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Commission
-                                </p>
-                                <div class="text-2xl font-bold text-emerald-400 tracking-tighter" id="pComm">0%</div>
-                            </div>
-                        </div>
-
-                        <!-- NEW: Creative Finder Button -->
-                        <button onclick="openCreativeFinder()"
-                            class="w-full py-4 rounded-2xl bg-primary hover:bg-blue-600 text-white font-bold flex items-center justify-center gap-3 shadow-xl shadow-primary/20 transition-all transform hover:-translate-y-1">
-                            <i class="fas fa-play-circle text-lg"></i>
-                            Discover Performance Shorts (<= 15s) </button>
+                    <div>
+                        <p class="seller-label">Seller</p>
+                        <p class="seller-name"><a href="#" class="seller-link" id="pSeller">--</a></p>
                     </div>
                 </div>
 
-                <!-- Right: High Level Analytics -->
-                <div class="lg:col-span-7 space-y-6">
+                <!-- Price + Commission -->
+                <div class="price-row">
+                    <span class="price-current" id="pPrice">$0.00</span>
+                    <span class="price-original" id="pOriginal" style="display:none;"></span>
+                    <span class="price-discount" id="pDiscount" style="display:none;"></span>
+                </div>
 
-                    <!-- Stats Grid -->
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <!-- 1. Total Sales -->
-                        <div
-                            class="bg-slate-900 border border-white/5 rounded-2xl p-5 group hover:border-primary/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Total Sales
-                            </p>
-                            <p class="text-2xl font-bold text-white font-heading" id="statSales">0</p>
-                            <div class="mt-2 h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div class="h-full bg-primary" style="width: 65%"></div>
-                            </div>
-                        </div>
-
-                        <!-- 2. Est. Revenue (Period) -->
-                        <div
-                            class="bg-slate-900 border border-white/5 rounded-2xl p-5 group hover:border-emerald-500/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Est. Revenue
-                                (Period)</p>
-                            <p class="text-2xl font-bold text-emerald-400 font-heading" id="statRev">$--</p>
-                            <div class="mt-2 h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div class="h-full bg-emerald-500" style="width: 45%"></div>
-                            </div>
-                        </div>
-
-                        <!-- 3. Total Ad Spend -->
-                        <div
-                            class="bg-slate-900 border border-white/5 rounded-2xl p-5 group hover:border-amber-500/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Total Ad
-                                Spend</p>
-                            <p class="text-2xl font-bold text-amber-500 font-heading" id="statAdSpend">--</p>
-                            <div class="mt-2 h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div class="h-full bg-amber-500" style="width: 55%"></div>
-                            </div>
-                        </div>
-
-                        <!-- 4. Creators -->
-                        <div
-                            class="bg-slate-900 border border-white/5 rounded-2xl p-5 group hover:border-violet-500/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Creators</p>
-                            <p class="text-2xl font-bold text-violet-400 font-heading" id="statInfluencers">0</p>
-                            <div class="mt-2 h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div class="h-full bg-violet-500" style="width: 80%"></div>
-                            </div>
-                        </div>
-
-                        <!-- 5. Active Videos (Period) -->
-                        <div
-                            class="bg-slate-900 border border-white/5 rounded-2xl p-5 group hover:border-rose-500/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">Active Videos
-                                (Period)</p>
-                            <p class="text-2xl font-bold text-rose-500 font-heading" id="statVideos">0</p>
-                            <div class="mt-2 h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div class="h-full bg-rose-500" style="width: 30%"></div>
-                            </div>
-                        </div>
-
-                        <!-- 6. All-Time Videos (Saturation) -->
-                        <div
-                            class="bg-slate-900 border border-white/5 rounded-2xl p-5 group hover:border-cyan-500/30 transition-all">
-                            <p class="text-slate-500 text-[10px] font-bold mb-2 uppercase tracking-widest">All-Time
-                                Videos</p>
-                            <p class="text-2xl font-bold text-cyan-400 font-heading" id="statAllVideos">0</p>
-                            <div class="mt-2 h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div class="h-full bg-cyan-500" style="width: 50%"></div>
-                            </div>
-                        </div>
+                <div style="display:flex; align-items:center; gap:var(--space-4); flex-wrap:wrap;">
+                    <div>
+                        <span class="commission-label">Commission</span>
+                        <div class="commission-badge" id="pComm">0%</div>
                     </div>
-
-                    <!-- Performance Chart -->
-                    <div class="bg-slate-900 border border-white/5 rounded-2xl p-8 relative overflow-hidden">
-                        <div class="absolute top-0 right-0 p-8 opacity-5">
-                            <i class="fas fa-chart-line text-9xl"></i>
-                        </div>
-                        <h3 class="font-heading font-bold text-lg mb-8 flex items-center gap-3 text-white">
-                            <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <i class="fas fa-wave-square text-primary text-xs"></i>
-                            </div>
-                            Velocity Trends (7D)
-                        </h3>
-                        <div class="chart-container">
-                            <canvas id="salesChart"></canvas>
-                        </div>
+                    <div id="shopAdsCommWrap" style="display:none;">
+                        <span class="commission-label">GMV Max Rate</span>
+                        <div class="commission-badge" id="pShopAds" style="background:color-mix(in srgb, var(--cyan) 12%, transparent); border-color:color-mix(in srgb, var(--cyan) 30%, transparent); color:var(--cyan);">0%</div>
                     </div>
+                </div>
 
-                    <!-- Advanced Analysis Panel -->
-                    <div class="bg-slate-900 border border-white/5 rounded-2xl p-8 shadow-lg">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="font-heading font-bold text-lg flex items-center gap-3 text-white">
-                                <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                                    <i class="fas fa-microchip text-violet-400 text-xs"></i>
-                                </div>
-                                System Analysis
-                            </h3>
-                            <span
-                                class="text-[9px] font-bold bg-slate-950 border border-white/5 px-3 py-1.5 rounded-full text-slate-500 tracking-widest uppercase">Status:
-                                Finalized</span>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div
-                                class="p-6 bg-slate-950 border border-white/5 rounded-2xl relative overflow-hidden group">
-                                <div
-                                    class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                </div>
-                                <p class="text-slate-500 text-[10px] font-bold mb-3 uppercase tracking-widest">
-                                    Competition Profile</p>
-                                <div class="flex items-center gap-4">
-                                    <div id="compLevel" class="text-xl font-bold text-white tracking-tight">Medium</div>
-                                    <div class="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                                        <div id="compBar" class="h-full bg-gradient-to-r from-primary to-violet-500"
-                                            style="width: 50%"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div
-                                class="p-6 bg-slate-950 border border-white/5 rounded-2xl relative overflow-hidden group">
-                                <div
-                                    class="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                </div>
-                                <p class="text-slate-500 text-[10px] font-bold mb-3 uppercase tracking-widest">Growth
-                                    Forecast</p>
-                                <div class="flex items-center gap-4">
-                                    <div class="text-xl font-bold text-emerald-400 tracking-tight">+12.4%</div>
-                                    <i class="fas fa-arrow-trend-up text-emerald-500"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Action buttons -->
+                <div class="action-buttons">
+                    <button class="action-btn" id="btnWatchlist" onclick="toggleWatchlist()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        Add to Watchlist
+                    </button>
+                    <button class="action-btn" onclick="copyLink()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                        Copy TikTok Link
+                    </button>
+                    <button class="action-btn" id="btnRefresh" onclick="refreshData()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                        Refresh Data
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- NEW: Creative Modal -->
-        <div id="creativeModal"
-            class="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[100] hidden flex items-center justify-center p-6">
-            <div
-                class="w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar bg-slate-900 border border-white/10 rounded-3xl p-8 relative">
-                <button onclick="closeCreativeModal()" class="absolute top-6 right-6 text-slate-500 hover:text-white">
-                    <i class="fas fa-times text-2xl"></i>
-                </button>
-                <div class="mb-8">
-                    <h3 class="text-2xl font-bold text-white font-heading">Performance Shorts</h3>
-                    <p class="text-slate-400 text-sm">Top performing videos under 15 seconds for this product.</p>
+        <!-- RIGHT COLUMN: Analytics -->
+        <div style="display:flex; flex-direction:column; gap:var(--space-6);">
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card" data-color="cyan">
+                    <span class="stat-label">7D Sales</span>
+                    <span class="stat-value" id="stat7dSales">--</span>
                 </div>
-                <div id="creativeModalGrid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="col-span-full py-20 text-center">
-                        <i class="fas fa-spinner fa-spin text-primary text-3xl mb-4"></i>
-                        <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">Scanning TikTok API...</p>
-                    </div>
+                <div class="stat-card" data-color="cyan">
+                    <span class="stat-label">30D Sales</span>
+                    <span class="stat-value" id="stat30dSales">--</span>
+                </div>
+                <div class="stat-card" data-color="green">
+                    <span class="stat-label">7D GMV</span>
+                    <span class="stat-value" id="stat7dGmv">--</span>
+                </div>
+                <div class="stat-card" data-color="green">
+                    <span class="stat-label">30D GMV</span>
+                    <span class="stat-value" id="stat30dGmv">--</span>
+                </div>
+                <div class="stat-card" data-color="violet">
+                    <span class="stat-label">Videos (7D)</span>
+                    <span class="stat-value" id="statVideos7d">--</span>
+                </div>
+                <div class="stat-card" data-color="violet">
+                    <span class="stat-label">All-Time Videos</span>
+                    <span class="stat-value" id="statVideosAll">--</span>
+                </div>
+                <div class="stat-card" data-color="amber">
+                    <span class="stat-label">Creators</span>
+                    <span class="stat-value" id="statCreators">--</span>
+                </div>
+                <div class="stat-card" data-color="amber">
+                    <span class="stat-label">Ad Spend</span>
+                    <span class="stat-value" id="statAdSpend">--</span>
+                </div>
+                <div class="stat-card" data-color="red">
+                    <span class="stat-label">Return Rate</span>
+                    <span class="stat-value" id="statReturnRate">--</span>
+                </div>
+                <div class="stat-card" data-color="green">
+                    <span class="stat-label">Rating</span>
+                    <span class="stat-value" id="statRating">--</span>
+                </div>
+                <div class="stat-card" data-color="cyan">
+                    <span class="stat-label">Sales Velocity</span>
+                    <span class="stat-value" id="statVelocity">--</span>
+                </div>
+                <div class="stat-card" data-color="green">
+                    <span class="stat-label">GMV Growth</span>
+                    <span class="stat-value" id="statGmvGrowth">--</span>
+                </div>
+            </div>
+
+            <!-- Extra stats row: all-time sales, views, live count, ROAS, est profit -->
+            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="stat-card">
+                    <span class="stat-label">All-Time Sales</span>
+                    <span class="stat-value" id="statTotalSales">--</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Views</span>
+                    <span class="stat-value" id="statViews">--</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Live Count</span>
+                    <span class="stat-value" id="statLiveCount">--</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">ROAS</span>
+                    <span class="stat-value" id="statRoas">--</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Est. Profit</span>
+                    <span class="stat-value" id="statEstProfit">--</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Price Trend</span>
+                    <span class="stat-value" id="statPriceTrend">--</span>
                 </div>
             </div>
         </div>
-    </main>
 
-    <script>
-        const productId = window.location.pathname.split('/').pop();
-        let chart;
+        <!-- BELOW GRID: Full-width sections -->
+        <div class="below-grid">
 
-        async function loadProductData() {
-            try {
-                const res = await fetch(`/api/product/${productId}`);
-                if (!res.ok) throw new Error("Product profile not found");
-                const data = await res.json();
-                if (data.success) render(data);
-                else throw new Error(data.error || "Unknown error");
-            } catch (e) {
-                document.getElementById('loader').innerHTML = `
-                    <div class="p-12 glass rounded-3xl max-w-lg mx-auto border-rose-500/20">
-                        <i class="fas fa-exclamation-triangle text-rose-500 text-4xl mb-4"></i>
-                        <p class="text-rose-400 font-bold text-lg mb-6">${e.message}</p>
-                        <a href="/" class="btn-premium no-underline">Abort to Dashboard</a>
-                    </div>`;
-            }
+            <!-- Sales Chart -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <div class="chart-header-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--text-primary);">Sales Trend</h3>
+                        <p style="font: var(--font-xs); color: var(--text-muted);">Estimated daily distribution over the last 7 days</p>
+                    </div>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="salesChart"></canvas>
+                </div>
+            </div>
+
+            <!-- AI Insight -->
+            <div class="ai-section">
+                <div class="chart-header">
+                    <div class="chart-header-icon" style="background: color-mix(in srgb, var(--violet) 10%, transparent); color: var(--violet);">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.95-2 3-2 8h-4c0-5-2-6.05-2-8a4 4 0 014-4z"/><line x1="10" y1="18" x2="14" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/><line x1="11" y1="18" x2="11" y2="22"/><line x1="13" y1="18" x2="13" y2="22"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--text-primary);">Why This Product?</h3>
+                        <p style="font: var(--font-xs); color: var(--text-muted);">AI-powered analysis based on product metrics</p>
+                    </div>
+                </div>
+                <div id="aiInsight">
+                    <div class="ai-skeleton">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Similar Products -->
+            <div class="similar-section">
+                <div class="chart-header">
+                    <div class="chart-header-icon" style="background: color-mix(in srgb, var(--cyan) 10%, transparent); color: var(--cyan);">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--text-primary);">Similar Products</h3>
+                        <p style="font: var(--font-xs); color: var(--text-muted);">Same category, sorted by velocity</p>
+                    </div>
+                </div>
+                <div id="similarGrid" class="similar-grid">
+                    <!-- Skeleton cards -->
+                    <div class="similar-card"><div style="aspect-ratio:1; background:var(--surface-2); animation:shimmer 1.5s infinite;"></div><div class="similar-card-body"><div class="skeleton" style="width:80%; height:12px; margin-bottom:8px;"></div><div class="skeleton" style="width:50%; height:10px;"></div></div></div>
+                    <div class="similar-card"><div style="aspect-ratio:1; background:var(--surface-2); animation:shimmer 1.5s infinite;"></div><div class="similar-card-body"><div class="skeleton" style="width:80%; height:12px; margin-bottom:8px;"></div><div class="skeleton" style="width:50%; height:10px;"></div></div></div>
+                    <div class="similar-card"><div style="aspect-ratio:1; background:var(--surface-2); animation:shimmer 1.5s infinite;"></div><div class="similar-card-body"><div class="skeleton" style="width:80%; height:12px; margin-bottom:8px;"></div><div class="skeleton" style="width:50%; height:10px;"></div></div></div>
+                    <div class="similar-card"><div style="aspect-ratio:1; background:var(--surface-2); animation:shimmer 1.5s infinite;"></div><div class="similar-card-body"><div class="skeleton" style="width:80%; height:12px; margin-bottom:8px;"></div><div class="skeleton" style="width:50%; height:10px;"></div></div></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Helpers ──────────────────────────────────────────────────────
+const productId = window.location.pathname.split('/').pop();
+let productData = null;
+let salesChart = null;
+
+const fmt = (n) => n == null ? '--' : Number(n).toLocaleString();
+const fmtK = (n) => {
+    if (n == null) return '--';
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
+    return '$' + Number(n).toFixed(2);
+};
+const fmtPct = (n) => n == null ? '--' : (n * 100).toFixed(1) + '%';
+const fmtPctRaw = (n) => n == null ? '--' : n.toFixed(1) + '%';
+const safe = (v, fallback = '--') => (v != null && v !== '' && v !== 0) ? v : fallback;
+
+// ── Load Product ─────────────────────────────────────────────────
+async function loadProduct() {
+    try {
+        const res = await fetch(`/api/product/${productId}`);
+        if (!res.ok) throw new Error('Product not found');
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Unknown error');
+        productData = data;
+        render(data);
+    } catch (e) {
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('errorState').style.display = 'block';
+        document.getElementById('errorMsg').textContent = e.message;
+    }
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function render(d) {
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+
+    // Image
+    const imgProxy = `/api/image-proxy/${d.product_id}`;
+    const img = document.getElementById('pImage');
+    img.src = imgProxy;
+
+    // Title + breadcrumb
+    const name = d.product_name || 'Unknown Product';
+    document.getElementById('pTitle').textContent = name;
+    document.getElementById('breadcrumb').textContent = `Products / ${name.substring(0, 40)}${name.length > 40 ? '...' : ''}`;
+    document.title = `${name.substring(0, 50)} | PRISM`;
+
+    // Category
+    const cat = [d.category, d.subcategory].filter(Boolean).join(' / ');
+    document.getElementById('pCategory').textContent = cat || 'Uncategorized';
+
+    // Status badge
+    const statusEl = document.getElementById('metaStatus');
+    const status = d.product_status || 'active';
+    const statusColors = { active: 'var(--green)', sold: 'var(--amber)', unavailable: 'var(--red)', inactive: 'var(--text-muted)' };
+    statusEl.querySelector('.dot').style.background = statusColors[status] || 'var(--text-muted)';
+    statusEl.childNodes[1].textContent = ' ' + status.charAt(0).toUpperCase() + status.slice(1);
+    if (d.status_note) statusEl.title = d.status_note;
+
+    // Meta dates
+    if (d.first_seen) {
+        const dt = new Date(d.first_seen);
+        const days = Math.ceil((Date.now() - dt) / 86400000);
+        document.getElementById('metaFirstSeen').textContent = `Discovered ${dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (${days}d ago)`;
+    }
+    if (d.last_updated) {
+        const dt = new Date(d.last_updated);
+        document.getElementById('metaLastUpdated').textContent = `Updated ${dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+    if (d.scan_type) {
+        document.getElementById('metaScanType').textContent = `Source: ${d.scan_type.replace(/_/g, ' ')}`;
+    }
+
+    // Seller
+    const sellerEl = document.getElementById('pSeller');
+    sellerEl.textContent = d.seller_name || '--';
+    if (d.seller_name) {
+        sellerEl.href = `/api/brand-products/${encodeURIComponent(d.seller_name)}`;
+    }
+
+    // Price
+    document.getElementById('pPrice').textContent = d.price ? `$${Number(d.price).toFixed(2)}` : '--';
+    if (d.original_price && d.original_price > (d.price || 0)) {
+        document.getElementById('pOriginal').textContent = `$${Number(d.original_price).toFixed(2)}`;
+        document.getElementById('pOriginal').style.display = '';
+        const disc = Math.round((1 - d.price / d.original_price) * 100);
+        if (disc > 0) {
+            document.getElementById('pDiscount').textContent = `-${disc}%`;
+            document.getElementById('pDiscount').style.display = '';
         }
+    }
 
-        function render(data) {
-            document.getElementById('loader').classList.add('hidden');
-            document.getElementById('content').classList.remove('hidden');
+    // Commission
+    document.getElementById('pComm').textContent = fmtPct(d.commission_rate);
+    if (d.shop_ads_commission && d.shop_ads_commission > 0) {
+        document.getElementById('pShopAds').textContent = fmtPct(d.shop_ads_commission);
+        document.getElementById('shopAdsCommWrap').style.display = '';
+    }
 
-            const imgProxy = `/api/image-proxy/${data.product_id}`;
-            document.getElementById('pImage').src = imgProxy;
-            document.getElementById('pImage').onerror = function () {
-                this.src = data.image_url || 'https://placehold.co/600x800/05070a/white?text=No+Data';
-            };
+    // Badges
+    if (d.is_ad_driven) document.getElementById('badgeAd').style.display = '';
+    if (d.sales_7d > 200) document.getElementById('badgeHot').style.display = '';
+    if (d.is_favorite) {
+        document.getElementById('badgeFav').style.display = '';
+        const btn = document.getElementById('btnWatchlist');
+        btn.classList.add('active');
+        btn.querySelector('svg').setAttribute('fill', 'currentColor');
+        btn.childNodes[2].textContent = ' On Watchlist';
+    }
 
-            document.getElementById('pTitle').textContent = data.product_name || 'System ID: ' + productId;
-            document.getElementById('pSeller').textContent = data.seller_name || 'Unknown Entity';
-            document.getElementById('navOperation').textContent = (data.product_name || 'Report').substring(0, 30) + '...';
-            document.getElementById('extLink').href = data.product_url || `https://shop.tiktok.com/view/product/${productId}?region=US&locale=en-US`;
+    // Stats grid (primary)
+    document.getElementById('stat7dSales').textContent = fmt(d.sales_7d);
+    document.getElementById('stat30dSales').textContent = fmt(d.sales_30d);
+    document.getElementById('stat7dGmv').textContent = fmtK(d.gmv);
+    document.getElementById('stat30dGmv').textContent = fmtK(d.gmv_30d);
+    document.getElementById('statVideos7d').textContent = fmt(d.video_7d || d.video_count);
+    document.getElementById('statVideosAll').textContent = fmt(d.video_count_alltime);
+    document.getElementById('statCreators').textContent = fmt(d.influencer_count);
+    document.getElementById('statAdSpend').textContent = d.ad_spend ? fmtK(d.ad_spend) : '--';
+    document.getElementById('statReturnRate').textContent = d.return_rate != null ? fmtPctRaw(d.return_rate) : '--';
 
-            if (data.is_ad_driven) document.getElementById('badgeAd').classList.remove('hidden');
-            if (data.sales_7d > 200) document.getElementById('badgeHot').classList.remove('hidden');
+    // Rating + review count
+    const rating = d.rating || d.product_rating;
+    const ratingStr = rating ? `${Number(rating).toFixed(1)}` : '--';
+    const reviewStr = d.review_count ? ` (${fmt(d.review_count)})` : '';
+    document.getElementById('statRating').textContent = ratingStr + reviewStr;
 
-            // Stats - Total Sales (use sales_7d as fallback if total not available)
-            const totalSales = data.sales || data.sales_7d || 0;
-            document.getElementById('statSales').textContent = totalSales.toLocaleString();
+    document.getElementById('statVelocity').textContent = d.sales_velocity ? Number(d.sales_velocity).toFixed(2) : '--';
 
-            // Total Ad Spend
-            document.getElementById('statAdSpend').textContent = (data.ad_spend_total > 0) ? ('$' + Math.round(data.ad_spend_total).toLocaleString()) : 'N/A';
+    const growth = d.gmv_growth || 0;
+    const growthEl = document.getElementById('statGmvGrowth');
+    growthEl.textContent = growth ? (growth > 0 ? '+' : '') + growth.toFixed(1) + '%' : '--';
+    if (growth > 0) growthEl.style.color = 'var(--green)';
+    else if (growth < 0) growthEl.style.color = 'var(--red)';
 
-            // Discovery Date
-            if (data.first_seen) {
-                const date = new Date(data.first_seen);
-                const diffTime = Math.abs(new Date() - date);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                document.getElementById('lblAge').textContent = `• Discovered ${dateStr} (${diffDays}d ago)`;
-            }
-            document.getElementById('statRev').textContent = '$' + (data.gmv_30d || (data.sales_7d || 0) * (data.price || 20)).toLocaleString();
-            document.getElementById('statInfluencers').textContent = data.influencer_count || 0;
-            document.getElementById('statVideos').textContent = data.video_count || 0;
-            document.getElementById('statAllVideos').textContent = (data.video_count_alltime || data.video_count || 0).toLocaleString();
+    // Extra stats
+    document.getElementById('statTotalSales').textContent = fmt(d.sales);
+    document.getElementById('statViews').textContent = fmt(d.views_count);
+    document.getElementById('statLiveCount').textContent = fmt(d.live_count);
+    document.getElementById('statRoas').textContent = d.roas ? d.roas.toFixed(1) + 'x' : '--';
+    document.getElementById('statEstProfit').textContent = d.est_profit ? fmtK(d.est_profit) : '--';
+    const trend = d.price_trend;
+    const trendEl = document.getElementById('statPriceTrend');
+    if (trend === 'rising') { trendEl.textContent = 'Rising'; trendEl.style.color = 'var(--red)'; }
+    else if (trend === 'falling') { trendEl.textContent = 'Falling'; trendEl.style.color = 'var(--green)'; }
+    else if (trend === 'stable') { trendEl.textContent = 'Stable'; trendEl.style.color = 'var(--text-muted)'; }
+    else { trendEl.textContent = '--'; }
 
-            document.getElementById('pPrice').textContent = '$' + (data.price || 0);
-            document.getElementById('pComm').textContent = Math.round((data.commission_rate || 0) * 100) + '%';
+    // Chart
+    renderChart(d);
 
+    // AI insight
+    loadAiInsight(d);
 
+    // Similar products
+    loadSimilar(d);
+}
 
-            // Competition Logic
-            const comp = data.influencer_count || 0;
-            let level = "Low Saturation";
-            let color = "var(--emerald)";
-            let pct = 20;
+// ── Chart ─────────────────────────────────────────────────────────
+function renderChart(d) {
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    if (salesChart) salesChart.destroy();
 
-            if (comp > 50) { level = "Critical Saturation"; color = "var(--rose)"; pct = 90; }
-            else if (comp > 20) { level = "High Saturation"; color = "var(--amber)"; pct = 65; }
-            else if (comp > 5) { level = "Moderate Saturation"; color = "var(--cyan)"; pct = 40; }
+    const s7d = d.sales_7d || 0;
+    // Simulate daily distribution from 7D total
+    const weights = [0.08, 0.12, 0.15, 0.11, 0.18, 0.16, 0.20];
+    const labels = [];
+    const values = [];
+    for (let i = 6; i >= 0; i--) {
+        const dt = new Date(); dt.setDate(dt.getDate() - i);
+        labels.push(dt.toLocaleDateString('en-US', { weekday: 'short' }));
+        values.push(Math.round(s7d * weights[6 - i]));
+    }
 
-            document.getElementById('compLevel').textContent = level;
-            document.getElementById('compLevel').style.color = color;
-            document.getElementById('compBar').style.width = pct + '%';
-            document.getElementById('compBar').style.background = color;
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(124, 58, 237, 0.3)');
+    gradient.addColorStop(1, 'rgba(124, 58, 237, 0)');
 
-            renderChart(data.sales_7d);
-        }
-
-        function renderChart(sales7d) {
-            const ctx = document.getElementById('salesChart').getContext('2d');
-            if (chart) chart.destroy();
-
-            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(6, 182, 212, 0.4)');
-            gradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
-
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: ['T-6', 'T-5', 'T-4', 'T-3', 'T-2', 'T-1', 'Now'],
-                    datasets: [{
-                        label: 'Sales Velocity',
-                        data: [
-                            Math.round(sales7d * 0.08),
-                            Math.round(sales7d * 0.12),
-                            Math.round(sales7d * 0.15),
-                            Math.round(sales7d * 0.11),
-                            Math.round(sales7d * 0.18),
-                            Math.round(sales7d * 0.16),
-                            Math.round(sales7d * 0.20)
-                        ],
-                        borderColor: '#06b6d4',
-                        borderWidth: 3,
-                        pointBackgroundColor: '#06b6d4',
-                        pointBorderColor: 'rgba(255,255,255,0.2)',
-                        pointBorderWidth: 4,
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                        fill: true,
-                        backgroundColor: gradient,
-                        tension: 0.4
-                    }]
+    salesChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Est. Daily Sales',
+                data: values,
+                borderColor: '#7c3aed',
+                borderWidth: 2.5,
+                pointBackgroundColor: '#7c3aed',
+                pointBorderColor: 'rgba(124,58,237,0.3)',
+                pointBorderWidth: 3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                fill: true,
+                backgroundColor: gradient,
+                tension: 0.4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(10,10,15,0.95)',
+                    titleFont: { family: "'Cabinet Grotesk', sans-serif", size: 13 },
+                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    padding: 12,
+                    cornerRadius: 8,
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+                    ticks: { color: '#666', font: { family: "'Inter', sans-serif", size: 11 } },
+                    beginAtZero: true,
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            titleFont: { family: 'Outfit', size: 14 },
-                            bodyFont: { family: 'Inter', size: 12 },
-                            padding: 12,
-                            borderRadius: 12,
-                            borderColor: 'rgba(255,255,255,0.1)',
-                            borderWidth: 1
-                        }
-                    },
-                    scales: {
-                        y: {
-                            grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
-                            ticks: { color: '#64748b', font: { family: 'Inter', size: 10 } }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#64748b', font: { family: 'Inter', size: 10 } }
-                        }
-                    }
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#666', font: { family: "'Inter', sans-serif", size: 11 } },
                 }
-            });
-        }
-
-        async function enrichNow() {
-            const btn = document.getElementById('enrichBtn');
-            const icon = btn.querySelector('i');
-            const text = btn.querySelector('span');
-
-            btn.disabled = true;
-            icon.className = 'fas fa-spinner fa-spin mr-2';
-            text.textContent = 'Synchronizing...';
-
-            try {
-                const res = await fetch(`/api/product/enrich/${productId}`);
-                const resData = await res.json();
-                if (resData.success) {
-                    render(resData.product);
-                } else {
-                    alert("Sync Error: " + (resData.error || "Connection timed out"));
-                }
-            } catch (e) {
-                alert("Network Error: " + e.message);
-            } finally {
-                btn.disabled = false;
-                icon.className = 'fas fa-bolt mr-2';
-                text.textContent = 'Sync Data';
             }
         }
+    });
+}
 
-        async function openCreativeFinder() {
-            const modal = document.getElementById('creativeModal');
-            const grid = document.getElementById('creativeModalGrid');
-            modal.classList.remove('hidden');
-            grid.innerHTML = '<div class="col-span-full py-20 text-center"><i class="fas fa-spinner fa-spin text-primary text-3xl mb-4"></i><p class="text-slate-500 font-bold uppercase tracking-widest text-xs">Scanning TikTok API...</p></div>';
+// ── AI Insight ────────────────────────────────────────────────────
+async function loadAiInsight(d) {
+    const container = document.getElementById('aiInsight');
+    const prompt = `Analyze this TikTok Shop product as a brief investment opportunity report (3-4 sentences max):
 
-            try {
-                const res = await fetch(`/api/analytics/creative-linker?product_id=${productId}`);
-                const data = await res.json();
-                if (data.success && data.videos.length > 0) {
-                    grid.innerHTML = data.videos.map(v => `
-                        <div class="glass rounded-2xl overflow-hidden border border-white/5 flex flex-col bg-slate-950/50">
-                        <div class="relative aspect-video group">
-                                <img src="${v.coverUrl || ''}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" onerror="this.src='/vantage_logo.png'">
-                                <div class="absolute inset-0 flex items-center justify-center">
-                                    <a href="${v.videoUrl || '#'}" target="_blank" class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white text-xl shadow-2xl transition-transform hover:scale-110">
-                                        <i class="fas fa-play ml-1"></i>
-                                    </a>
-                                </div>
-                                <div class="absolute top-3 left-3">
-                                    <span class="px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md text-[9px] font-bold text-white border border-white/10">
-                                        ${(v.durationSeconds || v.duration || '--')}s
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="p-4">
-                                <div class="flex justify-between items-end">
-                                    <div>
-                                        <p class="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Est. Revenue</p>
-                                        <p class="text-base font-bold text-emerald-400">$${(v.periodRevenue || 0).toLocaleString()}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Views</p>
-                                        <p class="text-xs font-bold text-white">${(v.periodViews || 0).toLocaleString()}</p>
-                                    </div>
-                                </div>
-                                <div class="flex justify-between items-center mt-2">
-                                    <p class="text-[9px] text-primary font-bold truncate">@${v.creatorUsername || 'unknown'}</p>
-                                    <p class="text-[8px] text-slate-500">${v.publishedAt ? new Date(v.publishedAt).toLocaleDateString() : (v.createTime ? new Date(v.createTime * 1000).toLocaleDateString() : '')}</p>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('');
+Product: ${d.product_name}
+Seller: ${d.seller_name || 'Unknown'}
+Price: $${d.price || 0}
+Commission: ${((d.commission_rate || 0) * 100).toFixed(1)}%
+7D Sales: ${d.sales_7d || 0}
+30D Sales: ${d.sales_30d || 0}
+All-time Sales: ${d.sales || 0}
+GMV: $${d.gmv || 0}
+Ad Spend: $${d.ad_spend || 0}
+Videos (7D): ${d.video_7d || d.video_count || 0}
+All-time Videos: ${d.video_count_alltime || 0}
+Creators: ${d.influencer_count || 0}
+Rating: ${d.product_rating || d.rating || 'N/A'}
+Reviews: ${d.review_count || 0}
+Category: ${d.category || 'Unknown'}
+Sales Velocity: ${d.sales_velocity || 0}
+GMV Growth: ${d.gmv_growth || 0}%
+
+Focus on: opportunity level, competition saturation, creator potential, and one actionable recommendation.`;
+
+    try {
+        const res = await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: prompt }),
+        });
+        const data = await res.json();
+        if (data.success && data.response) {
+            // Render with typing effect
+            container.innerHTML = '<div class="ai-response"></div>';
+            const el = container.querySelector('.ai-response');
+            const text = data.response;
+            let i = 0;
+            const cursor = document.createElement('span');
+            cursor.className = 'ai-cursor';
+            el.appendChild(cursor);
+            const type = () => {
+                if (i < text.length) {
+                    el.insertBefore(document.createTextNode(text[i]), cursor);
+                    i++;
+                    setTimeout(type, 8 + Math.random() * 12);
                 } else {
-                    grid.innerHTML = '<div class="col-span-full text-center py-10 text-slate-500">No performance shorts found for this product yet.</div>';
+                    cursor.remove();
                 }
-            } catch (e) {
-                grid.innerHTML = '<div class="col-span-full text-center py-10 text-rose-500">Failed to load creatives.</div>';
-            }
+            };
+            type();
+        } else {
+            container.innerHTML = '<p class="ai-response" style="color:var(--text-muted);">AI analysis unavailable. No API key configured.</p>';
+        }
+    } catch {
+        container.innerHTML = '<p class="ai-response" style="color:var(--text-muted);">Could not load AI analysis.</p>';
+    }
+}
+
+// ── Similar Products ──────────────────────────────────────────────
+async function loadSimilar(d) {
+    const grid = document.getElementById('similarGrid');
+    try {
+        const cat = d.category || '';
+        let url = `/api/products?limit=8&sort=sales_velocity&status=active`;
+        if (cat) url += `&category=${encodeURIComponent(cat)}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+        const products = (data.products || []).filter(p => p.product_id !== d.product_id).slice(0, 6);
+
+        if (products.length === 0) {
+            grid.innerHTML = '<p style="font:var(--font-sm); color:var(--text-muted); grid-column:1/-1; text-align:center; padding:var(--space-8) 0;">No similar products found.</p>';
+            return;
         }
 
-        function closeCreativeModal() {
-            document.getElementById('creativeModal').classList.add('hidden');
-        }
+        grid.innerHTML = products.map(p => `
+            <a href="/product/${p.product_id}" class="similar-card" style="text-decoration:none;">
+                <img src="/api/image-proxy/${p.product_id}" alt="" loading="lazy" width="120" height="120" onerror="this.style.display='none'">
+                <div class="similar-card-body">
+                    <p class="similar-card-name">${p.product_name || 'Unknown'}</p>
+                    <div class="similar-card-stats">
+                        <span class="similar-card-price">$${(p.price || 0).toFixed(2)}</span>
+                        <span class="similar-card-velocity">${p.sales_velocity ? p.sales_velocity.toFixed(1) + ' vel' : fmt(p.sales_7d) + ' 7D'}</span>
+                    </div>
+                </div>
+            </a>
+        `).join('');
+    } catch {
+        grid.innerHTML = '<p style="font:var(--font-sm); color:var(--text-muted); grid-column:1/-1; text-align:center;">Could not load similar products.</p>';
+    }
+}
 
-        loadProductData();
-    </script>
+// ── Actions ───────────────────────────────────────────────────────
+async function toggleWatchlist() {
+    if (!productData) return;
+    const btn = document.getElementById('btnWatchlist');
+    try {
+        const res = await fetch(`/api/favorite/${productId}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            const isFav = data.is_favorite;
+            productData.is_favorite = isFav;
+            btn.classList.toggle('active', isFav);
+            btn.querySelector('svg').setAttribute('fill', isFav ? 'currentColor' : 'none');
+            btn.childNodes[2].textContent = isFav ? ' On Watchlist' : ' Add to Watchlist';
+            document.getElementById('badgeFav').style.display = isFav ? '' : 'none';
+        }
+    } catch { /* silent */ }
+}
+
+function copyLink() {
+    const rawId = String(productId).replace('shop_', '');
+    const url = `https://shop.tiktok.com/view/product/${rawId}?region=US`;
+    navigator.clipboard.writeText(url).then(() => {
+        const btn = event.currentTarget;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+        setTimeout(() => btn.innerHTML = orig, 2000);
+    });
+}
+
+async function refreshData() {
+    const btn = document.getElementById('btnRefresh');
+    btn.classList.add('refreshing');
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 0.8s linear infinite;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Refreshing...';
+    try {
+        const res = await fetch(`/api/product/enrich/${productId}`);
+        const data = await res.json();
+        if (data.success && data.product) {
+            productData = data.product;
+            render(data.product);
+        }
+    } catch { /* silent */ }
+    btn.classList.remove('refreshing');
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Refresh Data';
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+loadProduct();
+</script>
 </body>
-
 </html>

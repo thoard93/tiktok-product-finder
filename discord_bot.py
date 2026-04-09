@@ -33,7 +33,7 @@ HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
 BRAND_HUNTER_CHANNEL_ID = int(os.environ.get('BRAND_HUNTER_CHANNEL_ID', 0))  # For daily brand hunter posts
 PRODUCT_LOOKUP_CHANNEL_ID = 1461053839800139959
 BLACKLIST_CHANNEL_ID = 1440369747467174019
-AI_CHAT_CHANNEL_ID = 1473031651599847631  # Vantage AI insights channel
+AI_CHAT_CHANNEL_ID = 1473031651599847631  # PRISM AI insights channel
 AI_CHAT_CATEGORY_ID = 1444029219951874129  # Category for private AI chat channels
 XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 
@@ -774,7 +774,7 @@ async def on_message(message):
     if message.author.bot:
         return
     
-    # ── Vantage AI Chat Channel ──────────────────────────────────────────
+    # ── PRISM AI Chat Channel ──────────────────────────────────────────
     if message.channel.id == AI_CHAT_CHANNEL_ID:
         await handle_ai_chat_redirect(message)
         return
@@ -884,7 +884,7 @@ async def on_message(message):
 async def handle_ai_chat_redirect(message):
     """When someone messages in the main AI channel, create/find their private channel and redirect."""
     if not XAI_API_KEY:
-        await message.reply("⚠️ Vantage AI is not configured yet. Ask an admin to set the `XAI_API_KEY` environment variable.", mention_author=False)
+        await message.reply("⚠️ PRISM AI is not configured yet. Ask an admin to set the `XAI_API_KEY` environment variable.", mention_author=False)
         return
     
     user_msg = message.content.strip()
@@ -937,15 +937,15 @@ async def handle_ai_chat_redirect(message):
                 name=channel_name,
                 category=category,
                 overwrites=overwrites,
-                topic=f"🧠 Private Vantage AI chat for {user.display_name}. Ask anything about products, gems, trends, and insights."
+                topic=f"🧠 Private PRISM AI chat for {user.display_name}. Ask anything about products, gems, trends, and insights."
             )
             active_ai_channels[user.id] = private_channel.id
             
             # Send welcome message in private channel
             welcome_embed = discord.Embed(
-                title="🧠 Vantage AI — Private Session",
+                title="🧠 PRISM AI — Private Session",
                 description=(
-                    f"Hey {user.mention}! This is your **private Vantage AI** channel.\n\n"
+                    f"Hey {user.mention}! This is your **private PRISM AI** channel.\n\n"
                     "Ask me anything about TikTok Shop products:\n"
                     "• *\"Find me gems with high ad spend\"*\n"
                     "• *\"What products have the best commissions?\"*\n"
@@ -955,7 +955,7 @@ async def handle_ai_chat_redirect(message):
                 ),
                 color=0x00C9A7
             )
-            welcome_embed.set_footer(text="Powered by Grok 4.1 • Data from Vantage")
+            welcome_embed.set_footer(text="Powered by Grok 4.1 • Data from PRISM")
             await private_channel.send(embed=welcome_embed)
             
         except discord.Forbidden:
@@ -996,7 +996,7 @@ async def handle_ai_chat_redirect(message):
 async def handle_ai_chat(message):
     """Handle messages in a private AI chat channel — direct conversation."""
     if not XAI_API_KEY:
-        await message.reply("⚠️ Vantage AI is not configured yet.", mention_author=False)
+        await message.reply("⚠️ PRISM AI is not configured yet.", mention_author=False)
         return
     
     user_msg = message.content.strip()
@@ -1014,7 +1014,7 @@ async def _generate_ai_response(channel, user, user_msg, reply_to=None):
     try:
         product_context = _build_discord_product_context(user_msg)
         
-        system_prompt = f"""You are 'Vantage AI', the expert intelligence engine of the Vantage platform — a TikTok Shop product research tool.
+        system_prompt = f"""You are 'PRISM AI', the expert intelligence engine of the PRISM platform — a TikTok Shop product research tool.
 
 You are responding in a private Discord channel for a TikTok Shop affiliate marketer/content creator.
 
@@ -1036,7 +1036,7 @@ RESPONSE RULES:
 5. Format numbers clearly: "$12.5K" not "12500".
 6. Keep responses under 1800 characters (Discord limit is 2000).
 7. If asked for gems or opportunities, sort by efficiency ratio (ad_spend / videos).
-8. Refer to the platform as 'Vantage'. You are Vantage AI.
+8. Refer to the platform as 'PRISM'. You are PRISM AI.
 9. Don't use markdown headers (# or ##). Use **bold** and bullet points instead.
 10. ALWAYS include these when listing products:
     - **Product name** (bold)
@@ -1064,7 +1064,7 @@ RESPONSE RULES:
             timestamp=datetime.utcnow()
         )
         embed.set_author(
-            name="Vantage AI",
+            name="PRISM AI",
             icon_url="https://cdn-icons-png.flaticon.com/512/4712/4712109.png"
         )
         embed.set_footer(text=f"Asked by {user.display_name} • Powered by Grok 4.1", icon_url=user.display_avatar.url if user.display_avatar else None)
@@ -1080,7 +1080,7 @@ RESPONSE RULES:
             await thinking_msg.delete()
         except:
             pass
-        await channel.send(f"❌ Vantage AI Error: {str(e)[:200]}")
+        await channel.send(f"❌ PRISM AI Error: {str(e)[:200]}")
 
 
 def _call_grok_discord(system_prompt, user_message):

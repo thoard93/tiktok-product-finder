@@ -1,630 +1,544 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brand Hunter | Vantage</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="/pwa/css/main.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        midnight: '#020617',
-                        slate: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
-                        primary: '#2563eb',
-                    }
-                }
-            }
-        }
-    </script>
+    <title>PRISM | Brand Hunter</title>
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        .brand-card {
-            transition: all 0.3s ease;
-        }
+        /* ── Layout ── */
+        body { display: flex; min-height: 100vh; }
 
-        .brand-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-        }
+        /* ── Main area ── */
+        .main { flex:1; display:flex; flex-direction:column; min-height:100vh; }
 
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
+        /* ── Top bar ── */
+        .top-bar { position:sticky; top:0; z-index:30; height:56px; background:rgba(10,10,15,0.85);
+            backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid var(--prism-border);
+            display:flex; align-items:center; padding:0 var(--sp-6); gap:var(--sp-4); }
+        .prism-nav-hamburger { /* styled by prism-nav.js */ }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+        /* ── Content ── */
+        .content { flex:1; overflow-y:auto; padding:var(--sp-6); max-width:var(--max-content); width:100%; }
+
+        /* ── Page header ── */
+        .page-header { margin-bottom:var(--sp-8); }
+        .page-title { font-family:'Cabinet Grotesk',sans-serif; font-size:var(--text-3xl); font-weight:700;
+            letter-spacing:-0.02em; color:var(--prism-text); margin-bottom:var(--sp-1); }
+        .page-subtitle { font-size:var(--text-base); color:var(--prism-text-muted); }
+
+        /* ── Search bar ── */
+        .search-bar { display:flex; gap:var(--sp-3); margin-bottom:var(--sp-6); }
+        .search-input { flex:1; background:var(--prism-surface); border:1px solid var(--prism-border);
+            border-radius:var(--radius-md); padding:var(--sp-3) var(--sp-4); font-size:var(--text-base);
+            color:var(--prism-text); outline:none; transition:border-color 120ms; font-family:'Inter',sans-serif; }
+        .search-input:focus { border-color:var(--prism-accent); box-shadow:0 0 0 3px var(--prism-accent-glow); }
+        .search-input::placeholder { color:var(--prism-text-faint); }
+
+        .btn { display:inline-flex; align-items:center; gap:var(--sp-2); padding:var(--sp-2) var(--sp-5);
+            border-radius:var(--radius-md); font-size:var(--text-sm); font-weight:600; cursor:pointer;
+            border:none; transition:all 120ms ease; font-family:'Inter',sans-serif; }
+        .btn-primary { background:var(--prism-accent); color:#fff; }
+        .btn-primary:hover { background:var(--prism-accent-hover); box-shadow:var(--shadow-glow-accent); }
+        .btn-primary:disabled { opacity:0.5; cursor:default; }
+        .btn-sm { padding:var(--sp-1) var(--sp-3); font-size:var(--text-xs); }
+        .btn-track { background:var(--prism-accent-glow); color:var(--prism-accent-text); border:1px solid rgba(124,58,237,0.3); }
+        .btn-track:hover { background:var(--prism-accent); color:#fff; }
+        .btn-danger { background:transparent; color:var(--prism-error); border:1px solid rgba(244,63,94,0.2); }
+        .btn-danger:hover { background:var(--prism-error-glow); border-color:rgba(244,63,94,0.4); }
+        .btn-ghost { background:transparent; color:var(--prism-text-muted); border:1px solid var(--prism-border); }
+        .btn-ghost:hover { background:var(--prism-surface-2); color:var(--prism-text); }
+
+        /* ── Search results ── */
+        .search-results { margin-bottom:var(--sp-8); }
+        .search-results-title { font-size:var(--text-sm); font-weight:600; color:var(--prism-text-muted);
+            text-transform:uppercase; letter-spacing:0.06em; margin-bottom:var(--sp-3); }
+        .search-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:var(--sp-3); }
+        .search-card { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-lg);
+            padding:var(--sp-4); display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3);
+            transition:border-color var(--duration-fast) ease; }
+        .search-card:hover { border-color:var(--prism-border-strong); }
+        .search-card-info { min-width:0; }
+        .search-card-name { font-weight:600; color:var(--prism-text); font-size:var(--text-base);
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .search-card-meta { font-size:var(--text-xs); color:var(--prism-text-muted); margin-top:2px; }
+
+        /* ── Section heading ── */
+        .section-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-4); }
+        .section-title { font-family:'Cabinet Grotesk',sans-serif; font-size:var(--text-xl); font-weight:700;
+            color:var(--prism-text); }
+        .section-count { font-size:var(--text-sm); color:var(--prism-text-muted); }
+
+        /* ── Brand card ── */
+        .brand-cards { display:flex; flex-direction:column; gap:var(--sp-3); }
+        .brand-card { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-lg);
+            overflow:hidden; transition:border-color var(--duration-fast) ease; }
+        .brand-card:hover { border-color:var(--prism-border-strong); }
+        .brand-card-header { display:flex; align-items:center; gap:var(--sp-4); padding:var(--sp-4) var(--sp-5);
+            cursor:pointer; user-select:none; }
+        .brand-card-header:hover { background:var(--prism-surface-2); }
+        .brand-name { font-family:'Cabinet Grotesk',sans-serif; font-size:var(--text-lg); font-weight:700;
+            color:var(--prism-text); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .brand-stats { display:flex; gap:var(--sp-6); align-items:center; flex-shrink:0; }
+        .brand-stat { text-align:center; }
+        .brand-stat-value { font-size:var(--text-base); font-weight:700; color:var(--prism-text); }
+        .brand-stat-label { font-size:10px; color:var(--prism-text-faint); text-transform:uppercase; letter-spacing:0.06em; }
+        .brand-chevron { color:var(--prism-text-faint); transition:transform var(--duration-base) var(--ease-out);
+            font-size:var(--text-sm); flex-shrink:0; width:20px; text-align:center; }
+        .brand-chevron.expanded { transform:rotate(180deg); }
+        .brand-actions { flex-shrink:0; display:flex; gap:var(--sp-2); }
+
+        /* ── Brand products (expanded) ── */
+        .brand-products { display:none; border-top:1px solid var(--prism-border); }
+        .brand-products.open { display:block; }
+        .brand-products-inner { padding:var(--sp-3) var(--sp-5) var(--sp-4); }
+        .product-row { display:grid; grid-template-columns:40px 1fr 80px 80px 80px; gap:var(--sp-3);
+            align-items:center; padding:var(--sp-2) var(--sp-2); border-radius:var(--radius-sm);
+            font-size:var(--text-sm); }
+        .product-row:nth-child(odd) { background:var(--prism-surface-2); }
+        .product-row:nth-child(even) { background:transparent; }
+        .product-row-header { font-size:10px; font-weight:700; color:var(--prism-text-faint);
+            text-transform:uppercase; letter-spacing:0.06em; background:transparent !important; border-bottom:1px solid var(--prism-border);
+            padding-bottom:var(--sp-2); margin-bottom:var(--sp-1); }
+        .product-thumb { width:40px; height:40px; border-radius:var(--radius-sm); object-fit:cover;
+            background:var(--prism-surface-2); }
+        .product-name-cell { font-weight:500; color:var(--prism-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .product-num { text-align:right; color:var(--prism-text-muted); font-variant-numeric:tabular-nums; }
+
+        /* ── Empty state ── */
+        .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
+            padding:var(--sp-16) var(--sp-6); color:var(--prism-text-faint); text-align:center; }
+        .empty-icon { font-size:48px; margin-bottom:var(--sp-4); opacity:0.3; animation:emptyFloat 3s ease-in-out infinite; }
+        @keyframes emptyFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+        .empty-text { font-size:var(--text-base); max-width:320px; }
+
+        /* ── Spinner ── */
+        .spinner { display:inline-block; width:18px; height:18px; border:2px solid var(--prism-border);
+            border-top-color:var(--prism-accent); border-radius:50%; animation:spin 0.6s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .spinner-lg { width:32px; height:32px; border-width:3px; }
+        .loading-center { display:flex; align-items:center; justify-content:center; padding:var(--sp-12); }
+
+        /* ── Toast ── */
+        .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); padding:var(--sp-2) var(--sp-5);
+            border-radius:var(--radius-lg); font-size:var(--text-sm); font-weight:600; z-index:200;
+            backdrop-filter:blur(12px); animation:toastIn 0.3s ease; pointer-events:none; }
+        .toast-info { background:rgba(6,182,212,0.15); border:1px solid rgba(6,182,212,0.3); color:var(--prism-cyan); }
+        .toast-error { background:rgba(244,63,94,0.15); border:1px solid rgba(244,63,94,0.3); color:var(--prism-error); }
+        .toast-success { background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); color:var(--prism-success); }
+        @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+
+        /* ── Responsive ── */
+        @media (max-width: 767px) {
+            .main { margin-left:0; }
+            .content { padding:var(--sp-4); }
+            .brand-stats { display:none; }
+            .product-row { grid-template-columns:40px 1fr 70px; }
+            .product-row .hide-mobile { display:none; }
+            .search-grid { grid-template-columns:1fr; }
+            .page-title { font-size:var(--text-2xl); }
+        }
+        @media (max-width: 480px) {
+            .search-bar { flex-direction:column; }
+            .search-bar .btn { width:100%; justify-content:center; }
         }
     </style>
 </head>
 
-<body class="flex h-screen overflow-hidden bg-slate-950 text-slate-200">
-
-    <!-- Sidebar -->
-    <aside class="hidden md:flex flex-col w-72 bg-slate-900 border-r border-white/5 z-30">
-        <div class="p-8">
-            <div class="flex items-center gap-3 group cursor-pointer" onclick="window.location.href='/'">
-                <div
-                    class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center relative overflow-hidden shrink-0 shadow-lg shadow-primary/20">
-                    <img src="/vantage_logo.png" class="w-full h-full object-cover p-1.5"
-                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                    <span style="display:none" class="text-xl h-full w-full items-center justify-center">V</span>
-                </div>
-                <div>
-                    <h1 class="font-heading font-bold text-xl tracking-tight text-white">Vantage</h1>
-                    <p class="text-[9px] text-primary font-bold tracking-widest uppercase opacity-80">Intelligence
-                        Platform</p>
-                </div>
-            </div>
-        </div>
-
-        <nav class="flex-1 px-3 space-y-1 overflow-y-auto no-scrollbar">
-            <div class="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">Main Menu
-            </div>
-            <a href="/" class="sidebar-link">
-                <i class="fas fa-grid-2 w-5 text-sm"></i>
-                <span>Dashboard</span>
-            </a>
-            <a href="/brand-hunter" class="sidebar-link active">
-                <i class="fas fa-bullseye w-5 text-sm"></i>
-                <span>Brand Hunter</span>
-            </a>
-            <a href="/vantage-v2" class="sidebar-link">
-                <i class="fas fa-rocket w-5 text-sm"></i>
-                <span>Growth Hub (v2)</span>
-            </a>
-
-            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">
-                Configuration</div>
-            <a href="/admin" class="sidebar-link">
-                <i class="fas fa-shield-alt w-5 text-sm"></i>
-                <span>Terminal</span>
-            </a>
-        </nav>
-    </aside>
+<body>
+    <div id="prism-nav"></div>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-950">
-        <!-- Header -->
-        <header
-            class="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md sticky top-0 z-20">
-            <div class="flex items-center gap-4">
-                <a href="/" class="text-slate-500 hover:text-white transition-colors">
-                    <i class="fas fa-arrow-left"></i>
-                </a>
-                <h2 class="font-heading font-bold text-lg text-white">🎯 Brand Hunter</h2>
+    <div class="main">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <button class="prism-nav-hamburger" onclick="prismNav.toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div style="font-size:var(--text-sm);font-weight:600;color:var(--prism-text)">
+                <i class="fas fa-crosshairs" style="color:var(--prism-accent-text);margin-right:var(--sp-2)"></i>
+                Brand Hunter
             </div>
-            <div class="flex items-center gap-3">
-                <button onclick="refreshAllBrands()"
-                    class="glass px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-white/5 hover:border-primary/50 transition-all">
-                    <i class="fas fa-sync-alt mr-2"></i>Refresh All
-                </button>
-                <button onclick="showAddBrandModal()" class="btn-premium px-4 py-2 text-xs">
-                    <i class="fas fa-plus mr-2"></i>Add Brand
+            <div style="margin-left:auto;display:flex;align-items:center;gap:var(--sp-3)">
+                <button class="btn btn-ghost btn-sm" onclick="refreshAllBrands()" id="btnRefreshAll" title="Refresh all brand stats">
+                    <i class="fas fa-arrows-rotate" style="font-size:11px"></i>
+                    <span class="hide-mobile">Refresh All</span>
                 </button>
             </div>
         </header>
 
-        <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar">
-            <!-- Stats Bar -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Tracked Brands</p>
-                    <div class="text-2xl font-heading font-bold text-white"><span id="statBrands">--</span></div>
-                </div>
-                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Products</p>
-                    <div class="text-2xl font-heading font-bold text-primary"><span id="statProducts">--</span></div>
-                </div>
-                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">7D Sales Volume</p>
-                    <div class="text-2xl font-heading font-bold text-emerald-400"><span id="statSales">--</span></div>
-                </div>
-                <div class="bg-slate-900 border border-white/5 p-5 rounded-2xl">
-                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Revenue</p>
-                    <div class="text-2xl font-heading font-bold text-amber-400"><span id="statRevenue">--</span></div>
-                </div>
+        <!-- Page Content -->
+        <div class="content">
+            <!-- Page Header -->
+            <div class="page-header">
+                <h1 class="page-title">Brand Hunter</h1>
+                <p class="page-subtitle">Track and analyze TikTok Shop brands</p>
             </div>
 
-            <!-- Brand Discovery Section -->
-            <div class="mb-8 p-6 bg-slate-900 border border-white/5 rounded-2xl">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 class="font-heading font-bold text-white text-lg flex items-center gap-2">
-                            <i class="fas fa-radar text-primary"></i> Brand Discovery
-                        </h3>
-                        <p class="text-slate-500 text-xs mt-1">Scan trending products to find big brands with high GMV
-                        </p>
-                    </div>
-                    <div class="flex gap-2">
-                        <button onclick="discoverFromExisting()"
-                            class="glass px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-white/5 transition-all">
-                            <i class="fas fa-database mr-1"></i> From Database
-                        </button>
-                        <button onclick="scanCopilotForBrands()" class="btn-premium px-4 py-2 text-xs"
-                            id="btnScanCopilot">
-                            <i class="fas fa-satellite-dish mr-1"></i> Scan Copilot
-                        </button>
-                    </div>
-                </div>
-
-                <div id="discoveryResults" class="hidden">
-                    <div
-                        class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 max-h-64 overflow-y-auto no-scrollbar">
-                        <!-- Discovered brands will be inserted here -->
-                    </div>
-                </div>
-
-                <div id="discoveryEmpty" class="text-center py-6 text-slate-600 text-sm">
-                    <i class="fas fa-search text-2xl mb-2 block opacity-50"></i>
-                    Click "Scan Copilot" to discover trending brands
-                </div>
-            </div>
-            <!-- Brand Search Bar -->
-            <div class="mb-6 flex gap-4 items-center">
-                <div class="relative flex-1 max-w-md">
-                    <input type="text" id="brandSearchInput" placeholder="Search brands..."
-                        class="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 pl-10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary/50"
-                        oninput="filterBrands()">
-                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
-                </div>
-                <span class="text-xs text-slate-500" id="brandCount">-- brands</span>
-            </div>
-
-            <!-- Brand Grid -->
-            <div id="brandGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                <div class="col-span-full text-center py-20 text-slate-500">
-                    <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
-                    <p class="font-bold uppercase tracking-widest">Loading brands...</p>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Add Brand Modal -->
-    <div id="addBrandModal"
-        class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] hidden flex items-center justify-center p-6"
-        onclick="if(event.target===this) this.classList.add('hidden')">
-        <div class="glass-card w-full max-w-md p-6 relative">
-            <button onclick="document.getElementById('addBrandModal').classList.add('hidden')"
-                class="absolute top-4 right-4 text-slate-500 hover:text-white">
-                <i class="fas fa-times"></i>
-            </button>
-            <h3 class="font-heading font-bold text-xl mb-2 text-white">Add Brand to Track</h3>
-            <p class="text-slate-400 text-sm mb-6">Enter the brand or seller name exactly as it appears on TikTok Shop.
-            </p>
-
-            <input type="text" id="brandNameInput" class="input-premium w-full mb-4"
-                placeholder="e.g. Medicube, Halara, QVC...">
-
-            <div class="flex gap-3">
-                <button onclick="document.getElementById('addBrandModal').classList.add('hidden')"
-                    class="flex-1 glass border-white/5 py-3 rounded-xl font-bold text-slate-400">Cancel</button>
-                <button onclick="addBrand()" class="flex-1 btn-premium py-3">Add Brand</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Brand Products Modal -->
-    <div id="productsModal" class="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] hidden flex flex-col p-6"
-        onclick="if(event.target===this) this.classList.add('hidden')">
-        <div class="max-w-6xl w-full mx-auto flex flex-col h-full">
-            <div class="flex items-center gap-4">
-                <div class="text-right">
-                    <h3 class="font-heading font-bold text-2xl text-white" id="modalBrandName">Brand Products</h3>
-                    <p class="text-slate-500 text-sm" id="modalProductCount">Loading...</p>
-                </div>
-            </div>
-            <div class="flex items-center gap-4">
-                <div class="relative group">
-                    <i
-                        class="fas fa-sort-amount-down absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs transition-colors group-hover:text-primary"></i>
-                    <select onchange="sortBrandProducts(this.value)"
-                        class="bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-primary/50 appearance-none cursor-pointer transition-all hover:border-white/20 font-medium min-w-[180px]">
-                        <option value="sales_7d">Sort: 7D Volume</option>
-                        <option value="ad_spend">Sort: Ad Spend</option>
-                        <option value="video_count">Sort: Videos</option>
-                        <option value="price_desc">Sort: Highest Price</option>
-                        <option value="price_asc">Sort: Lowest Price</option>
-                    </select>
-                    <i
-                        class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
-                </div>
-                <button onclick="document.getElementById('productsModal').classList.add('hidden')"
-                    class="glass p-3 rounded-xl text-slate-400 hover:text-white">
-                    <i class="fas fa-times"></i>
+            <!-- Search Bar -->
+            <div class="search-bar">
+                <input type="text" class="search-input" id="searchInput"
+                       placeholder="Search brands by name..."
+                       onkeydown="if(event.key==='Enter')searchBrands()">
+                <button class="btn btn-primary" onclick="searchBrands()" id="btnSearch">
+                    <i class="fas fa-search"></i> Search
                 </button>
             </div>
 
-            <div id="brandProductsGrid"
-                class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 no-scrollbar">
-                <!-- Products will be inserted here -->
+            <!-- Search Results (hidden by default) -->
+            <div class="search-results" id="searchResults" style="display:none">
+                <div class="search-results-title" id="searchResultsTitle">Search Results</div>
+                <div class="search-grid" id="searchGrid"></div>
+            </div>
+
+            <!-- Watched Brands Section -->
+            <div class="section-heading">
+                <div>
+                    <span class="section-title">Watched Brands</span>
+                    <span class="section-count" id="brandCount"></span>
+                </div>
+            </div>
+
+            <div id="brandList" class="brand-cards"></div>
+            <div id="brandLoading" class="loading-center">
+                <div class="spinner spinner-lg"></div>
+            </div>
+            <div id="brandEmpty" class="empty-state" style="display:none">
+                <div class="empty-icon"><i class="fas fa-crosshairs"></i></div>
+                <div class="empty-text">Start tracking brands to monitor their performance</div>
             </div>
         </div>
     </div>
 
     <script>
-        let brands = [];
-        let currentBrandProducts = [];
+    /* ================================================================
+       Brand Hunter — PRISM
+       ================================================================ */
 
-        function formatKMB(num) {
-            if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-            if (num >= 1000) return Math.round(num / 1000) + 'K';
-            return Math.round(num).toString();
+    // ── State ──
+    let watchedBrands = [];
+    const expandedCache = {}; // brandId -> products[]
+
+    // ── Formatting helpers ──
+    function fmt(n) {
+        if (n == null || isNaN(n)) return '0';
+        return Number(n).toLocaleString('en-US');
+    }
+
+    function fmtK(n) {
+        if (n == null || isNaN(n)) return '0';
+        n = Number(n);
+        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+        return n.toLocaleString('en-US');
+    }
+
+    function fmtDollar(n) {
+        if (n == null || isNaN(n)) return '$0';
+        return '$' + fmtK(n);
+    }
+
+    // ── Toast notification ──
+    function toast(msg, type = 'info') {
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 3000);
+    }
+
+    // ── Search Brands ──
+    async function searchBrands() {
+        const q = document.getElementById('searchInput').value.trim();
+        if (!q) return;
+
+        const btn = document.getElementById('btnSearch');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spinner"></div> Searching...';
+
+        try {
+            const res = await fetch(`/api/brands/discover`);
+            if (!res.ok) throw new Error('Search failed');
+            const data = await res.json();
+
+            const results = (data.discovered || []).filter(b =>
+                b.seller_name && b.seller_name.toLowerCase().includes(q.toLowerCase())
+            );
+
+            renderSearchResults(results, q);
+        } catch (err) {
+            toast('Failed to search brands', 'error');
+            console.error(err);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i> Search';
+        }
+    }
+
+    function renderSearchResults(results, query) {
+        const container = document.getElementById('searchResults');
+        const grid = document.getElementById('searchGrid');
+        const title = document.getElementById('searchResultsTitle');
+
+        if (results.length === 0) {
+            title.textContent = `No brands found for "${query}"`;
+            grid.innerHTML = '';
+            container.style.display = 'block';
+            return;
         }
 
-        async function loadBrands() {
-            try {
-                const res = await fetch('/api/brands');
-                const data = await res.json();
-
-                if (data.success) {
-                    // Sort brands by revenue (highest first)
-                    brands = (data.brands || []).sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
-                    renderBrands();
-                    updateStats();
+        title.textContent = `Found ${results.length} brand${results.length !== 1 ? 's' : ''} matching "${query}"`;
+        grid.innerHTML = results.map(b => {
+            const tracked = watchedBrands.some(wb => wb.name && wb.name.toLowerCase() === (b.seller_name || '').toLowerCase());
+            return `
+            <div class="search-card">
+                <div class="search-card-info">
+                    <div class="search-card-name">${esc(b.seller_name)}</div>
+                    <div class="search-card-meta">${fmt(b.product_count)} products &middot; ${fmtDollar(b.total_gmv)} GMV &middot; ${fmtK(b.total_sales_7d)} 7D sales</div>
+                </div>
+                ${tracked
+                    ? '<span style="font-size:var(--text-xs);color:var(--prism-success);font-weight:600"><i class="fas fa-check"></i> Tracked</span>'
+                    : `<button class="btn btn-track btn-sm" onclick="trackBrand('${esc(b.seller_name)}', this)"><i class="fas fa-plus"></i> Track</button>`
                 }
-            } catch (e) {
-                console.error('Failed to load brands:', e);
-                document.getElementById('brandGrid').innerHTML = `
-                    <div class="col-span-full text-center py-20 text-rose-400 font-bold">
-                        Failed to load brands. Please refresh.
-                    </div>`;
+            </div>`;
+        }).join('');
+
+        container.style.display = 'block';
+    }
+
+    // ── Track Brand ──
+    async function trackBrand(name, btnEl) {
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<div class="spinner"></div>';
+        }
+        try {
+            const res = await fetch('/api/brands', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to track brand');
+
+            toast(`Now tracking "${name}"`, 'success');
+            if (btnEl) {
+                btnEl.outerHTML = '<span style="font-size:var(--text-xs);color:var(--prism-success);font-weight:600"><i class="fas fa-check"></i> Tracked</span>';
+            }
+            await loadWatchedBrands();
+        } catch (err) {
+            toast(err.message, 'error');
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="fas fa-plus"></i> Track';
             }
         }
+    }
 
-        function updateStats() {
-            const totalProducts = brands.reduce((sum, b) => sum + (b.product_count || 0), 0);
-            const totalSales = brands.reduce((sum, b) => sum + (b.total_sales_7d || 0), 0);
-            const totalRevenue = brands.reduce((sum, b) => sum + (b.total_revenue || 0), 0);
+    // ── Remove Brand ──
+    async function removeBrand(brandId, name) {
+        if (!confirm(`Stop tracking "${name}"?`)) return;
 
-            document.getElementById('statBrands').textContent = brands.length;
-            document.getElementById('statProducts').textContent = totalProducts.toLocaleString();
-            document.getElementById('statSales').textContent = formatKMB(totalSales);
-            document.getElementById('statRevenue').textContent = '$' + formatKMB(totalRevenue);
+        try {
+            const res = await fetch(`/api/brands/${brandId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed to remove brand');
+
+            toast(`Removed "${name}"`, 'info');
+            delete expandedCache[brandId];
+            await loadWatchedBrands();
+        } catch (err) {
+            toast(err.message, 'error');
         }
+    }
 
-        let filteredBrands = [];
+    // ── Load Watched Brands ──
+    async function loadWatchedBrands() {
+        const list = document.getElementById('brandList');
+        const loading = document.getElementById('brandLoading');
+        const empty = document.getElementById('brandEmpty');
+        const count = document.getElementById('brandCount');
 
-        function filterBrands() {
-            const query = document.getElementById('brandSearchInput').value.toLowerCase().trim();
-            if (query === '') {
-                filteredBrands = brands;
+        loading.style.display = 'flex';
+        empty.style.display = 'none';
+        list.innerHTML = '';
+
+        try {
+            const res = await fetch('/api/brands');
+            if (!res.ok) throw new Error('Failed to load brands');
+            const data = await res.json();
+
+            watchedBrands = data.brands || [];
+
+            if (watchedBrands.length === 0) {
+                empty.style.display = 'flex';
+                count.textContent = '';
             } else {
-                filteredBrands = brands.filter(b => (b.name || '').toLowerCase().includes(query));
+                count.textContent = `(${watchedBrands.length})`;
+                list.innerHTML = watchedBrands.map(b => renderBrandCard(b)).join('');
             }
-            renderBrands(filteredBrands);
+        } catch (err) {
+            toast('Failed to load watched brands', 'error');
+            console.error(err);
+            empty.style.display = 'flex';
+        } finally {
+            loading.style.display = 'none';
+        }
+    }
+
+    function renderBrandCard(b) {
+        const topProduct = b.top_product_name || b.top_product || '-';
+        return `
+        <div class="brand-card" id="brand-${b.id}">
+            <div class="brand-card-header" onclick="toggleBrandExpand(${b.id}, '${esc(b.name)}')">
+                <div class="brand-name">${esc(b.name)}</div>
+                <div class="brand-stats">
+                    <div class="brand-stat">
+                        <div class="brand-stat-value">${fmt(b.product_count || 0)}</div>
+                        <div class="brand-stat-label">Products</div>
+                    </div>
+                    <div class="brand-stat">
+                        <div class="brand-stat-value">${fmtDollar(b.total_gmv || b.gmv || 0)}</div>
+                        <div class="brand-stat-label">GMV</div>
+                    </div>
+                    <div class="brand-stat">
+                        <div class="brand-stat-value">${fmtK(b.total_sales_7d || 0)}</div>
+                        <div class="brand-stat-label">7D Sales</div>
+                    </div>
+                </div>
+                <div class="brand-actions" onclick="event.stopPropagation()">
+                    <button class="btn btn-ghost btn-sm" onclick="syncBrand(${b.id})" title="Refresh stats">
+                        <i class="fas fa-arrows-rotate" style="font-size:11px"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="removeBrand(${b.id}, '${esc(b.name)}')" title="Stop tracking">
+                        <i class="fas fa-trash-can" style="font-size:11px"></i>
+                    </button>
+                </div>
+                <i class="fas fa-chevron-down brand-chevron" id="chevron-${b.id}"></i>
+            </div>
+            <div class="brand-products" id="products-${b.id}">
+                <div class="brand-products-inner" id="products-inner-${b.id}">
+                    <div class="loading-center"><div class="spinner"></div></div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // ── Toggle expand/collapse ──
+    async function toggleBrandExpand(brandId, brandName) {
+        const productsEl = document.getElementById(`products-${brandId}`);
+        const chevron = document.getElementById(`chevron-${brandId}`);
+        const inner = document.getElementById(`products-inner-${brandId}`);
+
+        if (productsEl.classList.contains('open')) {
+            productsEl.classList.remove('open');
+            chevron.classList.remove('expanded');
+            return;
         }
 
-        function renderBrands(list = null) {
-            const displayBrands = list || brands;
-            const grid = document.getElementById('brandGrid');
+        productsEl.classList.add('open');
+        chevron.classList.add('expanded');
 
-            // Update brand count
-            document.getElementById('brandCount').textContent = displayBrands.length + ' brands';
-
-            if (displayBrands.length === 0) {
-                grid.innerHTML = `
-                    <div class="col-span-full text-center py-20 border border-dashed border-white/10 rounded-2xl">
-                        <i class="fas fa-bullseye text-4xl text-slate-700 mb-4"></i>
-                        <p class="text-slate-500 font-bold uppercase tracking-widest mb-2">No Brands Found</p>
-                        <p class="text-slate-600 text-sm">Try a different search or add brands to track.</p>
-                    </div>`;
+        // Lazy-load products on first expand
+        if (!expandedCache[brandId]) {
+            inner.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+            try {
+                const res = await fetch(`/api/brands/${brandId}/products`);
+                if (!res.ok) throw new Error('Failed to load products');
+                const data = await res.json();
+                expandedCache[brandId] = data.products || [];
+            } catch (err) {
+                inner.innerHTML = '<div style="padding:var(--sp-4);color:var(--prism-error);font-size:var(--text-sm)">Failed to load products</div>';
+                console.error(err);
                 return;
             }
-
-            grid.innerHTML = displayBrands.map((b, idx) => {
-                // Dynamic gradient colors based on position/performance
-                const gradients = [
-                    'from-violet-500 to-fuchsia-500',
-                    'from-cyan-500 to-blue-500',
-                    'from-emerald-500 to-teal-500',
-                    'from-amber-500 to-orange-500',
-                    'from-rose-500 to-pink-500',
-                    'from-indigo-500 to-purple-500',
-                    'from-lime-500 to-green-500',
-                    'from-red-500 to-rose-500'
-                ];
-                const gradient = gradients[idx % gradients.length];
-                const initial = (b.name || 'B').charAt(0).toUpperCase();
-                const isTop = idx < 3;
-                const safeName = (b.name || '').replace(/'/g, "\\'");
-
-                return `
-                <div class="brand-card bg-slate-900 border ${isTop ? 'border-primary/30' : 'border-white/5'} rounded-2xl overflow-hidden ${isTop ? 'ring-1 ring-primary/20' : ''}">
-                    ${isTop ? '<div class="h-1 bg-gradient-to-r ' + gradient + '"></div>' : ''}
-                    <div class="p-5">
-                        <div class="flex items-start justify-between mb-4">
-                            <div class="flex items-center gap-3">
-                                <div class="w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center overflow-hidden shadow-lg">
-                                    <span class="text-white font-bold text-xl drop-shadow-md">${initial}</span>
-                                </div>
-                                <div>
-                                    <h4 class="font-heading font-bold text-white text-lg">${b.name || 'Unknown Brand'}</h4>
-                                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">${b.product_count || 0} Products</p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-3 gap-2 mb-4">
-                            <div class="bg-slate-950 p-3 rounded-xl border border-white/5 text-center">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1">7D Sales</p>
-                                <p class="text-sm font-bold text-white">${formatKMB(b.total_sales_7d || 0)}</p>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-xl border border-white/5 text-center">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1">Revenue</p>
-                                <p class="text-sm font-bold text-emerald-400">$${formatKMB(b.total_revenue || 0)}</p>
-                            </div>
-                            <div class="bg-slate-950 p-3 rounded-xl border border-white/5 text-center">
-                                <p class="text-[9px] font-bold text-slate-500 uppercase mb-1">Avg Comm</p>
-                                <p class="text-sm font-bold text-amber-400">${((b.avg_commission || 0) * 100).toFixed(1)}%</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-2">
-                            <button onclick="viewBrandProducts('${encodeURIComponent(b.name)}')" class="flex-1 glass py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-white/5 hover:border-primary/50 transition-all">
-                                <i class="fas fa-box mr-1"></i> View Products
-                            </button>
-                            <button onclick="syncBrand('${encodeURIComponent(b.name)}')" class="flex-1 btn-premium py-2.5 text-xs">
-                                <i class="fas fa-sync-alt mr-1"></i> Sync
-                            </button>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
         }
 
-        function showAddBrandModal() {
-            document.getElementById('brandNameInput').value = '';
-            document.getElementById('addBrandModal').classList.remove('hidden');
-            document.getElementById('brandNameInput').focus();
+        renderBrandProducts(brandId, inner);
+    }
+
+    function renderBrandProducts(brandId, container) {
+        const products = expandedCache[brandId] || [];
+
+        if (products.length === 0) {
+            container.innerHTML = '<div style="padding:var(--sp-4);color:var(--prism-text-faint);font-size:var(--text-sm);text-align:center">No products found for this brand</div>';
+            return;
         }
 
-        async function addBrand() {
-            const name = document.getElementById('brandNameInput').value.trim();
-            if (!name) return alert('Please enter a brand name');
+        let html = `
+        <div class="product-row product-row-header">
+            <div></div>
+            <div>Product</div>
+            <div class="product-num">Price</div>
+            <div class="product-num hide-mobile">7D Sales</div>
+            <div class="product-num hide-mobile">Commission</div>
+        </div>`;
 
-            try {
-                const res = await fetch('/api/brands', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name })
-                });
-                const data = await res.json();
+        html += products.map(p => {
+            const img = p.image_url || p.images?.[0] || '';
+            const commission = p.commission_rate ? (p.commission_rate + '%') : '-';
+            return `
+            <div class="product-row">
+                <img class="product-thumb" src="${esc(img)}" alt="" onerror="this.style.display='none'" loading="lazy">
+                <div class="product-name-cell" title="${esc(p.title || p.name || '')}">${esc(p.title || p.name || 'Untitled')}</div>
+                <div class="product-num">$${fmt(p.price || 0)}</div>
+                <div class="product-num hide-mobile">${fmtK(p.sales_7d || p.units_sold_7d || 0)}</div>
+                <div class="product-num hide-mobile">${commission}</div>
+            </div>`;
+        }).join('');
 
-                if (data.success) {
-                    document.getElementById('addBrandModal').classList.add('hidden');
-                    alert(data.message);
-                    loadBrands();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (e) {
-                alert('Failed to add brand: ' + e.message);
-            }
+        container.innerHTML = html;
+    }
+
+    // ── Sync single brand ──
+    async function syncBrand(brandId) {
+        try {
+            const res = await fetch(`/api/brands/${brandId}/sync`, { method: 'POST' });
+            if (!res.ok) throw new Error('Sync failed');
+            const data = await res.json();
+            toast(data.message || 'Brand synced', 'success');
+            delete expandedCache[brandId];
+            await loadWatchedBrands();
+        } catch (err) {
+            toast(err.message, 'error');
         }
+    }
 
-        async function deleteBrand(id, name) {
-            if (!confirm(`Stop tracking "${name}"? This won't delete the products.`)) return;
+    // ── Refresh all brands ──
+    async function refreshAllBrands() {
+        const btn = document.getElementById('btnRefreshAll');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spinner"></div> <span class="hide-mobile">Refreshing...</span>';
 
-            try {
-                const res = await fetch(`/api/brands/${id}`, { method: 'DELETE' });
-                const data = await res.json();
-
-                if (data.success) {
-                    loadBrands();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
+        try {
+            const res = await fetch('/api/brands/refresh-all', { method: 'POST' });
+            if (!res.ok) throw new Error('Refresh failed');
+            const data = await res.json();
+            toast(data.message || 'All brands refreshed', 'success');
+            Object.keys(expandedCache).forEach(k => delete expandedCache[k]);
+            await loadWatchedBrands();
+        } catch (err) {
+            toast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-arrows-rotate" style="font-size:11px"></i> <span class="hide-mobile">Refresh All</span>';
         }
+    }
 
-        async function syncBrand(brandName) {
-            try {
-                const res = await fetch(`/api/brand-sync/${brandName}`, { method: 'POST' });
-                const data = await res.json();
+    // ── Escape HTML ──
+    function esc(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = String(s);
+        return d.innerHTML.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    }
 
-                if (data.success) {
-                    alert(data.message);
-                    loadBrands();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function refreshAllBrands() {
-            try {
-                const res = await fetch('/api/brands/refresh-all', { method: 'POST' });
-                const data = await res.json();
-
-                if (data.success) {
-                    alert(data.message);
-                    loadBrands();
-                }
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function viewBrandProducts(brandName) {
-            const decodedName = decodeURIComponent(brandName);
-            document.getElementById('modalBrandName').textContent = decodedName + ' Products';
-            document.getElementById('modalProductCount').textContent = 'Loading products...';
-            document.getElementById('brandProductsGrid').innerHTML = '<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-2xl text-slate-500"></i></div>';
-            document.getElementById('productsModal').classList.remove('hidden');
-
-            try {
-                const res = await fetch(`/api/brand-products/${brandName}`);
-                const data = await res.json();
-
-                if (data.success) {
-                    document.getElementById('modalProductCount').textContent = `${data.count} products found`;
-
-                    if (data.products.length === 0) {
-                        document.getElementById('brandProductsGrid').innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No products found for this brand in your database.</div>';
-                        return;
-                    }
-
-                    currentBrandProducts = data.products || [];
-                    sortBrandProducts('sales_7d'); // Initial sort
-                }
-            } catch (e) {
-                document.getElementById('brandProductsGrid').innerHTML = '<div class="col-span-full text-center py-12 text-rose-400">Failed to load products</div>';
-            }
-        }
-
-        function sortBrandProducts(val) {
-            if (!currentBrandProducts || currentBrandProducts.length === 0) return;
-
-            const sorted = [...currentBrandProducts].sort((a, b) => {
-                if (val === 'sales_7d') return (b.sales_7d || 0) - (a.sales_7d || 0);
-                if (val === 'ad_spend') return (b.ad_spend || 0) - (a.ad_spend || 0);
-                if (val === 'video_count') return (b.video_count_alltime || b.video_count || 0) - (a.video_count_alltime || a.video_count || 0);
-                if (val === 'price_desc') return (b.price || 0) - (a.price || 0);
-                if (val === 'price_asc') return (a.price || 0) - (b.price || 0);
-                return 0;
-            });
-
-            renderProductGrid(sorted);
-        }
-
-        function renderProductGrid(products) {
-            document.getElementById('brandProductsGrid').innerHTML = products.map(p => `
-                <div class="bg-slate-900 border border-white/5 rounded-xl p-4 cursor-pointer hover:border-primary/50 transition-all" onclick="window.location.href='/product/${p.product_id}'">
-                    <div class="flex gap-3">
-                        <img src="/api/image-proxy/${p.product_id}" class="w-16 h-16 rounded-lg object-cover bg-slate-800" onerror="this.src='/vantage_logo.png'">
-                        <div class="flex-1 min-w-0">
-                            <h5 class="font-bold text-white text-sm truncate">${p.product_name}</h5>
-                            <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
-                                <span class="text-slate-400">7D: <span class="text-white font-bold">${(p.sales_7d || 0).toLocaleString()}</span></span>
-                                <span class="text-slate-400">Ad$: <span class="text-emerald-400 font-bold">$${formatKMB(p.ad_spend || 0)}</span></span>
-                                <span class="text-slate-400">Videos: <span class="text-primary font-bold">${(p.video_count_alltime || p.video_count || 0).toLocaleString()}</span></span>
-                                <span class="text-slate-400">Price: <span class="text-amber-400 font-bold">$${(p.price || 0).toFixed(2)}</span></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // Handle Enter key in brand input
-        document.getElementById('brandNameInput').addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') addBrand();
-        });
-
-        // === BRAND DISCOVERY FUNCTIONS ===
-
-        async function scanCopilotForBrands() {
-            const btn = document.getElementById('btnScanCopilot');
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Scanning...';
-            btn.disabled = true;
-
-            document.getElementById('discoveryEmpty').classList.add('hidden');
-            document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-2xl text-primary"></i><p class="text-slate-500 mt-2 text-sm">Scanning Copilot for trending brands...</p></div>';
-            document.getElementById('discoveryResults').classList.remove('hidden');
-
-            try {
-                const res = await fetch('/api/brands/scan-copilot', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pages: 10 })
-                });
-                const data = await res.json();
-
-                if (data.success && data.discovered.length > 0) {
-                    renderDiscoveredBrands(data.discovered);
-                } else {
-                    document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8 text-slate-500">No new brands discovered</div>';
-                }
-            } catch (e) {
-                document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8 text-rose-400">Scan failed: ' + e.message + '</div>';
-            } finally {
-                btn.innerHTML = original;
-                btn.disabled = false;
-            }
-        }
-
-        async function discoverFromExisting() {
-            document.getElementById('discoveryEmpty').classList.add('hidden');
-            document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-2xl text-primary"></i></div>';
-            document.getElementById('discoveryResults').classList.remove('hidden');
-
-            try {
-                const res = await fetch('/api/brands/discover');
-                const data = await res.json();
-
-                if (data.success && data.discovered.length > 0) {
-                    renderDiscoveredBrands(data.discovered);
-                } else {
-                    document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8 text-slate-500">No untracked brands found in your database</div>';
-                }
-            } catch (e) {
-                document.getElementById('discoveryResults').innerHTML = '<div class="text-center py-8 text-rose-400">Failed: ' + e.message + '</div>';
-            }
-        }
-
-        function renderDiscoveredBrands(discovered) {
-            const container = document.getElementById('discoveryResults');
-            container.classList.remove('hidden');
-            container.innerHTML = `
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 max-h-64 overflow-y-auto no-scrollbar">
-                    ${discovered.map(b => `
-                        <div class="bg-slate-950 border border-white/5 rounded-xl p-3 hover:border-primary/50 transition-all cursor-pointer group" onclick="quickAddBrand('${b.name.replace(/'/g, "\\'")}')">
-                            <div class="flex items-center justify-between mb-2">
-                                <h5 class="font-bold text-white text-xs truncate flex-1">${b.name}</h5>
-                                <i class="fas fa-plus-circle text-primary opacity-0 group-hover:opacity-100 transition-opacity ml-2"></i>
-                            </div>
-                            <div class="flex gap-2 text-[10px]">
-                                <span class="text-emerald-400 font-bold">$${formatKMB(b.total_gmv || 0)}</span>
-                                <span class="text-slate-500">${b.product_count || 0} products</span>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-                <p class="text-[10px] text-slate-600 mt-3 text-center">Click a brand to start tracking it</p>
-            `;
-        }
-
-        async function quickAddBrand(name) {
-            try {
-                const res = await fetch('/api/brands', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name })
-                });
-                const data = await res.json();
-
-                if (data.success) {
-                    alert(`✅ Now tracking "${name}"!\n\n${data.message}`);
-                    loadBrands();
-                    // Refresh discovery list
-                    discoverFromExisting();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        // Load on page ready
-        document.addEventListener('DOMContentLoaded', loadBrands);
+    // ── Init ──
+    document.addEventListener('DOMContentLoaded', () => {
+        loadWatchedBrands();
+    });
     </script>
+    <script src="/pwa/js/prism-nav.js"></script>
 </body>
-
 </html>

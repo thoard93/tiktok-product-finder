@@ -1,372 +1,441 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner | Vantage</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="/pwa/css/main.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        midnight: '#020617',
-                        slate: {
-                            800: '#1e293b',
-                            900: '#0f172a',
-                            950: '#020617',
-                        },
-                        primary: '#2563eb',
-                    }
-                }
-            }
-        }
-    </script>
+    <title>Product Scanner | PRISM</title>
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
+        /* ── Layout ── */
+        body { display: flex; min-height: 100vh; }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        /* ── Main ── */
+        .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
 
-        .terminal-bg {
-            background: rgba(0, 0, 0, 0.4);
-            font-family: 'JetBrains Mono', monospace;
-        }
+        /* ── Top bar ── */
+        .top-bar { position: sticky; top: 0; z-index: 30; height: 56px; background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--prism-border);
+            display: flex; align-items: center; padding: 0 var(--sp-6); gap: var(--sp-4); }
+        .top-bar-title { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: var(--text-lg);
+            color: var(--prism-text); }
+        .top-bar-status { display: flex; align-items: center; gap: 6px; margin-left: auto;
+            font-size: var(--text-xs); color: var(--prism-text-muted); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--prism-success);
+            animation: pulse-dot 2s ease-in-out infinite; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-        .log-entry {
-            border-left: 2px solid transparent;
-            padding-left: 1rem;
-            margin-bottom: 0.25rem;
-        }
+        /* ── Content ── */
+        .content { flex: 1; padding: var(--sp-6); overflow-y: auto; max-width: 1200px; width: 100%; margin: 0 auto; }
+        .content::-webkit-scrollbar { width: 5px; }
+        .content::-webkit-scrollbar-track { background: transparent; }
+        .content::-webkit-scrollbar-thumb { background: var(--prism-border); border-radius: 9999px; }
 
-        .log-info {
-            border-left-color: #64748b;
-            color: #94a3b8;
-        }
+        /* ── Search ── */
+        .search-section { margin-bottom: var(--sp-6); }
+        .search-section h2 { font-size: var(--text-2xl); margin-bottom: var(--sp-1); }
+        .search-section p { color: var(--prism-text-muted); font-size: var(--text-sm); margin-bottom: var(--sp-4); }
+        .search-bar { display: flex; gap: var(--sp-3); }
+        .search-input { flex: 1; background: var(--prism-surface); border: 1px solid var(--prism-border);
+            border-radius: var(--radius-lg); padding: var(--sp-3) var(--sp-4); padding-left: 44px;
+            font-size: var(--text-base); color: var(--prism-text); outline: none; transition: all 200ms;
+            font-family: 'Inter', sans-serif; }
+        .search-input:focus { border-color: var(--prism-accent); box-shadow: 0 0 0 3px var(--prism-accent-glow); }
+        .search-input::placeholder { color: var(--prism-text-faint); }
+        .search-input-wrap { position: relative; flex: 1; }
+        .search-input-wrap i { position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+            color: var(--prism-text-faint); font-size: var(--text-sm); pointer-events: none; }
+        .search-btn { display: inline-flex; align-items: center; gap: 8px; padding: var(--sp-3) var(--sp-6);
+            background: var(--prism-accent); color: #fff; border: none; border-radius: var(--radius-lg);
+            font-size: var(--text-sm); font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer;
+            transition: all 150ms; white-space: nowrap; }
+        .search-btn:hover { background: var(--prism-accent-hover); box-shadow: var(--shadow-glow-accent); }
+        .search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .search-btn .spinner { display: none; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; }
+        .search-btn.loading .spinner { display: block; }
+        .search-btn.loading .btn-text { display: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .log-success {
-            border-left-color: #10b981;
-            color: #34d399;
-        }
+        /* ── Results grid ── */
+        .results-section { margin-bottom: var(--sp-6); }
+        .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); }
+        .results-header h3 { font-size: var(--text-lg); color: var(--prism-text); }
+        .results-count { font-size: var(--text-xs); color: var(--prism-text-muted); }
 
-        .log-error {
-            border-left-color: #f43f5e;
-            color: #fb7185;
-        }
+        .results-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-4); }
 
-        .log-warn {
-            border-left-color: #f59e0b;
-            color: #fbbf24;
+        .product-card { background: var(--prism-surface); border: 1px solid var(--prism-border);
+            border-radius: var(--radius-lg); overflow: hidden; transition: all 200ms; }
+        .product-card:hover { border-color: var(--prism-border-strong); box-shadow: var(--shadow-md);
+            transform: translateY(-1px); }
+
+        .card-image { width: 100%; height: 180px; object-fit: cover; background: var(--prism-surface-2);
+            display: block; }
+        .card-body { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+        .card-name { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: var(--text-md);
+            color: var(--prism-text); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical; overflow: hidden; }
+        .card-seller { font-size: var(--text-xs); color: var(--prism-text-muted); display: flex;
+            align-items: center; gap: 4px; }
+        .card-seller i { font-size: 10px; }
+
+        .card-price-row { display: flex; align-items: baseline; gap: var(--sp-3); }
+        .card-price { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 800; font-size: var(--text-xl);
+            color: var(--prism-text); }
+        .card-commission { font-size: var(--text-xs); font-weight: 600; color: var(--prism-success);
+            background: var(--prism-success-glow); padding: 2px 8px; border-radius: var(--radius-full); }
+
+        .card-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2); }
+        .card-stat { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2);
+            background: var(--prism-surface-2); border-radius: var(--radius-sm); }
+        .card-stat-label { font-size: 10px; font-weight: 600; color: var(--prism-text-faint);
+            text-transform: uppercase; letter-spacing: 0.05em; }
+        .card-stat-value { font-size: var(--text-sm); font-weight: 700; color: var(--prism-text); }
+
+        .card-footer { display: flex; align-items: center; justify-content: space-between; padding-top: var(--sp-3);
+            border-top: 1px solid var(--prism-border); }
+        .card-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px;
+            border-radius: var(--radius-full); font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.04em; }
+        .badge-active { background: var(--prism-success-glow); color: var(--prism-success); }
+        .badge-sold { background: var(--prism-warning-glow); color: var(--prism-warning); }
+        .badge-dead { background: var(--prism-error-glow); color: var(--prism-error); }
+        .badge-new { background: var(--prism-cyan-glow); color: var(--prism-cyan); }
+
+        .add-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
+            background: color-mix(in srgb, var(--prism-accent) 15%, transparent); color: var(--prism-accent-text);
+            border: 1px solid color-mix(in srgb, var(--prism-accent) 30%, transparent); border-radius: var(--radius-md);
+            font-size: var(--text-xs); font-weight: 600; cursor: pointer; transition: all 150ms;
+            font-family: 'Inter', sans-serif; }
+        .add-btn:hover { background: color-mix(in srgb, var(--prism-accent) 25%, transparent);
+            border-color: var(--prism-accent); }
+        .add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .add-btn.saved { background: var(--prism-success-glow); color: var(--prism-success);
+            border-color: color-mix(in srgb, var(--prism-success) 30%, transparent); }
+
+        /* ── Empty state ── */
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: var(--sp-16) var(--sp-6); text-align: center; }
+        .empty-icon { font-size: 3rem; color: var(--prism-text-faint); margin-bottom: var(--sp-4); opacity: 0.4; }
+        .empty-title { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: var(--text-lg);
+            color: var(--prism-text-muted); margin-bottom: var(--sp-2); }
+        .empty-text { font-size: var(--text-sm); color: var(--prism-text-faint); max-width: 360px; }
+
+        /* ── Terminal log ── */
+        .terminal-section { margin-top: auto; }
+        .terminal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
+        .terminal-header h4 { font-size: var(--text-sm); font-weight: 600; color: var(--prism-text-muted);
+            display: flex; align-items: center; gap: 8px; }
+        .terminal-header h4 i { font-size: var(--text-xs); color: var(--prism-text-faint); }
+        .terminal-toggle { background: none; border: none; color: var(--prism-text-faint); font-size: var(--text-xs);
+            cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); transition: all 120ms; }
+        .terminal-toggle:hover { color: var(--prism-text-muted); background: var(--prism-surface-2); }
+
+        .terminal { background: rgba(0, 0, 0, 0.4); border: 1px solid var(--prism-border);
+            border-radius: var(--radius-lg); padding: var(--sp-3); max-height: 220px; overflow-y: auto;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 11px;
+            line-height: 1.7; }
+        .terminal::-webkit-scrollbar { width: 4px; }
+        .terminal::-webkit-scrollbar-track { background: transparent; }
+        .terminal::-webkit-scrollbar-thumb { background: var(--prism-border); border-radius: 9999px; }
+
+        .log-entry { border-left: 2px solid transparent; padding-left: 12px; margin-bottom: 2px;
+            white-space: pre-wrap; word-break: break-all; }
+        .log-info { border-left-color: var(--prism-text-faint); color: var(--prism-text-muted); }
+        .log-success { border-left-color: var(--prism-success); color: #34d399; }
+        .log-error { border-left-color: var(--prism-error); color: #fb7185; }
+        .log-warn { border-left-color: var(--prism-warning); color: #fbbf24; }
+        .log-time { color: var(--prism-text-faint); margin-right: 8px; }
+
+        /* ── Mobile ── */
+        @media (max-width: 768px) {
+            .results-grid { grid-template-columns: 1fr; }
+            .search-bar { flex-direction: column; }
+            .search-btn { justify-content: center; }
+            .content { padding: var(--sp-4); }
         }
     </style>
 </head>
 
-<body class="flex h-screen overflow-hidden bg-slate-950 text-slate-200">
+<body>
+    <div id="prism-nav"></div>
 
-    <!-- Sidebar (Desktop) -->
-    <aside class="hidden md:flex flex-col w-72 bg-slate-900 border-r border-white/5 z-30">
-        <div class="p-8">
-            <div class="flex items-center gap-3 group cursor-pointer" onclick="window.location.href='/'">
-                <div
-                    class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center relative overflow-hidden shrink-0 shadow-lg shadow-primary/20">
-                    <img src="/vantage_logo.png" class="w-full h-full object-cover p-1.5"
-                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                    <span style="display:none" class="text-xl h-full w-full items-center justify-center">V</span>
-                </div>
-                <div>
-                    <h1 class="font-heading font-bold text-xl tracking-tight text-white">Vantage</h1>
-                    <p class="text-[9px] text-primary font-bold tracking-widest uppercase opacity-80">Intelligence
-                        Platform</p>
-                </div>
-            </div>
-        </div>
-
-        <nav class="flex-1 px-3 space-y-1 overflow-y-auto no-scrollbar">
-            <div class="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">Main Menu
-            </div>
-            <a href="/" class="sidebar-link"><i class="fas fa-grid-2 w-5 text-sm"></i><span>Dashboard</span></a>
-            <a href="/scanner" class="sidebar-link active"><i class="fas fa-sync-alt w-5 text-sm"></i><span>Sync
-                    Center</span></a>
-            <a href="/brand-hunter" class="sidebar-link">
-                <i class="fas fa-bullseye w-5 text-sm"></i>
-                <span>Brand Hunter</span>
-            </a>
-            <a href="/vantage-v2" class="sidebar-link">
-                <i class="fas fa-rocket w-5 text-sm"></i>
-                <span>Growth Hub (v2)</span>
-            </a>
-
-            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">
-                Configuration</div>
-            <a href="/admin" class="sidebar-link"><i class="fas fa-shield-alt w-5 text-sm"></i><span>Terminal</span></a>
-            <a href="/settings" class="sidebar-link"><i
-                    class="fas fa-sliders-h w-5 text-sm"></i><span>Settings</span></a>
-        </nav>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-950">
-        <header
-            class="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md sticky top-0 z-20">
-            <div class="flex items-center gap-4">
-                <button onclick="toggleSidebar()"
-                    class="md:hidden bg-slate-900 p-2 rounded-lg border border-white/5 text-slate-400">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <h2 class="font-heading font-bold text-lg text-white">Sync Center</h2>
-                <div class="h-4 w-px bg-white/10 mx-2 hidden md:block"></div>
-                <div id="statusIndicator"
-                    class="flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <span class="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">System Online</span>
-                </div>
+    <!-- Main content -->
+    <div class="main">
+        <!-- Top bar -->
+        <header class="top-bar">
+            <button class="prism-nav-hamburger" onclick="toggleSidebar()" aria-label="Toggle menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <span class="top-bar-title">Product Scanner</span>
+            <div class="top-bar-status">
+                <span class="status-dot"></span>
+                <span id="statusText">Ready</span>
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar pb-32">
-            <div class="max-w-4xl mx-auto space-y-8">
-
-                <!-- TikTokCopilot Sync Panel -->
-                <div
-                    class="bg-slate-900 border border-white/5 rounded-2xl p-8 md:p-10 relative overflow-hidden shadow-2xl">
-                    <div class="absolute top-0 right-0 p-8 opacity-5">
-                        <i class="fas fa-cloud-download-alt text-9xl"></i>
+        <!-- Content area -->
+        <div class="content">
+            <!-- Search section -->
+            <section class="search-section">
+                <h2>Scan Products</h2>
+                <p>Look up TikTok Shop products by URL or product ID to view analytics and add to your database.</p>
+                <div class="search-bar">
+                    <div class="search-input-wrap">
+                        <i class="fas fa-link"></i>
+                        <input type="text" class="search-input" id="searchInput"
+                            placeholder="Enter TikTok product URL or product ID..."
+                            onkeydown="if(event.key==='Enter') searchProduct()">
                     </div>
-
-                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 relative z-10">
-                        <div>
-                            <h3 class="text-xl font-heading font-bold text-white mb-2 flex items-center gap-3">
-                                <i class="fas fa-bolt text-primary"></i>
-                                Partner Sync Protocol
-                            </h3>
-                            <p class="text-slate-400 text-xs">Synchronize latest market data vectors including ad spend,
-                                revenue, and engagement metrics.</p>
-                        </div>
-                        <div class="flex gap-3">
-                            <button onclick="stopCopilotSync(this)" id="btnStop" disabled
-                                class="bg-rose-600/20 text-rose-500 border border-rose-500/20 px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-rose-600 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all">
-                                <i class="fas fa-stop mr-2"></i> Stop Scan
-                            </button>
-                            <button onclick="runCopilotSync(this)" id="btnSync"
-                                class="btn-premium px-8 py-3 shadow-lg shadow-primary/20">
-                                <i class="fas fa-sync-alt mr-2"></i> Execute Sync
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 relative z-10">
-                        <div>
-                            <label
-                                class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Time
-                                Horizon</label>
-                            <div class="relative">
-                                <select id="sync-timeframe"
-                                    class="w-full bg-slate-950 border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-primary/50 appearance-none font-bold">
-                                    <option value="1d">24 Hours</option>
-                                    <option value="3d">3 Days</option>
-                                    <option value="7d" selected>7 Days</option>
-                                    <option value="14d">14 Days</option>
-                                    <option value="30d">30 Days</option>
-                                </select>
-                                <i
-                                    class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] pointer-events-none"></i>
-                            </div>
-                        </div>
-                        <div>
-                            <label
-                                class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Limit
-                                / Page</label>
-                            <input type="number" id="sync-limit" value="50"
-                                class="w-full bg-slate-950 border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-primary/50 font-bold">
-                        </div>
-                        <div>
-                            <label
-                                class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Starting
-                                Page</label>
-                            <input type="number" id="sync-page" value="0"
-                                class="w-full bg-slate-950 border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-primary/50 font-bold">
-                        </div>
-                        <div>
-                            <label
-                                class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Batch
-                                Size</label>
-                            <input type="number" id="sync-pages" value="3"
-                                class="w-full bg-slate-950 border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-primary/50 font-bold">
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-950/50 p-4 rounded-xl border border-white/5 relative z-10">
-                        <p class="text-[9px] font-bold text-primary uppercase tracking-widest mb-2">Protocol Output:</p>
-                        <ul class="text-[10px] text-slate-400 space-y-1 list-disc ml-4">
-                            <li>Trending products ranked by <span class="text-white">revenue velocity</span></li>
-                            <li>Metrics: Ad Spend, Video Count, Creator Volume, GMV</li>
-                            <li>Automatic filtration of low-quality placeholders</li>
-                            <li class="text-slate-500">Estimated Yield: ~150 datasets per batch</li>
-                        </ul>
-                    </div>
+                    <button class="search-btn" id="searchBtn" onclick="searchProduct()">
+                        <div class="spinner"></div>
+                        <span class="btn-text"><i class="fas fa-search"></i> Search</span>
+                    </button>
                 </div>
+            </section>
 
-                <!-- Terminal Log -->
-                <div
-                    class="bg-slate-900 border border-white/5 rounded-2xl overflow-hidden h-[400px] flex flex-col shadow-2xl">
-                    <div class="px-6 py-3 bg-white/5 border-b border-white/5 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <i class="fas fa-terminal text-slate-600 text-xs"></i>
-                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">System
-                                Log</span>
-                        </div>
-                        <button onclick="document.getElementById('consoleLog').innerHTML = ''"
-                            class="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors">Clear</button>
-                    </div>
-                    <div id="consoleLog"
-                        class="flex-1 overflow-y-auto p-6 space-y-2 font-mono text-[11px] leading-relaxed text-slate-400">
-                        <div class="log-entry log-info border-l-2 border-slate-700 pl-3">
-                            <span class="opacity-50 text-[10px] mr-2">SYSTEM</span>
-                            <span>Ready for synchronization. Awaiting operator command.</span>
-                        </div>
-                    </div>
+            <!-- Results section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <div class="results-header">
+                    <h3>Results</h3>
+                    <span class="results-count" id="resultsCount"></span>
                 </div>
+                <div class="results-grid" id="resultsGrid"></div>
+            </section>
 
+            <!-- Empty state (shown by default) -->
+            <div class="empty-state" id="emptyState">
+                <div class="empty-icon"><i class="fas fa-satellite-dish"></i></div>
+                <div class="empty-title">No products scanned yet</div>
+                <div class="empty-text">Enter a TikTok Shop product URL or ID above to fetch product data, view analytics, and optionally add it to your tracking database.</div>
             </div>
+
+            <!-- Terminal log -->
+            <section class="terminal-section">
+                <div class="terminal-header">
+                    <h4><i class="fas fa-terminal"></i> Scan Log</h4>
+                    <button class="terminal-toggle" onclick="clearTerminal()">Clear</button>
+                </div>
+                <div class="terminal" id="terminal">
+                    <div class="log-entry log-info"><span class="log-time">[--:--:--]</span>Scanner initialized. Awaiting input...</div>
+                </div>
+            </section>
         </div>
-    </main>
+    </div>
 
     <script>
+        // ── State ──
+        let scannedProducts = [];
+
+        // ── Terminal logging ──
         function log(msg, type = 'info') {
-            const c = document.getElementById('consoleLog');
+            const terminal = document.getElementById('terminal');
+            const now = new Date();
+            const ts = [now.getHours(), now.getMinutes(), now.getSeconds()]
+                .map(n => String(n).padStart(2, '0')).join(':');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `<span class="log-time">[${ts}]</span>${escapeHtml(msg)}`;
+            terminal.appendChild(entry);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function clearTerminal() {
+            const terminal = document.getElementById('terminal');
+            terminal.innerHTML = '';
+            log('Terminal cleared.', 'info');
+        }
+
+        function escapeHtml(str) {
             const d = document.createElement('div');
-            d.className = `log-entry log-${type}`;
-            d.innerHTML = `<span class="opacity-30">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
-            c.appendChild(d);
-            c.scrollTop = c.scrollHeight;
+            d.textContent = str;
+            return d.innerHTML;
         }
 
-        let isStopRequested = false;
+        // ── Search ──
+        async function searchProduct() {
+            const input = document.getElementById('searchInput');
+            const btn = document.getElementById('searchBtn');
+            const value = input.value.trim();
 
-        async function stopCopilotSync(btn) {
-            isStopRequested = true;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Stopping...';
-            log('🛑 STOP REQUESTED. Signaling backend...', 'warn');
-
-            try {
-                await fetch('/api/copilot/stop-sync', { method: 'POST' });
-            } catch (e) {
-                console.error("Stop signal error:", e);
+            if (!value) {
+                log('Please enter a product URL or ID.', 'warn');
+                input.focus();
+                return;
             }
-        }
 
-        async function runCopilotSync(btn) {
-            const timeframe = document.getElementById('sync-timeframe').value;
-            const limit = parseInt(document.getElementById('sync-limit').value) || 50;
-            const startPage = parseInt(document.getElementById('sync-page').value) || 0;
-            const pageCount = parseInt(document.getElementById('sync-pages').value) || 1;
-            const stopBtn = document.getElementById('btnStop');
-
-            isStopRequested = false;
+            // Loading state
+            btn.classList.add('loading');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Syncing...';
-            stopBtn.disabled = false;
-            stopBtn.innerHTML = '<i class="fas fa-stop mr-2"></i> Stop Scan';
-
-            log(`Starting Copilot sync: ${pageCount} pages, ${limit}/page, ${timeframe} horizon...`, 'info');
-
-            // Reset backend state
-            try { await fetch('/api/copilot/reset-sync', { method: 'POST' }); } catch (e) { }
-
-            let totalSaved = 0;
-            let totalFetched = 0;
+            document.getElementById('statusText').textContent = 'Scanning...';
+            log(`Scanning: ${value}`, 'info');
 
             try {
-                for (let i = 0; i < pageCount; i++) {
-                    if (isStopRequested) {
-                        log('🛑 SYNC HALTED BY OPERATOR.', 'warn');
-                        break;
-                    }
+                const res = await fetch('/api/scan/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: value })
+                });
 
-                    const page = startPage + i;
-                    log(`Fetching page ${page + 1}...`, 'info');
-
-                    const res = await fetch('/api/copilot/sync', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ timeframe, limit, page, pages: 1 }) // pages: 1 to prevent backend nested loop
-                    });
-
-                    const data = await res.json();
-
-                    if (data.success || data.status === 'success') {
-                        totalSaved += (data.saved || data.synced || 0);
-                        totalFetched += (data.total_in_response || 0);
-                        log(`>> Page ${page + 1}: Saved ${(data.saved || data.synced || 0)} products`, 'success');
-
-                        if (data.stop_requested) {
-                            log('🛑 Backend confirmed sync interruption.', 'warn');
-                            break;
-                        }
-                    } else {
-                        log(`!! Page ${page + 1} failed: ${data.error}`, 'error');
-                    }
-
-                    // Rate limit protection
-                    if (i < pageCount - 1) await new Promise(r => setTimeout(r, 1500));
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `HTTP ${res.status}`);
                 }
 
-                if (isStopRequested) {
-                    log(`⏹️ PROCESS TERMINATED. ${totalSaved} products saved before stop.`, 'warn');
+                const data = await res.json();
+                log(`Scan complete. Received response.`, 'success');
+
+                // Handle single product or array
+                const products = Array.isArray(data) ? data : (data.products || (data.product ? [data.product] : [data]));
+
+                if (products.length === 0) {
+                    log('No products found for this query.', 'warn');
                 } else {
-                    log(`✅ SYNC COMPLETE: ${totalSaved} products saved (${totalFetched} fetched, remainder filtered as placeholders)`, 'success');
+                    log(`Found ${products.length} product(s).`, 'success');
+                    products.forEach(p => {
+                        if (!scannedProducts.find(sp => sp.product_id === p.product_id)) {
+                            scannedProducts.push(p);
+                        }
+                    });
                 }
 
-            } catch (e) {
-                log(`System Error: ${e.message}`, 'error');
+                renderResults();
+            } catch (err) {
+                log(`Error: ${err.message}`, 'error');
+                console.error('Scan error:', err);
             } finally {
+                btn.classList.remove('loading');
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i> Execute Sync';
-                stopBtn.disabled = true;
-                stopBtn.innerHTML = '<i class="fas fa-stop mr-2"></i> Stop Scan';
+                document.getElementById('statusText').textContent = 'Ready';
             }
         }
 
-        function toggleSidebar() {
-            const aside = document.querySelector('aside');
-            if (aside.classList.contains('hidden')) {
-                aside.classList.remove('hidden');
-                aside.classList.add('fixed', 'inset-0', 'bg-slate-900', 'z-50');
-                if (!document.getElementById('mobile-sidebar-close')) {
-                    const closeBtn = document.createElement('button');
-                    closeBtn.id = 'mobile-sidebar-close';
-                    closeBtn.className = 'absolute top-8 right-8 glass p-3 rounded-2xl border-white/5 text-white';
-                    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                    closeBtn.onclick = toggleSidebar;
-                    aside.appendChild(closeBtn);
-                }
-            } else {
-                aside.classList.add('hidden');
-                aside.classList.remove('fixed', 'inset-0', 'bg-slate-900', 'z-50');
-                const closeBtn = document.getElementById('mobile-sidebar-close');
-                if (closeBtn) closeBtn.remove();
+        // ── Render results ──
+        function renderResults() {
+            const section = document.getElementById('resultsSection');
+            const grid = document.getElementById('resultsGrid');
+            const empty = document.getElementById('emptyState');
+            const count = document.getElementById('resultsCount');
+
+            if (scannedProducts.length === 0) {
+                section.style.display = 'none';
+                empty.style.display = '';
+                return;
             }
+
+            section.style.display = '';
+            empty.style.display = 'none';
+            count.textContent = `${scannedProducts.length} product${scannedProducts.length !== 1 ? 's' : ''}`;
+
+            grid.innerHTML = scannedProducts.map(p => {
+                const id = p.product_id || p.id || '';
+                const name = p.product_name || p.name || 'Unknown Product';
+                const seller = p.seller_name || p.shop_name || p.seller || 'Unknown Seller';
+                const price = formatPrice(p.price || p.product_price || 0);
+                const commission = p.commission_rate || p.commission || 0;
+                const sales7d = formatNum(p.sales_7d || p.units_sold_7d || 0);
+                const gmv = formatPrice(p.gmv_7d || p.revenue_7d || 0);
+                const videos = formatNum(p.video_count || p.videos || 0);
+                const creators = formatNum(p.creator_count || p.creators || 0);
+                const status = p.status || 'active';
+                const badgeClass = status === 'active' ? 'badge-active' : status === 'sold' ? 'badge-sold' : status === 'dead' ? 'badge-dead' : 'badge-new';
+                const saved = p._saved || false;
+
+                return `
+                <div class="product-card" data-id="${id}">
+                    <img class="card-image" src="/api/image-proxy/${id}" alt="${escapeHtml(name)}" loading="lazy" width="400" height="180"
+                        onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22180%22><rect fill=%22%2316161f%22 width=%22400%22 height=%22180%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%236b6b80%22 font-size=%2214%22>No Image</text></svg>'">
+                    <div class="card-body">
+                        <div class="card-name">${escapeHtml(name)}</div>
+                        <div class="card-seller"><i class="fas fa-store"></i> ${escapeHtml(seller)}</div>
+                        <div class="card-price-row">
+                            <span class="card-price">${price}</span>
+                            ${commission ? `<span class="card-commission">${commission}% commission</span>` : ''}
+                        </div>
+                        <div class="card-stats">
+                            <div class="card-stat">
+                                <span class="card-stat-label">7D Sales</span>
+                                <span class="card-stat-value">${sales7d}</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-stat-label">GMV</span>
+                                <span class="card-stat-value">${gmv}</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-stat-label">Videos</span>
+                                <span class="card-stat-value">${videos}</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-stat-label">Creators</span>
+                                <span class="card-stat-value">${creators}</span>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <span class="card-badge ${badgeClass}">
+                                <i class="fas fa-circle" style="font-size:5px"></i> ${status}
+                            </span>
+                            <button class="add-btn ${saved ? 'saved' : ''}" onclick="addToDb('${id}', this)" ${saved ? 'disabled' : ''}>
+                                <i class="fas ${saved ? 'fa-check' : 'fa-plus'}"></i>
+                                ${saved ? 'Saved' : 'Add to Database'}
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // ── Add to database ──
+        async function addToDb(productId, btnEl) {
+            if (!productId) return;
+
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            log(`Adding product ${productId} to database...`, 'info');
+
+            try {
+                const res = await fetch('/api/scan/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: productId, save: true })
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `HTTP ${res.status}`);
+                }
+
+                log(`Product ${productId} saved to database.`, 'success');
+                btnEl.classList.add('saved');
+                btnEl.innerHTML = '<i class="fas fa-check"></i> Saved';
+
+                // Mark in local state
+                const p = scannedProducts.find(sp => (sp.product_id || sp.id) === productId);
+                if (p) p._saved = true;
+            } catch (err) {
+                log(`Failed to save: ${err.message}`, 'error');
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="fas fa-plus"></i> Add to Database';
+            }
+        }
+
+        // ── Helpers ──
+        function formatPrice(val) {
+            const num = parseFloat(val);
+            if (isNaN(num)) return '$0.00';
+            return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatNum(val) {
+            const num = parseInt(val);
+            if (isNaN(num)) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toLocaleString();
         }
     </script>
-
-    <!-- Mobile Bottom Navigation -->
-    <nav class="mobile-nav">
-        <a href="/" class="mobile-nav-item"><i class="fas fa-th-large"></i><span>Intel</span></a>
-        <a href="/scanner" class="mobile-nav-item active"><i class="fas fa-sync-alt"></i><span>Sync</span></a>
-        <!-- Mobile Shops Disabled -->
-        <a href="/settings" class="mobile-nav-item"><i class="fas fa-cog"></i><span>Setup</span></a>
-    </nav>
+    <script src="/pwa/js/prism-nav.js"></script>
 </body>
 
 </html>

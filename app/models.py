@@ -1,0 +1,337 @@
+"""
+PRISM — SQLAlchemy Models
+All database models for the TikTok Shop Intelligence Platform.
+"""
+
+from datetime import datetime, timedelta
+from app import db
+
+
+class SystemConfig(db.Model):
+    """General system settings stored in DB to survive restarts without Render redeploy"""
+    __tablename__ = 'system_config'
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text)
+    description = db.Column(db.String(255))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class User(db.Model):
+    """Users who can access the tool"""
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    discord_id = db.Column(db.String(50), unique=True, nullable=True)
+    discord_username = db.Column(db.String(100))
+    discord_avatar = db.Column(db.String(255))
+    is_admin = db.Column(db.Boolean, default=False)
+    is_dev_user = db.Column(db.Boolean, default=False)  # Logged in via passkey
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'discord_id': self.discord_id,
+            'discord_username': self.discord_username,
+            'is_admin': self.is_admin,
+            'is_dev_user': self.is_dev_user,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_login': self.last_login.isoformat() if self.last_login else None
+        }
+
+
+class ActivityLog(db.Model):
+    """Log of user activities"""
+    __tablename__ = 'activity_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    action = db.Column(db.String(100))  # scan, export, favorite, view, etc.
+    details = db.Column(db.Text)  # JSON details
+    ip_address = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='activities')
+
+    def to_dict(self):
+        # Convert UTC to EST (UTC-5)
+        est_time = None
+        if self.created_at:
+            est_time = self.created_at - timedelta(hours=5)
+
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.user.discord_username if self.user else 'Unknown',
+            'action': self.action,
+            'details': self.details,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at_est': est_time.strftime('%m/%d/%Y, %I:%M:%S %p') if est_time else None
+        }
+
+
+class SiteConfig(db.Model):
+    """Site-wide configuration stored in DB"""
+    __tablename__ = 'site_config'
+
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Product(db.Model):
+    """Products found by scanner"""
+    __tablename__ = 'products'
+
+    # Core identity
+    product_id = db.Column(db.String(50), primary_key=True)
+    product_name = db.Column(db.String(500))
+    product_url = db.Column(db.String(500))
+    image_url = db.Column(db.Text)
+    cached_image_url = db.Column(db.Text)
+    image_cached_at = db.Column(db.DateTime)
+
+    # Seller info
+    seller_id = db.Column(db.String(50), index=True)
+    seller_name = db.Column(db.String(255), index=True)
+
+    # Sales & revenue
+    sales = db.Column(db.Integer, default=0)
+    sales_7d = db.Column(db.Integer, default=0, index=True)
+    sales_30d = db.Column(db.Integer, default=0)
+    gmv = db.Column(db.Float, default=0)
+    gmv_30d = db.Column(db.Float, default=0)
+    gmv_growth = db.Column(db.Float, default=0)  # 7D GMV Growth Percentage
+
+    # Pricing & commission
+    price = db.Column(db.Float, default=0, index=True)
+    original_price = db.Column(db.Float, default=0)  # Strikethrough price
+    commission_rate = db.Column(db.Float, default=0, index=True)
+    shop_ads_commission = db.Column(db.Float, default=0, index=True)
+
+    # Video & influencer stats
+    video_count = db.Column(db.Integer, default=0)  # 7D videos
+    video_count_alltime = db.Column(db.Integer, default=0)  # All-time saturation
+    video_7d = db.Column(db.Integer, default=0)
+    video_30d = db.Column(db.Integer, default=0)
+    live_count = db.Column(db.Integer, default=0)
+    views_count = db.Column(db.Integer, default=0)
+    influencer_count = db.Column(db.Integer, default=0, index=True)
+
+    # Product quality
+    product_rating = db.Column(db.Float, default=0)
+    review_count = db.Column(db.Integer, default=0)
+
+    # Ad spend & performance
+    ad_spend = db.Column(db.Float, default=0)  # 7D
+    ad_spend_total = db.Column(db.Float, default=0)  # Lifetime
+    is_ad_driven = db.Column(db.Boolean, default=False)
+
+    # Deal hunter
+    has_free_shipping = db.Column(db.Boolean, default=False, index=True)
+    last_shown_hot = db.Column(db.DateTime)
+
+    # User features
+    is_favorite = db.Column(db.Boolean, default=False, index=True)
+    product_status = db.Column(db.String(50), default='active', index=True)
+    status_note = db.Column(db.String(255))
+
+    # Inventory & velocity
+    prev_sales_7d = db.Column(db.Integer, default=0)
+    prev_sales_30d = db.Column(db.Integer, default=0)
+    sales_velocity = db.Column(db.Float, default=0)
+
+    # Metadata
+    scan_type = db.Column(db.String(50), default='brand_hunter', index=True)
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+    # --- New fields ---
+    category = db.Column(db.String(100))
+    subcategory = db.Column(db.String(100))
+    return_rate = db.Column(db.Float)
+    rating = db.Column(db.Float)  # Normalized 0-5 rating (distinct from product_rating for future use)
+    price_trend = db.Column(db.String(20))  # 'rising', 'falling', 'stable'
+    last_echotik_sync = db.Column(db.DateTime)
+
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        db.Index('idx_influencer_sales', 'influencer_count', 'sales_7d'),
+        db.Index('idx_influencer_commission', 'influencer_count', 'commission_rate'),
+        db.Index('idx_status_influencer', 'product_status', 'influencer_count'),
+        db.Index('idx_influencer_firstseen', 'influencer_count', 'first_seen'),
+        db.Index('idx_influencer_price', 'influencer_count', 'price'),
+        db.Index('idx_favorite_sales', 'is_favorite', 'sales_7d'),
+        db.Index('idx_firstseen_influencer', 'first_seen', 'influencer_count'),
+    )
+
+    def to_dict(self):
+        """Convert product to dictionary for API response."""
+        return {
+            'product_id': self.product_id,
+            'product_name': self.product_name,
+            'seller_id': self.seller_id,
+            'seller_name': self.seller_name,
+            'is_ad_driven': (self.scan_type in ['apify_ad', 'daily_virals']) or (self.sales_7d > 50 and self.influencer_count < 5 and self.video_count < 5),
+            'commission_rate': self.commission_rate,
+            'shop_ads_commission': self.shop_ads_commission,
+            'stock': self.live_count,
+            'price': self.price,
+            'image_url': self.cached_image_url or self.image_url,
+            'cached_image_url': self.cached_image_url,
+            'product_url': self.product_url,
+            'product_rating': self.product_rating,
+            'review_count': self.review_count,
+            'has_free_shipping': self.has_free_shipping or False,
+            'is_favorite': self.is_favorite,
+            'product_status': self.product_status or 'active',
+            'status_note': self.status_note,
+            'scan_type': self.scan_type,
+            'first_seen': self.first_seen.isoformat() if self.first_seen else None,
+            'last_updated': self.last_updated.isoformat() if self.last_updated else None,
+            # Stats
+            'sales': self.sales,
+            'sales_7d': self.sales_7d,
+            'sales_30d': self.sales_30d,
+            'gmv': self.gmv,
+            'gmv_30d': self.gmv_30d,
+            'gmv_growth': self.gmv_growth or 0,
+            'video_count': self.video_count,
+            'video_count_alltime': self.video_count_alltime or self.video_count,
+            'video_7d': self.video_7d,
+            'video_30d': self.video_30d,
+            'influencer_count': self.influencer_count,
+            'live_count': self.live_count,
+            'views_count': self.views_count,
+            'ad_spend': self.ad_spend,
+            'ad_spend_total': self.ad_spend_total,
+            'sales_velocity': self.sales_velocity or 0,
+            'ad_spend_per_video': (self.ad_spend / self.video_count) if (self.video_count and self.video_count > 0) else 0,
+            'roas': (self.gmv / self.ad_spend) if (self.ad_spend and self.ad_spend > 0) else 0,
+            'est_profit': (self.gmv * self.commission_rate),
+            # New fields
+            'category': self.category,
+            'subcategory': self.subcategory,
+            'return_rate': self.return_rate,
+            'rating': self.rating,
+            'price_trend': self.price_trend,
+            'last_echotik_sync': self.last_echotik_sync.isoformat() if self.last_echotik_sync else None,
+        }
+
+
+class BlacklistedBrand(db.Model):
+    """TikTok Shop Brands/Sellers that are blacklisted"""
+    __tablename__ = 'blacklisted_brands'
+
+    id = db.Column(db.Integer, primary_key=True)
+    seller_name = db.Column(db.String(255), unique=True, index=True, nullable=False)
+    seller_id = db.Column(db.String(50), unique=True, index=True)
+    reason = db.Column(db.Text)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'seller_name': self.seller_name,
+            'seller_id': self.seller_id,
+            'reason': self.reason,
+            'added_at': self.added_at.isoformat() if self.added_at else None
+        }
+
+
+class CreatorList(db.Model):
+    """Per-thread TikTok creator lists for inspo-chat forum threads"""
+    __tablename__ = 'creator_lists'
+
+    id = db.Column(db.Integer, primary_key=True)
+    thread_id = db.Column(db.String(50), index=True, nullable=False)
+    creator_name = db.Column(db.String(255), nullable=False)
+    added_by = db.Column(db.String(255))
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('thread_id', 'creator_name', name='uq_thread_creator'),
+    )
+
+
+class WatchedBrand(db.Model):
+    """Brands being tracked in Brand Hunter"""
+    __tablename__ = 'watched_brands'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, index=True, nullable=False)
+    logo_url = db.Column(db.String(500))
+    product_count = db.Column(db.Integer, default=0)
+    total_sales_7d = db.Column(db.Integer, default=0)
+    total_revenue = db.Column(db.Float, default=0)
+    avg_commission = db.Column(db.Float, default=0)
+    top_product_id = db.Column(db.String(100))
+    top_product_name = db.Column(db.String(500))
+    is_active = db.Column(db.Boolean, default=True)
+    last_synced = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'logo_url': self.logo_url,
+            'product_count': self.product_count or 0,
+            'total_sales_7d': self.total_sales_7d or 0,
+            'total_revenue': self.total_revenue or 0,
+            'avg_commission': self.avg_commission or 0,
+            'top_product_id': self.top_product_id,
+            'top_product_name': self.top_product_name,
+            'is_active': self.is_active,
+            'last_synced': self.last_synced.isoformat() if self.last_synced else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+    def refresh_stats(self):
+        """Recalculate stats from products matching this brand"""
+        from sqlalchemy import func
+        products = Product.query.filter(
+            Product.seller_name.ilike(f'%{self.name}%')
+        ).all()
+
+        if products:
+            self.product_count = len(products)
+            self.total_sales_7d = sum(p.sales_7d or 0 for p in products)
+            self.total_revenue = sum(p.gmv or 0 for p in products)
+            commissions = [p.commission_rate for p in products if p.commission_rate]
+            self.avg_commission = sum(commissions) / len(commissions) if commissions else 0
+
+            top = max(products, key=lambda p: p.sales_7d or 0)
+            self.top_product_id = top.product_id
+            self.top_product_name = top.product_name
+
+            if products[0].image_url:
+                self.logo_url = products[0].cached_image_url or products[0].image_url
+
+        self.last_synced = datetime.utcnow()
+        db.session.commit()
+
+
+class ApiKey(db.Model):
+    """API Keys for external SaaS access"""
+    __tablename__ = 'api_keys'
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(32), unique=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    credits = db.Column(db.Integer, default=0)  # 1 credit = 1 scan
+    total_usage = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ScanJob(db.Model):
+    """Async Job Queue for SaaS Scans"""
+    __tablename__ = 'scan_jobs'
+    id = db.Column(db.String(36), primary_key=True)  # UUID
+    status = db.Column(db.String(20), default='queued', index=True)
+    input_query = db.Column(db.String(500))
+    result_json = db.Column(db.Text)
+    api_key_id = db.Column(db.Integer, db.ForeignKey('api_keys.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
