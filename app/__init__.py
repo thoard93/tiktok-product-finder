@@ -5,7 +5,7 @@ Creates the Flask app, initializes extensions, registers all blueprints.
 
 import os
 import secrets
-from flask import Flask
+from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.pool import NullPool
 from concurrent.futures import ThreadPoolExecutor
