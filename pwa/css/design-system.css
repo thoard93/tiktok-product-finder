@@ -144,6 +144,55 @@
 }
 
 /* =========================================================================
+   2a. Shorthand Aliases — unprefixed names for convenience
+   Some pages use var(--surface) instead of var(--prism-surface).
+   These aliases ensure both forms resolve correctly in all themes.
+   ========================================================================= */
+
+:root,
+[data-theme="dark"],
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg:              var(--prism-bg);
+  --surface:         var(--prism-surface);
+  --surface-2:       var(--prism-surface-2);
+
+  /* Borders */
+  --border:          var(--prism-border);
+  --border-strong:   var(--prism-border-strong);
+
+  /* Text */
+  --text-primary:    var(--prism-text);
+  --text-secondary:  var(--prism-text-muted);
+
+  /* Accent & semantic colors */
+  --accent:          var(--prism-accent);
+  --cyan:            var(--prism-cyan);
+  --green:           var(--prism-success);
+  --red:             var(--prism-error);
+  --amber:           var(--prism-warning);
+  --violet:          var(--prism-accent);
+
+  /* Fonts */
+  --font-display:    'Cabinet Grotesk', sans-serif;
+  --font-body:       'Inter', sans-serif;
+  --font-xs:         600 var(--text-xs) / 1.4 'Inter', sans-serif;
+  --font-sm:         400 var(--text-sm) / 1.5 'Inter', sans-serif;
+  --font-base:       400 var(--text-base) / 1.5 'Inter', sans-serif;
+
+  /* Spacing (space-N aliases for sp-N) */
+  --space-1:  var(--sp-1);
+  --space-2:  var(--sp-2);
+  --space-3:  var(--sp-3);
+  --space-4:  var(--sp-4);
+  --space-5:  var(--sp-5);
+  --space-6:  var(--sp-6);
+  --space-8:  var(--sp-8);
+  --space-10: var(--sp-10);
+  --space-12: var(--sp-12);
+}
+
+/* =========================================================================
    3. Base Reset
    ========================================================================= */
 
