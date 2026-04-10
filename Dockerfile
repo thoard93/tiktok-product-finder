@@ -1,5 +1,5 @@
-# Dockerfile for Vantage - TikTok Shop Intelligence Platform
-# With Playwright + Chromium for authenticated V2 API access
+# Dockerfile for PRISM - TikTok Shop Intelligence Platform
+# With Playwright + Chromium for browser automation
 
 FROM python:3.11-slim
 
@@ -44,5 +44,5 @@ COPY . .
 ENV PORT=10000
 EXPOSE 10000
 
-# Reduced workers for Playwright memory usage (1 worker handles Playwright subprocess)
-CMD gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 180
+# main:app is the Flask entrypoint (app factory in app/__init__.py, exposed via main.py)
+CMD gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
