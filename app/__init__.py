@@ -16,12 +16,20 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 def create_app():
     """Create and configure the Flask application."""
-    flask_app = Flask(__name__, static_folder='../pwa')
+    # root_path must point to the PROJECT root (one level up from this file)
+    # so that send_from_directory('pwa', ...) resolves to <project>/pwa/
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    flask_app = Flask(
+        __name__,
+        static_folder=os.path.join(project_root, 'pwa'),
+        root_path=project_root,
+    )
 
     # Optional WhiteNoise for static files
+    pwa_dir = os.path.join(project_root, 'pwa')
     try:
         from whitenoise import WhiteNoise
-        flask_app.wsgi_app = WhiteNoise(flask_app.wsgi_app, root='pwa/')
+        flask_app.wsgi_app = WhiteNoise(flask_app.wsgi_app, root=pwa_dir)
     except ImportError:
         print("WARNING: WhiteNoise not found. Static files may not be served correctly.")
 
