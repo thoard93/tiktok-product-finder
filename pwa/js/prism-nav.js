@@ -21,7 +21,7 @@
     { label: 'Scanner',      icon: 'fas fa-satellite-dish',  href: '/scanner',      adminOnly: true },
     { label: 'Brand Hunter', icon: 'fas fa-crosshairs',      href: '/brand-hunter' },
     { label: 'Analytics',    icon: 'fas fa-chart-bar',        href: '/vantage-v2' },
-    { label: 'FlipTracker',  icon: 'fas fa-tags',            href: '/price/index.html' },
+    { label: 'FlipTracker',  icon: 'fas fa-tags',            href: '/price/index.html', adminOnly: true },
     { section: 'System' },
     { label: 'Settings',     icon: 'fas fa-sliders-h',       href: '/settings' },
     { label: 'Admin',        icon: 'fas fa-terminal',         href: '/admin',        adminOnly: true },

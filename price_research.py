@@ -12,9 +12,10 @@ import requests
 import base64
 import re
 from datetime import datetime
-from flask import request, jsonify, send_from_directory
+from flask import request, jsonify, send_from_directory, session, redirect
 
 from app import app, db
+from app.models import User
 
 log = logging.getLogger('PriceBlade')
 
@@ -780,14 +781,42 @@ IMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no co
 # API ROUTES
 # =============================================================================
 
+# ─── FlipTracker Admin Guard ──────────────────────────────────────────────────
+
+def _is_admin_user():
+    """Check if the current session belongs to an admin user."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return False
+    user = User.query.get(user_id)
+    return user is not None and user.is_admin
+
+
+@app.before_request
+def fliptracker_api_admin_guard():
+    """Block all /price/api/* requests from non-admin users."""
+    if request.path.startswith('/price/api/'):
+        if not _is_admin_user():
+            return jsonify({'error': 'FlipTracker access restricted to admins'}), 401
+
+
 # ─── Serve PriceBlade PWA ─────────────────────────────────────────────────────
 @app.route('/price')
 @app.route('/price/')
 def price_home():
+    if not _is_admin_user():
+        return redirect('/' if session.get('user_id') else '/login')
     return send_from_directory('pwa/price', 'index.html')
 
 @app.route('/price/<path:filename>')
 def price_static(filename):
+    # Allow static assets (CSS/JS/images) through without auth check
+    static_extensions = ('.css', '.js', '.png', '.jpg', '.svg', '.ico', '.woff', '.woff2', '.json', '.webmanifest')
+    if filename.endswith(static_extensions):
+        return send_from_directory('pwa/price', filename)
+    # HTML files require admin
+    if not _is_admin_user():
+        return redirect('/' if session.get('user_id') else '/login')
     return send_from_directory('pwa/price', filename)
 
 

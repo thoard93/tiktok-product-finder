@@ -1,269 +1,289 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PRISM Hub | Pro Growth Analytics</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
-        rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        midnight: '#020617',
-                        slate: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
-                        primary: '#2563eb',
-                    }
-                }
-            }
-        }
-    </script>
+    <title>Analytics | PRISM</title>
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
+        body { display: flex; min-height: 100vh; }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        .main { flex:1; display:flex; flex-direction:column; min-height:100vh; }
 
-        .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
+        /* Top bar — matches dashboard */
+        .top-bar { position:sticky; top:0; z-index:30; height:56px; background:rgba(10,10,15,0.85);
+            backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid var(--prism-border);
+            display:flex; align-items:center; padding:0 var(--sp-6); gap:var(--sp-4); }
+        .top-bar-title { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-lg);
+            color:var(--prism-text); }
+        .top-bar-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px;
+            border-radius:var(--radius-full); background:var(--prism-success-glow); border:1px solid rgba(16,185,129,0.2); }
+        .top-bar-badge .dot { width:6px; height:6px; border-radius:50%; background:var(--prism-success); animation:pulse 2s ease-in-out infinite; }
+        .top-bar-badge span { font-size:10px; font-weight:700; color:var(--prism-success); text-transform:uppercase; letter-spacing:0.06em; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-        .btn-premium {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-            color: white;
-            border-radius: 0.75rem;
-            font-weight: 700;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+        /* Content */
+        .content { flex:1; overflow-y:auto; padding:var(--sp-6); }
+        .content::-webkit-scrollbar { width:5px; }
+        .content::-webkit-scrollbar-thumb { background:var(--prism-border); border-radius:99px; }
 
-        .btn-premium:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
-        }
+        /* Section header */
+        .section-header { margin-bottom:var(--sp-5); }
+        .section-title { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-2xl);
+            color:var(--prism-text); }
+        .section-desc { font-size:var(--text-sm); color:var(--prism-text-muted); margin-top:var(--sp-1); }
 
-        .sidebar-link {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem 1rem;
-            border-radius: 0.75rem;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: #94a3b8;
-            transition: all 0.2s;
-        }
+        /* Divider */
+        .section-divider { border:none; border-top:1px solid var(--prism-border); margin:var(--sp-10) 0; }
 
-        .sidebar-link:hover {
-            background: rgba(255, 255, 255, 0.05);
-            color: white;
-        }
+        /* Card grid — movers */
+        .movers-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:var(--sp-4); }
 
-        .sidebar-link.active {
-            background: #2563eb;
-            color: white;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-        }
+        /* Mover card */
+        .mover-card { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-lg);
+            padding:var(--sp-4); cursor:pointer; transition:all 150ms ease; }
+        .mover-card:hover { border-color:rgba(16,185,129,0.3); transform:translateY(-2px);
+            box-shadow:0 8px 24px rgba(0,0,0,0.3); }
+        .mover-top { display:flex; align-items:flex-start; gap:var(--sp-3); margin-bottom:var(--sp-3); }
+        .mover-thumb { width:52px; height:52px; border-radius:var(--radius-md); object-fit:cover;
+            background:var(--prism-surface-2); flex-shrink:0; }
+        .mover-info { flex:1; min-width:0; }
+        .growth-badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:var(--radius-full);
+            background:var(--prism-success-glow); font-size:10px; font-weight:700; color:var(--prism-success);
+            margin-bottom:var(--sp-1); }
+        .mover-name { font-weight:600; font-size:var(--text-sm); color:var(--prism-text); overflow:hidden;
+            text-overflow:ellipsis; white-space:nowrap; }
+        .mover-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--sp-2); margin-top:var(--sp-3); }
+        .mover-stat { background:var(--prism-surface-2); padding:var(--sp-2); border-radius:var(--radius-md); text-align:center; }
+        .mover-stat-label { font-size:9px; font-weight:700; color:var(--prism-text-faint); text-transform:uppercase;
+            letter-spacing:0.04em; }
+        .mover-stat-value { font-size:var(--text-xs); font-weight:700; color:var(--prism-text); margin-top:2px; }
+        .mover-stat-value.green { color:var(--prism-success); }
+        .mover-stat-value.cyan { color:var(--prism-cyan); }
 
-        .video-card {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
+        /* Video grid — shorts */
+        .shorts-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:var(--sp-5); }
 
-        .video-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(37, 99, 235, 0.3);
-        }
+        /* Video card */
+        .video-card { background:var(--prism-surface); border:1px solid var(--prism-border); border-radius:var(--radius-lg);
+            overflow:hidden; transition:all 200ms ease; display:flex; flex-direction:column; }
+        .video-card:hover { border-color:rgba(124,58,237,0.3); transform:translateY(-4px);
+            box-shadow:0 12px 32px rgba(0,0,0,0.4); }
+        .video-cover { position:relative; aspect-ratio:9/16; background:var(--prism-surface-2); overflow:hidden; }
+        .video-cover img { width:100%; height:100%; object-fit:cover; opacity:0.85; transition:opacity 200ms; }
+        .video-card:hover .video-cover img { opacity:1; }
+        .video-play { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+            opacity:0; transition:opacity 200ms; }
+        .video-card:hover .video-play { opacity:1; }
+        .video-play a { width:56px; height:56px; border-radius:50%; background:var(--prism-accent);
+            display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px;
+            box-shadow:0 4px 20px rgba(124,58,237,0.4); transition:transform 150ms; }
+        .video-play a:hover { transform:scale(1.1); }
+        .video-duration { position:absolute; top:var(--sp-3); left:var(--sp-3); padding:4px 10px;
+            border-radius:var(--radius-full); background:rgba(0,0,0,0.6); backdrop-filter:blur(8px);
+            border:1px solid rgba(255,255,255,0.08); font-size:10px; font-weight:700; color:var(--prism-text); }
+        .video-overlay { position:absolute; bottom:var(--sp-3); left:var(--sp-3); right:var(--sp-3);
+            background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,0.08);
+            padding:var(--sp-3); border-radius:var(--radius-md); }
+        .video-overlay-row { display:flex; justify-content:space-between; align-items:flex-end; }
+        .video-overlay-label { font-size:9px; font-weight:700; color:var(--prism-text-muted); text-transform:uppercase;
+            letter-spacing:0.06em; }
+        .video-earnings { font-family:'Cabinet Grotesk',sans-serif; font-weight:700; font-size:var(--text-xl);
+            color:var(--prism-success); }
+        .video-views { font-size:var(--text-sm); font-weight:600; color:var(--prism-text); }
+        .video-body { padding:var(--sp-4); display:flex; flex-direction:column; flex:1; }
+        .video-creator-row { display:flex; align-items:center; gap:var(--sp-3); margin-bottom:var(--sp-3); }
+        .video-product-thumb { width:36px; height:36px; border-radius:var(--radius-md); object-fit:cover;
+            background:var(--prism-surface-2); flex-shrink:0; }
+        .video-creator-name { font-size:10px; font-weight:700; color:var(--prism-accent-text); overflow:hidden;
+            text-overflow:ellipsis; white-space:nowrap; }
+        .video-product-name { font-size:var(--text-xs); font-weight:600; color:var(--prism-text-muted); overflow:hidden;
+            text-overflow:ellipsis; white-space:nowrap; }
+        .video-cta { display:flex; align-items:center; justify-content:center; gap:var(--sp-2);
+            padding:var(--sp-2) var(--sp-3); border-radius:var(--radius-md); background:var(--prism-surface-2);
+            border:1px solid var(--prism-border); font-size:10px; font-weight:700; color:var(--prism-text-muted);
+            text-transform:uppercase; letter-spacing:0.06em; cursor:pointer; transition:all 120ms;
+            text-decoration:none; margin-top:auto; }
+        .video-cta:hover { border-color:var(--prism-accent); color:var(--prism-accent-text);
+            background:var(--prism-accent-glow); }
 
-        .growth-badge {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        /* Filter pill */
+        .filter-pill { display:inline-flex; align-items:center; gap:var(--sp-2); padding:var(--sp-2) var(--sp-4);
+            border-radius:var(--radius-full); background:var(--prism-surface); border:1px solid var(--prism-border);
+            font-size:10px; font-weight:700; color:var(--prism-accent-text); text-transform:uppercase;
+            letter-spacing:0.06em; }
+
+        /* Loading spinner */
+        .loading-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
+            padding:var(--sp-16) 0; }
+        .loading-state i { font-size:28px; color:var(--prism-accent); margin-bottom:var(--sp-4); }
+        .loading-state p { font-size:10px; font-weight:700; color:var(--prism-text-faint); text-transform:uppercase;
+            letter-spacing:0.1em; }
+
+        /* Empty state */
+        .empty-state { text-align:center; padding:var(--sp-16) 0; color:var(--prism-text-faint); }
+        .empty-state i { font-size:40px; margin-bottom:var(--sp-4); opacity:0.3; }
+        .empty-state p { font-size:var(--text-sm); }
+
+        /* Skeleton */
+        .skel { background:var(--prism-surface-2); border-radius:var(--radius-md); position:relative; overflow:hidden; }
+        .skel::after { content:''; position:absolute; inset:0;
+            background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.03) 50%,transparent 100%);
+            background-size:200% 100%; animation:shimmer 1.8s ease-in-out infinite; }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .movers-grid { grid-template-columns: repeat(2,1fr); }
+        }
+        @media (max-width: 767px) {
+            .content { padding: var(--sp-4); }
+            .movers-grid { grid-template-columns: 1fr; }
+            .shorts-grid { grid-template-columns: 1fr 1fr; }
+            .section-title { font-size: var(--text-xl); }
+        }
+        @media (max-width: 480px) {
+            .shorts-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 
-<body class="flex h-screen overflow-hidden bg-slate-950 text-slate-200 font-['Inter']">
+<body>
+    <div id="prism-nav"></div>
 
-    <!-- Sidebar -->
-    <aside class="hidden md:flex flex-col w-72 bg-slate-900 border-r border-white/5 z-30">
-        <div class="p-8">
-            <div class="flex items-center gap-3 group cursor-pointer" onclick="window.location.href='/'">
-                <div
-                    class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                    <img src="/vantage_logo.png" class="w-full h-full object-cover p-1.5"
-                        onerror="this.style.display='none'">
-                </div>
-                <div>
-                    <h1 class="font-bold text-xl tracking-tight text-white font-['Outfit']">PRISM</h1>
-                    <p class="text-[9px] text-primary font-bold tracking-widest uppercase opacity-80">v2 Intelligence
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <nav class="flex-1 px-3 space-y-1 overflow-y-auto no-scrollbar">
-            <div class="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">Discovery
-            </div>
-            <a href="/" class="sidebar-link">
-                <i class="fas fa-grid-2 text-sm"></i>
-                <span>Market Insights</span>
-            </a>
-            <a href="/vantage-v2" class="sidebar-link active">
-                <i class="fas fa-rocket text-sm"></i>
-                <span>Growth Hub (v2)</span>
-            </a>
-            <a href="/brand-hunter" class="sidebar-link">
-                <i class="fas fa-bullseye text-sm"></i>
-                <span>Brand Hunter</span>
-            </a>
-
-            <div class="px-4 py-6 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-50">Shorts
-                Engine</div>
-            <a href="#shorts-feed" class="sidebar-link">
-                <i class="fas fa-play-circle text-sm"></i>
-                <span>ROI Shorts Feed</span>
-            </a>
-        </nav>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-950">
-        <header
-            class="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md sticky top-0 z-20">
-            <h2 class="font-bold text-lg text-white font-['Outfit']">PRISM Growth Hub <span
-                    class="text-xs text-primary ml-2 uppercase tracking-tighter">Pro Elite</span></h2>
-            <div class="flex items-center gap-4">
-                <div
-                    class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Live Intel Feed</span>
+    <div class="main">
+        <!-- Top bar -->
+        <header class="top-bar">
+            <button class="prism-nav-hamburger" onclick="prismNav.toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <div style="flex:1; display:flex; align-items:center; gap:var(--sp-4)">
+                <h2 class="top-bar-title">Analytics</h2>
+                <div class="top-bar-badge">
+                    <span class="dot"></span>
+                    <span>Live Intel</span>
                 </div>
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar pb-32">
+        <!-- Content -->
+        <div class="content">
 
             <!-- Section 1: Movers & Shakers -->
-            <div class="mb-12">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h3 class="font-bold text-2xl text-white font-['Outfit']">Movers & Shakers</h3>
-                        <p class="text-sm text-slate-500 mt-1">Products with explosive GMV growth in the last 7 days.
-                        </p>
-                    </div>
+            <div>
+                <div class="section-header">
+                    <h3 class="section-title">Movers & Shakers</h3>
+                    <p class="section-desc">Products with explosive GMV growth in the last 7 days.</p>
                 </div>
 
-                <div id="moversGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <!-- Loading State -->
-                    <div class="col-span-full py-20 flex flex-col items-center">
-                        <i class="fas fa-spinner fa-spin text-primary text-3xl mb-4"></i>
-                        <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">Scanning Trends...</p>
+                <div id="moversGrid" class="movers-grid">
+                    <div class="loading-state" style="grid-column:1/-1">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Scanning trends...</p>
                     </div>
                 </div>
             </div>
 
-            <hr class="border-white/5 mb-12">
+            <hr class="section-divider">
 
             <!-- Section 2: ROI Shorts Feed -->
             <div id="shorts-feed">
-                <div class="flex items-center justify-between mb-8">
+                <div class="section-header" style="display:flex; align-items:flex-start; justify-content:space-between; gap:var(--sp-4); flex-wrap:wrap;">
                     <div>
-                        <h3 class="font-bold text-2xl text-white font-['Outfit']">ROI Shorts Goldmine</h3>
-                        <p class="text-sm text-slate-500 mt-1">High-earning videos under 15 seconds. Optimized for
-                            performance.</p>
+                        <h3 class="section-title">ROI Shorts Goldmine</h3>
+                        <p class="section-desc">High-earning videos under 15 seconds. Optimized for performance.</p>
                     </div>
-                    <div class="flex gap-2">
-                        <div class="px-4 py-2 rounded-xl glass text-[10px] font-bold text-primary border-primary/20">
-                            FILTERED: <= 15 SECONDS </div>
-                        </div>
-                    </div>
-
-                    <div id="shortsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
-                        <!-- Loading State -->
-                        <div class="col-span-full py-20 flex flex-col items-center">
-                            <i class="fas fa-spinner fa-spin text-primary text-3xl mb-4"></i>
-                            <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">Mining Short-Form
-                                Data...</p>
-                        </div>
+                    <div class="filter-pill">
+                        <i class="fas fa-filter" style="font-size:9px"></i>
+                        &le; 15 Seconds
                     </div>
                 </div>
 
+                <div id="shortsGrid" class="shorts-grid">
+                    <div class="loading-state" style="grid-column:1/-1">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Mining short-form data...</p>
+                    </div>
+                </div>
             </div>
-    </main>
 
-    <!-- Modal for Creative Finder -->
-    <div id="creativeModal"
-        class="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[100] hidden flex items-center justify-center p-6">
-        <div
-            class="w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar bg-slate-900 border border-white/10 rounded-3xl p-8 relative">
-            <button onclick="closeCreativeModal()" class="absolute top-6 right-6 text-slate-500 hover:text-white">
-                <i class="fas fa-times text-2xl"></i>
+        </div><!-- /.content -->
+    </div><!-- /.main -->
+
+    <!-- Creative Finder Modal -->
+    <div id="creativeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9);
+        backdrop-filter:blur(16px); z-index:100; align-items:center; justify-content:center; padding:var(--sp-6);">
+        <div style="width:100%; max-width:900px; max-height:90vh; overflow-y:auto; background:var(--prism-surface);
+            border:1px solid var(--prism-border); border-radius:var(--radius-xl); padding:var(--sp-8); position:relative;">
+            <button onclick="closeCreativeModal()" style="position:absolute; top:var(--sp-4); right:var(--sp-4);
+                background:none; border:none; color:var(--prism-text-muted); cursor:pointer; font-size:20px;">
+                <i class="fas fa-times"></i>
             </button>
             <div id="creativeModalContent"></div>
         </div>
     </div>
+
+    <!-- Shared nav -->
+    <script src="/pwa/js/prism-nav.js"></script>
 
     <script>
         async function fetchMovers() {
             try {
                 const res = await fetch('/api/analytics/movers-shakers?limit=8');
                 const data = await res.json();
-                if (data.success) {
-                    renderMovers(data.products);
-                }
-            } catch (e) { console.error("Movers Error", e); }
+                if (data.success) renderMovers(data.products);
+                else renderMovers([]);
+            } catch (e) {
+                console.error('Movers Error', e);
+                renderMovers([]);
+            }
         }
 
         async function fetchShorts() {
             try {
                 const res = await fetch('/api/analytics/top-videos');
                 const data = await res.json();
-                if (data.success) {
-                    renderShorts(data.videos);
-                }
-            } catch (e) { console.error("Shorts Error", e); }
+                if (data.success) renderShorts(data.videos);
+                else renderShorts([]);
+            } catch (e) {
+                console.error('Shorts Error', e);
+                renderShorts([]);
+            }
         }
 
         function renderMovers(products) {
             const grid = document.getElementById('moversGrid');
-            if (products.length === 0) {
-                grid.innerHTML = '<div class="col-span-full text-center py-10 text-slate-500">No high-growth movers found.</div>';
+            if (!products || products.length === 0) {
+                grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-chart-line"></i><p>No high-growth movers found.</p></div>';
                 return;
             }
             grid.innerHTML = products.map(p => `
-                <div class="glass p-4 rounded-2xl border border-white/5 hover:border-emerald-500/30 transition-all cursor-pointer" onclick="window.location.href='/product/${p.product_id}'">
-                    <div class="flex items-start gap-4 mb-4">
-                        <img src="/api/image-proxy/${p.product_id}" class="w-16 h-16 rounded-xl object-cover" onerror="this.style.display='none'">
-                        <div class="flex-1 min-w-0">
-                            <div class="px-2 py-1 rounded-lg growth-badge text-[9px] font-black text-white inline-block mb-1">
-                                +${(p.gmv_growth || 0).toFixed(1)}% GROWTH
+                <div class="mover-card" onclick="window.location.href='/product/${p.product_id}'">
+                    <div class="mover-top">
+                        <img src="/api/image-proxy/${p.product_id}" class="mover-thumb" loading="lazy"
+                             onerror="this.style.display='none'" alt="">
+                        <div class="mover-info">
+                            <div class="growth-badge">
+                                <i class="fas fa-arrow-up" style="font-size:8px"></i>
+                                +${(p.gmv_growth || 0).toFixed(1)}%
                             </div>
-                            <h4 class="font-bold text-sm text-slate-200 truncate">${p.product_name}</h4>
+                            <div class="mover-name">${p.product_name || 'Unknown Product'}</div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-3 gap-2 mt-4">
-                        <div class="bg-black/20 p-2 rounded-lg text-center">
-                            <p class="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">7D Sales</p>
-                            <p class="text-xs font-bold text-white">${(p.sales_7d || 0).toLocaleString()}</p>
+                    <div class="mover-stats">
+                        <div class="mover-stat">
+                            <div class="mover-stat-label">7D Sales</div>
+                            <div class="mover-stat-value">${(p.sales_7d || 0).toLocaleString()}</div>
                         </div>
-                        <div class="bg-black/20 p-2 rounded-lg text-center">
-                            <p class="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Ad Spend</p>
-                            <p class="text-xs font-bold text-emerald-400">$${(p.ad_spend || 0).toLocaleString()}</p>
+                        <div class="mover-stat">
+                            <div class="mover-stat-label">Ad Spend</div>
+                            <div class="mover-stat-value green">$${(p.ad_spend || 0).toLocaleString()}</div>
                         </div>
-                        <div class="bg-black/20 p-2 rounded-lg text-center">
-                            <p class="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Videos</p>
-                            <p class="text-xs font-bold text-cyan-400">${(p.video_count || 0).toLocaleString()}</p>
+                        <div class="mover-stat">
+                            <div class="mover-stat-label">Videos</div>
+                            <div class="mover-stat-value cyan">${(p.video_count || 0).toLocaleString()}</div>
                         </div>
                     </div>
                 </div>
@@ -272,51 +292,54 @@
 
         function renderShorts(videos) {
             const grid = document.getElementById('shortsGrid');
-            if (videos.length === 0) {
-                grid.innerHTML = '<div class="col-span-full text-center py-10 text-slate-500">No short-form top earners found.</div>';
+            if (!videos || videos.length === 0) {
+                grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-play-circle"></i><p>No short-form top earners found.</p></div>';
                 return;
             }
             grid.innerHTML = videos.map(v => `
-                <div class="video-card glass rounded-3xl overflow-hidden border border-white/5 flex flex-col">
-                    <div class="relative aspect-[9/16] bg-slate-950 group">
-                        <img src="${v.coverUrl}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity">
-                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <a href="${v.videoUrl}" target="_blank" class="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-2xl shadow-2xl">
-                                <i class="fas fa-play ml-1"></i>
+                <div class="video-card">
+                    <div class="video-cover">
+                        <img src="${v.coverUrl}" loading="lazy" alt=""
+                             onerror="this.style.display='none'">
+                        <div class="video-play">
+                            <a href="${v.videoUrl}" target="_blank" rel="noopener">
+                                <i class="fas fa-play" style="margin-left:2px"></i>
                             </a>
                         </div>
-                        <div class="absolute top-4 left-4">
-                            <span class="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white border border-white/10">
-                                ${v.durationSeconds}s DURATION
-                            </span>
-                        </div>
-                        <div class="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-md p-3 rounded-2xl border border-white/10">
-                            <div class="flex justify-between items-end mb-2">
+                        <div class="video-duration">${v.durationSeconds}s</div>
+                        <div class="video-overlay">
+                            <div class="video-overlay-row">
                                 <div>
-                                    <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Video Earnings</p>
-                                    <p class="text-xl font-black text-emerald-400">$${(v.periodRevenue || 0).toLocaleString()}</p>
+                                    <div class="video-overlay-label">Earnings</div>
+                                    <div class="video-earnings">$${(v.periodRevenue || 0).toLocaleString()}</div>
                                 </div>
-                                <div class="text-right">
-                                    <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Views</p>
-                                    <p class="text-sm font-bold text-white">${(v.periodViews || 0).toLocaleString()}</p>
+                                <div style="text-align:right">
+                                    <div class="video-overlay-label">Views</div>
+                                    <div class="video-views">${(v.periodViews || 0).toLocaleString()}</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="p-5 flex flex-col flex-1">
-                        <div class="flex items-center gap-3 mb-4">
-                            <img src="${v.productImageUrl}" class="w-10 h-10 rounded-lg object-cover" onerror="this.style.display='none'">
-                            <div class="flex-1 min-w-0">
-                                <p class="text-[10px] text-primary font-bold truncate">@${v.creatorUsername}</p>
-                                <h4 class="text-xs font-bold text-slate-300 truncate">${v.productTitle}</h4>
+                    <div class="video-body">
+                        <div class="video-creator-row">
+                            <img src="${v.productImageUrl}" class="video-product-thumb" loading="lazy"
+                                 onerror="this.style.display='none'" alt="">
+                            <div style="flex:1; min-width:0">
+                                <div class="video-creator-name">@${v.creatorUsername}</div>
+                                <div class="video-product-name">${v.productTitle}</div>
                             </div>
                         </div>
-                        <button onclick="window.location.href='/product/${v.productId}'" class="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-[10px] font-bold text-white uppercase tracking-widest transition-all">
+                        <a class="video-cta" href="/product/${v.productId}">
+                            <i class="fas fa-arrow-right" style="font-size:9px"></i>
                             View Product Intel
-                        </button>
+                        </a>
                     </div>
                 </div>
             `).join('');
+        }
+
+        function closeCreativeModal() {
+            document.getElementById('creativeModal').style.display = 'none';
         }
 
         document.addEventListener('DOMContentLoaded', () => {
