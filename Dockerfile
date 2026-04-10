@@ -45,4 +45,4 @@ ENV PORT=10000
 EXPOSE 10000
 
 # Reduced workers for Playwright memory usage (1 worker handles Playwright subprocess)
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 180
+CMD gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 180
