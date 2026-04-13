@@ -57,87 +57,112 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)  # Disable default help
 log.info("====== CODE VERSION: 2026-02-15-v3 (with creator lists + thread join) ======")
 
+def is_share_link(url):
+    """Return True if the URL is a short share link that needs redirect resolution."""
+    return bool(re.search(r'(vm\.tiktok\.com|vt\.tiktok\.com|tiktok\.com/t/)', url, re.IGNORECASE))
+
+
 def extract_product_id(text):
-    """Extract TikTok product ID from URL or text"""
-    # Pattern for product ID in URLs
+    """Extract TikTok product ID from a fully-resolved URL or raw text.
+    Does NOT handle short share links — use resolve_tiktok_share_link() first."""
     patterns = [
         r'shop/pdp/(\d+)',
-        r'product/(\d+)',
         r'view/product/(\d+)',
+        r'product/(\d+)',
         r'product_id=(\d+)',
-        r'/(\d{15,25})(?:[/?]|$)',  # Direct product ID (15-25 digits)
         r'productId=(\d+)',
+        r'/(\d{15,25})(?:[/?]|$)',  # bare ID in path segment
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, text)
         if match:
             return match.group(1)
-    
-    # Check if it's just a raw product ID
+
+    # Plain numeric product ID pasted directly
     if re.match(r'^\d{15,25}$', text.strip()):
         return text.strip()
-    
+
     return None
 
+
 def resolve_tiktok_share_link(url):
-    """Resolve TikTok share link to get Product ID by following redirects and scraping page"""
-    print(f"🔍 [Bot] Resolving redirect for: {url}")
-    
+    """Follow a TikTok short share link to its final destination, then extract the product ID.
+
+    Handles:
+      - tiktok.com/t/XXXXXXX   (newer share format)
+      - vm.tiktok.com/XXXXXXX  (legacy short link)
+      - vt.tiktok.com/XXXXXXX  (regional variant)
+
+    Returns (product_id, region) or (None, 'US').
+    """
+    print(f"[Bot] Resolving share link: {url}")
+
+    # Normalise: bare tiktok.com/t/XXX links sometimes arrive without scheme
+    if not url.startswith('http'):
+        url = 'https://' + url
+
+    headers = {
+        'User-Agent': (
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
+            'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
+            'Mobile/15E148 Safari/604.1'
+        ),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+
     try:
-        # Use a mobile user agent as TikTok often redirects differently for desktop vs mobile
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-        }
-        
-        # Follow redirects and get the page content
-        res = requests.get(url, allow_redirects=True, headers=headers, timeout=15)
+        # HEAD first — fast, no body download, still follows 30x chains
+        res = requests.head(url, allow_redirects=True, headers=headers, timeout=10)
         final_url = res.url
-        print(f"✅ [Bot] Resolved URL: {final_url}")
-        
-        # Try to extract product ID from the final URL first
+        print(f"[Bot] HEAD resolved to: {final_url}")
+
         pid = extract_product_id(final_url)
         if pid:
-            print(f"✅ [Bot] Found product ID in URL: {pid}")
+            print(f"[Bot] Product ID from resolved URL: {pid}")
             return pid, 'US'
-        
-        # If URL doesn't have product ID, try to scrape it from page content
-        # TikTok video pages with products often have product links in the HTML
-        html_content = res.text
-        
-        # Look for product IDs in the HTML (common patterns in TikTok's JSON data)
-        product_patterns = [
+
+        # HEAD didn't land on a product page — fetch with GET and mine the HTML
+        print(f"[Bot] No product ID in URL, fetching page body...")
+        res = requests.get(final_url, allow_redirects=True, headers=headers, timeout=15)
+        final_url = res.url  # update in case GET redirected further
+
+        pid = extract_product_id(final_url)
+        if pid:
+            return pid, 'US'
+
+        html = res.text
+
+        # Patterns found in TikTok's embedded JSON / Shop page markup
+        html_patterns = [
             r'"productId"\s*:\s*"(\d{15,25})"',
             r'"product_id"\s*:\s*"(\d{15,25})"',
             r'shop\.tiktok\.com/view/product/(\d{15,25})',
-            r'/product/(\d{15,25})',
+            r'shop/pdp/(\d{15,25})',
+            r'"/product/(\d{15,25})',
             r'"itemId"\s*:\s*"(\d{15,25})"',
             r'data-product-id="(\d{15,25})"',
         ]
-        
-        for pattern in product_patterns:
-            match = re.search(pattern, html_content)
+
+        for pattern in html_patterns:
+            match = re.search(pattern, html)
             if match:
                 pid = match.group(1)
-                print(f"✅ [Bot] Found product ID in page HTML: {pid}")
+                print(f"[Bot] Product ID from page HTML ({pattern}): {pid}")
                 return pid, 'US'
-        
-        # Final fallback: look for any 17-20 digit number that might be a product ID
-        # Be more conservative here to avoid false positives
-        potential_ids = re.findall(r'(\d{17,20})', final_url + html_content[:5000])
-        if potential_ids:
-            # Return the first unique one that looks like a product ID
-            for pid in potential_ids:
-                if len(pid) >= 17:
-                    print(f"⚠️ [Bot] Using potential product ID from content: {pid}")
-                    return pid, 'US'
-        
-        print(f"❌ [Bot] Could not extract product ID from {final_url}")
-        
+
+        # Conservative numeric fallback — 17-20 digit IDs in first 8 KB
+        for pid in re.findall(r'\b(\d{17,20})\b', final_url + html[:8000]):
+            print(f"[Bot] Numeric fallback product ID: {pid}")
+            return pid, 'US'
+
+        print(f"[Bot] Could not extract product ID from {final_url}")
+
+    except requests.exceptions.Timeout:
+        print(f"[Bot] Timeout resolving {url}")
     except Exception as e:
-        print(f"❌ [Bot] Resolution Error: {e}")
+        print(f"[Bot] Resolution error: {e}")
 
     return None, 'US'
 
@@ -705,14 +730,14 @@ async def on_message(message):
             product_id = None
             region = 'US'
 
-            # Check if any URL is a share link that needs resolving
+            # Check if any URL is a short share link that needs redirect resolution
             for url in urls:
-                if 'vm.tiktok.com' in url or '/t/' in url or 'tiktok.com' in url:
+                if is_share_link(url):
                     resolved_pid, reg = resolve_tiktok_share_link(url)
                     if resolved_pid:
                         product_id = resolved_pid
                         region = reg
-                        print(f"[Bot] Got product ID from link resolution: {product_id}")
+                        print(f"[Bot] Got product ID from share link resolution: {product_id}")
                         break
 
             # If no product ID from link resolution, try extracting from the raw message
@@ -1095,9 +1120,9 @@ async def lookup_command(ctx, *, query: str = None):
         mention_author=False,
     )
 
-    # Try to resolve if it's a share link
+    # Try to resolve if it's a short share link
     region = 'US'
-    if 'vm.tiktok.com' in query or '/t/' in query or 'tiktok.com' in query:
+    if is_share_link(query):
         extracted_id, reg = resolve_tiktok_share_link(query)
         if extracted_id:
             query = extracted_id
