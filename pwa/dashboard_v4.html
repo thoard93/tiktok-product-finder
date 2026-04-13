@@ -684,6 +684,101 @@
     }
 
     </script>
+
+    <!-- ================================================================
+         PRISM AI CHAT WIDGET
+         ================================================================ -->
+    <style>
+    .ai-fab{position:fixed;bottom:24px;right:24px;z-index:9999;width:56px;height:56px;border-radius:50%;
+      background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;font-size:22px;
+      cursor:pointer;box-shadow:0 4px 20px rgba(124,58,237,.45);transition:transform .15s,box-shadow .15s}
+    .ai-fab:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(124,58,237,.6)}
+    .ai-fab.open{transform:rotate(45deg)}
+
+    .ai-panel{position:fixed;bottom:90px;right:24px;z-index:9998;width:380px;max-width:calc(100vw - 32px);
+      max-height:520px;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;
+      background:var(--prism-card-bg,#111118);border:1px solid rgba(124,58,237,.25);
+      box-shadow:0 12px 48px rgba(0,0,0,.6);transform:translateY(16px) scale(.95);opacity:0;
+      pointer-events:none;transition:transform .2s ease,opacity .2s ease}
+    .ai-panel.visible{transform:translateY(0) scale(1);opacity:1;pointer-events:auto}
+
+    .ai-panel-header{padding:14px 16px;background:linear-gradient(135deg,#7c3aed,#6d28d9);
+      font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;color:#fff}
+    .ai-panel-header i{font-size:16px}
+
+    .ai-messages{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;
+      font-size:13px;line-height:1.55;color:var(--prism-text,#ccc);min-height:200px}
+    .ai-msg{padding:10px 12px;border-radius:10px;max-width:92%;word-wrap:break-word}
+    .ai-msg.user{align-self:flex-end;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.25);color:#e0d4fc}
+    .ai-msg.bot{align-self:flex-start;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}
+    .ai-msg.bot strong{color:#a78bfa}
+
+    .ai-starters{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}
+    .ai-starter{font-size:11px;padding:5px 10px;border-radius:20px;border:1px solid rgba(124,58,237,.25);
+      background:rgba(124,58,237,.08);color:#a78bfa;cursor:pointer;transition:background .15s}
+    .ai-starter:hover{background:rgba(124,58,237,.2)}
+
+    .ai-input-row{display:flex;gap:8px;padding:10px 14px;border-top:1px solid rgba(255,255,255,.06)}
+    .ai-input-row input{flex:1;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.1);
+      background:rgba(255,255,255,.05);color:#fff;font-size:13px;outline:none}
+    .ai-input-row input::placeholder{color:#666}
+    .ai-input-row button{padding:8px 14px;border-radius:8px;border:none;background:#7c3aed;
+      color:#fff;font-size:13px;font-weight:600;cursor:pointer}
+    .ai-input-row button:disabled{opacity:.4;cursor:not-allowed}
+    </style>
+
+    <button class="ai-fab" id="aiFab" onclick="toggleAiPanel()" title="PRISM AI Chat">
+      <i class="fas fa-bolt"></i>
+    </button>
+
+    <div class="ai-panel" id="aiPanel">
+      <div class="ai-panel-header"><i class="fas fa-bolt"></i> PRISM AI</div>
+      <div class="ai-messages" id="aiMessages">
+        <div class="ai-msg bot">Hey! I'm <strong>PRISM AI</strong>. Ask me anything about TikTok Shop products, trends, or opportunities.</div>
+      </div>
+      <div class="ai-starters" id="aiStarters">
+        <span class="ai-starter" onclick="aiSend(this.textContent)">Show me the best gems today</span>
+        <span class="ai-starter" onclick="aiSend(this.textContent)">Top products by GMV?</span>
+        <span class="ai-starter" onclick="aiSend(this.textContent)">High commission under $30</span>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" id="aiInput" placeholder="Ask PRISM AI..." onkeydown="if(event.key==='Enter')aiSend()">
+        <button id="aiSendBtn" onclick="aiSend()">Send</button>
+      </div>
+    </div>
+
+    <script>
+    function toggleAiPanel(){
+      const p=document.getElementById('aiPanel'),f=document.getElementById('aiFab');
+      p.classList.toggle('visible');f.classList.toggle('open');
+      if(p.classList.contains('visible'))document.getElementById('aiInput').focus();
+    }
+    async function aiSend(text){
+      const inp=document.getElementById('aiInput');
+      const msg=text||inp.value.trim(); if(!msg)return;
+      inp.value='';
+      document.getElementById('aiStarters').style.display='none';
+      const msgs=document.getElementById('aiMessages');
+      msgs.innerHTML+=`<div class="ai-msg user">${escapeHtml(msg)}</div>`;
+      const thinkDiv=document.createElement('div');
+      thinkDiv.className='ai-msg bot';thinkDiv.innerHTML='<i class="fas fa-spinner fa-spin"></i> Thinking...';
+      msgs.appendChild(thinkDiv);msgs.scrollTop=msgs.scrollHeight;
+      const btn=document.getElementById('aiSendBtn');btn.disabled=true;
+      try{
+        const res=await fetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+        const data=await res.json();
+        thinkDiv.innerHTML=data.success?renderMd(data.response):'<span style="color:#f87171">'+escapeHtml(data.error||'Error')+'</span>';
+      }catch(e){thinkDiv.innerHTML='<span style="color:#f87171">Network error</span>';}
+      btn.disabled=false;msgs.scrollTop=msgs.scrollHeight;
+    }
+    function escapeHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+    function renderMd(t){
+      return t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+              .replace(/\[(.*?)\]\((.*?)\)/g,'<a href="$2" target="_blank" style="color:#a78bfa">$1</a>')
+              .replace(/\n/g,'<br>');
+    }
+    </script>
+
     <script src="/pwa/js/prism-nav.js"></script>
 </body>
 

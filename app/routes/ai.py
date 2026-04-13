@@ -47,30 +47,27 @@ def get_anthropic_key():
 
 @ai_bp.route('/api/ai/chat', methods=['POST'])
 def ai_chat():
-    """PRISM AI Chatbot - Grok 4.1 powered TikTok Shop Expert"""
+    """PRISM AI Chatbot — Claude Sonnet primary, Grok fallback."""
     try:
-        # Use Grok 4.1 via XAI_API_KEY (falls back to Anthropic if XAI not set)
-        xai_key = os.environ.get('XAI_API_KEY', '')
         anthropic_key = get_anthropic_key()
+        xai_key = os.environ.get('XAI_API_KEY', '')
 
-        if not xai_key and not anthropic_key:
-            return jsonify({"success": False, "error": "No AI API key configured. Set XAI_API_KEY or ANTHROPIC_API_KEY."}), 500
+        if not anthropic_key and not xai_key:
+            return jsonify({"success": False, "error": "No AI API key configured. Set ANTHROPIC_API_KEY or XAI_API_KEY."}), 500
 
         data = request.json
         message = data.get('message', '')
         if not message:
             return jsonify({"success": False, "error": "No message provided"}), 400
 
-        # Build diverse product context based on what the user might ask about
         product_context = _build_product_context(message)
 
-        system_prompt = f"""You are 'PRISM AI', the expert intelligence engine of the PRISM platform — a TikTok Shop product research tool.
+        system_prompt = f"""You are 'PRISM AI', the expert intelligence engine of the PRISM platform — a TikTok Shop product research tool powered by EchoTik data.
 
 YOUR CAPABILITIES:
-- Analyze TikTok Shop product data (sales, ad spend, video counts, pricing, commission rates, GMV)
-- Find "Gems" — products with high ad spend but few affiliate videos (opportunity for content creators)
-- Find "Caked Picks" — products with $50K-$200K GMV and ≤50 influencers
-- Identify trending products, scaling brands, and best affiliate opportunities
+- Analyze TikTok Shop product data: GMV, 7-day & 30-day sales, commission rates, video counts, creator counts, pricing trends
+- Find "Gems" — products with strong sales but few affiliate videos (untapped opportunity for content creators)
+- Identify trending products, scaling brands, and best affiliate opportunities by GMV and sales velocity
 - Provide market insights and product recommendations based on real data
 
 CURRENT DATABASE SNAPSHOT:
@@ -78,21 +75,50 @@ CURRENT DATABASE SNAPSHOT:
 
 RESPONSE RULES:
 1. Be concise, professional, and data-driven. Always reference specific numbers.
-2. When recommending products, explain WHY (e.g., "$22K ad spend with only 40 videos = massive untapped opportunity").
+2. When recommending products, explain WHY (e.g., "174 sales in 7 days with only 23 creators = massive untapped opportunity").
 3. Never make up data — only reference products from the context above.
 4. If the user asks about something not in your data, say so honestly.
 5. Format important numbers clearly (e.g., "$12.5K" not "12500").
-6. If asked for "gems" or opportunities, sort by efficiency ratio (ad_spend / videos).
+6. If asked for "gems" or opportunities, prioritize products with high sales but low video/creator counts.
 7. Refer to the platform as 'PRISM'. You are PRISM AI.
 8. ALWAYS include these when listing products:
    - **Product name** (bold)
    - Seller/Shop name
    - TikTok link from the tiktok_link field
-   - Key stats (ad spend, videos, sales, commission)
-   Example: **Product Name** by Seller — $X ad spend, Y videos, Z% commission | [View on TikTok](link)"""
+   - Key stats (sales, GMV, videos, commission)
+   Example: **Product Name** by Seller — $X GMV, Y sales/7d, Z videos, W% commission | [View on TikTok](link)"""
 
-        if xai_key:
-            # Use Grok 4.1 Fast-Reasoning (preferred)
+        ai_response = None
+
+        # PRIMARY — Claude Sonnet via Anthropic API
+        if anthropic_key:
+            try:
+                ai_res = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": anthropic_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-sonnet-4-5-20250514",
+                        "max_tokens": 1500,
+                        "temperature": 0.4,
+                        "system": system_prompt,
+                        "messages": [{"role": "user", "content": message}],
+                    },
+                    timeout=60,
+                )
+                if ai_res.status_code == 200:
+                    ai_data = ai_res.json()
+                    ai_response = ai_data['content'][0]['text']
+                else:
+                    print(f"[AI] Anthropic error {ai_res.status_code}, falling back to Grok")
+            except Exception as e:
+                print(f"[AI] Anthropic exception: {e}, falling back to Grok")
+
+        # FALLBACK — Grok via xAI (if Anthropic failed or key missing)
+        if ai_response is None and xai_key:
             ai_res = requests.post(
                 "https://api.x.ai/v1/chat/completions",
                 headers={
@@ -105,40 +131,18 @@ RESPONSE RULES:
                     "temperature": 0.4,
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": message}
-                    ]
+                        {"role": "user", "content": message},
+                    ],
                 },
-                timeout=60
+                timeout=60,
             )
-
             if ai_res.status_code != 200:
                 return jsonify({"success": False, "error": f"AI Error ({ai_res.status_code}): {ai_res.text[:200]}"}), 500
-
             ai_data = ai_res.json()
             ai_response = ai_data['choices'][0]['message']['content']
-        else:
-            # Fallback to Anthropic/Claude
-            ai_res = requests.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": anthropic_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json"
-                },
-                json={
-                    "model": "claude-3-haiku-20240307",
-                    "max_tokens": 1500,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": message}]
-                },
-                timeout=30
-            )
 
-            if ai_res.status_code != 200:
-                return jsonify({"success": False, "error": f"AI Error: {ai_res.text[:200]}"}), 500
-
-            ai_data = ai_res.json()
-            ai_response = ai_data['content'][0]['text']
+        if ai_response is None:
+            return jsonify({"success": False, "error": "All AI providers failed"}), 500
 
         return jsonify({"success": True, "response": ai_response})
 
@@ -177,38 +181,36 @@ def _build_product_context(user_message):
 
     # Always include: summary stats
     total = Product.query.filter(Product.product_status == 'active').count()
-    high_spend = Product.query.filter(Product.ad_spend > 5000, Product.product_status == 'active').count()
     gems = Product.query.filter(
-        Product.ad_spend > 2000,
+        Product.sales_7d > 50,
         Product.video_count < 50,
-        Product.product_status == 'active'
+        Product.product_status == 'active',
     ).count()
 
     context["database_summary"] = {
         "total_active_products": total,
-        "high_ad_spend_products": high_spend,
         "gem_opportunities": gems,
     }
 
-    # Segment 1: Top products by ad spend (always useful)
-    top_ad = Product.query.filter(
-        Product.ad_spend > 0,
-        Product.product_status == 'active'
-    ).order_by(desc(Product.ad_spend)).limit(15).all()
-    context["top_by_ad_spend"] = [_product_summary(p) for p in top_ad]
+    # Segment 1: Top products by GMV (always useful)
+    top_gmv = Product.query.filter(
+        Product.gmv > 0,
+        Product.product_status == 'active',
+    ).order_by(desc(Product.gmv)).limit(15).all()
+    context["top_by_gmv"] = [_product_summary(p) for p in top_gmv]
 
-    # Segment 2: Gems — high ad spend, low videos
+    # Segment 2: Gems — strong sales, low video/creator saturation
     gem_products = Product.query.filter(
-        Product.ad_spend > 2000,
+        Product.sales_7d > 50,
         Product.video_count < 50,
-        Product.product_status == 'active'
-    ).order_by(desc(Product.ad_spend)).limit(15).all()
-    context["gems_high_spend_low_videos"] = [_product_summary(p) for p in gem_products]
+        Product.product_status == 'active',
+    ).order_by(desc(Product.sales_7d)).limit(15).all()
+    context["gems_high_sales_low_videos"] = [_product_summary(p) for p in gem_products]
 
     # Segment 3: Top sellers by 7D sales volume
     top_sales = Product.query.filter(
         Product.sales_7d > 0,
-        Product.product_status == 'active'
+        Product.product_status == 'active',
     ).order_by(desc(Product.sales_7d)).limit(10).all()
     context["top_by_sales_volume"] = [_product_summary(p) for p in top_sales]
 
@@ -217,33 +219,32 @@ def _build_product_context(user_message):
         high_comm = Product.query.filter(
             Product.commission_rate > 0.10,
             Product.sales_7d > 10,
-            Product.product_status == 'active'
+            Product.product_status == 'active',
         ).order_by(desc(Product.commission_rate)).limit(10).all()
         context["best_commission_rates"] = [_product_summary(p) for p in high_comm]
 
-    # Segment 5: Newest products (recently discovered)
+    # Segment 5: Newest / trending products
     if any(w in msg_lower for w in ['new', 'recent', 'latest', 'discover', 'fresh', 'trending']):
         newest = Product.query.filter(
-            Product.product_status == 'active'
+            Product.product_status == 'active',
         ).order_by(desc(Product.first_seen)).limit(10).all()
         context["recently_discovered"] = [_product_summary(p) for p in newest]
 
-    # Segment 6: Caked Picks ($50K-$200K GMV, ≤50 influencers)
-    if any(w in msg_lower for w in ['caked', 'cake', 'pick', 'sweet', 'niche']):
-        caked = Product.query.filter(
-            Product.gmv_30d >= 50000,
-            Product.gmv_30d <= 200000,
-            Product.influencer_count <= 50,
-            Product.product_status == 'active'
-        ).order_by(desc(Product.gmv_30d)).limit(10).all()
-        context["caked_picks"] = [_product_summary(p) for p in caked]
+    # Segment 6: Niche opportunities (high GMV, low creators)
+    if any(w in msg_lower for w in ['niche', 'untapped', 'opportunity', 'hidden']):
+        niche = Product.query.filter(
+            Product.gmv > 10000,
+            Product.influencer_count <= 30,
+            Product.product_status == 'active',
+        ).order_by(desc(Product.gmv)).limit(10).all()
+        context["niche_opportunities"] = [_product_summary(p) for p in niche]
 
-    # Segment 7: Cheapest products (budget-friendly)
+    # Segment 7: Budget-friendly products
     if any(w in msg_lower for w in ['cheap', 'budget', 'affordable', 'low price', 'under']):
         cheap = Product.query.filter(
             Product.price > 0,
             Product.sales_7d > 5,
-            Product.product_status == 'active'
+            Product.product_status == 'active',
         ).order_by(Product.price.asc()).limit(10).all()
         context["budget_friendly"] = [_product_summary(p) for p in cheap]
 

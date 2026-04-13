@@ -710,14 +710,44 @@ async def on_message(message):
     
     # ── PRISM AI Chat Channel ──────────────────────────────────────────
     if message.channel.id == AI_CHAT_CHANNEL_ID:
-        await handle_ai_chat_redirect(message)
+        user_msg = message.content.strip()
+        # Ignore empty, very short, or bot-command messages
+        if not user_msg or len(user_msg) < 2 or user_msg.startswith('!'):
+            await bot.process_commands(message)
+            return
+
+        # Show typing while the AI thinks
+        async with message.channel.typing():
+            try:
+                res = requests.post(
+                    f"{PRISM_BASE_URL}/api/ai/chat",
+                    json={"message": user_msg},
+                    timeout=65,
+                )
+                data = res.json()
+                if data.get('success') and data.get('response'):
+                    reply = data['response']
+                    # Discord max message length is 2000 chars
+                    if len(reply) > 1900:
+                        reply = reply[:1900] + "\n\n*...truncated*"
+                    await message.reply(reply, mention_author=False)
+                else:
+                    await message.reply(
+                        f"Sorry, I couldn't process that. ({data.get('error', 'Unknown error')})",
+                        mention_author=False,
+                    )
+            except Exception as e:
+                log.error(f"[AI] Discord chat error: {e}")
+                await message.reply(
+                    "PRISM AI is temporarily unavailable. Try again in a moment.",
+                    mention_author=False,
+                )
         return
-    
-    # ── Private AI Chat Channels ───────────────────────────────────────
+
+    # ── Private AI Chat Channels (legacy — still respond if someone messages there) ──
     if message.channel.id in active_ai_channels.values():
         await handle_ai_chat(message)
         return
-    # Also check by channel name pattern (survives bot restart)
     if hasattr(message.channel, 'category_id') and message.channel.category_id == AI_CHAT_CATEGORY_ID:
         if message.channel.name.startswith('ai-'):
             active_ai_channels[message.author.id] = message.channel.id
