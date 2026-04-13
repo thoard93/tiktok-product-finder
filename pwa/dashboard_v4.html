@@ -228,7 +228,7 @@
                     <select class="filter-select" id="sortSelect" onchange="updateSort(this.value)">
                         <option value="gem_score">Opportunity Score</option>
                         <option value="sales_7d">7D Sales</option>
-                        <option value="ad_spend_7d">7D Ad Spend</option>
+                        <option value="gmv">GMV</option>
                         <option value="commission">Commission %</option>
                         <option value="video_count_alltime">Videos (All-time)</option>
                         <option value="vids_asc">Least Videos</option>
@@ -281,7 +281,7 @@
                                 <th onclick="sortBy('video_count_alltime')" class="hide-mobile" style="text-align:right">Videos <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
                                 <th onclick="sortBy('influencer_count')" class="hide-mobile" style="text-align:right">Creators <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
                                 <th onclick="sortBy('commission')" style="text-align:right">Comm <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
-                                <th onclick="sortBy('ad_spend_7d')" class="hide-mobile" style="text-align:right">Ad Spend <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
+                                <th onclick="sortBy('sales')" class="hide-mobile" style="text-align:right">Total Sales <span class="sort-arrow"><i class="fas fa-sort"></i></span></th>
                                 <th class="hide-mobile" style="text-align:right">Velocity</th>
                                 <th style="width:40px">Status</th>
                             </tr>
@@ -536,7 +536,7 @@
                 <td class="hide-mobile" style="text-align:right">${fmtKMB(p.video_count_alltime||p.video_count||0)}</td>
                 <td class="hide-mobile" style="text-align:right">${fmtKMB(p.influencer_count||0)}</td>
                 <td style="text-align:right; font-weight:600; ${commColor}">${comm}</td>
-                <td class="hide-mobile" style="text-align:right">$${fmtKMB(p.ad_spend||0)}</td>
+                <td class="hide-mobile" style="text-align:right">${fmtKMB(p.sales||0)}</td>
                 <td class="hide-mobile" style="text-align:right">
                     <span class="velocity-badge ${velClass}">${vel.toFixed(1)} ${velLabel}</span>
                 </td>
@@ -633,7 +633,7 @@
         const savedSort = curFilter.sort_by || 'gem_score';
         if (type === 'gems') curFilter = { gems_only: 'true' };
         else if (type === 'caked') curFilter = { caked_only: 'true' };
-        else if (type === 'high_spend') curFilter = { high_ad_spend: 'true' };
+        else if (type === 'high_spend') curFilter = { sort_by: 'sales' };
         else if (type === 'favorites') curFilter = { favorites_only: 'true' };
         else curFilter = {};
         curFilter.sort_by = savedSort;

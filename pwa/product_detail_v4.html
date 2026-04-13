@@ -410,8 +410,8 @@
                     <span class="stat-value" id="statCreators">--</span>
                 </div>
                 <div class="stat-card" data-color="amber">
-                    <span class="stat-label">Ad Spend</span>
-                    <span class="stat-value" id="statAdSpend">--</span>
+                    <span class="stat-label">Total Sales</span>
+                    <span class="stat-value" id="statTotalSales">--</span>
                 </div>
                 <div class="stat-card" data-color="red">
                     <span class="stat-label">Return Rate</span>
@@ -641,7 +641,7 @@ function render(d) {
     document.getElementById('statVideos7d').textContent = fmt(d.video_7d || d.video_count);
     document.getElementById('statVideosAll').textContent = fmt(d.video_count_alltime);
     document.getElementById('statCreators').textContent = fmt(d.influencer_count);
-    document.getElementById('statAdSpend').textContent = d.ad_spend ? fmtK(d.ad_spend) : '--';
+    document.getElementById('statTotalSales').textContent = d.sales ? fmtK(d.sales) : '--';
     document.getElementById('statReturnRate').textContent = d.return_rate != null ? fmtPctRaw(d.return_rate) : '--';
 
     // Rating + review count
@@ -763,7 +763,6 @@ Commission: ${((d.commission_rate || 0) * 100).toFixed(1)}%
 30D Sales: ${d.sales_30d || 0}
 All-time Sales: ${d.sales || 0}
 GMV: $${d.gmv || 0}
-Ad Spend: $${d.ad_spend || 0}
 Videos (7D): ${d.video_7d || d.video_count || 0}
 All-time Videos: ${d.video_count_alltime || 0}
 Creators: ${d.influencer_count || 0}

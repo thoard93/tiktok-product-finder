@@ -346,11 +346,13 @@ def get_product_data(product_id):
             p.sales_7d = detail.get('sales_7d', 0)
             p.sales_30d = detail.get('sales_30d', 0)
             p.gmv = detail.get('gmv', 0)
-            p.video_count = detail.get('video_count', 0)
+            p.video_count = detail.get('video_count_alltime') or detail.get('video_count', 0)
+            p.video_count_alltime = detail.get('video_count_alltime', 0)
+            p.video_7d = detail.get('video_count_7d', 0)
+            p.video_30d = detail.get('video_30d', 0)
             p.influencer_count = detail.get('influencer_count', 0)
             p.commission_rate = detail.get('commission_rate', 0)
             p.shop_ads_commission = detail.get('shop_ads_commission', 0)
-            p.ad_spend = detail.get('ad_spend', 0)
             p.scan_type = 'bot_lookup_echotik'
             p.last_updated = datetime.now(timezone.utc)
             p.is_enriched = True
@@ -465,7 +467,6 @@ def create_product_embed(p, title_prefix=""):
     # embed.add_field(name="📦 Stock", value=f"{stock:,}", inline=True) <-- REMOVED
     
     embed.add_field(name="📉 7 Day Sales", value=f"{sales_7d:,}", inline=True)
-    embed.add_field(name="💸 Ad Spend", value=f"${float(get_val('ad_spend', 0)):,.2f}", inline=True)
     embed.add_field(name="🏷️ Price", value=f"${price:,.2f}", inline=True)
     
     # Commission display
