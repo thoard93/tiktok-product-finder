@@ -434,11 +434,14 @@ def create_product_embed(p, title_prefix=""):
     if isinstance(image_url, list) and len(image_url) > 0:
         image_url = image_url[0]
     
+    # Suspect data: 0 videos but meaningful sales — EchoTik gap
+    video_is_suspect = (video_count == 0 and total_sales >= 50)
+
     # Determine embed color and opportunity based on VIDEO COUNT
-    if video_count <= 10:
-        color = 0xFF4500  # Orange-red (Hot/Untapped)
-        opportunity = "🔥 UNTAPPED (1-10 vids)"
-    elif video_count <= 30:
+    if video_is_suspect:
+        color = 0x5865F2  # Discord blurple — data unavailable
+        opportunity = "❓ VIDEO DATA UNAVAILABLE"
+    elif video_count <= 10:
         color = 0x00FF00  # Green (Low Comp)
         opportunity = "💎 LOW COMPETITION (11-30 vids)"
     elif video_count <= 60:
@@ -474,8 +477,8 @@ def create_product_embed(p, title_prefix=""):
     embed.add_field(name="💵 Commission", value=commission_display, inline=True)
     
     embed.add_field(name="✨ Total Sales", value=f"{total_sales:,}", inline=True)
-    embed.add_field(name="🎬 Total Videos", value=f"**{video_count:,}**", inline=True)
-    embed.add_field(name="👥 Creators", value=f"{influencer_count:,}", inline=True)
+    embed.add_field(name="🎬 Total Videos", value="**--**" if video_is_suspect else f"**{video_count:,}**", inline=True)
+    embed.add_field(name="👥 Creators", value="--" if (influencer_count == 0 and video_is_suspect) else f"{influencer_count:,}", inline=True)
     
     # Brand field
     seller_name = get_val('seller_name')

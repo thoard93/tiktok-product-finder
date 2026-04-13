@@ -533,7 +533,7 @@
                     </div>
                 </td>
                 <td class="hide-mobile" style="text-align:right; font-weight:600">$${fmtKMB(p.gmv||0)}</td>
-                <td class="hide-mobile" style="text-align:right">${fmtKMB(p.video_count_alltime||p.video_count||0)}</td>
+                <td class="hide-mobile" style="text-align:right">${((p.video_count_alltime||p.video_count||0)==0 && (p.sales||0)>=50) ? '--' : fmtKMB(p.video_count_alltime||p.video_count||0)}</td>
                 <td class="hide-mobile" style="text-align:right">${fmtKMB(p.influencer_count||0)}</td>
                 <td style="text-align:right; font-weight:600; ${commColor}">${comm}</td>
                 <td class="hide-mobile" style="text-align:right">${fmtKMB(p.sales||0)}</td>
