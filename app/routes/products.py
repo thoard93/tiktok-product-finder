@@ -634,15 +634,10 @@ def favicon():
     )
 
 
-@products_bp.route('/')
-# @login_required - REMOVED to allow Health Checks (GET /) to pass with 200 OK
-def index():
-    # If user is NOT logged in, return 200 OK with Login Page (Satisfies Render Health Check)
-    if not session.get('user_id'):
-        return send_from_directory(current_app.static_folder, 'login.html')
-
-    # If logged in, show Dashboard
-    return send_from_directory('pwa', 'dashboard_v4.html')
+@products_bp.route('/legacy-index')
+def legacy_index():
+    """Legacy index — /  is now handled by views_bp."""
+    return redirect('/')
 
 @products_bp.route('/product/<path:product_id>')
 @login_required

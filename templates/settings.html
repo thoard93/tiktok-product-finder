@@ -1,213 +1,226 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - TikTok Product Finder</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f5f7fa;
-            min-height: 100vh;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .header-content {
-            max-width: 800px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn-secondary {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            border: 2px solid white;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 0 20px;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
-        }
-        
-        .card h2 {
-            margin-bottom: 20px;
-            color: #333;
-        }
-        
-        .info-box {
-            background: #f0f7ff;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-        }
-        
-        .info-box p {
-            color: #333;
-            line-height: 1.6;
-        }
-        
-        .settings-grid {
-            display: grid;
-            gap: 20px;
-        }
-        
-        .setting-item label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-        }
-        
-        .setting-item p {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 8px;
-        }
-        
-        .setting-item input,
-        .setting-item select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-        }
-        
-        .credentials {
-            background: #fff9e6;
-            border: 2px solid #ffd700;
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 20px;
-        }
-        
-        .credentials code {
-            background: #333;
-            color: #0f0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Monaco', 'Courier New', monospace;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="header-content">
-            <h1>⚙️ Settings</h1>
-            <a href="/dashboard" class="btn btn-secondary">← Back to Dashboard</a>
-        </div>
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Settings</h1>
+  <p class="page-subtitle">Manage your account, subscription, and preferences</p>
+</div>
+
+<!-- Settings tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="switchSettingsTab('profile', this)">Profile</button>
+  <button class="tab" onclick="switchSettingsTab('notifications', this)">Notifications</button>
+  <button class="tab" onclick="switchSettingsTab('subscription', this)">Subscription</button>
+  <button class="tab" onclick="switchSettingsTab('discord', this)">Discord</button>
+</div>
+
+<!-- PROFILE TAB -->
+<div class="tab-content active" id="tab-profile">
+  <div class="card" style="max-width:560px">
+    <div style="display:flex;align-items:center;gap:var(--space-5);margin-bottom:var(--space-6)">
+      <div class="avatar avatar-lg">
+        {% if current_user and current_user.discord_avatar %}
+          <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
+        {% else %}
+          {{ (current_user.discord_username or 'U')[0] | upper }}
+        {% endif %}
+      </div>
+      <div>
+        <div class="font-semibold text-lg">{{ current_user.discord_username if current_user else 'Guest' }}</div>
+        <div class="text-sm text-muted">Member since {{ current_user.created_at.strftime('%B %Y') if current_user and current_user.created_at else '--' }}</div>
+      </div>
     </div>
-    
-    <div class="container">
-        <div class="card">
-            <h2>Login Credentials</h2>
-            <div class="credentials">
-                <p><strong>Default Login:</strong></p>
-                <p>Username: <code>admin</code></p>
-                <p>Password: <code>changeme123</code></p>
-                <br>
-                <p><strong>⚠️ Important:</strong> Change your password after first login by updating the database or contact support.</p>
-            </div>
-        </div>
-        
-        <div class="card">
-            <h2>EchoTik API Configuration</h2>
-            <div class="info-box">
-                <p><strong>These settings are configured via environment variables on your hosting platform (Render.com).</strong></p>
-                <p>To update your API credentials or scan settings, go to your Render dashboard and update the environment variables.</p>
-            </div>
-            
-            <div class="settings-grid">
-                <div class="setting-item">
-                    <label>API Username</label>
-                    <p>Environment variable: <code>ECHOTIK_USERNAME</code></p>
-                </div>
-                
-                <div class="setting-item">
-                    <label>API Password</label>
-                    <p>Environment variable: <code>ECHOTIK_PASSWORD</code></p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="card">
-            <h2>Scan Settings</h2>
-            <div class="info-box">
-                <p>Configure these via environment variables on Render:</p>
-            </div>
-            
-            <div class="settings-grid">
-                <div class="setting-item">
-                    <label>Region</label>
-                    <p><code>SCAN_REGION</code> - Default: US</p>
-                    <p>Options: US, GB, ID, TH, PH, MY, VN, SG</p>
-                </div>
-                
-                <div class="setting-item">
-                    <label>Pages to Scan</label>
-                    <p><code>PAGES_TO_SCAN</code> - Default: 20 (200 products)</p>
-                </div>
-                
-                <div class="setting-item">
-                    <label>Minimum Sales</label>
-                    <p><code>MIN_SALES</code> - Default: 10</p>
-                </div>
-                
-                <div class="setting-item">
-                    <label>Maximum Influencers</label>
-                    <p><code>MAX_INFLUENCERS</code> - Default: 500</p>
-                </div>
-                
-                <div class="setting-item">
-                    <label>Minimum Commission</label>
-                    <p><code>MIN_COMMISSION</code> - Default: 0.10 (10%)</p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="card">
-            <h2>Daily Scan Schedule</h2>
-            <div class="info-box">
-                <p>The daily scan runs automatically every day via Render's Cron Job feature.</p>
-                <p>Default schedule: 9:00 AM UTC (configured in render.yaml)</p>
-                <p>To change the schedule, update the <code>schedule</code> field in render.yaml and redeploy.</p>
-            </div>
-        </div>
+
+    <form id="profileForm" onsubmit="saveProfile(event)">
+      <div class="input-group" style="margin-bottom:var(--space-5)">
+        <label class="input-label">Display name</label>
+        <input type="text" class="input" id="displayName" value="{{ current_user.discord_username if current_user else '' }}">
+      </div>
+      <div class="input-group" style="margin-bottom:var(--space-6)">
+        <label class="input-label">Discord ID</label>
+        <input type="text" class="input" value="{{ current_user.discord_id if current_user and current_user.discord_id else 'Not linked' }}" readonly style="opacity:0.6;cursor:not-allowed">
+        <span class="input-hint">Linked via Discord OAuth</span>
+      </div>
+      <button type="submit" class="btn btn-primary">Save changes</button>
+    </form>
+  </div>
+</div>
+
+<!-- NOTIFICATIONS TAB -->
+<div class="tab-content" id="tab-notifications">
+  <div class="card" style="max-width:560px">
+    <div class="text-sm font-semibold mb-4">Email Alerts</div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div class="text-sm font-semibold">New trending products</div>
+        <div class="text-xs text-muted">Get notified when new products hit a trending score above 80</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="notifTrending" checked>
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </label>
     </div>
-</body>
-</html>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div class="text-sm font-semibold">Commission changes</div>
+        <div class="text-xs text-muted">Alert when a saved product changes commission rate</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="notifCommission">
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </label>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0">
+      <div>
+        <div class="text-sm font-semibold">Weekly digest</div>
+        <div class="text-xs text-muted">Summary of top products and market trends each Monday</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="notifDigest" checked>
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </label>
+    </div>
+
+    <button class="btn btn-primary mt-6" onclick="saveNotifications()">Save preferences</button>
+  </div>
+</div>
+
+<!-- SUBSCRIPTION TAB -->
+<div class="tab-content" id="tab-subscription">
+  <div class="card" style="max-width:560px">
+    {% if subscription and subscription.status == 'active' %}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-5)">
+        <div>
+          <div class="text-sm text-muted">Current plan</div>
+          <div class="text-lg font-semibold">Vantage Pro</div>
+        </div>
+        <span class="badge badge-green" style="font-size:var(--text-sm);padding:var(--space-1) var(--space-3)">Active</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-6)">
+        <div>
+          <div class="text-xs text-muted">Price</div>
+          <div class="font-semibold">$19.99/mo</div>
+        </div>
+        <div>
+          <div class="text-xs text-muted">Next billing</div>
+          <div class="font-semibold">
+            {% if subscription.next_billing_date %}
+              {{ subscription.next_billing_date.strftime('%b %d, %Y') }}
+            {% else %}
+              --
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if subscription.coupon_code %}
+      <div style="margin-bottom:var(--space-5)">
+        <div class="text-xs text-muted">Active coupon</div>
+        <span class="badge badge-accent">{{ subscription.coupon_code }}</span>
+      </div>
+      {% endif %}
+
+      <button class="btn btn-danger w-full"
+              onclick="confirmAction('Cancel subscription', 'Your access will continue until the end of the current billing period.', cancelSubscription)">
+        Cancel subscription
+      </button>
+
+    {% else %}
+      <div style="text-align:center;padding:var(--space-6) 0">
+        <div style="color:var(--text-muted);margin-bottom:var(--space-3)">
+          <i data-lucide="crown" style="width:40px;height:40px"></i>
+        </div>
+        <div class="text-lg font-semibold mb-2">No active subscription</div>
+        <p class="text-sm text-secondary mb-4">Upgrade to Vantage Pro for unlimited access to all features.</p>
+        <a href="/app/subscribe" class="btn btn-primary">Upgrade now</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- DISCORD TAB -->
+<div class="tab-content" id="tab-discord">
+  <div class="card" style="max-width:560px">
+    {% if current_user and current_user.discord_id %}
+      <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-5)">
+        <div class="avatar avatar-lg">
+          {% if current_user.discord_avatar %}
+            <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
+          {% else %}
+            {{ current_user.discord_username[0] | upper }}
+          {% endif %}
+        </div>
+        <div>
+          <div class="font-semibold">{{ current_user.discord_username }}</div>
+          <div class="text-sm text-muted">Connected via Discord</div>
+        </div>
+        <span class="badge badge-green" style="margin-left:auto">Connected</span>
+      </div>
+      <p class="text-sm text-secondary">Your Discord account is linked. You can log in with Discord and receive notifications in our community server.</p>
+    {% else %}
+      <div style="text-align:center;padding:var(--space-6) 0">
+        <div style="color:var(--text-muted);margin-bottom:var(--space-3)">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+        </div>
+        <div class="text-lg font-semibold mb-2">Connect Discord</div>
+        <p class="text-sm text-secondary mb-4">Link your Discord account for easy login and community notifications.</p>
+        <a href="/auth/discord" class="btn btn-secondary">
+          Connect Discord
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchSettingsTab(tab, btn) {
+  document.querySelectorAll(".tab-content").forEach(function(el) { el.classList.remove("active"); });
+  document.querySelectorAll(".tab").forEach(function(el) { el.classList.remove("active"); });
+  document.getElementById("tab-" + tab).classList.add("active");
+  btn.classList.add("active");
+}
+
+async function saveProfile(e) {
+  e.preventDefault();
+  var name = document.getElementById("displayName").value;
+  try {
+    var res = await fetch("/api/me/update", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({display_name: name})
+    });
+    showFlash("Profile saved", "success");
+  } catch(err) { showFlash("Failed to save", "error"); }
+}
+
+function saveNotifications() {
+  showFlash("Notification preferences saved", "success");
+}
+
+async function cancelSubscription() {
+  try {
+    var res = await fetch("/api/payments/cancel-subscription", { method: "POST" });
+    var data = await res.json();
+    if (data.success) {
+      showFlash("Subscription cancelled", "success");
+      setTimeout(function() { location.reload(); }, 1500);
+    } else {
+      showFlash(data.error || "Failed to cancel", "error");
+    }
+  } catch(e) { showFlash("Network error", "error"); }
+}
+</script>
+{% endblock %}

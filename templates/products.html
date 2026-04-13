@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Products{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Products</h1>
+  <p class="page-subtitle">Discover trending TikTok Shop products with high commissions</p>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+  <select class="select" id="filterCategory" onchange="applyFilters()">
+    <option value="">All Categories</option>
+    <option value="Beauty">Beauty &amp; Personal Care</option>
+    <option value="Health">Health &amp; Wellness</option>
+    <option value="Home">Home &amp; Kitchen</option>
+    <option value="Electronics">Electronics</option>
+    <option value="Fashion">Fashion &amp; Apparel</option>
+    <option value="Food">Food &amp; Beverage</option>
+    <option value="Sports">Sports &amp; Outdoors</option>
+    <option value="Toys">Toys &amp; Games</option>
+    <option value="Pets">Pet Supplies</option>
+  </select>
+
+  <select class="select" id="filterCommission" onchange="applyFilters()">
+    <option value="">Min Commission</option>
+    <option value="5">5%+</option>
+    <option value="10">10%+</option>
+    <option value="15">15%+</option>
+    <option value="20">20%+</option>
+  </select>
+
+  <select class="select" id="filterSort" onchange="applyFilters()">
+    <option value="trending">Trending</option>
+    <option value="commission">Commission</option>
+    <option value="new">Newest</option>
+    <option value="gmv">GMV</option>
+  </select>
+
+  <div class="topbar-search" style="margin-left:auto">
+    <i data-lucide="search"></i>
+    <input type="text" class="input" placeholder="Search products..." id="filterSearch" oninput="applyFilters()">
+  </div>
+</div>
+
+<!-- Product Grid -->
+{% if products and products | length > 0 %}
+<div class="product-grid" id="productGrid">
+  {% for product in products %}
+  <div class="product-card" data-category="{{ product.category | default('') }}" data-commission="{{ product.commission_rate | default(0) }}" data-name="{{ product.product_name | lower }}">
+    <div class="product-card-img">
+      {% if product.image_url %}
+        <img src="{{ product.image_url }}" alt="{{ product.product_name }}" loading="lazy"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="product-card-img-fallback" style="display:none">
+          <i data-lucide="package"></i>
+        </div>
+      {% else %}
+        <div class="product-card-img-fallback">
+          <i data-lucide="package"></i>
+        </div>
+      {% endif %}
+      {% if product.category %}
+        <span class="badge badge-neutral product-card-badge-category">{{ product.category }}</span>
+      {% endif %}
+      {% set score = product.trending_score | default(0) | int %}
+      <span class="badge product-card-badge-score
+        {% if score > 80 %}badge-green{% elif score > 50 %}badge-yellow{% else %}badge-red{% endif %}">
+        {{ score }}
+      </span>
+    </div>
+    <div class="product-card-body">
+      <div class="product-card-name">{{ product.product_name }}</div>
+      <div class="product-card-commission">{{ "%.1f" | format(product.commission_rate | default(0) * 100) }}%</div>
+      <div class="product-card-price">
+        ${{ "%.2f" | format(product.price | default(0)) }}
+      </div>
+
+      {% if product.gmv %}
+      <div class="product-card-gmv">
+        <div class="product-card-gmv-label">GMV Est: ${{ "{:,.0f}".format(product.gmv | default(0)) }}</div>
+        <div class="product-card-gmv-bar">
+          <div class="product-card-gmv-fill" style="width:{{ [product.gmv / 10000 * 100, 100] | min }}%"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="product-card-actions">
+        <button class="btn btn-ghost btn-sm" onclick="blacklistProduct('{{ product.product_id }}')">
+          <i data-lucide="shield-ban" style="width:14px;height:14px"></i>
+          Blacklist
+        </button>
+        <a href="/app/products/{{ product.product_id }}" class="btn btn-primary btn-sm">View Details</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if total_pages is defined and total_pages > 1 %}
+<div class="pagination">
+  <button class="pagination-btn" {% if page <= 1 %}disabled{% endif %}
+    onclick="window.location.href='?page={{ page - 1 }}'">
+    <i data-lucide="chevron-left" style="width:16px;height:16px"></i>
+  </button>
+  {% for p in range(1, total_pages + 1) %}
+    {% if p <= 5 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
+      <button class="pagination-btn {% if p == page %}active{% endif %}"
+        onclick="window.location.href='?page={{ p }}'">{{ p }}</button>
+    {% elif p == 6 or p == page - 2 %}
+      <span class="pagination-btn" style="cursor:default;opacity:0.3">&hellip;</span>
+    {% endif %}
+  {% endfor %}
+  <button class="pagination-btn" {% if page >= total_pages %}disabled{% endif %}
+    onclick="window.location.href='?page={{ page + 1 }}'">
+    <i data-lucide="chevron-right" style="width:16px;height:16px"></i>
+  </button>
+</div>
+{% endif %}
+
+{% else %}
+<!-- Empty state -->
+<div class="empty-state">
+  <div class="empty-state-icon">
+    <i data-lucide="package-search" style="width:80px;height:80px"></i>
+  </div>
+  <h3 class="empty-state-title">No products match your filters</h3>
+  <p class="empty-state-desc">Try broadening your search or clearing filters to see all tracked products.</p>
+  <button class="btn btn-secondary" onclick="clearFilters()">Clear all filters</button>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilters() {
+  const category = document.getElementById('filterCategory').value.toLowerCase();
+  const minComm = parseFloat(document.getElementById('filterCommission').value) || 0;
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+  const cards = document.querySelectorAll('.product-card');
+
+  cards.forEach(card => {
+    const cat = (card.dataset.category || '').toLowerCase();
+    const comm = parseFloat(card.dataset.commission || 0) * 100;
+    const name = card.dataset.name || '';
+
+    const matchCat = !category || cat.includes(category);
+    const matchComm = comm >= minComm;
+    const matchSearch = !search || name.includes(search);
+
+    card.style.display = (matchCat && matchComm && matchSearch) ? '' : 'none';
+  });
+}
+
+function clearFilters() {
+  document.getElementById('filterCategory').value = '';
+  document.getElementById('filterCommission').value = '';
+  document.getElementById('filterSearch').value = '';
+  applyFilters();
+}
+
+async function blacklistProduct(productId) {
+  try {
+    const res = await fetch('/api/blacklist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showFlash('Product blacklisted', 'success');
+    } else {
+      showFlash(data.error || 'Failed to blacklist', 'error');
+    }
+  } catch {
+    showFlash('Network error', 'error');
+  }
+}
+
+// Apply URL params on load
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('sort')) document.getElementById('filterSort').value = params.get('sort');
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Vantage{% endblock %} — TikTok Shop Intelligence</title>
+  <meta name="description" content="Real-time TikTok Shop product intelligence. Find winning products, track trends, and maximize your commissions.">
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/css/main.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ===== SIDEBAR (desktop) ===== -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 22L14 4L22 22" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M14 4L14 14" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M14 14L20 8" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="20" cy="8" r="2" fill="#2dd4bf"/>
+        </svg>
+        <span class="sidebar-logo-text">Vantage</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <span class="sidebar-section-label">Main</span>
+
+        <a href="/app/dashboard" class="sidebar-link {% if active_page == 'dashboard' %}active{% endif %}">
+          <i data-lucide="layout-dashboard"></i>
+          Dashboard
+        </a>
+        <a href="/app/products" class="sidebar-link {% if active_page == 'products' %}active{% endif %}">
+          <i data-lucide="package-search"></i>
+          Products
+        </a>
+        <a href="/app/analytics" class="sidebar-link {% if active_page == 'analytics' %}active{% endif %}">
+          <i data-lucide="bar-chart-3"></i>
+          Analytics
+        </a>
+
+        <span class="sidebar-section-label">Manage</span>
+
+        <a href="/app/blacklist" class="sidebar-link {% if active_page == 'blacklist' %}active{% endif %}">
+          <i data-lucide="shield-ban"></i>
+          Blacklist
+        </a>
+        <a href="/app/settings" class="sidebar-link {% if active_page == 'settings' %}active{% endif %}">
+          <i data-lucide="settings"></i>
+          Settings
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="avatar">
+            {% if current_user and current_user.discord_avatar %}
+              <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
+            {% else %}
+              {{ (current_user.discord_username or 'U')[0] | upper }}
+            {% endif %}
+          </div>
+          <div class="user-info">
+            <div class="user-name">{{ current_user.discord_username if current_user else 'Guest' }}</div>
+            <div class="user-plan">
+              {% if current_user and current_user.is_admin %}
+                <span class="badge badge-teal">Admin</span>
+              {% elif subscription and subscription.status == 'active' %}
+                <span class="badge badge-green">Pro</span>
+              {% else %}
+                <span class="badge badge-neutral">Free</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN AREA ===== -->
+    <main class="main-area">
+
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="topbar-search">
+          <i data-lucide="search"></i>
+          <input type="text" class="input" placeholder="Search products, brands..." id="globalSearch">
+        </div>
+        <div class="topbar-actions">
+          {% if subscription and subscription.status == 'active' %}
+            <span class="badge badge-green">Pro</span>
+          {% else %}
+            <a href="/app/subscribe" class="btn btn-primary btn-sm">Upgrade</a>
+          {% endif %}
+          <a href="/auth/logout" class="btn btn-ghost btn-sm btn-icon" title="Sign out">
+            <i data-lucide="log-out"></i>
+          </a>
+        </div>
+      </header>
+
+      <!-- Page content -->
+      <div class="page-content">
+        {% block content %}{% endblock %}
+      </div>
+
+    </main>
+
+    <!-- ===== MOBILE TAB BAR ===== -->
+    <nav class="mobile-tabs">
+      <div class="mobile-tabs-inner">
+        <a href="/app/dashboard" class="mobile-tab {% if active_page == 'dashboard' %}active{% endif %}">
+          <i data-lucide="layout-dashboard"></i>
+          Home
+        </a>
+        <a href="/app/products" class="mobile-tab {% if active_page == 'products' %}active{% endif %}">
+          <i data-lucide="package-search"></i>
+          Products
+        </a>
+        <a href="/app/analytics" class="mobile-tab {% if active_page == 'analytics' %}active{% endif %}">
+          <i data-lucide="bar-chart-3"></i>
+          Analytics
+        </a>
+        <a href="/app/blacklist" class="mobile-tab {% if active_page == 'blacklist' %}active{% endif %}">
+          <i data-lucide="shield-ban"></i>
+          Blacklist
+        </a>
+        <a href="/app/settings" class="mobile-tab {% if active_page == 'settings' %}active{% endif %}">
+          <i data-lucide="settings"></i>
+          Settings
+        </a>
+      </div>
+    </nav>
+
+  </div>
+
+  <!-- Flash messages -->
+  <div class="flash-container" id="flashContainer">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash-msg {{ category }}" data-auto-dismiss>
+            <span>{{ message }}</span>
+            <button class="flash-close" onclick="this.parentElement.classList.add('out'); setTimeout(() => this.parentElement.remove(), 300)">
+              <i data-lucide="x" style="width:14px;height:14px"></i>
+            </button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <!-- Confirm dialog (reusable) -->
+  <div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-dialog">
+      <h3 class="confirm-title" id="confirmTitle">Are you sure?</h3>
+      <p class="confirm-desc" id="confirmDesc">This action cannot be undone.</p>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" id="confirmCancel">Cancel</button>
+        <button class="btn btn-danger" id="confirmAction">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/main.js"></script>
+  {% block scripts %}{% endblock %}
+  <script>lucide.createIcons();</script>
+</body>
+</html>

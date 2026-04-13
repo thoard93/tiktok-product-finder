@@ -22,6 +22,7 @@ def create_app():
     flask_app = Flask(
         __name__,
         static_folder=os.path.join(project_root, 'pwa'),
+        template_folder=os.path.join(project_root, 'templates'),
         root_path=project_root,
     )
 
@@ -71,6 +72,7 @@ def create_app():
     from app.routes.ai import ai_bp
     from app.routes.extern import extern_bp
     from app.routes.payments import payments_bp
+    from app.routes.views import views_bp
 
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(products_bp)
@@ -80,6 +82,15 @@ def create_app():
     flask_app.register_blueprint(ai_bp)
     flask_app.register_blueprint(extern_bp)
     flask_app.register_blueprint(payments_bp)
+    flask_app.register_blueprint(views_bp)
+
+    # --- Serve /static/ from project static/ folder (CSS/JS for Jinja2 templates) ---
+    import flask
+    static_dir = os.path.join(project_root, 'static')
+
+    @flask_app.route('/static/<path:filename>')
+    def vantage_static(filename):
+        return flask.send_from_directory(static_dir, filename)
 
     # --- Ensure data/ directory exists (for scraper cookies, etc.) ---
     os.makedirs(os.path.join(project_root, 'data'), exist_ok=True)

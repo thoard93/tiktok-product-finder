@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Subscribe{% endblock %}
+
+{% block content %}
+<div class="subscribe-page">
+
+  <svg width="40" height="40" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:var(--space-6)">
+    <path d="M6 22L14 4L22 22" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M14 4L14 14" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M14 14L20 8" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="20" cy="8" r="2" fill="#2dd4bf"/>
+  </svg>
+
+  <h1 class="subscribe-hero-title">Unlock full access to Vantage</h1>
+  <p class="subscribe-hero-sub">Get unlimited product research, real-time trending data, and commission analytics.</p>
+
+  {% if subscription and subscription.status == 'active' %}
+    <!-- EXISTING SUBSCRIBER: Manage -->
+    <div class="subscribe-card">
+      <div class="flex items-center justify-between mb-4">
+        <span class="badge badge-green" style="font-size:var(--text-sm);padding:var(--space-1) var(--space-3)">Active</span>
+        <span class="text-sm text-secondary">{{ subscription.plan }}</span>
+      </div>
+
+      <div style="margin-bottom:var(--space-5)">
+        <div class="text-sm text-secondary mb-2">Next billing date</div>
+        <div class="font-semibold">
+          {% if subscription.next_billing_date %}
+            {{ subscription.next_billing_date.strftime('%B %d, %Y') }}
+          {% else %}
+            --
+          {% endif %}
+        </div>
+      </div>
+
+      {% if subscription.coupon_code %}
+        <div style="margin-bottom:var(--space-5)">
+          <div class="text-sm text-secondary mb-2">Active coupon</div>
+          <span class="badge badge-accent">{{ subscription.coupon_code }}</span>
+        </div>
+      {% endif %}
+
+      {% if subscription.referral_code %}
+        <div style="margin-bottom:var(--space-6)">
+          <div class="text-sm text-secondary mb-2">Your referral code</div>
+          <div class="flex gap-2 items-center">
+            <input type="text" class="input" value="{{ subscription.referral_code }}" readonly id="referralCode" style="font-weight:600">
+            <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('referralCode').value); showFlash('Copied!','success')">
+              <i data-lucide="copy" style="width:16px;height:16px"></i>
+            </button>
+          </div>
+        </div>
+      {% endif %}
+
+      <button class="btn btn-danger w-full" onclick="confirmAction('Cancel subscription', 'Your access will continue until the end of the current billing period. This cannot be undone.', cancelSubscription)">
+        Cancel subscription
+      </button>
+    </div>
+
+  {% else %}
+    <!-- NEW SUBSCRIBER: Plan card -->
+    <div class="subscribe-card">
+      <div class="pricing-amount" style="margin-bottom:var(--space-5)">$19.99 <span>/ month</span></div>
+
+      <div class="pricing-features" style="margin-bottom:var(--space-6)">
+        <div class="pricing-feature"><i data-lucide="check"></i> Unlimited product research</div>
+        <div class="pricing-feature"><i data-lucide="check"></i> Real-time trending scores</div>
+        <div class="pricing-feature"><i data-lucide="check"></i> Commission rate tracking</div>
+        <div class="pricing-feature"><i data-lucide="check"></i> Creator &amp; video analytics</div>
+        <div class="pricing-feature"><i data-lucide="check"></i> GMV estimates &amp; sales velocity</div>
+        <div class="pricing-feature"><i data-lucide="check"></i> Personal blacklist manager</div>
+        <div class="pricing-feature"><i data-lucide="check"></i> Daily EchoTik data sync</div>
+        <div class="pricing-feature"><i data-lucide="check"></i> Discord community access</div>
+      </div>
+
+      <!-- Coupon input -->
+      <div class="input-group" style="margin-bottom:var(--space-5)">
+        <label class="input-label">Have a coupon?</label>
+        <div class="coupon-input-row">
+          <input type="text" class="input" id="couponInput" placeholder="Enter code">
+          <button class="btn btn-secondary btn-sm" onclick="applyCoupon()">Apply</button>
+        </div>
+        <div class="coupon-result" id="couponResult"></div>
+      </div>
+
+      <!-- PayPal CTA -->
+      <button class="btn btn-primary btn-lg w-full" id="subscribeBtn" onclick="startSubscription()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.65h6.03c2 0 3.463.503 4.345 1.494.867.975 1.18 2.398.93 4.228-.323 2.373-1.293 4.09-2.88 5.108-1.536.984-3.55 1.483-5.988 1.483H6.787l-1.412 6.046a.641.641 0 0 1-.625.508h1.326z"/></svg>
+        Subscribe with PayPal
+      </button>
+
+      <div class="coupon-banner" style="margin-top:var(--space-5)">
+        <div class="coupon-code">LAUNCH50</div>
+        <div class="coupon-desc">50% off your first month</div>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function applyCoupon() {
+  const code = document.getElementById('couponInput').value.trim().toUpperCase();
+  const result = document.getElementById('couponResult');
+  if (!code) { result.textContent = ''; return; }
+
+  try {
+    const res = await fetch('/api/payments/validate-coupon', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (data.valid) {
+      result.className = 'coupon-result valid';
+      result.textContent = `${data.description} — ${data.discount_percent}% off applied`;
+    } else {
+      result.className = 'coupon-result invalid';
+      result.textContent = 'Invalid coupon code';
+    }
+  } catch {
+    result.className = 'coupon-result invalid';
+    result.textContent = 'Could not validate coupon';
+  }
+}
+
+async function startSubscription() {
+  const btn = document.getElementById('subscribeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span>Redirecting to PayPal...</span>';
+
+  const coupon = document.getElementById('couponInput').value.trim().toUpperCase();
+
+  try {
+    const res = await fetch('/api/payments/create-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coupon_code: coupon || null })
+    });
+    const data = await res.json();
+    if (data.approval_url) {
+      window.location.href = data.approval_url;
+    } else {
+      showFlash(data.error || 'Failed to create subscription', 'error');
+      btn.disabled = false;
+      btn.innerHTML = 'Subscribe with PayPal';
+    }
+  } catch {
+    showFlash('Network error. Please try again.', 'error');
+    btn.disabled = false;
+    btn.innerHTML = 'Subscribe with PayPal';
+  }
+}
+
+async function cancelSubscription() {
+  try {
+    const res = await fetch('/api/payments/cancel-subscription', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showFlash('Subscription cancelled', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showFlash(data.error || 'Failed to cancel', 'error');
+    }
+  } catch {
+    showFlash('Network error', 'error');
+  }
+}
+</script>
+{% endblock %}

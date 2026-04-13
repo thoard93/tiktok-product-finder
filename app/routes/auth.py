@@ -236,9 +236,9 @@ def check_maintenance_mode():
 # AUTHENTICATION ROUTES
 # =============================================================================
 
-@auth_bp.route('/login')
-def login_page():
-    """Show login page"""
+@auth_bp.route('/legacy-login')
+def login_page_legacy():
+    """Legacy login — /login is now handled by views_bp."""
     return send_from_directory(current_app.static_folder, 'login.html')
 
 @auth_bp.route('/terms')
