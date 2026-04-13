@@ -939,14 +939,8 @@ def api_products():
             )
 
         if is_high_ad:
-            # High Ad Spend: High Volume & Copilot Scan
-            # This is distinct from Gems (which focuses on low saturation)
-            query = query.filter(
-                db.or_(
-                    Product.ad_spend > 500,
-                    Product.scan_type == 'copilot'
-                )
-            )
+            # High Volume products with significant ad investment
+            query = query.filter(Product.sales_7d >= 100)
 
         if is_caked:
             # Caked Finds: High-Potential "Early Phase" Winners
@@ -1568,7 +1562,7 @@ def api_delete_brand(brand_id):
 @login_required
 @subscription_required
 def api_sync_brand(brand_id):
-    """Sync products for a specific brand by searching Copilot"""
+    """Refresh stats for a specific brand from products in the database."""
     brand = WatchedBrand.query.get(brand_id)
     if not brand:
         return jsonify({'success': False, 'error': 'Brand not found'}), 404

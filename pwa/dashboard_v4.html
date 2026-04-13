@@ -641,7 +641,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:11px"></i> Syncing...';
         try {
-            await fetchJSON('/api/scan/partner_opportunity', { method: 'POST' });
+            await fetchJSON('/api/scan/echotik-sync', { method: 'POST' });
             showToast('Sync triggered — results in a few minutes');
         } catch(e) {
             showToast('Sync failed: ' + e.message, 'error');

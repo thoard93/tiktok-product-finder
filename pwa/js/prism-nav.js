@@ -22,7 +22,8 @@
     { label: 'Brand Hunter', icon: 'fas fa-crosshairs',      href: '/brand-hunter' },
     { label: 'Analytics',    icon: 'fas fa-chart-bar',        href: '/vantage-v2' },
     { label: 'FlipTracker',  icon: 'fas fa-tags',            href: '/price/index.html', adminOnly: true },
-    { section: 'System' },
+    { section: 'Account' },
+    { label: 'Subscribe',    icon: 'fas fa-crown',            href: '/subscribe' },
     { label: 'Settings',     icon: 'fas fa-sliders-h',       href: '/settings' },
     { label: 'Admin',        icon: 'fas fa-terminal',         href: '/admin',        adminOnly: true },
   ];
@@ -407,7 +408,7 @@
     const origHtml = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
     try {
-      const res = await fetch('/api/scan/partner_opportunity', { method: 'POST' });
+      const res = await fetch('/api/scan/echotik-sync', { method: 'POST' });
       if (!res.ok) throw new Error('Sync failed');
       btn.innerHTML = '<i class="fas fa-check"></i> Triggered';
       setTimeout(() => { btn.innerHTML = origHtml; btn.disabled = false; }, 3000);
