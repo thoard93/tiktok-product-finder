@@ -1,186 +1,138 @@
 {% extends "base.html" %}
-
 {% block title %}{{ product.product_name | truncate(40) }}{% endblock %}
-
-{% block head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-{% endblock %}
+{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>{% endblock %}
 
 {% block content %}
-
-<a href="/app/products" class="detail-back">
-  <i data-lucide="arrow-left"></i>
-  Back to products
-</a>
+<a href="/app/products" class="detail-back"><i data-lucide="arrow-left"></i> Back to Products</a>
 
 <div class="detail-layout">
-
-  <!-- LEFT: Product info -->
+  {# ===== LEFT: Product Info ===== #}
   <div>
     <div class="detail-image">
-      {% if product.image_url %}
-        <img src="{{ product.image_url }}" alt="{{ product.product_name }}">
+      {% if product.image_url or product.cached_image_url %}
+        <img src="{{ product.cached_image_url or product.image_url }}" alt="{{ product.product_name }}">
       {% else %}
-        <div class="product-card-img-fallback" style="height:100%">
-          <i data-lucide="package" style="width:64px;height:64px"></i>
-        </div>
+        <div class="product-card-img-fallback" style="height:100%"><i data-lucide="package" style="width:64px;height:64px"></i></div>
       {% endif %}
     </div>
 
     <h1 style="font-size:var(--text-2xl);margin-bottom:var(--space-3)">{{ product.product_name }}</h1>
 
-    {% if product.category %}
-      <span class="badge badge-neutral mb-4">{{ product.category }}</span>
-    {% endif %}
+    <div class="flex gap-3 items-center mb-4" style="flex-wrap:wrap">
+      {% if product.category %}<span class="badge badge-muted">{{ product.category }}</span>{% endif %}
+      <span class="badge badge-accent" style="font-size:var(--text-sm);padding:4px 12px">{{ "%.0f" | format((product.commission_rate or 0) * 100) }}% commission</span>
+      <span class="text-sm text-muted">${{ "%.2f" | format(product.price or 0) }}</span>
+    </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin:var(--space-5) 0">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-5)">
       <div class="card">
-        <div class="stat-card-label">Commission</div>
-        <div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800;color:var(--accent-text)">
-          {{ "%.1f" | format(product.commission_rate | default(0) * 100) }}%
-        </div>
+        <div class="stat-label">7-Day Sales</div>
+        <div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800;color:var(--teal)">{{ "{:,}".format(product.sales_7d or 0) }}</div>
       </div>
       <div class="card">
-        <div class="stat-card-label">Price</div>
-        <div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800">
-          ${{ "%.2f" | format(product.price | default(0)) }}
-        </div>
-      </div>
-      <div class="card">
-        <div class="stat-card-label">7-Day Sales</div>
-        <div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800;color:var(--teal)">
-          {{ "{:,}".format(product.sales_7d | default(0)) }}
-        </div>
-      </div>
-      <div class="card">
-        <div class="stat-card-label">GMV (30d)</div>
-        <div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800">
-          ${{ "{:,.0f}".format(product.gmv_30d | default(0)) }}
-        </div>
+        <div class="stat-label">GMV (30d)</div>
+        <div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800">${{ "{:,.0f}".format(product.gmv_30d or 0) }}</div>
       </div>
     </div>
 
-    <div style="display:flex;gap:var(--space-4);margin:var(--space-4) 0">
-      <div class="text-sm"><span class="text-muted">Videos (7d):</span> <strong>{{ product.video_7d | default('--') }}</strong></div>
-      <div class="text-sm"><span class="text-muted">Influencers:</span> <strong>{{ product.influencer_count | default(0) }}</strong></div>
-      <div class="text-sm"><span class="text-muted">Rating:</span> <strong>{{ "%.1f" | format(product.product_rating | default(0)) }}</strong></div>
+    <div class="flex gap-4 mb-4" style="flex-wrap:wrap">
+      <div class="text-sm"><span class="text-faint">Videos (7d):</span> <strong>{{ product.video_7d if product.video_7d else '--' }}</strong></div>
+      <div class="text-sm"><span class="text-faint">Influencers:</span> <strong>{{ product.influencer_count or 0 }}</strong></div>
+      <div class="text-sm"><span class="text-faint">Rating:</span> <strong>{{ "%.1f" | format(product.product_rating or 0) }}</strong></div>
     </div>
 
-    {% if product.subcategory or product.price_trend %}
+    {% if product.subcategory or product.price_trend or product.has_free_shipping %}
     <div class="detail-tags">
-      {% if product.subcategory %}<span class="badge badge-neutral">{{ product.subcategory }}</span>{% endif %}
-      {% if product.price_trend %}
-        <span class="badge {% if product.price_trend == 'rising' %}badge-green{% elif product.price_trend == 'falling' %}badge-red{% else %}badge-neutral{% endif %}">
-          Price {{ product.price_trend }}
-        </span>
-      {% endif %}
+      {% if product.subcategory %}<span class="badge badge-muted">{{ product.subcategory }}</span>{% endif %}
+      {% if product.price_trend %}<span class="badge {{ 'badge-green' if product.price_trend == 'rising' else ('badge-red' if product.price_trend == 'falling' else 'badge-muted') }}">Price {{ product.price_trend }}</span>{% endif %}
       {% if product.has_free_shipping %}<span class="badge badge-teal">Free shipping</span>{% endif %}
     </div>
     {% endif %}
 
-    <div style="margin-top:var(--space-6);display:flex;gap:var(--space-3)">
+    <div style="margin-top:var(--space-6);display:flex;gap:var(--space-3);flex-wrap:wrap">
       {% if product.product_url %}
-        <a href="{{ product.product_url }}" target="_blank" rel="noopener" class="btn btn-secondary">
-          <i data-lucide="external-link" style="width:16px;height:16px"></i> View on TikTok Shop
-        </a>
+        <a href="{{ product.product_url }}" target="_blank" rel="noopener" class="btn btn-ghost"><i data-lucide="external-link" style="width:16px;height:16px"></i> View on TikTok Shop</a>
       {% endif %}
-      <button class="btn btn-ghost" onclick="blacklistProduct('{{ product.product_id }}')">
-        <i data-lucide="shield-ban" style="width:16px;height:16px"></i> Add to blacklist
-      </button>
+      <button class="btn btn-ghost" onclick="blacklistProduct('{{ product.product_id }}', this)"><i data-lucide="ban" style="width:16px;height:16px"></i> Add to Blacklist</button>
     </div>
   </div>
 
-  <!-- RIGHT: Analytics panel -->
+  {# ===== RIGHT: Analytics ===== #}
   <div>
-    <div class="chart-card" style="margin-bottom:var(--space-4)">
-      <div class="chart-card-title">Sales trend (30 days)</div>
-      <div class="chart-canvas-wrap"><canvas id="salesChart"></canvas></div>
+    {# Sales trend #}
+    <div class="chart-card mb-4">
+      <div class="chart-title">Sales trend (30 days)</div>
+      <div class="chart-wrap"><canvas id="detailSalesChart"></canvas></div>
     </div>
 
-    <div class="calc-widget" style="margin-bottom:var(--space-4)">
-      <div class="calc-widget-title">
-        <i data-lucide="calculator" style="width:18px;height:18px"></i> Commission Calculator
-      </div>
+    {# Commission calculator #}
+    <div class="calc-widget mb-4">
+      <div class="calc-widget-title"><i data-lucide="calculator" style="width:18px;height:18px"></i> Commission Calculator</div>
       <div class="input-group">
-        <label class="input-label">Est. daily sales (units)</label>
-        <input type="number" class="input" id="calcDailySales" value="10" min="1" oninput="updateCalc()">
+        <label class="input-label">Est. daily orders</label>
+        <input type="number" class="input" id="calcDailySales" value="10" min="1">
       </div>
       <div class="calc-result">
         <div class="calc-result-value" id="calcRevenue">$0.00</div>
-        <div class="calc-result-label">Est. monthly commission revenue</div>
+        <div class="calc-result-label">Est. monthly commission</div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="text-sm font-semibold text-secondary mb-4">Top Creator Videos</div>
+    {# Top creator videos #}
+    <div class="card mb-4">
+      <div class="text-sm font-semibold text-muted mb-4">Top Creator Videos</div>
       {% if creator_videos and creator_videos | length > 0 %}
-        {% for video in creator_videos[:3] %}
+        {% for v in creator_videos[:3] %}
         <div class="video-card">
-          <div class="video-thumb">{% if video.thumbnail %}<img src="{{ video.thumbnail }}" alt="">{% endif %}</div>
-          <div class="video-info">
-            <div class="video-creator">@{{ video.creator_handle | default('creator') }}</div>
-            <div class="video-views">{{ "{:,}".format(video.views | default(0)) }} views</div>
+          <div class="video-thumb">{% if v.thumbnail %}<img src="{{ v.thumbnail }}" alt="">{% endif %}</div>
+          <div>
+            <div class="video-creator">@{{ v.creator_handle | default('creator') }}</div>
+            <div class="video-views">{{ "{:,}".format(v.views or 0) }} views</div>
           </div>
         </div>
         {% endfor %}
       {% else %}
-        <p class="text-sm text-muted" style="padding:var(--space-4) 0;text-align:center">No creator videos tracked yet</p>
+        <p class="text-sm text-faint text-center" style="padding:var(--space-4) 0">No creator videos tracked yet</p>
       {% endif %}
     </div>
 
+    {# Similar products #}
     {% if similar_products and similar_products | length > 0 %}
-    <div class="card" style="margin-top:var(--space-4)">
-      <div class="text-sm font-semibold text-secondary mb-4">Similar Products</div>
+    <div class="card">
+      <div class="text-sm font-semibold text-muted mb-4">Similar Products</div>
       {% for sp in similar_products[:4] %}
       <a href="/app/products/{{ sp.product_id }}" class="video-card" style="text-decoration:none">
-        <div class="video-thumb">{% if sp.image_url %}<img src="{{ sp.image_url }}" alt="">{% endif %}</div>
-        <div class="video-info">
+        <div class="video-thumb">
+          {% if sp.image_url or sp.cached_image_url %}<img src="{{ sp.cached_image_url or sp.image_url }}" alt="">{% endif %}
+        </div>
+        <div>
           <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary)">{{ sp.product_name | truncate(35) }}</div>
-          <div class="video-views">{{ "%.1f" | format(sp.commission_rate | default(0) * 100) }}% commission</div>
+          <div class="video-views">{{ "%.0f" | format((sp.commission_rate or 0) * 100) }}% commission</div>
         </div>
       </a>
       {% endfor %}
     </div>
     {% endif %}
   </div>
-
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/dashboard.js"></script>
 <script>
-var productPrice = {{ product.price | default(0) }};
-var commissionRate = {{ product.commission_rate | default(0) }};
+/* Commission calculator */
+initCalc({{ product.price or 0 }}, {{ product.commission_rate or 0 }});
 
-function updateCalc() {
-  var daily = parseInt(document.getElementById("calcDailySales").value) || 0;
-  var monthly = daily * 30 * productPrice * commissionRate;
-  document.getElementById("calcRevenue").textContent = "$" + monthly.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-updateCalc();
-
-var ctx = document.getElementById("salesChart");
-if (ctx) {
-  var labels = [], chartData = [];
-  var baseVal = {{ product.sales_7d | default(10) }} / 7;
+/* Sales chart — placeholder data (real data would come from API) */
+(function() {
+  var labels = [], data = [];
+  var base = {{ product.sales_7d or 10 }} / 7;
   for (var i = 0; i < 30; i++) {
     var d = new Date(); d.setDate(d.getDate() - 29 + i);
     labels.push(d.toLocaleDateString("en-US", {month:"short", day:"numeric"}));
-    chartData.push(Math.floor(baseVal * (0.5 + Math.random())));
+    data.push(Math.floor(base * (0.5 + Math.random())));
   }
-  new Chart(ctx, {
-    type: "line",
-    data: { labels: labels, datasets: [{ label: "Sales", data: chartData, borderColor: "#2dd4bf", backgroundColor: "rgba(45,212,191,0.1)", fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: "rgba(255,255,255,0.04)" }, ticks: { color: "#636366", font: { size: 10 }, maxTicksLimit: 6 }, border: { display: false } }, y: { grid: { color: "rgba(255,255,255,0.04)" }, ticks: { color: "#636366", font: { size: 10 } }, border: { display: false }, beginAtZero: true } } }
-  });
-}
-
-async function blacklistProduct(id) {
-  try {
-    var res = await fetch("/api/blacklist", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({product_id: id}) });
-    var d = await res.json();
-    showFlash(d.success ? "Product blacklisted" : (d.error || "Failed"), d.success ? "success" : "error");
-  } catch(e) { showFlash("Network error", "error"); }
-}
+  createLineChart("detailSalesChart", labels, data, CHART_COLORS.teal);
+})();
 </script>
 {% endblock %}

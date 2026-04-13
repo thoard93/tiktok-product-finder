@@ -1,26 +1,10 @@
 {% extends "base.html" %}
-
 {% block title %}Blacklist{% endblock %}
 
 {% block content %}
-
 <div class="page-header">
   <h1 class="page-title">Blacklist</h1>
-  <p class="page-subtitle">Products and brands you want to hide from your results</p>
-</div>
-
-<!-- Why blacklist callout -->
-<div class="card" style="margin-bottom:var(--space-6);display:flex;gap:var(--space-4);align-items:flex-start">
-  <div class="feature-icon teal" style="flex-shrink:0">
-    <i data-lucide="shield-ban"></i>
-  </div>
-  <div>
-    <div class="text-sm font-semibold" style="margin-bottom:var(--space-1)">Why use the blacklist?</div>
-    <p class="text-sm text-secondary">
-      Blacklisted brands and products are hidden from your product feed, trending results, and analytics.
-      Use this to filter out saturated niches, low-quality sellers, or products you have already evaluated.
-    </p>
-  </div>
+  <p class="page-subtitle">Products and brands hidden from your results</p>
 </div>
 
 {% if blacklist_items and blacklist_items | length > 0 %}
@@ -32,36 +16,29 @@
         <th>Category</th>
         <th>Date Added</th>
         <th>Reason</th>
-        <th style="width:80px"></th>
+        <th style="width:60px"></th>
       </tr>
     </thead>
     <tbody>
       {% for item in blacklist_items %}
-      <tr id="bl-row-{{ item.id }}">
+      <tr id="bl-{{ item.id }}">
         <td>
           <div class="font-semibold">{{ item.seller_name }}</div>
-          {% if item.seller_id %}
-            <div class="text-xs text-muted">ID: {{ item.seller_id }}</div>
-          {% endif %}
+          {% if item.seller_id %}<div class="text-xs text-faint">ID: {{ item.seller_id }}</div>{% endif %}
         </td>
-        <td><span class="badge badge-neutral">Brand</span></td>
-        <td class="text-sm text-muted">
-          {% if item.added_at %}
-            {{ item.added_at.strftime('%b %d, %Y') }}
-          {% else %}
-            --
-          {% endif %}
+        <td><span class="badge badge-muted">Brand</span></td>
+        <td class="text-sm text-muted">{% if item.added_at %}{{ item.added_at.strftime('%b %d, %Y') }}{% else %}--{% endif %}</td>
+        <td>
+          <div class="flex gap-2 items-center">
+            <input type="text" class="input" style="height:36px;font-size:var(--text-xs)"
+                   value="{{ item.reason | default('') }}" placeholder="Add a reason..."
+                   onchange="updateReason({{ item.id }}, this.value)">
+          </div>
         </td>
         <td>
-          <input type="text" class="input" style="height:36px;font-size:var(--text-xs)"
-                 value="{{ item.reason | default('') }}"
-                 placeholder="Add a reason..."
-                 onchange="updateReason({{ item.id }}, this.value)">
-        </td>
-        <td>
-          <button class="btn btn-ghost btn-sm btn-icon" style="color:var(--red)"
-                  onclick="removeBlacklist({{ item.id }})"
-                  title="Remove from blacklist">
+          <button class="btn btn-ghost btn-icon btn-sm" style="color:var(--danger)"
+                  onclick="confirmAction('Remove from blacklist','This brand will appear in your product feed again.',function(){removeBlacklist({{ item.id }})})"
+                  title="Remove">
             <i data-lucide="trash-2" style="width:16px;height:16px"></i>
           </button>
         </td>
@@ -70,64 +47,44 @@
     </tbody>
   </table>
 </div>
+
 {% else %}
-<!-- Empty state -->
 <div class="empty-state">
-  <div class="empty-state-icon">
-    <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:80px;height:80px">
-      <rect x="20" y="30" width="80" height="60" rx="8" stroke="currentColor" stroke-width="2" fill="none"/>
-      <path d="M20 50h80" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
-      <path d="M20 70h80" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
-      <circle cx="60" cy="60" r="20" stroke="#ff4d6d" stroke-width="2" fill="none"/>
-      <path d="M46 46l28 28" stroke="#ff4d6d" stroke-width="2" stroke-linecap="round"/>
+  <div class="empty-icon">
+    <svg viewBox="0 0 120 120" fill="none" style="width:80px;height:80px">
+      <rect x="25" y="35" width="70" height="50" rx="8" stroke="currentColor" stroke-width="2"/>
+      <path d="M25 55h70M25 70h70" stroke="currentColor" stroke-width="1.5" opacity=".2"/>
+      <circle cx="60" cy="58" r="18" stroke="#ff4d6d" stroke-width="2"/>
+      <path d="M48 46l24 24" stroke="#ff4d6d" stroke-width="2" stroke-linecap="round"/>
     </svg>
   </div>
-  <h3 class="empty-state-title">Your blacklist is empty</h3>
-  <p class="empty-state-desc">
-    When you find products or brands you want to hide, click the blacklist button on any product card. They will appear here.
-  </p>
-  <a href="/app/products" class="btn btn-secondary">Browse products</a>
+  <h3 class="empty-title">Your blacklist is empty</h3>
+  <p class="empty-desc">Blacklisted products are hidden from your dashboard so you can focus on new opportunities. Click "Blacklist" on any product card to add it here.</p>
 </div>
 {% endif %}
-
 {% endblock %}
 
 {% block scripts %}
 <script>
 async function removeBlacklist(id) {
   try {
-    var res = await fetch("/api/blacklist/" + id, { method: "DELETE" });
+    var res = await fetch("/api/blacklist/" + id, {method:"DELETE"});
     var data = await res.json();
     if (data.success) {
-      var row = document.getElementById("bl-row-" + id);
-      if (row) {
-        row.style.opacity = "0";
-        row.style.transform = "translateX(20px)";
-        row.style.transition = "all 0.3s ease";
-        setTimeout(function() { row.remove(); checkEmpty(); }, 300);
-      }
+      var row = document.getElementById("bl-" + id);
+      if (row) { row.style.opacity = "0"; row.style.transform = "translateX(20px)"; row.style.transition = "all .3s ease"; setTimeout(function(){ row.remove(); checkEmpty(); }, 300); }
       showFlash("Removed from blacklist", "success");
-    } else {
-      showFlash(data.error || "Failed to remove", "error");
-    }
+    } else { showFlash(data.error || "Failed to remove", "error"); }
   } catch(e) { showFlash("Network error", "error"); }
 }
 
 async function updateReason(id, reason) {
-  try {
-    await fetch("/api/blacklist/" + id, {
-      method: "PATCH",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({reason: reason})
-    });
-  } catch(e) { /* silent */ }
+  try { await fetch("/api/blacklist/" + id, {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({reason:reason})}); } catch(e) {}
 }
 
 function checkEmpty() {
   var tbody = document.querySelector("#blacklistTable tbody");
-  if (tbody && tbody.children.length === 0) {
-    location.reload();
-  }
+  if (tbody && tbody.children.length === 0) location.reload();
 }
 </script>
 {% endblock %}

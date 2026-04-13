@@ -1,225 +1,204 @@
 {% extends "base.html" %}
-
 {% block title %}Settings{% endblock %}
 
 {% block content %}
-
 <div class="page-header">
   <h1 class="page-title">Settings</h1>
   <p class="page-subtitle">Manage your account, subscription, and preferences</p>
 </div>
 
-<!-- Settings tabs -->
-<div class="tabs">
-  <button class="tab active" onclick="switchSettingsTab('profile', this)">Profile</button>
-  <button class="tab" onclick="switchSettingsTab('notifications', this)">Notifications</button>
-  <button class="tab" onclick="switchSettingsTab('subscription', this)">Subscription</button>
-  <button class="tab" onclick="switchSettingsTab('discord', this)">Discord</button>
-</div>
-
-<!-- PROFILE TAB -->
-<div class="tab-content active" id="tab-profile">
-  <div class="card" style="max-width:560px">
-    <div style="display:flex;align-items:center;gap:var(--space-5);margin-bottom:var(--space-6)">
-      <div class="avatar avatar-lg">
-        {% if current_user and current_user.discord_avatar %}
-          <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
-        {% else %}
-          {{ (current_user.discord_username or 'U')[0] | upper }}
-        {% endif %}
-      </div>
-      <div>
-        <div class="font-semibold text-lg">{{ current_user.discord_username if current_user else 'Guest' }}</div>
-        <div class="text-sm text-muted">Member since {{ current_user.created_at.strftime('%B %Y') if current_user and current_user.created_at else '--' }}</div>
-      </div>
-    </div>
-
-    <form id="profileForm" onsubmit="saveProfile(event)">
-      <div class="input-group" style="margin-bottom:var(--space-5)">
-        <label class="input-label">Display name</label>
-        <input type="text" class="input" id="displayName" value="{{ current_user.discord_username if current_user else '' }}">
-      </div>
-      <div class="input-group" style="margin-bottom:var(--space-6)">
-        <label class="input-label">Discord ID</label>
-        <input type="text" class="input" value="{{ current_user.discord_id if current_user and current_user.discord_id else 'Not linked' }}" readonly style="opacity:0.6;cursor:not-allowed">
-        <span class="input-hint">Linked via Discord OAuth</span>
-      </div>
-      <button type="submit" class="btn btn-primary">Save changes</button>
-    </form>
+<div class="settings-layout">
+  {# Left: tab list #}
+  <div class="settings-tabs">
+    <button class="settings-tab active" onclick="switchTab('profile',this)"><i data-lucide="user" style="width:16px;height:16px;margin-right:8px"></i>Profile</button>
+    <button class="settings-tab" onclick="switchTab('subscription',this)"><i data-lucide="credit-card" style="width:16px;height:16px;margin-right:8px"></i>Subscription</button>
+    <button class="settings-tab" onclick="switchTab('discord',this)"><i data-lucide="message-circle" style="width:16px;height:16px;margin-right:8px"></i>Discord</button>
+    <button class="settings-tab" onclick="switchTab('notifications',this)"><i data-lucide="bell" style="width:16px;height:16px;margin-right:8px"></i>Notifications</button>
   </div>
-</div>
 
-<!-- NOTIFICATIONS TAB -->
-<div class="tab-content" id="tab-notifications">
-  <div class="card" style="max-width:560px">
-    <div class="text-sm font-semibold mb-4">Email Alerts</div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0;border-bottom:1px solid var(--border)">
-      <div>
-        <div class="text-sm font-semibold">New trending products</div>
-        <div class="text-xs text-muted">Get notified when new products hit a trending score above 80</div>
-      </div>
-      <label class="toggle">
-        <input type="checkbox" id="notifTrending" checked>
-        <span class="toggle-track"></span>
-        <span class="toggle-thumb"></span>
-      </label>
-    </div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0;border-bottom:1px solid var(--border)">
-      <div>
-        <div class="text-sm font-semibold">Commission changes</div>
-        <div class="text-xs text-muted">Alert when a saved product changes commission rate</div>
-      </div>
-      <label class="toggle">
-        <input type="checkbox" id="notifCommission">
-        <span class="toggle-track"></span>
-        <span class="toggle-thumb"></span>
-      </label>
-    </div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0">
-      <div>
-        <div class="text-sm font-semibold">Weekly digest</div>
-        <div class="text-xs text-muted">Summary of top products and market trends each Monday</div>
-      </div>
-      <label class="toggle">
-        <input type="checkbox" id="notifDigest" checked>
-        <span class="toggle-track"></span>
-        <span class="toggle-thumb"></span>
-      </label>
-    </div>
-
-    <button class="btn btn-primary mt-6" onclick="saveNotifications()">Save preferences</button>
-  </div>
-</div>
-
-<!-- SUBSCRIPTION TAB -->
-<div class="tab-content" id="tab-subscription">
-  <div class="card" style="max-width:560px">
-    {% if subscription and subscription.status == 'active' %}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-5)">
-        <div>
-          <div class="text-sm text-muted">Current plan</div>
-          <div class="text-lg font-semibold">Vantage Pro</div>
-        </div>
-        <span class="badge badge-green" style="font-size:var(--text-sm);padding:var(--space-1) var(--space-3)">Active</span>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-6)">
-        <div>
-          <div class="text-xs text-muted">Price</div>
-          <div class="font-semibold">$19.99/mo</div>
-        </div>
-        <div>
-          <div class="text-xs text-muted">Next billing</div>
-          <div class="font-semibold">
-            {% if subscription.next_billing_date %}
-              {{ subscription.next_billing_date.strftime('%b %d, %Y') }}
+  {# Right: tab content #}
+  <div>
+    {# ===== PROFILE ===== #}
+    <div class="tab-content active" id="tab-profile">
+      <div class="card" style="max-width:560px">
+        <div class="flex items-center gap-4 mb-6">
+          <div class="avatar avatar-lg">
+            {% if current_user and current_user.discord_avatar %}
+              <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
             {% else %}
-              --
+              {{ (current_user.discord_username or 'U')[0] | upper }}
             {% endif %}
           </div>
+          <div>
+            <div class="font-semibold text-lg">{{ current_user.discord_username if current_user else 'Guest' }}</div>
+            <div class="text-sm text-muted">Member since {% if current_user and current_user.created_at %}{{ current_user.created_at.strftime('%B %Y') }}{% else %}--{% endif %}</div>
+          </div>
+        </div>
+
+        <form onsubmit="saveProfile(event)">
+          <div class="input-group mb-4">
+            <label class="input-label">Display name</label>
+            <input type="text" class="input" id="displayName" value="{{ current_user.discord_username if current_user else '' }}">
+          </div>
+          <div class="input-group mb-6">
+            <label class="input-label">Discord ID</label>
+            <div class="flex gap-2 items-center">
+              <input type="text" class="input" value="{{ current_user.discord_id if current_user and current_user.discord_id else 'Not linked' }}" readonly style="opacity:.5">
+              <i data-lucide="lock" style="width:16px;height:16px;color:var(--text-faint)"></i>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary"><span class="btn-label">Save changes</span><span class="btn-spinner"></span></button>
+        </form>
+
+        <div style="margin-top:var(--space-8);padding-top:var(--space-6);border-top:1px solid var(--border)">
+          <div class="text-sm font-semibold" style="color:var(--danger);margin-bottom:var(--space-2)">Danger zone</div>
+          <a href="#" class="text-sm" style="color:var(--danger)" onclick="confirmAction('Delete account','This will permanently delete your account and all data. This cannot be undone.',function(){showFlash('Please contact support to delete your account.','info')})">Delete my account</a>
         </div>
       </div>
+    </div>
 
-      {% if subscription.coupon_code %}
-      <div style="margin-bottom:var(--space-5)">
-        <div class="text-xs text-muted">Active coupon</div>
-        <span class="badge badge-accent">{{ subscription.coupon_code }}</span>
-      </div>
-      {% endif %}
-
-      <button class="btn btn-danger w-full"
-              onclick="confirmAction('Cancel subscription', 'Your access will continue until the end of the current billing period.', cancelSubscription)">
-        Cancel subscription
-      </button>
-
-    {% else %}
-      <div style="text-align:center;padding:var(--space-6) 0">
-        <div style="color:var(--text-muted);margin-bottom:var(--space-3)">
-          <i data-lucide="crown" style="width:40px;height:40px"></i>
-        </div>
-        <div class="text-lg font-semibold mb-2">No active subscription</div>
-        <p class="text-sm text-secondary mb-4">Upgrade to Vantage Pro for unlimited access to all features.</p>
-        <a href="/app/subscribe" class="btn btn-primary">Upgrade now</a>
-      </div>
-    {% endif %}
-  </div>
-</div>
-
-<!-- DISCORD TAB -->
-<div class="tab-content" id="tab-discord">
-  <div class="card" style="max-width:560px">
-    {% if current_user and current_user.discord_id %}
-      <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-5)">
-        <div class="avatar avatar-lg">
-          {% if current_user.discord_avatar %}
-            <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
-          {% else %}
-            {{ current_user.discord_username[0] | upper }}
+    {# ===== SUBSCRIPTION ===== #}
+    <div class="tab-content" id="tab-subscription">
+      <div class="card" style="max-width:560px">
+        {% if subscription and subscription.status == 'active' %}
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <div class="text-sm text-muted">Current plan</div>
+              <div class="text-lg font-bold">Vantage Pro &middot; $19.99/mo</div>
+            </div>
+            <span class="badge badge-green" style="padding:4px 12px;font-size:var(--text-sm)">Active</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-6)">
+            <div>
+              <div class="text-xs text-faint">Next billing</div>
+              <div class="font-semibold">{% if subscription.next_billing_date %}{{ subscription.next_billing_date.strftime('%b %d, %Y') }}{% else %}--{% endif %}</div>
+            </div>
+            {% if subscription.coupon_code %}
+            <div>
+              <div class="text-xs text-faint">Active coupon</div>
+              <span class="badge badge-accent">{{ subscription.coupon_code }}</span>
+            </div>
+            {% endif %}
+          </div>
+          {% if subscription.referral_code %}
+          <div class="mb-6">
+            <div class="text-xs text-faint mb-2">Your referral code</div>
+            <div class="flex gap-2 items-center">
+              <input type="text" class="input" value="{{ subscription.referral_code }}" readonly id="settingsRefCode" style="font-weight:600">
+              <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('settingsRefCode').value);showFlash('Copied!','success')">
+                <i data-lucide="copy" style="width:16px;height:16px"></i>
+              </button>
+            </div>
+          </div>
           {% endif %}
-        </div>
-        <div>
-          <div class="font-semibold">{{ current_user.discord_username }}</div>
-          <div class="text-sm text-muted">Connected via Discord</div>
-        </div>
-        <span class="badge badge-green" style="margin-left:auto">Connected</span>
+          <button class="btn btn-danger w-full" onclick="confirmAction('Cancel subscription','Your access continues until the end of the billing period.',cancelSub)">
+            <span class="btn-label">Cancel subscription</span><span class="btn-spinner"></span>
+          </button>
+        {% else %}
+          <div class="text-center" style="padding:var(--space-6) 0">
+            <div style="color:var(--text-faint);margin-bottom:var(--space-3)"><i data-lucide="crown" style="width:40px;height:40px"></i></div>
+            <div class="text-lg font-semibold mb-2">No active subscription</div>
+            <p class="text-sm text-muted mb-4">Upgrade to Vantage Pro for unlimited access to all features.</p>
+            <a href="/app/subscribe" class="btn btn-primary">Upgrade now</a>
+          </div>
+        {% endif %}
       </div>
-      <p class="text-sm text-secondary">Your Discord account is linked. You can log in with Discord and receive notifications in our community server.</p>
-    {% else %}
-      <div style="text-align:center;padding:var(--space-6) 0">
-        <div style="color:var(--text-muted);margin-bottom:var(--space-3)">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
-        </div>
-        <div class="text-lg font-semibold mb-2">Connect Discord</div>
-        <p class="text-sm text-secondary mb-4">Link your Discord account for easy login and community notifications.</p>
-        <a href="/auth/discord" class="btn btn-secondary">
-          Connect Discord
-        </a>
+    </div>
+
+    {# ===== DISCORD ===== #}
+    <div class="tab-content" id="tab-discord">
+      <div class="card" style="max-width:560px">
+        {% if current_user and current_user.discord_id %}
+          <div class="flex items-center gap-4 mb-4">
+            <div class="avatar avatar-lg">
+              {% if current_user.discord_avatar %}
+                <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
+              {% else %}
+                {{ current_user.discord_username[0] | upper }}
+              {% endif %}
+            </div>
+            <div>
+              <div class="font-semibold">{{ current_user.discord_username }}</div>
+              <div class="text-sm text-muted">Connected via Discord</div>
+            </div>
+            <span class="badge badge-green" style="margin-left:auto">Connected</span>
+          </div>
+          <p class="text-sm text-muted">Your Discord account is linked. You can log in with Discord and receive product alerts in our community server.</p>
+        {% else %}
+          <div class="text-center" style="padding:var(--space-6) 0">
+            <div style="color:var(--text-faint);margin-bottom:var(--space-3)">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+            </div>
+            <div class="text-lg font-semibold mb-2">Connect your Discord</div>
+            <p class="text-sm text-muted mb-4">Link your Discord to receive product alerts in DMs and access our community server.</p>
+            <a href="/auth/discord" class="btn btn-ghost" style="border-color:#5865F2;color:#5865F2">Connect Discord</a>
+          </div>
+        {% endif %}
       </div>
-    {% endif %}
+    </div>
+
+    {# ===== NOTIFICATIONS ===== #}
+    <div class="tab-content" id="tab-notifications">
+      <div class="card" style="max-width:560px">
+        <div class="text-sm font-semibold mb-4">Email &amp; Push Alerts</div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div class="text-sm font-semibold">New trending products</div>
+            <div class="text-xs text-faint">Daily digest of products scoring above 80</div>
+          </div>
+          <label class="toggle"><input type="checkbox" checked onchange="saveNotif()"><span class="toggle-track"></span><span class="toggle-knob"></span></label>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div class="text-sm font-semibold">Score crosses 80 alert</div>
+            <div class="text-xs text-faint">Get notified when any tracked product breaks into top tier</div>
+          </div>
+          <label class="toggle"><input type="checkbox" onchange="saveNotif()"><span class="toggle-track"></span><span class="toggle-knob"></span></label>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) 0">
+          <div>
+            <div class="text-sm font-semibold">Weekly commission summary</div>
+            <div class="text-xs text-faint">Top earning products and market trends every Monday</div>
+          </div>
+          <label class="toggle"><input type="checkbox" checked onchange="saveNotif()"><span class="toggle-track"></span><span class="toggle-knob"></span></label>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
-function switchSettingsTab(tab, btn) {
-  document.querySelectorAll(".tab-content").forEach(function(el) { el.classList.remove("active"); });
-  document.querySelectorAll(".tab").forEach(function(el) { el.classList.remove("active"); });
+function switchTab(tab, btn) {
+  document.querySelectorAll(".tab-content").forEach(function(el){ el.classList.remove("active"); });
+  document.querySelectorAll(".settings-tab").forEach(function(el){ el.classList.remove("active"); });
   document.getElementById("tab-" + tab).classList.add("active");
   btn.classList.add("active");
 }
 
 async function saveProfile(e) {
   e.preventDefault();
-  var name = document.getElementById("displayName").value;
+  var btn = e.target.querySelector(".btn-primary");
+  setLoading(btn, true);
   try {
-    var res = await fetch("/api/me/update", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({display_name: name})
-    });
+    await fetch("/api/me/update", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({display_name:document.getElementById("displayName").value})});
     showFlash("Profile saved", "success");
   } catch(err) { showFlash("Failed to save", "error"); }
+  setLoading(btn, false);
 }
 
-function saveNotifications() {
-  showFlash("Notification preferences saved", "success");
-}
+function saveNotif() { showFlash("Preferences saved", "success"); }
 
-async function cancelSubscription() {
+async function cancelSub() {
   try {
-    var res = await fetch("/api/payments/cancel-subscription", { method: "POST" });
+    var res = await fetch("/api/subscribe/cancel", {method:"POST"});
     var data = await res.json();
-    if (data.success) {
-      showFlash("Subscription cancelled", "success");
-      setTimeout(function() { location.reload(); }, 1500);
-    } else {
-      showFlash(data.error || "Failed to cancel", "error");
-    }
+    if (data.success) { showFlash("Subscription cancelled", "success"); setTimeout(function(){ location.reload(); }, 1500); }
+    else { showFlash(data.error || "Failed to cancel", "error"); }
   } catch(e) { showFlash("Network error", "error"); }
 }
 </script>

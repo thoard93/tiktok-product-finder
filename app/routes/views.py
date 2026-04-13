@@ -5,10 +5,10 @@ Existing API routes remain unchanged in their respective blueprints.
 """
 
 from functools import wraps
-from flask import Blueprint, render_template, redirect, session, request
+from flask import Blueprint, render_template, redirect, session, request, jsonify
 from sqlalchemy import desc
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription
+from app.models import Product, BlacklistedBrand, Subscription, User
 from app.routes.auth import get_current_user
 
 
@@ -18,6 +18,16 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if 'user_id' not in session:
             return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated
+
+
+def api_auth(f):
+    """API-level login check: returns JSON 401."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Authentication required'}), 401
         return f(*args, **kwargs)
     return decorated
 
@@ -213,3 +223,67 @@ def settings():
 def subscribe():
     ctx = _base_context('subscribe')
     return render_template('subscribe.html', **ctx)
+
+# ---------------------------------------------------------------------------
+# API endpoints for frontend (blacklist CRUD, profile update)
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/api/blacklist/add', methods=['POST'])
+@api_auth
+def api_blacklist_add():
+    data = request.get_json() or {}
+    product_id = data.get('product_id')
+    if not product_id:
+        return jsonify({'error': 'product_id required'}), 400
+    product = Product.query.get(product_id)
+    if not product:
+        return jsonify({'error': 'Product not found'}), 404
+    # Use seller_name for blacklisting (brand-level)
+    existing = BlacklistedBrand.query.filter_by(seller_name=product.seller_name or product.product_name).first()
+    if existing:
+        return jsonify({'success': True, 'message': 'Already blacklisted'})
+    bl = BlacklistedBrand(
+        seller_name=product.seller_name or product.product_name,
+        seller_id=product.seller_id,
+        reason='Blacklisted from product card'
+    )
+    db.session.add(bl)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@views_bp.route('/api/blacklist/<int:item_id>', methods=['DELETE'])
+@api_auth
+def api_blacklist_delete(item_id):
+    item = BlacklistedBrand.query.get(item_id)
+    if not item:
+        return jsonify({'error': 'Not found'}), 404
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@views_bp.route('/api/blacklist/<int:item_id>', methods=['PATCH'])
+@api_auth
+def api_blacklist_update(item_id):
+    item = BlacklistedBrand.query.get(item_id)
+    if not item:
+        return jsonify({'error': 'Not found'}), 404
+    data = request.get_json() or {}
+    if 'reason' in data:
+        item.reason = data['reason']
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@views_bp.route('/api/me/update', methods=['POST'])
+@api_auth
+def api_profile_update():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not authenticated'}), 401
+    data = request.get_json() or {}
+    if 'display_name' in data and data['display_name'].strip():
+        user.discord_username = data['display_name'].strip()[:100]
+    db.session.commit()
+    return jsonify({'success': True})
