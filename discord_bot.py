@@ -134,22 +134,37 @@ def resolve_tiktok_share_link(url):
 
         html = res.text
 
-        # Patterns found in TikTok's embedded JSON / Shop page markup
+        # Patterns found in TikTok's embedded JSON / Shop page / video page markup.
+        # tiktok.com/t/ links often land on a video page that has a tagged shop product
+        # embedded in __UNIVERSAL_DATA_FOR_REHYDRATION__ or window.__NEXT_DATA__ JSON blobs.
         html_patterns = [
+            # Shop product pages
             r'"productId"\s*:\s*"(\d{15,25})"',
             r'"product_id"\s*:\s*"(\d{15,25})"',
             r'shop\.tiktok\.com/view/product/(\d{15,25})',
             r'shop/pdp/(\d{15,25})',
             r'"/product/(\d{15,25})',
-            r'"itemId"\s*:\s*"(\d{15,25})"',
             r'data-product-id="(\d{15,25})"',
+            # Video pages with tagged products (SIGI_STATE / NEXT_DATA blobs)
+            r'"itemId"\s*:\s*"(\d{15,25})"',
+            r'"productIds?\s*":\s*\["(\d{15,25})"',
+            r'"shoppingInfo".*?"productId"\s*:\s*"(\d{15,25})"',
+            r'tiktokcdn\.com.*?/product/(\d{15,25})',
         ]
 
         for pattern in html_patterns:
-            match = re.search(pattern, html)
+            match = re.search(pattern, html, re.DOTALL)
             if match:
                 pid = match.group(1)
-                print(f"[Bot] Product ID from page HTML ({pattern}): {pid}")
+                print(f"[Bot] Product ID from page HTML ({pattern[:40]}): {pid}")
+                return pid, 'US'
+
+        # Also check any shop.tiktok.com URLs embedded in the page
+        shop_urls = re.findall(r'shop\.tiktok\.com[^\s"\'<>]+', html)
+        for shop_url in shop_urls:
+            pid = extract_product_id(shop_url)
+            if pid:
+                print(f"[Bot] Product ID from embedded shop URL: {pid}")
                 return pid, 'US'
 
         # Conservative numeric fallback — 17-20 digit IDs in first 8 KB
@@ -157,7 +172,7 @@ def resolve_tiktok_share_link(url):
             print(f"[Bot] Numeric fallback product ID: {pid}")
             return pid, 'US'
 
-        print(f"[Bot] Could not extract product ID from {final_url}")
+        print(f"[Bot] Could not extract product ID from {final_url} (likely a plain video with no tagged product)")
 
     except requests.exceptions.Timeout:
         print(f"[Bot] Timeout resolving {url}")
@@ -191,17 +206,40 @@ from app import enrich_product_data
 
 PRISM_BASE_URL = os.environ.get('PRISM_BASE_URL', 'https://thoardburgersauce.com')
 
+# Discord IDs that bypass the subscription check entirely (server owners / admins)
+# Set DISCORD_ADMIN_IDS env var as comma-separated IDs, e.g. "274339622119669760,123456789"
+_raw_admin_ids = os.environ.get('DISCORD_ADMIN_IDS', '274339622119669760')
+DISCORD_ADMIN_IDS = {int(x.strip()) for x in _raw_admin_ids.split(',') if x.strip().isdigit()}
+
 
 def check_user_subscription(discord_id):
-    """Check if a Discord user has an active PRISM subscription. Admins bypass."""
-    with app.app_context():
-        user = User.query.filter_by(discord_id=str(discord_id)).first()
-        if not user:
-            return False, None
-        if user.is_admin:
-            return True, user
-        sub = Subscription.query.filter_by(user_id=user.id, status='active').first()
-        return (sub is not None), user
+    """Check if a Discord user has an active PRISM subscription.
+
+    Bypass order:
+      1. DISCORD_ADMIN_IDS env var — hard-coded server admins, no DB needed
+      2. User.is_admin flag in PRISM DB
+      3. Active Subscription row
+    Returns (has_access: bool, user_or_None)
+    """
+    try:
+        # Fast env-var admin bypass — no DB hit needed
+        if int(discord_id) in DISCORD_ADMIN_IDS:
+            log.info(f"[Sub] Discord admin bypass for {discord_id}")
+            return True, None
+
+        with app.app_context():
+            user = User.query.filter_by(discord_id=str(discord_id)).first()
+            if not user:
+                return False, None
+            if user.is_admin:
+                return True, user
+            sub = Subscription.query.filter_by(user_id=user.id, status='active').first()
+            return (sub is not None), user
+
+    except Exception as e:
+        log.error(f"[Sub] check_user_subscription error for {discord_id}: {e}")
+        # Fail open so a DB hiccup doesn't silently kill all lookups
+        return False, None
 
 def save_product_to_db(product_data):
     """
@@ -702,7 +740,9 @@ async def on_message(message):
             r'tiktok\.com.*product',
             r'shop\.tiktok\.com',
             r'vm\.tiktok\.com',
-            r'/t/\w+',
+            r'vt\.tiktok\.com',
+            r'tiktok\.com/t/[\w-]+',  # tiktok.com/t/XXXXXXX share links (may contain hyphens)
+            r'/t/[\w-]{6,}',           # bare /t/ path
         ]
 
         content = message.content
