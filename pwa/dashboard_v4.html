@@ -328,12 +328,6 @@
                     </div>
                     <div id="gemsCards" class="stagger-children"></div>
                 </div>
-                <div class="right-section">
-                    <div class="right-section-title">
-                        <i class="fas fa-cake-candles" style="color:var(--prism-error)"></i> Caked Picks
-                    </div>
-                    <div id="cakedCards" class="stagger-children"></div>
-                </div>
             </aside>
         </div>
     </div>
@@ -463,8 +457,6 @@
         loadMiniSection('/api/analytics/movers-shakers?limit=5', 'moversCards');
         // Hidden Gems
         loadMiniSection('/api/products?gems_only=true&limit=5&sort_by=gem_score', 'gemsCards');
-        // Caked Picks
-        loadMiniSection('/api/products?caked_only=true&limit=5&sort_by=sales_7d', 'cakedCards');
     }
 
     async function loadMiniSection(url, containerId) {
@@ -632,7 +624,6 @@
 
         const savedSort = curFilter.sort_by || 'gem_score';
         if (type === 'gems') curFilter = { gems_only: 'true' };
-        else if (type === 'caked') curFilter = { caked_only: 'true' };
         else if (type === 'high_spend') curFilter = { sort_by: 'sales' };
         else if (type === 'favorites') curFilter = { favorites_only: 'true' };
         else curFilter = {};
