@@ -113,23 +113,14 @@ def resolve_tiktok_share_link(url):
     }
 
     try:
-        # HEAD first — fast, no body download, still follows 30x chains
-        res = requests.head(url, allow_redirects=True, headers=headers, timeout=10)
+        # GET with full redirect following — TikTok blocks/truncates HEAD redirects
+        res = requests.get(url, allow_redirects=True, headers=headers, timeout=15)
         final_url = res.url
-        print(f"[Bot] HEAD resolved to: {final_url}")
+        print(f"[Bot] Resolved to: {final_url}")
 
         pid = extract_product_id(final_url)
         if pid:
             print(f"[Bot] Product ID from resolved URL: {pid}")
-            return pid, 'US'
-
-        # HEAD didn't land on a product page — fetch with GET and mine the HTML
-        print(f"[Bot] No product ID in URL, fetching page body...")
-        res = requests.get(final_url, allow_redirects=True, headers=headers, timeout=15)
-        final_url = res.url  # update in case GET redirected further
-
-        pid = extract_product_id(final_url)
-        if pid:
             return pid, 'US'
 
         html = res.text
