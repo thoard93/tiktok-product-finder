@@ -335,3 +335,35 @@ class ScanJob(db.Model):
     api_key_id = db.Column(db.Integer, db.ForeignKey('api_keys.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime)
+
+
+class Subscription(db.Model):
+    """PayPal recurring subscriptions for PRISM access"""
+    __tablename__ = 'subscriptions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    status = db.Column(db.String(20), default='inactive', index=True)  # active, inactive, cancelled, past_due
+    paypal_subscription_id = db.Column(db.String(100), unique=True, nullable=True)
+    plan = db.Column(db.String(50), default='monthly_19.99')
+    referral_code = db.Column(db.String(50), nullable=True, index=True)
+    coupon_code = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    next_billing_date = db.Column(db.DateTime, nullable=True)
+    cancelled_at = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship('User', backref=db.backref('subscription', uselist=False))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'status': self.status,
+            'plan': self.plan,
+            'referral_code': self.referral_code,
+            'coupon_code': self.coupon_code,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'next_billing_date': self.next_billing_date.isoformat() if self.next_billing_date else None,
+            'cancelled_at': self.cancelled_at.isoformat() if self.cancelled_at else None,
+            'is_active': self.status == 'active',
+        }

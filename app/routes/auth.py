@@ -21,7 +21,7 @@ from flask import (
     send_from_directory, current_app,
 )
 from app import db
-from app.models import User, ActivityLog, SystemConfig, SiteConfig
+from app.models import User, ActivityLog, SystemConfig, SiteConfig, Subscription
 
 # =============================================================================
 # BLUEPRINT
@@ -73,6 +73,30 @@ def admin_required(f):
             return jsonify({'error': 'Admin privileges required'}), 403
         return f(*args, **kwargs)
     return decorated_function
+
+def subscription_required(f):
+    """Require an active subscription. Admins bypass."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Authentication required', 'redirect': '/login'}), 401
+        user = User.query.get(session['user_id'])
+        if not user:
+            return jsonify({'error': 'Authentication required', 'redirect': '/login'}), 401
+        # Admins always bypass subscription check
+        if user.is_admin:
+            return f(*args, **kwargs)
+        # Check for active subscription
+        sub = Subscription.query.filter_by(user_id=user.id, status='active').first()
+        if not sub:
+            return jsonify({
+                'error': 'Active subscription required',
+                'redirect': '/subscribe',
+                'subscription_required': True,
+            }), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 def log_activity(user_id, action, details=None):
     """Log user activity to DB"""

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscribe | PRISM</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/pwa/css/design-system.css">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--prism-bg);
+            color: var(--prism-text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .bg-gradient {
+            position: fixed; inset: 0; z-index: 0;
+            background:
+                radial-gradient(ellipse 80% 60% at 20% 30%, rgba(124, 58, 237, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 80% at 80% 70%, rgba(124, 58, 237, 0.06) 0%, transparent 60%),
+                linear-gradient(180deg, #07070d 0%, #0a0a14 50%, #0d0b18 100%);
+        }
+
+        .subscribe-container {
+            position: relative; z-index: 1;
+            width: 100%; max-width: 480px;
+            padding: 2rem;
+        }
+
+        .subscribe-card {
+            background: var(--prism-card-bg, rgba(255,255,255,0.04));
+            border: 1px solid var(--prism-border, rgba(255,255,255,0.08));
+            border-radius: 16px;
+            padding: 2.5rem 2rem;
+            text-align: center;
+        }
+
+        .logo { font-family: 'Cabinet Grotesk', sans-serif; font-size: 2rem; font-weight: 800; margin-bottom: 0.25rem; }
+        .logo span { background: linear-gradient(135deg, #7c3aed, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        .subtitle { color: var(--prism-text-muted, #888); font-size: 0.9rem; margin-bottom: 2rem; }
+
+        .price-tag {
+            font-family: 'Cabinet Grotesk', sans-serif;
+            font-size: 3rem; font-weight: 800; margin: 1rem 0 0.25rem;
+        }
+        .price-tag .currency { font-size: 1.5rem; vertical-align: super; }
+        .price-tag .period { font-size: 1rem; font-weight: 500; color: var(--prism-text-muted); }
+
+        .price-original {
+            text-decoration: line-through; color: var(--prism-text-muted);
+            font-size: 1.1rem; display: none; margin-bottom: 0.5rem;
+        }
+        .price-original.visible { display: block; }
+
+        .features { list-style: none; text-align: left; margin: 1.5rem 0; padding: 0; }
+        .features li {
+            padding: 0.5rem 0; font-size: 0.9rem;
+            color: var(--prism-text-muted); display: flex; align-items: center; gap: 0.5rem;
+        }
+        .features li::before { content: '\2713'; color: #7c3aed; font-weight: 700; }
+
+        .coupon-row {
+            display: flex; gap: 0.5rem; margin-bottom: 1.25rem;
+        }
+        .coupon-row input {
+            flex: 1; padding: 0.6rem 0.75rem; border-radius: 8px; font-size: 0.85rem;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            color: #fff; outline: none; text-transform: uppercase;
+        }
+        .coupon-row input::placeholder { text-transform: none; }
+        .coupon-row button {
+            padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+            background: rgba(124, 58, 237, 0.15); color: #a78bfa;
+            border: 1px solid rgba(124, 58, 237, 0.3); cursor: pointer; white-space: nowrap;
+        }
+        .coupon-row button:hover { background: rgba(124, 58, 237, 0.25); }
+
+        .coupon-msg { font-size: 0.8rem; margin-bottom: 1rem; min-height: 1.2em; }
+        .coupon-msg.success { color: #34d399; }
+        .coupon-msg.error { color: #f87171; }
+
+        .btn-subscribe {
+            display: block; width: 100%; padding: 0.85rem; border-radius: 10px;
+            font-size: 1rem; font-weight: 700; border: none; cursor: pointer;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: #fff; transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .btn-subscribe:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4); }
+        .btn-subscribe:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .status-banner {
+            margin-top: 1rem; padding: 0.75rem; border-radius: 8px; font-size: 0.85rem;
+            display: none;
+        }
+        .status-banner.active {
+            display: block; background: rgba(52, 211, 153, 0.1);
+            border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399;
+        }
+        .status-banner.cancelled {
+            display: block; background: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.3); color: #f87171;
+        }
+
+        .back-link {
+            display: block; text-align: center; margin-top: 1.25rem;
+            color: var(--prism-text-muted); font-size: 0.85rem; text-decoration: none;
+        }
+        .back-link:hover { color: #a78bfa; }
+
+        .cancel-link {
+            display: none; margin-top: 0.75rem; font-size: 0.8rem;
+            color: #f87171; background: none; border: none; cursor: pointer;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-gradient"></div>
+
+    <div class="subscribe-container">
+        <div class="subscribe-card">
+            <div class="logo"><span>PRISM</span></div>
+            <p class="subtitle">TikTok Product Intelligence Platform</p>
+
+            <div class="price-original" id="priceOriginal">$19.99/mo</div>
+            <div class="price-tag">
+                <span class="currency">$</span><span id="priceValue">19.99</span>
+                <span class="period">/month</span>
+            </div>
+
+            <ul class="features">
+                <li>Full product database access</li>
+                <li>Real-time trending & movers/shakers</li>
+                <li>Creative Linker — viral video finder</li>
+                <li>Discord bot product lookups</li>
+                <li>AI-powered product insights</li>
+                <li>Daily automated scans & alerts</li>
+            </ul>
+
+            <div class="coupon-row">
+                <input type="text" id="couponInput" placeholder="Coupon code (optional)">
+                <button onclick="applyCoupon()">Apply</button>
+            </div>
+            <div class="coupon-msg" id="couponMsg"></div>
+
+            <button class="btn-subscribe" id="subscribeBtn" onclick="subscribe()">Subscribe Now</button>
+
+            <div class="status-banner" id="statusBanner"></div>
+            <button class="cancel-link" id="cancelBtn" onclick="cancelSub()">Cancel subscription</button>
+
+            <a href="/" class="back-link">Back to dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        let appliedCoupon = null;
+
+        // Check if already subscribed
+        (async () => {
+            try {
+                const res = await fetch('/api/subscription/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                const banner = document.getElementById('statusBanner');
+                const btn = document.getElementById('subscribeBtn');
+                const cancelBtn = document.getElementById('cancelBtn');
+
+                if (data.is_active) {
+                    banner.textContent = data.is_admin
+                        ? 'Admin account — full access granted.'
+                        : 'Your subscription is active!';
+                    banner.className = 'status-banner active';
+                    btn.disabled = true;
+                    btn.textContent = 'Already Subscribed';
+                    if (!data.is_admin && data.has_subscription) cancelBtn.style.display = 'inline';
+                }
+                if (data.status === 'cancelled') {
+                    banner.textContent = 'Subscription cancelled. Re-subscribe to regain access.';
+                    banner.className = 'status-banner cancelled';
+                }
+            } catch (_) {}
+        })();
+
+        // Check URL params for status messages
+        const params = new URLSearchParams(location.search);
+        if (params.get('cancelled') === 'true') {
+            const b = document.getElementById('statusBanner');
+            b.textContent = 'Checkout cancelled. You can try again anytime.';
+            b.className = 'status-banner cancelled';
+        }
+
+        async function applyCoupon() {
+            const code = document.getElementById('couponInput').value.trim();
+            const msg = document.getElementById('couponMsg');
+            if (!code) { msg.textContent = ''; return; }
+
+            try {
+                const res = await fetch('/api/subscribe/coupon', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ coupon_code: code }),
+                });
+                const data = await res.json();
+                if (data.valid) {
+                    appliedCoupon = data.coupon_code;
+                    msg.textContent = `${data.description} — first month $${data.discounted_price}`;
+                    msg.className = 'coupon-msg success';
+                    document.getElementById('priceValue').textContent = data.discounted_price.toFixed(2);
+                    document.getElementById('priceOriginal').classList.add('visible');
+                } else {
+                    appliedCoupon = null;
+                    msg.textContent = data.error || 'Invalid coupon';
+                    msg.className = 'coupon-msg error';
+                    document.getElementById('priceValue').textContent = '19.99';
+                    document.getElementById('priceOriginal').classList.remove('visible');
+                }
+            } catch (e) {
+                msg.textContent = 'Error validating coupon';
+                msg.className = 'coupon-msg error';
+            }
+        }
+
+        async function subscribe() {
+            const btn = document.getElementById('subscribeBtn');
+            btn.disabled = true;
+            btn.textContent = 'Redirecting to PayPal...';
+
+            try {
+                const body = {};
+                if (appliedCoupon) body.coupon_code = appliedCoupon;
+
+                const res = await fetch('/api/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+
+                if (data.approval_url) {
+                    window.location.href = data.approval_url;
+                } else {
+                    alert(data.error || 'Failed to create subscription');
+                    btn.disabled = false;
+                    btn.textContent = 'Subscribe Now';
+                }
+            } catch (e) {
+                alert('Network error — please try again');
+                btn.disabled = false;
+                btn.textContent = 'Subscribe Now';
+            }
+        }
+
+        async function cancelSub() {
+            if (!confirm('Are you sure you want to cancel your subscription?')) return;
+            try {
+                const res = await fetch('/api/subscribe/cancel', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) location.reload();
+                else alert(data.error || 'Cancel failed');
+            } catch (e) {
+                alert('Network error');
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -25,16 +25,16 @@ log = logging.getLogger('BrandHunterBot')
 
 # Database setup - Import from main application to ensure model consistency
 # Database setup - Import from main application to ensure model consistency
-from app import app, db, Product, User, ApiKey
+from app import app, db, Product, User, ApiKey, Subscription
 
 # Discord Config
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
 HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
 BRAND_HUNTER_CHANNEL_ID = int(os.environ.get('BRAND_HUNTER_CHANNEL_ID', 0))  # For daily brand hunter posts
-PRODUCT_LOOKUP_CHANNEL_ID = 1461053839800139959
-BLACKLIST_CHANNEL_ID = 1440369747467174019
-AI_CHAT_CHANNEL_ID = 1473031651599847631  # PRISM AI insights channel
-AI_CHAT_CATEGORY_ID = 1444029219951874129  # Category for private AI chat channels
+PRODUCT_LOOKUP_CHANNEL_ID = int(os.environ.get('PRODUCT_LOOKUP_CHANNEL_ID', 1461053839800139959))
+BLACKLIST_CHANNEL_ID = int(os.environ.get('BLACKLIST_CHANNEL_ID', 1440369747467174019))
+AI_CHAT_CHANNEL_ID = int(os.environ.get('AI_CHAT_CHANNEL_ID', 1473031651599847631))  # PRISM AI insights channel
+AI_CHAT_CATEGORY_ID = int(os.environ.get('AI_CHAT_CATEGORY_ID', 1444029219951874129))  # Category for private AI chat channels
 XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 
 # Track active private AI channels: {user_id: channel_id}
@@ -162,86 +162,21 @@ def get_product_from_db(product_id):
             }
         return None
 
-from app import enrich_product_data, fetch_copilot_products
+from app import enrich_product_data
 
-def get_product_from_v2_api(product_id):
-    """
-    V2 API: Search Copilot /api/trending/products for accurate product stats.
-    This provides much more accurate video_count, creator_count, and sales data.
-    """
-    try:
-        print(f"🚀 [V2] Searching Copilot Products API for {product_id}...")
-        raw_pid = str(product_id).replace('shop_', '')
-        
-        # Try multiple timeframes to find the product
-        for timeframe in ['7d', 'all']:
-            with app.app_context():
-                res = fetch_copilot_products(timeframe=timeframe, limit=50)
-            
-            if not res or not res.get('products'):
-                continue
-            
-            # Search for this specific product
-            for p in res.get('products', []):
-                if str(p.get('productId', '')) == raw_pid:
-                    print(f"✅ [V2] Found product {product_id} in {timeframe} data!")
-                    
-                    # Extract V2 accurate stats
-                    shop_pid = f"shop_{raw_pid}"
-                    video_count = int(p.get('periodVideoCount') or p.get('adVideoCount') or 0)
-                    creator_count = int(p.get('periodCreatorCount') or 0)
-                    total_ad_spend = float(p.get('totalAdCost') or 0)
-                    total_sales = int(p.get('unitsSold') or 0)
-                    sales_7d = int(p.get('periodUnits') or 0)
-                    gmv = float(p.get('periodRevenue') or 0)
-                    
-                    # Save to database
-                    with app.app_context():
-                        db_product = Product.query.get(shop_pid)
-                        if not db_product:
-                            db_product = Product(product_id=shop_pid)
-                            db_product.first_seen = datetime.now(timezone.utc)
-                            db.session.add(db_product)
-                        
-                        db_product.product_name = p.get('productTitle') or db_product.product_name
-                        db_product.seller_name = p.get('sellerName') or db_product.seller_name
-                        db_product.image_url = p.get('productCoverUrl') or db_product.image_url
-                        db_product.video_count = video_count
-                        db_product.influencer_count = creator_count
-                        db_product.ad_spend_total = total_ad_spend
-                        db_product.ad_spend = total_ad_spend * 0.15  # Estimate 7d as 15%
-                        db_product.sales = total_sales
-                        db_product.sales_7d = sales_7d
-                        db_product.gmv = gmv
-                        db_product.commission_rate = float(p.get('tapCommissionRate') or 0) / 10000.0
-                        db_product.shop_ads_commission = float(p.get('tapShopAdsRate') or 0) / 10000.0
-                        db_product.scan_type = 'bot_lookup_v2'
-                        db_product.last_updated = datetime.now(timezone.utc)
-                        db.session.commit()
-                        
-                        return {
-                            'product_id': db_product.product_id,
-                            'product_name': db_product.product_name,
-                            'seller_name': db_product.seller_name,
-                            'image_url': db_product.cached_image_url or db_product.image_url,
-                            'video_count': video_count,
-                            'influencer_count': creator_count,
-                            'sales': total_sales,
-                            'sales_7d': sales_7d,
-                            'gmv': gmv,
-                            'ad_spend': db_product.ad_spend,
-                            'ad_spend_total': total_ad_spend,
-                            'commission_rate': db_product.commission_rate,
-                            'shop_ads_commission': db_product.shop_ads_commission,
-                            'from_v2_api': True
-                        }
-        
-        print(f"⚠️ [V2] Product {product_id} not found in trending data")
-        return None
-        
-    except Exception as e:
-        print(f"❌ [V2] Error: {e}")
-        return None
+PRISM_BASE_URL = os.environ.get('PRISM_BASE_URL', 'https://thoardburgersauce.com')
+
+
+def check_user_subscription(discord_id):
+    """Check if a Discord user has an active PRISM subscription. Admins bypass."""
+    with app.app_context():
+        user = User.query.filter_by(discord_id=str(discord_id)).first()
+        if not user:
+            return False, None
+        if user.is_admin:
+            return True, user
+        sub = Subscription.query.filter_by(user_id=user.id, status='active').first()
+        return (sub is not None), user
 
 def save_product_to_db(product_data):
     """
@@ -306,121 +241,17 @@ def save_product_to_db(product_data):
             'cached_image_url': p.cached_image_url
         }
 
-def get_product_from_api(product_id):
-    """
-    Search Copilot for product stats.
-    """
-    try:
-        print(f"🚀 Triggering Copilot Search for {product_id}...")
-        
-        # Create a temp product dict to pass to enricher
-        # We need to create a skeletal DB object or just a dict?
-        # enrich_product_data expects a dict-like object (p) that supports .get() and .update() / [] setting
-        
-        with app.app_context():
-            # Check if exists in DB to update it
-            # The bot uses numeric ID, app uses shop_ID
-            numeric_id = str(product_id).replace('shop_', '')
-            shop_pid = f"shop_{numeric_id}"
-            
-            p = Product.query.get(shop_pid)
-            if not p:
-                # Create a temporary/new product
-                p = Product(product_id=shop_pid)
-                p.first_seen = datetime.now(datetime.timezone.utc)
-                db.session.add(p)
-            
-            # Convert to dict-like logic for the function?
-            # actually enrich_product_data works on the SQLAlchemy object too because it supports __setitem__? 
-            # No, standard SQLAlchemy objects don't support p['key'] assignment unless defined.
-            # But the 'Product' model in this app might... let's check app.py later.
-            # Assuming it does, or enrich_product_data handles it?
-            # Re-reading app.py enrich_product_data:
-            # p['sales'] = ... 
-            # Yes, standard SQLAlchemy objects DO NOT support this.
-            # So `enrich_product_data` in app.py probably expects a Dictionary OR the Product class has __setitem__.
-            
-            # Only way to be sure: `enrich_product_data` in app.py uses `p.get()` and `p['key'] = val`.
-            # This implies `p` is a Dictionary.
-            # But `app.py` passes the `Product` row object... 
-            # Wait, `scan_target` in apify_service passed a dictionary.
-            # Let's fix `enrich_product_data` compatibility or wrap the product.
-            
-            # Simple fix: Pass a dictionary, then update the DB object.
-            
-            temp_p = {
-                'product_id': shop_pid,
-                'is_enriched': False
-            }
-            
-            # Call Echotik Logic
-            success, msg = enrich_product_data(temp_p, force=True)
-            
-            if success:
-                print(f"✅ Copilot found stats for {product_id}")
-                
-                # Update Real DB Object
-                p.scan_type = 'bot_lookup'
-                p.product_name = temp_p.get('product_name') or p.product_name or "Unknown Product"
-                p.image_url = temp_p.get('image_url') or p.image_url
-                p.sales = temp_p.get('sales', 0)
-                p.sales_7d = temp_p.get('sales_7d', 0)
-                p.sales_30d = temp_p.get('sales_30d', 0)
-                p.influencer_count = temp_p.get('influencer_count', 0)
-                p.video_count = temp_p.get('video_count', 0)
-                p.commission_rate = temp_p.get('commission_rate', 0)
-                p.shop_ads_commission = temp_p.get('shop_ads_commission', 0)
-                p.price = temp_p.get('price', 0)
-                p.gmv = temp_p.get('gmv', 0)
-                p.ad_spend = temp_p.get('ad_spend', 0)
-                p.ad_spend_total = temp_p.get('ad_spend_total', 0)
-                p.gmv_growth = temp_p.get('gmv_growth', 0)
-                p.last_updated = datetime.now(timezone.utc)
-                p.live_count = temp_p.get('live_count', 0)
-                
-                db.session.commit()
-                
-                # Convert to dict before returning!
-                return {
-                    'product_id': p.product_id,
-                    'product_name': p.product_name,
-                    'sales': p.sales,
-                    'sales_7d': p.sales_7d,
-                    'sales_30d': p.sales_30d,
-                    'influencer_count': p.influencer_count,
-                    'video_count': p.video_count,
-                    'commission_rate': p.commission_rate,
-                    'shop_ads_commission': p.shop_ads_commission,
-                    'price': p.price,
-                    'gmv': p.gmv,
-                    'ad_spend': p.ad_spend,
-                    'gmv_growth': p.gmv_growth,
-                    'image_url': p.cached_image_url or p.image_url,
-                    'live_count': p.live_count,
-                    'from_api': True
-                }
-            else:
-                print(f"❌ Copilot search failed: {msg}")
-                return None
-
-    except Exception as e:
-        print(f"Error fetching product {product_id}: {e}")
-        return None
-
 def get_product_data(product_id):
-    """Get product - check database first. If not found, try V2 API then legacy."""
-    
+    """Get product — check database first, then fetch from EchoTik API."""
+
+    raw_pid = str(product_id).replace('shop_', '')
+    shop_pid = f"shop_{raw_pid}"
+
     with app.app_context():
-        # Check DB
-        # Note: The bot logic uses numeric ID, but app uses 'shop_' prefix.
-        # We need to handle both lookups.
-        db_product = db.session.get(Product, product_id) or db.session.get(Product, f"shop_{product_id}")
-        
-        # If found AND has valid stats (any source), return it
-        # We trust 'sales_7d' > 0 as a sign of having data
-        if db_product and (db_product.sales_7d > 0 or db_product.video_count > 0):
-            print(f"✅ Product {product_id} found in database (Cached)")
-            # Return as DICT to survive session close
+        db_product = db.session.get(Product, shop_pid) or db.session.get(Product, raw_pid)
+
+        if db_product and (db_product.sales_7d or 0) > 0:
+            print(f"[Bot] Product {product_id} found in database (cached)")
             return {
                 'product_id': db_product.product_id,
                 'product_name': db_product.product_name,
@@ -430,22 +261,67 @@ def get_product_data(product_id):
                 'influencer_count': db_product.influencer_count,
                 'video_count': db_product.video_count,
                 'commission_rate': db_product.commission_rate,
-                'shop_ads_commission': db_product.shop_ads_commission,  # GMV Max Ads
+                'shop_ads_commission': db_product.shop_ads_commission,
                 'price': db_product.price,
                 'image_url': db_product.cached_image_url or db_product.image_url,
                 'has_free_shipping': db_product.has_free_shipping,
-                'live_count': db_product.live_count
+                'live_count': db_product.live_count,
             }
-    
-    # Not found OR needs upgrade -> Try V2 API first (more accurate data)
-    print(f"🔍 Product {product_id} needs scan/upgrade, trying V2 API...")
-    v2_result = get_product_from_v2_api(product_id)
-    if v2_result:
-        return v2_result
-    
-    # V2 didn't find it -> Fallback to legacy Copilot search
-    print(f"⚠️ V2 API didn't find {product_id}, falling back to legacy...")
-    return get_product_from_api(product_id)
+
+    # Not in DB or stale — fetch from EchoTik
+    print(f"[Bot] Fetching {product_id} from EchoTik API...")
+    try:
+        from app.services.echotik import fetch_product_detail, EchoTikError
+        with app.app_context():
+            detail = fetch_product_detail(raw_pid)
+            if not detail:
+                return None
+
+            # Upsert to DB
+            p = db.session.get(Product, shop_pid)
+            if not p:
+                p = Product(product_id=shop_pid)
+                p.first_seen = datetime.now(timezone.utc)
+                db.session.add(p)
+
+            p.product_name = detail.get('product_name') or p.product_name
+            p.seller_name = detail.get('seller_name') or p.seller_name
+            p.image_url = detail.get('image_url') or p.image_url
+            p.price = detail.get('price', 0)
+            p.sales = detail.get('sales', 0)
+            p.sales_7d = detail.get('sales_7d', 0)
+            p.sales_30d = detail.get('sales_30d', 0)
+            p.gmv = detail.get('gmv', 0)
+            p.video_count = detail.get('video_count', 0)
+            p.influencer_count = detail.get('influencer_count', 0)
+            p.commission_rate = detail.get('commission_rate', 0)
+            p.shop_ads_commission = detail.get('shop_ads_commission', 0)
+            p.ad_spend = detail.get('ad_spend', 0)
+            p.scan_type = 'bot_lookup_echotik'
+            p.last_updated = datetime.now(timezone.utc)
+            p.is_enriched = True
+            db.session.commit()
+
+            return {
+                'product_id': p.product_id,
+                'product_name': p.product_name,
+                'sales': p.sales,
+                'sales_7d': p.sales_7d,
+                'sales_30d': p.sales_30d,
+                'influencer_count': p.influencer_count,
+                'video_count': p.video_count,
+                'commission_rate': p.commission_rate,
+                'shop_ads_commission': p.shop_ads_commission,
+                'price': p.price,
+                'image_url': p.cached_image_url or p.image_url,
+                'gmv': p.gmv,
+                'ad_spend': p.ad_spend,
+                'live_count': p.live_count,
+                'from_echotik': True,
+            }
+    except Exception as e:
+        print(f"[Bot] EchoTik fetch error for {product_id}: {e}")
+        return None
 
 
 def create_product_embed(p, title_prefix=""):
@@ -803,21 +679,32 @@ async def on_message(message):
             r'vm\.tiktok\.com',
             r'/t/\w+',
         ]
-        
+
         content = message.content
         has_tiktok_link = any(re.search(pattern, content, re.IGNORECASE) for pattern in tiktok_patterns)
-        
+
         if has_tiktok_link or re.search(r'\d{15,25}', content):
+            # Subscription gate — non-subscribers get a signup prompt
+            has_sub, _user = check_user_subscription(str(message.author.id))
+            if not has_sub:
+                await message.reply(
+                    f"🔒 **PRISM Subscription Required**\n"
+                    f"Product lookups require an active subscription.\n"
+                    f"[Subscribe here]({PRISM_BASE_URL}/subscribe) for $19.99/month to unlock full access!",
+                    mention_author=False,
+                )
+                return
+
             # React to show we're processing
             await message.add_reaction('🔍')
-            
+
             # Try to resolve share links first
             url_pattern = r'https?://[^\s]+'
             urls = re.findall(url_pattern, content)
-            
+
             product_id = None
             region = 'US'
-            
+
             # Check if any URL is a share link that needs resolving
             for url in urls:
                 if 'vm.tiktok.com' in url or '/t/' in url or 'tiktok.com' in url:
@@ -825,50 +712,30 @@ async def on_message(message):
                     if resolved_pid:
                         product_id = resolved_pid
                         region = reg
-                        print(f"🎯 [Bot] Got product ID from link resolution: {product_id}")
+                        print(f"[Bot] Got product ID from link resolution: {product_id}")
                         break
-            
+
             # If no product ID from link resolution, try extracting from the raw message
             if not product_id:
                 product_id = extract_product_id(content)
-            
+
             if not product_id:
                 await message.add_reaction('❌')
                 await message.reply("❌ Could not find a valid TikTok product ID. This might be a regular video link without a tagged product.", mention_author=False)
                 return
 
-            
-            # Fetch product (database first, then API)
+            # Fetch product (database first, then EchoTik API)
             product = get_product_data(product_id)
-            
-            # If not in DB, try to fetch from API
-            if not product:
-                status_msg = await message.reply(f"🔎 Fetching fresh data from Copilot for `{product_id}`...", mention_author=False)
-                
-                # We need a dummy dict to pass to enrich_product_data since it expects a dict
-                dummy_p = {'product_id': product_id, 'region': region}
-                success, msg = enrich_product_data(dummy_p, i_log_prefix="[BotAutoLookup]", force=True)
-                
-                await status_msg.delete() # Remove searching message
-                
-                if success:
-                    # Save it to DB so get_product_data works
-                    new_prod = save_product_to_db(dummy_p) 
-                    if new_prod:
-                         product = new_prod
-                else:
-                    await message.reply(f"❌ Copilot search failed: {msg}", mention_author=False)
-                    return
 
             if not product:
                 await message.add_reaction('❌')
-                await message.reply(f"❌ Lookup Failed: {msg or 'Unknown Error'} (ID: {product_id})", mention_author=False)
+                await message.reply(f"❌ Product not found via EchoTik API (ID: {product_id})", mention_author=False)
                 return
-            
+
             # Create and send embed
             embed = create_product_embed(product)
             await message.reply(embed=embed, mention_author=False)
-            
+
             # Update reaction
             await message.remove_reaction('🔍', bot.user)
             await message.add_reaction('✅')
@@ -1204,77 +1071,56 @@ async def lookup_command(ctx, *, query: str = None):
         return
 
     # =========================================================================
-    # CREDIT SYSTEM CHECK (DISABLED - FREE MODE)
+    # SUBSCRIPTION CHECK
     # =========================================================================
-    ADMIN_IDS = [274339622119669760]
-    is_admin = ctx.author.id in ADMIN_IDS
-    user_credits = "Unlimited" # Free mode
-    
-    # Logic bypassed - Bot is now free for everyone
-    # if not is_admin: ... (removed)
-        
+    has_sub, _user = check_user_subscription(str(ctx.author.id))
+    is_admin = _user.is_admin if _user else False
+
+    if not has_sub:
+        await ctx.reply(
+            f"🔒 **PRISM Subscription Required**\n"
+            f"Product lookups require an active subscription.\n"
+            f"[Subscribe here]({PRISM_BASE_URL}/subscribe) for $19.99/month to unlock full access!",
+            mention_author=False,
+        )
+        return
+
     # =========================================================================
     # EXECUTE SCAN
     # =========================================================================
-    
+
     await ctx.message.add_reaction('🔍')
-    if is_admin:
-        status_msg = await ctx.reply(f"👑 **Admin Bypass** | Scanning... ", mention_author=False)
-    else:
-        status_msg = await ctx.reply(f"🎁 **Free Product Lookup** | Scanning...", mention_author=False)
-    
+    status_msg = await ctx.reply(
+        f"{'👑 **Admin** | ' if is_admin else ''}🔎 Scanning `{query[:50]}`...",
+        mention_author=False,
+    )
+
     # Try to resolve if it's a share link
     region = 'US'
     if 'vm.tiktok.com' in query or '/t/' in query or 'tiktok.com' in query:
-        # Use API to get ID directly
         extracted_id, reg = resolve_tiktok_share_link(query)
         if extracted_id:
-            query = extracted_id # Query is now the ID
+            query = extracted_id
             region = reg
-    
+
     product_id = extract_product_id(query)
-    
+
     if not product_id:
         await ctx.message.add_reaction('❌')
         await status_msg.edit(content="❌ Could not extract product ID from your input.")
         return
-    
-    
+
     product = get_product_data(product_id)
-    
-    # If not in DB, try to fetch from API
-    if not product:
-        await status_msg.edit(content=f"🔎 Fetching fresh data from Copilot for `{product_id}`...")
-        
-        # We need a dummy dict to pass to enrich_product_data since it expects a dict
-        dummy_p = {'product_id': product_id, 'region': region}
-        success, msg = enrich_product_data(dummy_p, i_log_prefix="[BotLookup]", force=True)
-        
-        if success:
-            # Save it to DB so get_product_data works
-            new_prod = save_product_to_db(dummy_p) 
-            if new_prod:
-                product = new_prod
-        else:
-             await status_msg.edit(content=f"❌ Copilot search failed: {msg}")
-             return
-    
+
     if not product:
         await ctx.message.add_reaction('❌')
-        # Use simple variable 'msg' which might capture the error from the enrich call above
-        # Note: 'msg' scope needs care. Initializing it safely.
-        await status_msg.edit(content=f"❌ Lookup Failed: {locals().get('msg', 'Product not found in DB/API')} (ID: {product_id})")
+        await status_msg.edit(content=f"❌ Product not found via EchoTik API (ID: {product_id})")
         return
-    
+
     await status_msg.delete()
     embed = create_product_embed(product)
-    
-    # Add Credit Footer
-    if not is_admin:
-        embed.set_footer(text=f"Credits Remaining: {user_credits} | ID: {product_id}")
-    else:
-        embed.set_footer(text=f"👑 Admin Mode | ID: {product_id}")
-        
+    embed.set_footer(text=f"{'👑 Admin' if is_admin else 'PRISM'} | ID: {product_id}")
+
     await ctx.reply(embed=embed, mention_author=False)
     await ctx.message.remove_reaction('🔍', bot.user)
     await ctx.message.add_reaction('✅')
@@ -1649,7 +1495,7 @@ async def search_brand(ctx, brand_name: str):
 # =============================================================================
 
 # Forum channel and thread IDs
-INSPO_CHAT_CHANNEL_ID = 1470824861160181863
+INSPO_CHAT_CHANNEL_ID = int(os.environ.get('INSPO_CHAT_CHANNEL_ID', 1470824861160181863))
 INSPO_THREAD_IDS = {
     1472589213567549694: 'AI Generations',
     1472588346567037091: 'Cakedfinds Styled Creators',

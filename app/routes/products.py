@@ -24,7 +24,7 @@ from sqlalchemy import func, or_, text
 from app import db
 from app.models import Product, WatchedBrand, BlacklistedBrand
 
-from app.routes.auth import login_required, admin_required, get_current_user, log_activity
+from app.routes.auth import login_required, admin_required, subscription_required, get_current_user, log_activity
 
 
 # ---------------------------------------------------------------------------
@@ -288,8 +288,11 @@ def save_or_update_product(p_data, scan_type='brand_hunter', explicit_id=None):
 
 def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
     """
-    Global Helper: Search/Upgrade product using TikTokCopilot API.
+    Global Helper: Enrich product data using EchoTik API.
+    Replaces the defunct TikTokCopilot pipeline.
     """
+    from app.services.echotik import fetch_product_detail, EchoTikError
+
     # Helper for robust attribute access
     def gv(obj, key, default=None):
         if isinstance(obj, dict): return obj.get(key, default)
@@ -300,156 +303,92 @@ def enrich_product_data(p, i_log_prefix="", force=False, allow_paid=False):
         else: setattr(obj, key, val)
 
     pid = gv(p, 'product_id')
-    if not pid: return False, "No Product ID"
+    if not pid:
+        return False, "No Product ID"
 
-    # Strip shop_ for search
     raw_pid = str(pid).replace('shop_', '')
 
-    print(f"{i_log_prefix} 🕵️‍♂️ Searching Copilot for {raw_pid}...")
+    print(f"{i_log_prefix} Enriching {raw_pid} via EchoTik...")
 
-    # STAGE 1: Search by direct Product ID
-    res = fetch_copilot_trending(timeframe='30d', limit=5, product_id=raw_pid)
+    try:
+        detail = fetch_product_detail(raw_pid)
+    except EchoTikError as exc:
+        print(f"{i_log_prefix} EchoTik error for {raw_pid}: {exc}")
+        return False, f"EchoTik API error: {exc}"
 
-    # STAGE 2: Fallback to Keyword Search if no results
-    if not res or not res.get('videos'):
-        print(f"{i_log_prefix} ⚠️ Stage 1 (ID Search) failed for {raw_pid}, trying Stage 2 (Keyword fallback)...")
-        res = fetch_copilot_trending(timeframe='30d', limit=10, keywords=raw_pid)
+    if not detail:
+        print(f"{i_log_prefix} EchoTik returned no data for {raw_pid}")
+        return False, "Product not found in EchoTik"
 
-    if not res or not res.get('videos'):
-        print(f"{i_log_prefix} ❌ Copilot Search Found Nothing for {raw_pid} after all stages. Full Response: {res}")
-        return False, "Copilot Search Found Nothing"
+    # Apply EchoTik data — the _normalize_product() in echotik.py already maps
+    # to canonical field names matching our Product model
+    sv(p, 'product_name', detail.get('product_name') or gv(p, 'product_name'))
+    sv(p, 'seller_name', detail.get('seller_name') or gv(p, 'seller_name'))
+    sv(p, 'seller_id', detail.get('seller_id') or gv(p, 'seller_id'))
+    sv(p, 'image_url', detail.get('image_url') or gv(p, 'image_url'))
+    sv(p, 'product_url', detail.get('product_url') or gv(p, 'product_url'))
 
-    # ========== 3-STAGE MATCHING FOR BEST MATCH ==========
-    best_match = None
-    videos = res.get('videos', [])
-    result_pids = [str(v.get('productId', '')) for v in videos]
+    # Sales & GMV
+    sales = detail.get('sales') or 0
+    sales_7d = detail.get('sales_7d') or 0
+    sales_30d = detail.get('sales_30d') or 0
+    gmv = detail.get('gmv') or 0
+    gmv_30d = detail.get('gmv_30d') or 0
 
-    # STAGE A: Exact PID match
-    for v in videos:
-        v_pid = str(v.get('productId', ''))
-        if raw_pid == v_pid:
-            best_match = v
-            print(f"{i_log_prefix} ✅ Exact PID match!")
-            break
+    if sales > 0: sv(p, 'sales', sales)
+    if sales_7d > 0: sv(p, 'sales_7d', sales_7d)
+    if sales_30d > 0: sv(p, 'sales_30d', sales_30d)
+    if gmv > 0: sv(p, 'gmv', gmv)
+    if gmv_30d > 0: sv(p, 'gmv_30d', gmv_30d)
 
-    # STAGE B: Fuzzy PID match (if no exact, requires 85%+ similarity)
-    if not best_match and FUZZY_AVAILABLE and result_pids:
-        try:
-            fuzzy_result = process.extractOne(raw_pid, result_pids, scorer=fuzz.ratio)
-            if fuzzy_result and fuzzy_result[1] >= 85:
-                matched_pid = fuzzy_result[0]
-                for v in videos:
-                    if str(v.get('productId', '')) == matched_pid:
-                        best_match = v
-                        print(f"{i_log_prefix} 🎯 Fuzzy match: {raw_pid} → {matched_pid} ({fuzzy_result[1]}%)")
-                        break
-        except Exception as fuzzy_err:
-            print(f"{i_log_prefix} ⚠️ Fuzzy matching error: {fuzzy_err}")
+    # Video counts — never downgrade all-time
+    v_alltime = detail.get('video_count_alltime') or 0
+    v_7d = detail.get('video_count_7d') or 0
+    current_alltime = int(gv(p, 'video_count_alltime') or 0)
+    current_vcount = int(gv(p, 'video_count') or 0)
 
-    # STAGE C: Keyword fallback with productTitle + sellerName
-    if not best_match:
-        product_title = gv(p, 'product_name') or gv(p, 'title') or ''
-        seller_name = gv(p, 'seller_name') or ''
-        query = f"{product_title} {seller_name}".strip()
-        if query and len(query) > 5:
-            print(f"{i_log_prefix} 🔍 Trying keyword search: '{query[:50]}...'")
-            kw_res = fetch_copilot_trending(timeframe='30d', limit=10, keywords=query)
-            if kw_res and kw_res.get('videos'):
-                best_match = kw_res['videos'][0]  # Take top result
-                print(f"{i_log_prefix} 📦 Keyword match found: {best_match.get('productId')}")
+    if v_alltime > current_alltime:
+        sv(p, 'video_count_alltime', v_alltime)
+    if v_alltime > current_vcount:
+        sv(p, 'video_count', v_alltime)
+    if v_7d > 0:
+        sv(p, 'video_7d', v_7d)
 
-    if not best_match:
-        print(f"{i_log_prefix} ❌ No match after all 3 stages for {raw_pid}. Result PIDs: {result_pids[:5]}")
-        return False, "No match found after exact, fuzzy, and keyword searches"
+    # Influencer count — never downgrade
+    inf = detail.get('influencer_count') or 0
+    current_inf = int(gv(p, 'influencer_count') or 0)
+    if inf > current_inf:
+        sv(p, 'influencer_count', inf)
 
-    # Extract Data from Best Match
-    v = best_match
-
-    # Update Fields
-    sv(p, 'product_name', v.get('productTitle') or gv(p, 'product_name'))
-    sv(p, 'seller_name', v.get('sellerName') or gv(p, 'seller_name'))
-    sv(p, 'image_url', v.get('productImageUrl') or gv(p, 'image_url'))
-
-    gmv = float(v.get('periodRevenue') or v.get('productPeriodRevenue') or 0)
-    sales_period = int(v.get('periodUnits') or v.get('units') or 0)
-
-    # Stats Extraction
-    v_count = int(v.get('productVideoCount') or 0)
-    inf_count = int(v.get('productCreatorCount') or 0)
-    shop_ads = float(v.get('tapShopAdsRate') or 0) / 10000.0
-    ad_spend = float(v.get('periodAdSpend') or 0)
-    ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or 0)
-    comm = float(v.get('tapCommissionRate') or 0) / 10000.0
-    price = float(v.get('avgUnitPrice') or v.get('minPrice') or v.get('productPrice') or 0)
-
-    sv(p, 'sales_7d', sales_period if sales_period > 0 else gv(p, 'sales_7d'))
-    sv(p, 'gmv', gmv if gmv > 0 else gv(p, 'gmv'))
-
-    # VIDEO COUNT & INFLUENCER COUNT: Update all-time fields, never downgrade
-    # video_count and influencer_count represent all-time saturation metrics
-    current_video_count = int(gv(p, 'video_count') or 0)
-    current_video_count_alltime = int(gv(p, 'video_count_alltime') or 0)
-    current_inf_count = int(gv(p, 'influencer_count') or 0)
-
-    # Only update video counts if new value is higher (never downgrade)
-    if v_count > 0:
-        if v_count > current_video_count_alltime:
-            sv(p, 'video_count_alltime', v_count)
-        if v_count > current_video_count:
-            sv(p, 'video_count', v_count)
-
-    # Only update influencer count if new value is higher (never downgrade)
-    if inf_count > 0 and inf_count > current_inf_count:
-        sv(p, 'influencer_count', inf_count)
-
-    sv(p, 'shop_ads_commission', shop_ads if shop_ads > 0 else gv(p, 'shop_ads_commission'))
-    sv(p, 'ad_spend', ad_spend if ad_spend > 0 else gv(p, 'ad_spend'))
-    sv(p, 'ad_spend_total', ad_spend_total if ad_spend_total > 0 else gv(p, 'ad_spend_total'))
-    sv(p, 'commission_rate', comm if comm > 0 else gv(p, 'commission_rate'))
+    # Pricing & commission
+    comm = detail.get('commission_rate') or 0
+    price = detail.get('price') or 0
+    if comm > 0: sv(p, 'commission_rate', comm)
     if price > 0: sv(p, 'price', price)
-    sv(p, 'last_updated', datetime.utcnow())
 
-    # Ratings & Reviews (Try common keys)
-    rating = float(v.get('productRating') or v.get('rating') or v.get('avgRating') or 0)
-    reviews = int(v.get('productReviewCount') or v.get('reviewCount') or v.get('commentCount') or 0)
+    # Ad spend
+    ad_spend = detail.get('ad_spend') or 0
+    if ad_spend > 0: sv(p, 'ad_spend', ad_spend)
+
+    # Ratings & quality
+    rating = detail.get('rating') or 0
+    reviews = detail.get('review_count') or 0
     if rating > 0: sv(p, 'product_rating', rating)
     if reviews > 0: sv(p, 'review_count', reviews)
 
-    if gmv > 0: sv(p, 'gmv', gmv)
-    if sales_period > 0:
-        sv(p, 'sales_7d', sales_period)
+    # Category
+    if detail.get('category'): sv(p, 'category', detail['category'])
+    if detail.get('subcategory'): sv(p, 'subcategory', detail['subcategory'])
 
-        # If Total Sales missing, at least use Period Sales
-        current_total = int(gv(p, 'sales', 0))
-        if current_total < sales_period:
-            sv(p, 'sales', sales_period)
-
-    # Try generic Total Sales keys
-    total_sales = int(v.get('productTotalSales') or v.get('totalSales') or v.get('soldCount') or 0)
-    if total_sales > 0: sv(p, 'sales', total_sales)
-
-    # NOTE: video_count and influencer_count already handled above with all-time logic
-
-    # Extract Ad Spend
-    ad_spend_7d = float(v.get('periodAdSpend') or 0)
-    ad_spend_total = float(v.get('productTotalAdSpend') or v.get('totalAdSpend') or v.get('adSpend') or 0)
-    if ad_spend_7d > 0: sv(p, 'ad_spend', ad_spend_7d)
-    if ad_spend_total > 0: sv(p, 'ad_spend_total', ad_spend_total)
-
-    # Extract Growth
-    growth_val = float(v.get('growthPercentage') or v.get('periodGrowth') or 0)
-    if growth_val != 0: sv(p, 'gmv_growth', growth_val)
-
-    # Dates
+    # Metadata
     sv(p, 'last_updated', datetime.utcnow())
-    sv(p, 'is_enriched', True)
+    sv(p, 'last_echotik_sync', datetime.utcnow())
 
-    # FINAL FILTER: Only reject products with no recent sales
-    # Video count filter is only for Hot Product Tracker, not individual enrichment
-    if sales_period <= 0:
-        return False, f"Zero 7D Sales ({sales_period})"
+    # Reject products with zero recent sales
+    if sales_7d <= 0:
+        return False, f"Zero 7D sales ({sales_7d})"
 
-    return True, "Enriched via Copilot"
+    return True, "Enriched via EchoTik"
 
 
 def get_cached_image_urls(cover_urls):
@@ -580,12 +519,7 @@ def fetch_seller_name(seller_id):
 
 
 def fetch_copilot_trending(**kwargs):
-    """Proxy — delegates to the monolith's fetch_copilot_trending."""
-    import sys
-    main_mod = sys.modules.get('__main__')
-    fn = getattr(main_mod, 'fetch_copilot_trending', None)
-    if fn:
-        return fn(**kwargs)
+    """Stub — TikTokCopilot API was shut down Feb 4, 2026. Use EchoTik instead."""
     return None
 
 
@@ -760,6 +694,7 @@ def pwa_files(filename):
 
 @products_bp.route('/api/product/enrich/<path:product_id>')
 @login_required
+@subscription_required
 def api_enrich_product(product_id):
     """Enforce fresh enrichment from EchoTik for a single product"""
     # 1. Resolve ID
@@ -948,6 +883,7 @@ def image_proxy(product_id):
 
 @products_bp.route('/api/products', methods=['GET'])
 @login_required
+@subscription_required
 def api_products():
     """Unified product listing API with filtering, sorting, and pagination"""
     try:
@@ -1140,6 +1076,7 @@ def api_products():
 @products_bp.route('/api/debug/check-product/<path:product_id>')
 @products_bp.route('/api/product/<path:product_id>')
 @login_required
+@subscription_required
 def unified_product_detail(product_id):
     """Unified helper for product details"""
     p = Product.query.get(product_id)
@@ -1248,6 +1185,7 @@ def get_favorites():
 
 @products_bp.route('/api/brand-products/<seller_name>')
 @login_required
+@subscription_required
 def get_brand_products_by_name(seller_name):
     """Get products for a specific brand by seller_name"""
     try:
@@ -1269,6 +1207,7 @@ def get_brand_products_by_name(seller_name):
 
 @products_bp.route('/api/brand-sync/<seller_name>', methods=['POST'])
 @login_required
+@subscription_required
 def sync_brand_by_name(seller_name):
     """Sync/refresh products for a brand (placeholder - stats are computed on-the-fly)"""
     try:
@@ -1297,6 +1236,7 @@ def sync_brand_by_name(seller_name):
 
 @products_bp.route('/api/lookup', methods=['GET', 'POST'])
 @login_required
+@subscription_required
 def lookup_product():
     """
     Look up any TikTok product by URL or ID.
@@ -1377,6 +1317,7 @@ def lookup_product():
 
 @products_bp.route('/api/lookup/batch', methods=['POST'])
 @login_required
+@subscription_required
 def lookup_batch():
     """
     Batch lookup multiple TikTok products by URL or ID.
@@ -1497,6 +1438,7 @@ def api_oos_products():
 
 @products_bp.route('/api/brands', methods=['GET'])
 @login_required
+@subscription_required
 def api_list_brands():
     """List all watched brands with their stats
     V2 FIX: Filters out brands with undefined/null names
@@ -1517,6 +1459,7 @@ def api_list_brands():
 
 @products_bp.route('/api/brands/discover', methods=['GET'])
 @login_required
+@subscription_required
 def api_discover_brands():
     """Discover top brands from existing products, sorted by GMV"""
     try:
@@ -1572,6 +1515,7 @@ def api_discover_brands():
 
 @products_bp.route('/api/brands', methods=['POST'])
 @login_required
+@subscription_required
 def api_add_brand():
     """Add a new brand to watch"""
     data = request.json or {}
@@ -1604,6 +1548,7 @@ def api_add_brand():
 
 @products_bp.route('/api/brands/<int:brand_id>', methods=['DELETE'])
 @login_required
+@subscription_required
 def api_delete_brand(brand_id):
     """Stop tracking a brand"""
     brand = WatchedBrand.query.get(brand_id)
@@ -1621,6 +1566,7 @@ def api_delete_brand(brand_id):
 
 @products_bp.route('/api/brands/<int:brand_id>/sync', methods=['POST'])
 @login_required
+@subscription_required
 def api_sync_brand(brand_id):
     """Sync products for a specific brand by searching Copilot"""
     brand = WatchedBrand.query.get(brand_id)
@@ -1641,6 +1587,7 @@ def api_sync_brand(brand_id):
 
 @products_bp.route('/api/brands/<int:brand_id>/products', methods=['GET'])
 @login_required
+@subscription_required
 def api_brand_products(brand_id):
     """Get all products for a specific brand"""
     brand = WatchedBrand.query.get(brand_id)
@@ -1661,6 +1608,7 @@ def api_brand_products(brand_id):
 
 @products_bp.route('/api/brands/refresh-all', methods=['POST'])
 @login_required
+@subscription_required
 def api_refresh_all_brands():
     """Refresh stats for all watched brands"""
     brands = WatchedBrand.query.filter_by(is_active=True).all()
@@ -1707,6 +1655,7 @@ def api_init_brands():
 
 @products_bp.route('/api/brands/debug', methods=['GET'])
 @login_required
+@subscription_required
 def api_debug_brands():
     """Debug: Show raw brand data and schema info"""
     try:

@@ -70,6 +70,7 @@ def create_app():
     from app.routes.admin import admin_bp
     from app.routes.ai import ai_bp
     from app.routes.extern import extern_bp
+    from app.routes.payments import payments_bp
 
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(products_bp)
@@ -78,6 +79,7 @@ def create_app():
     flask_app.register_blueprint(admin_bp)
     flask_app.register_blueprint(ai_bp)
     flask_app.register_blueprint(extern_bp)
+    flask_app.register_blueprint(payments_bp)
 
     # --- Ensure data/ directory exists (for scraper cookies, etc.) ---
     os.makedirs(os.path.join(project_root, 'data'), exist_ok=True)
@@ -135,6 +137,7 @@ from app.models import (  # noqa: E402, F401
     WatchedBrand,
     ApiKey,
     ScanJob,
+    Subscription,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)
@@ -154,25 +157,9 @@ from app.routes.auth import (  # noqa: E402, F401
     get_current_user,
     login_required,
     admin_required,
+    subscription_required,
     log_activity,
     is_maintenance_mode,
     set_maintenance_mode,
     generate_watermark,
 )
-
-
-# Copilot stubs (API shut down Feb 4, 2026)
-def get_copilot_cookie():
-    return None
-
-
-def fetch_copilot_products(**kwargs):
-    return None
-
-
-def fetch_copilot_trending(**kwargs):
-    return None
-
-
-def sync_copilot_products(**kwargs):
-    return 0, 0
