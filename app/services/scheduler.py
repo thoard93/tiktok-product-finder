@@ -60,6 +60,46 @@ def echotik_trending_sync(app):
             log.exception("[SCHEDULER] Trending sync DB commit failed")
 
 
+def echotik_scraper_sync(app):
+    """
+    Run the Playwright browser scraper to capture EchoTik product data
+    from XHR interception.  Offset 3 h from the API sync so the DB
+    effectively refreshes every ~3 hours.
+    """
+    try:
+        from app.services.echotik_scraper import (
+            run_scraper_sync, ScraperCookieError, ScraperBlockedError,
+            ScraperTimeoutError, ScraperError,
+        )
+    except ImportError:
+        log.warning("[SCHEDULER] echotik_scraper not available — skipping browser sync")
+        return
+
+    with app.app_context():
+        log.info("[SCHEDULER] EchoTik browser scrape starting")
+        try:
+            result = run_scraper_sync(app, pages=5)
+            log.info(
+                "[SCHEDULER] Browser scrape complete in %.1fs: "
+                "%d new, %d updated, %d skipped, %d errors",
+                result.get('duration_s', 0),
+                result.get('created', 0),
+                result.get('updated', 0),
+                result.get('skipped', 0),
+                result.get('errors', 0),
+            )
+        except ScraperCookieError as exc:
+            log.critical("[SCHEDULER] Scraper COOKIE ERROR — admin must re-upload cookies: %s", exc)
+        except ScraperBlockedError as exc:
+            log.warning("[SCHEDULER] Scraper BLOCKED by EchoTik: %s", exc)
+        except ScraperTimeoutError as exc:
+            log.warning("[SCHEDULER] Scraper TIMEOUT: %s", exc)
+        except ScraperError as exc:
+            log.error("[SCHEDULER] Scraper error: %s", exc)
+        except Exception:
+            log.exception("[SCHEDULER] Scraper unexpected error")
+
+
 def echotik_deep_refresh(app):
     """
     Re-fetch product detail for every active product whose last_echotik_sync
@@ -310,6 +350,19 @@ def init_scheduler(app):
         name='EchoTik Trending Sync',
     )
 
+    # EchoTik browser scraper — every 6 hours, offset 3 h from API sync
+    from datetime import datetime as _dt, timedelta as _td
+    scraper_start = _dt.utcnow() + _td(hours=3)
+    scheduler.add_job(
+        func=echotik_scraper_sync,
+        args=[app],
+        trigger='interval',
+        hours=6,
+        next_run_time=scraper_start,
+        id='echotik_scraper_sync',
+        name='EchoTik Browser Scraper',
+    )
+
     # EchoTik deep refresh — every 24 hours
     scheduler.add_job(
         func=echotik_deep_refresh,
@@ -334,6 +387,6 @@ def init_scheduler(app):
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
     log.info(
-        "[SCHEDULER] Started — EchoTik trending (6h), deep refresh (24h), "
-        "Google Sheets (72h)"
+        "[SCHEDULER] Started — EchoTik API trending (6h), browser scraper (6h +3h offset), "
+        "deep refresh (24h), Google Sheets (72h)"
     )

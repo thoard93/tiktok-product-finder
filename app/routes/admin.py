@@ -5,10 +5,13 @@ Admin dashboard, config, cleanup, debug, migration, and maintenance routes.
 
 import os
 import json
+import logging
 import time
 import traceback
 import secrets
 import requests
+
+log = logging.getLogger(__name__)
 from datetime import datetime, timedelta
 from flask import (
     Blueprint, jsonify, request, session,
@@ -1953,6 +1956,105 @@ def debug_force_stale():
     if scheduled_stale_refresh:
         executor.submit(scheduled_stale_refresh)
     return jsonify({'success': True, 'message': 'Triggered stale refresh job in background.'})
+
+
+# =============================================================================
+# ECHOTIK BROWSER SCRAPER — Cookie Management & Manual Triggers
+# =============================================================================
+
+@admin_bp.route('/api/admin/echotik-cookies', methods=['POST'])
+@login_required
+@admin_required
+def upload_echotik_cookies():
+    """
+    Upload EchoTik session cookies for the Playwright scraper.
+
+    Expects JSON body: { "cookies": [ { name, value, domain, ... }, ... ] }
+    Cookies can be exported from browser DevTools or EditThisCookie extension.
+    """
+    data = request.get_json()
+    if not data or not isinstance(data.get('cookies'), list):
+        return jsonify({'error': 'Body must be {"cookies": [...]}'}), 400
+
+    cookies = data['cookies']
+    if len(cookies) == 0:
+        return jsonify({'error': 'Cookie list is empty'}), 400
+
+    # Validate each cookie has at least name + value
+    for i, c in enumerate(cookies):
+        if not isinstance(c, dict) or not c.get('name') or not c.get('value'):
+            return jsonify({'error': f'Cookie at index {i} missing name or value'}), 400
+
+    try:
+        from app.services.echotik_scraper import save_cookies
+        result = save_cookies(cookies)
+        log_activity(session.get('user_id'), 'echotik_cookies_upload',
+                     {'total': result['total'], 'echotik_cookies': result['echotik_cookies']})
+        return jsonify({'success': True, **result})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
+@admin_bp.route('/api/admin/echotik-cookies/status', methods=['GET'])
+@login_required
+@admin_required
+def echotik_cookies_status():
+    """Check if EchoTik cookies are configured (does NOT expose cookie values)."""
+    try:
+        from app.services.echotik_scraper import get_cookie_status
+        return jsonify(get_cookie_status())
+    except Exception as exc:
+        return jsonify({'configured': False, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/api/admin/echotik-scraper/run', methods=['POST'])
+@login_required
+@admin_required
+def trigger_echotik_scraper():
+    """
+    Manually trigger a full EchoTik browser scrape.
+    Runs in background thread — returns immediately.
+    """
+    pages = request.get_json(silent=True) or {}
+    num_pages = pages.get('pages', 5)
+
+    try:
+        from app.services.echotik_scraper import run_scraper_sync
+    except ImportError:
+        return jsonify({'error': 'echotik_scraper module not available'}), 500
+
+    def _run():
+        try:
+            result = run_scraper_sync(current_app._get_current_object(), pages=num_pages)
+            log.info("[ADMIN] Manual scraper run complete: %s", result)
+        except Exception as exc:
+            log.error("[ADMIN] Manual scraper run failed: %s", exc)
+
+    executor.submit(_run)
+    log_activity(session.get('user_id'), 'echotik_scraper_manual',
+                 {'pages': num_pages})
+    return jsonify({'success': True, 'message': f'Scraper started ({num_pages} pages) — running in background'})
+
+
+@admin_bp.route('/api/admin/echotik-scraper/debug', methods=['POST'])
+@login_required
+@admin_required
+def debug_echotik_scraper():
+    """
+    Debug scrape: capture 1 page of XHR traffic and return raw results
+    instead of syncing to DB. Useful for discovering XHR URL patterns
+    and response structures.
+    """
+    try:
+        from app.services.echotik_scraper import run_debug_scrape
+    except ImportError:
+        return jsonify({'error': 'echotik_scraper module not available'}), 500
+
+    try:
+        result = run_debug_scrape(current_app._get_current_object(), pages=1)
+        return jsonify({'success': True, **result})
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @admin_bp.route('/api/log-activity', methods=['POST'])

@@ -16,5 +16,8 @@ __pycache__/
 copilot_*.json
 temp.html
 
+# Scraper data (session cookies, cache files)
+data/
+
 # Environment
 .env

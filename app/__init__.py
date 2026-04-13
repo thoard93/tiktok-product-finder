@@ -79,6 +79,9 @@ def create_app():
     flask_app.register_blueprint(ai_bp)
     flask_app.register_blueprint(extern_bp)
 
+    # --- Ensure data/ directory exists (for scraper cookies, etc.) ---
+    os.makedirs(os.path.join(project_root, 'data'), exist_ok=True)
+
     # --- Database init ---
     with flask_app.app_context():
         from app import models  # noqa: F401 — ensure models registered
