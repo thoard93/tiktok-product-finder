@@ -626,3 +626,9 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .value-prop i{width:20px;height:20px;color:var(--accent);flex-shrink:0;margin-top:2px}
 .value-prop strong{display:block;font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px}
 .value-prop p{font-size:13px;color:var(--text-muted);line-height:1.6;margin:0}
+
+/* 26. ADMIN SCAN STATUS ==================================================== */
+.scan-status-box{padding:14px 18px;border-radius:var(--radius);font-size:var(--text-sm);line-height:1.6}
+.scan-status-info{background:var(--teal-dim);border:1px solid rgba(45,212,191,.2);color:var(--teal)}
+.scan-status-success{background:var(--success-dim);border:1px solid rgba(74,222,128,.2);color:var(--success)}
+.scan-status-error{background:var(--danger-dim);border:1px solid rgba(248,113,113,.2);color:var(--danger)}

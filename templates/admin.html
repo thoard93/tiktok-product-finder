@@ -64,49 +64,75 @@
 
 {% block scripts %}
 <script>
-var pollTimer = null;
+function showStatus(type, msg) {
+  var el = document.getElementById("scanStatus");
+  el.style.display = "block";
+  el.className = "scan-status-box scan-status-" + type;
+  el.innerHTML = msg;
+}
 
 async function runScan() {
   var btn = document.getElementById("scanBtn");
-  var status = document.getElementById("scanStatus");
   setLoading(btn, true);
-  status.style.display = "block";
-  status.className = "mb-4 flash-msg info";
-  status.style.cssText = "display:block;position:static;animation:none;pointer-events:auto;max-width:none";
-  status.innerHTML = '<span class="anim-pulse">Scan in progress... This may take 1-3 minutes.</span>';
+  showStatus("info", '<span class="anim-pulse">&#x23f3; Scan in progress... This may take 1-3 minutes. Do not close this page.</span>');
 
   try {
+    /* 5-minute timeout for the synchronous scan */
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 300000);
+
     var res = await fetch("/api/scan/echotik-sync", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({pages: 10, page_size: 50})
+      body: JSON.stringify({pages: 10, page_size: 50}),
+      signal: controller.signal
     });
-    var data = await res.json();
+    clearTimeout(timeout);
+
+    var text = await res.text();
+    console.log("[Admin] Scan response (" + res.status + "):", text);
+
+    var data;
+    try { data = JSON.parse(text); } catch(e) {
+      showStatus("error", "<strong>Server returned invalid JSON (HTTP " + res.status + "):</strong><br><code style='font-size:12px;word-break:break-all'>" + text.substring(0, 500) + "</code>");
+      setLoading(btn, false);
+      return;
+    }
 
     if (res.status === 409) {
-      status.className = "mb-4 flash-msg error";
-      status.style.cssText = "display:block;position:static;animation:none;pointer-events:auto;max-width:none";
-      status.innerHTML = "<span>Scan already running. Please wait.</span>";
+      showStatus("error", "Scan already running. Please wait for it to finish.");
+      setLoading(btn, false);
+      return;
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      showStatus("error", "Auth error (" + res.status + "): " + (data.error || "Not authorized"));
       setLoading(btn, false);
       return;
     }
 
     if (data.success) {
+      var fetched = data.fetched || 0;
+      var filtered = data.filtered || 0;
       var created = data.created || 0;
       var updated = data.updated || 0;
-      status.className = "mb-4 flash-msg success";
-      status.style.cssText = "display:block;position:static;animation:none;pointer-events:auto;max-width:none";
-      status.innerHTML = "<span>Scan complete &mdash; " + created + " new products added, " + updated + " updated.</span>";
+      var errors = data.errors || 0;
+      showStatus("success",
+        "<strong>Scan complete!</strong><br>" +
+        fetched + " products fetched &rarr; " + filtered + " passed filters &rarr; " +
+        created + " new, " + updated + " updated" +
+        (errors > 0 ? ", " + errors + " errors" : "")
+      );
       document.getElementById("lastSyncTime").textContent = "Just now";
     } else {
-      status.className = "mb-4 flash-msg error";
-      status.style.cssText = "display:block;position:static;animation:none;pointer-events:auto;max-width:none";
-      status.innerHTML = "<span>Scan failed: " + (data.error || "Unknown error") + "</span>";
+      showStatus("error", "<strong>Scan failed:</strong> " + (data.error || "Unknown error"));
     }
   } catch(e) {
-    status.className = "mb-4 flash-msg error";
-    status.style.cssText = "display:block;position:static;animation:none;pointer-events:auto;max-width:none";
-    status.innerHTML = "<span>Network error: " + e.message + "</span>";
+    if (e.name === "AbortError") {
+      showStatus("error", "Scan timed out after 5 minutes. Check server logs.");
+    } else {
+      showStatus("error", "<strong>Network error:</strong> " + e.message);
+    }
   }
   setLoading(btn, false);
 }
