@@ -9,9 +9,13 @@
   {# ===== LEFT: Product Info ===== #}
   <div>
     <div class="detail-image">
-      <img src="/api/image-proxy/{{ product.product_id }}" alt="{{ product.product_name }}"
-           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-      <div class="product-card-img-fallback" style="height:100%;display:none"><i data-lucide="package" style="width:64px;height:64px"></i></div>
+      {% if product.cached_image_url or product.image_url %}
+        <img src="{{ product.cached_image_url or product.image_url }}" alt="{{ product.product_name }}"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="product-card-img-fallback" style="height:100%;display:none"><i data-lucide="package" style="width:64px;height:64px"></i></div>
+      {% else %}
+        <div class="product-card-img-fallback" style="height:100%"><i data-lucide="package" style="width:64px;height:64px"></i></div>
+      {% endif %}
     </div>
 
     <h1 style="font-size:var(--text-2xl);margin-bottom:var(--space-3)">{{ product.product_name }}</h1>

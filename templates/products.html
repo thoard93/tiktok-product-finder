@@ -41,9 +41,13 @@
   {% for p in products %}
   <div class="product-card" data-category="{{ p.category | default('') }}" data-commission="{{ (p.commission_rate or 0) * 100 }}" data-name="{{ p.product_name | lower }}">
     <div class="product-card-img">
-      <img src="/api/image-proxy/{{ p.product_id }}" alt="{{ p.product_name }}" loading="lazy"
-           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-      <div class="product-card-img-fallback" style="display:none"><i data-lucide="package"></i></div>
+      {% if p.cached_image_url or p.image_url %}
+        <img src="{{ p.cached_image_url or p.image_url }}" alt="{{ p.product_name }}" loading="lazy"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="product-card-img-fallback" style="display:none"><i data-lucide="package"></i></div>
+      {% else %}
+        <div class="product-card-img-fallback"><i data-lucide="package"></i></div>
+      {% endif %}
       {% if p.category %}<span class="badge badge-muted badge-overlay-tl">{{ p.category }}</span>{% endif %}
       <span class="badge badge-overlay-tr {{ 'badge-green' if p.trending_score >= 80 else ('badge-gold' if p.trending_score >= 50 else 'badge-red') }}">{{ p.trending_score }}</span>
     </div>

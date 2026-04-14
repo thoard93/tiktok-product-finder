@@ -171,6 +171,54 @@ def _pick(*candidates, default=None):
     return default
 
 
+def _extract_image_url(raw):
+    """
+    Extract a single usable image URL from whatever EchoTik sends.
+
+    Handles: plain URL string, dict with 'url' key, list of dicts,
+    or a JSON-encoded string of any of the above.
+    """
+    import json as _json
+
+    if not raw:
+        return None
+
+    # If it's a string that looks like JSON (starts with [ or {), parse it
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        if stripped.startswith(('[', '{')):
+            try:
+                raw = _json.loads(stripped)
+            except (ValueError, TypeError):
+                pass
+
+    # List of dicts — pick the first one with a url
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                url = item.get('url') or item.get('thumb_url')
+                if url and isinstance(url, str) and url.startswith('http'):
+                    return url[:500]
+            elif isinstance(item, str) and item.startswith('http'):
+                return item[:500]
+        return None
+
+    # Single dict
+    if isinstance(raw, dict):
+        url = (raw.get('url')
+               or (raw.get('url_list') or [None])[0]
+               or raw.get('thumb_url'))
+        if url and isinstance(url, str):
+            return url[:500]
+        return None
+
+    # Plain string URL
+    if isinstance(raw, str) and raw.startswith('http'):
+        return raw[:500]
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Public API — fetch_trending_products
 # ---------------------------------------------------------------------------
@@ -361,8 +409,49 @@ def sync_to_db(products_list: list[dict]) -> dict:
         db.session.rollback()
         raise
 
+    # --- Post-sync: sign images in batches of 10 ---
+    try:
+        _sign_product_images(db)
+    except Exception:
+        log.exception("Post-sync image signing failed (non-fatal)")
+
     log.info("sync_to_db: created=%d updated=%d errors=%d", created, updated, errors)
     return {'created': created, 'updated': updated, 'errors': errors}
+
+
+def _sign_product_images(db):
+    """Sign image URLs for products that don't have cached_image_url yet."""
+    from app.models import Product
+
+    products = Product.query.filter(
+        Product.image_url.isnot(None),
+        Product.cached_image_url.is_(None),
+    ).limit(50).all()
+
+    if not products:
+        return
+
+    # Build batches of 10
+    for i in range(0, len(products), 10):
+        batch = products[i:i + 10]
+        urls = [p.image_url for p in batch if p.image_url and p.image_url.startswith('http')]
+        if not urls:
+            continue
+
+        signed = fetch_batch_images(urls)
+        if not signed:
+            continue
+
+        for p in batch:
+            if p.image_url in signed:
+                p.cached_image_url = signed[p.image_url][:500]
+                log.debug("Signed image for %s", p.product_id)
+
+    try:
+        db.session.commit()
+    except Exception:
+        log.warning("Image signing commit failed")
+        db.session.rollback()
 
 
 # ---------------------------------------------------------------------------
@@ -463,17 +552,12 @@ def _normalize_product(d: dict) -> dict:
         d.get('productName'), d.get('product_name'), d.get('name'),
     )
 
-    # Image — may be a dict with a url key
+    # Image — may be a dict, list of dicts, or JSON string
     raw_img = _pick(
         d.get('product_image'), d.get('image'), d.get('cover'),
         d.get('image_url'), d.get('cover_url'), d.get('product_img_url'),
     )
-    if isinstance(raw_img, dict):
-        image_url = (raw_img.get('url')
-                     or (raw_img.get('url_list') or [None])[0]
-                     or raw_img.get('thumb_url'))
-    else:
-        image_url = raw_img
+    image_url = _extract_image_url(raw_img)
 
     product_url = _pick(d.get('product_url'), d.get('productUrl'))
     if not product_url and product_id:
@@ -582,17 +666,17 @@ def _update_existing(product, p: dict, velocity: float, now: datetime):
     product.ad_spend = p.get('ad_spend') or product.ad_spend or 0
 
     # Name / seller — only update if current is unknown
-    name = (p.get('product_name') or '').strip()
+    name = (p.get('product_name') or '').strip()[:500]
     if name and name.lower() not in ('', 'unknown', 'none', 'null'):
         product.product_name = name
 
     img = p.get('image_url')
     if img:
-        product.image_url = img
+        product.image_url = str(img)[:500]
 
     url = p.get('product_url')
     if url:
-        product.product_url = url
+        product.product_url = str(url)[:500]
 
     sname = (p.get('seller_name') or '').strip()
     if sname and sname.lower() not in ('', 'unknown', 'none', 'null'):
@@ -631,9 +715,9 @@ def _create_new(product_id: str, p: dict, velocity: float, now: datetime, db):
 
     product = Product(
         product_id=product_id,
-        product_name=p.get('product_name') or 'Unknown Product',
-        image_url=p.get('image_url'),
-        product_url=product_url,
+        product_name=(p.get('product_name') or 'Unknown Product')[:500],
+        image_url=(p.get('image_url') or '')[:500] or None,
+        product_url=(product_url or '')[:500] or None,
         price=p.get('price', 0) or 0,
         original_price=p.get('original_price', 0) or 0,
         sales=p.get('sales', 0) or 0,
