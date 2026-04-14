@@ -34,7 +34,7 @@ def api_auth(f):
 views_bp = Blueprint('views', __name__)
 
 # Products with status='active' or NULL (new products may not have status set)
-_active_filter = or_(_active_filter, Product.product_status.is_(None))
+_active_filter = or_(Product.product_status == 'active', Product.product_status.is_(None))
 
 # ---------------------------------------------------------------------------
 # Helpers
