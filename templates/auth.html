@@ -69,6 +69,17 @@
         Continue with Discord
       </a>
 
+      <div class="auth-divider">developer access</div>
+
+      {# Dev passkey login #}
+      <div class="flex gap-2">
+        <input type="password" class="input" id="devPasskey" placeholder="Enter developer passkey" style="flex:1">
+        <button class="btn btn-ghost" onclick="devLogin()" id="devLoginBtn">
+          <i data-lucide="key" style="width:16px;height:16px"></i> Enter
+        </button>
+      </div>
+      <div id="devError" style="display:none;margin-top:var(--space-2);font-size:var(--text-xs);color:var(--danger)"></div>
+
       <div class="auth-footer">By continuing you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</div>
     </div>
   </div>
@@ -89,8 +100,45 @@ if (new URLSearchParams(window.location.search).get("tab") === "register") switc
 document.querySelectorAll(".auth-form form").forEach(function(f) {
   f.addEventListener("submit", function() {
     var btn = f.querySelector(".btn-primary");
-    if (btn) setLoading(btn, true);
+    if (btn) { btn.disabled = true; btn.style.opacity = "0.6"; }
   });
+});
+
+/* Dev passkey login */
+async function devLogin() {
+  var input = document.getElementById("devPasskey");
+  var btn = document.getElementById("devLoginBtn");
+  var err = document.getElementById("devError");
+  var passkey = input.value.trim();
+  if (!passkey) { input.focus(); return; }
+
+  btn.disabled = true; btn.style.opacity = "0.6";
+  err.style.display = "none";
+
+  try {
+    var res = await fetch("/auth/passkey", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({passkey: passkey})
+    });
+    var data = await res.json();
+    if (data.success) {
+      window.location.href = data.redirect || "/app/dashboard";
+    } else {
+      err.textContent = data.error || "Invalid passkey";
+      err.style.display = "block";
+      btn.disabled = false; btn.style.opacity = "";
+    }
+  } catch(e) {
+    err.textContent = "Network error";
+    err.style.display = "block";
+    btn.disabled = false; btn.style.opacity = "";
+  }
+}
+
+/* Enter key on passkey input */
+document.getElementById("devPasskey").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") { e.preventDefault(); devLogin(); }
 });
 </script>
 {% endblock %}
