@@ -205,20 +205,26 @@ def product_detail(product_id):
     product.trending_score = min(99, int((product.sales_7d or 0) / 10 + (product.influencer_count or 0) * 3 + (product.commission_rate or 0) * 200))
     ctx['product'] = product
 
-    # Build stats dict from existing model fields
+    # Build stats dict from existing model fields — per time period
     ctx['stats'] = {
+        # 7-day
         'sales_7d': product.sales_7d or 0,
         'revenue_7d': product.gmv or 0,
+        'videos_7d': product.video_7d or 0,
+        'growth_7d': product.gmv_growth or 0,
+        # 30-day
         'sales_30d': product.sales_30d or 0,
         'revenue_30d': product.gmv_30d or 0,
+        'videos_30d': product.video_30d or 0,
+        # All-time
         'total_sales': product.sales or 0,
         'total_revenue': product.gmv or 0,
+        'total_videos': product.video_count_alltime or product.video_count or 0,
+        'total_creators': product.influencer_count or 0,
+        # Always visible
         'trending_score': product.trending_score,
         'commission_rate': round((product.commission_rate or 0) * 100, 1),
-        'creator_count': product.influencer_count or 0,
-        'video_count': product.video_count or 0,
         'avg_order_value': product.price or 0,
-        'growth_7d': product.gmv_growth or 0,
     }
 
     # Lazy-load trend data (cache 24h) — defensive if columns don't exist yet
