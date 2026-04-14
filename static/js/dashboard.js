@@ -265,25 +265,24 @@ document.addEventListener("DOMContentLoaded", function() {
 
 /* --- Theme Toggle (light/dark) -------------------------------------------- */
 function toggleTheme() {
-  var shell = document.querySelector(".app-shell");
-  if (!shell) return;
-  var isLight = shell.classList.toggle("light-mode");
-  localStorage.setItem("vantage_theme", isLight ? "light" : "dark");
-  // Update toggle icon
+  var current = document.documentElement.getAttribute("data-theme");
+  var next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("vantage_theme", next);
   var icon = document.getElementById("themeIcon");
-  if (icon) icon.setAttribute("data-lucide", isLight ? "moon" : "sun");
+  if (icon) icon.setAttribute("data-lucide", next === "dark" ? "sun" : "moon");
   if (window.lucide) lucide.createIcons();
 }
 
-/* Restore saved theme on load */
+/* Restore saved theme on load — default light for app */
 document.addEventListener("DOMContentLoaded", function() {
-  var saved = localStorage.getItem("vantage_theme");
-  if (saved === "light") {
-    var shell = document.querySelector(".app-shell");
-    if (shell) shell.classList.add("light-mode");
-    var icon = document.getElementById("themeIcon");
-    if (icon) icon.setAttribute("data-lucide", "moon");
-  }
+  // Only apply theme if we're in the app shell (not landing page)
+  if (!document.querySelector(".app-shell")) return;
+  var saved = localStorage.getItem("vantage_theme") || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  var icon = document.getElementById("themeIcon");
+  if (icon) icon.setAttribute("data-lucide", saved === "dark" ? "sun" : "moon");
+  if (window.lucide) lucide.createIcons();
 });
 
 /* --- Fee Calculator ------------------------------------------------------- */

@@ -12,33 +12,65 @@
   --space-5:20px; --space-6:24px; --space-7:28px; --space-8:32px;
   --space-10:40px; --space-12:48px; --space-14:56px; --space-16:64px;
 
-  /* Surfaces — rich dark with slight cool tint */
+  /* === LIGHT MODE (default for app) === */
+  --bg-base:#f4f5f7;
+  --bg-surface:#ffffff;
+  --bg-elevated:#f8f9fa;
+  --bg-hover:#eef0f3;
+  --bg-active:#e4e6ea;
+
+  --border:rgba(0,0,0,0.08);
+  --border-strong:rgba(0,0,0,0.14);
+
+  --text-primary:#0f1117;
+  --text-secondary:#4b5563;
+  --text-muted:#6b7280;
+  --text-faint:#9ca3af;
+
+  --accent:#e8384d;
+  --accent-hover:#cc2e42;
+  --accent-glow:rgba(232,56,77,0.08);
+
+  --teal:#0d9488;
+  --teal-dim:rgba(13,148,136,0.08);
+
+  --gold:#d97706;
+  --gold-dim:rgba(217,119,6,0.08);
+  --success:#059669;
+  --success-dim:rgba(5,150,105,0.08);
+  --warning:#ea580c;
+  --warning-dim:rgba(234,88,12,0.08);
+  --danger:#dc2626;
+  --danger-dim:rgba(220,38,38,0.08);
+
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg:0 12px 32px rgba(0,0,0,0.10),0 4px 8px rgba(0,0,0,0.04);
+}
+
+/* === DARK MODE (landing page + toggle) === */
+[data-theme="dark"] {
   --bg-base:#0c0d10;
   --bg-surface:#13141a;
   --bg-elevated:#1a1b22;
   --bg-hover:#22232c;
   --bg-active:#2a2b35;
 
-  /* Borders — slightly brighter for better card definition */
   --border:rgba(255,255,255,0.07);
   --border-strong:rgba(255,255,255,0.13);
 
-  /* Text — HIGH CONTRAST hierarchy */
-  --text-primary:#f4f2ef;          /* Near-white — headings, stat values, names */
-  --text-secondary:#b8b5af;        /* Warm gray — body text, descriptions */
-  --text-muted:#8d8a84;            /* Medium gray — labels, secondary info */
-  --text-faint:#5e5b56;            /* Dim — timestamps, hints, placeholders */
+  --text-primary:#f4f2ef;
+  --text-secondary:#b8b5af;
+  --text-muted:#8d8a84;
+  --text-faint:#5e5b56;
 
-  /* Accent — coral/salmon (slightly brighter for contrast) */
   --accent:#ff5272;
   --accent-hover:#ff3458;
   --accent-glow:rgba(255,82,114,0.14);
 
-  /* Teal — data / charts / positive indicators */
   --teal:#36d9c4;
   --teal-dim:rgba(54,217,196,0.12);
 
-  /* Utility colors — slightly brighter for readability */
   --gold:#f5a623;
   --gold-dim:rgba(245,166,35,0.12);
   --success:#5ee89c;
@@ -48,11 +80,12 @@
   --danger:#ff6b6b;
   --danger-dim:rgba(255,107,107,0.12);
 
-  /* Shadows — deeper for card separation */
   --shadow-sm:0 1px 3px rgba(0,0,0,0.6);
   --shadow-md:0 4px 16px rgba(0,0,0,0.5);
   --shadow-lg:0 12px 40px rgba(0,0,0,0.7);
+}
 
+:root {
   /* Radius */
   --radius-sm:6px;
   --radius:8px;
@@ -743,20 +776,6 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .fee-calc-row .value.highlight{color:var(--teal);font-size:var(--text-lg)}
 .fee-calc-inputs{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-4)}
 
-/* 37. LIGHT MODE (app only, not landing) =================================== */
-.app-shell.light-mode{--bg-base:#f5f6f8;--bg-surface:#ffffff;--bg-elevated:#f0f1f3;--bg-hover:#e8e9ec;--bg-active:#dfe0e3;--border:rgba(0,0,0,0.08);--border-strong:rgba(0,0,0,0.14);--text-primary:#111827;--text-secondary:#4b5563;--text-muted:#6b7280;--text-faint:#9ca3af;--shadow-sm:0 1px 3px rgba(0,0,0,0.08);--shadow-md:0 4px 16px rgba(0,0,0,0.06);--shadow-lg:0 12px 40px rgba(0,0,0,0.1)}
-.app-shell.light-mode .sidebar{background:#fff;border-color:rgba(0,0,0,0.08)}
-.app-shell.light-mode .topbar{background:rgba(255,255,255,0.85)}
-.app-shell.light-mode .card,.app-shell.light-mode .product-card{background:#fff;box-shadow:var(--shadow-sm)}
-.app-shell.light-mode .product-table th{background:#f5f6f8}
-.app-shell.light-mode .stat-card{background:#fff}
-.app-shell.light-mode .chart-card{background:#fff}
-.app-shell.light-mode .input,.app-shell.light-mode .select{background:#f5f6f8;border-color:rgba(0,0,0,0.12);color:#111827}
-.app-shell.light-mode .mobile-tabs{background:#fff}
-.app-shell.light-mode .modal-dialog{background:#fff}
-.app-shell.light-mode .flash-msg{background:#fff}
-.app-shell.light-mode .badge-muted{background:#e8e9ec;color:#4b5563}
-
-/* Theme toggle button */
+/* 37. THEME TOGGLE ========================================================= */
 .theme-toggle{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius);cursor:pointer;color:var(--text-muted);transition:all var(--dur-fast)}
 .theme-toggle:hover{color:var(--text-primary);background:var(--bg-hover)}
