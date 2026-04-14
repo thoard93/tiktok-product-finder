@@ -527,6 +527,27 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .upgrade-banner__cta{margin-left:auto;color:var(--accent);font-weight:600;text-decoration:none;white-space:nowrap}
 .upgrade-banner__cta:hover{text-decoration:underline}
 
+/* 27. STATS PANEL (Product Detail) ========================================= */
+.stats-panel{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.stats-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg-base)}
+.stats-tab{flex:1;padding:12px 8px;font-size:13px;font-weight:500;color:var(--text-muted);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all var(--dur-fast)}
+.stats-tab:hover{color:var(--text-primary);background:rgba(255,255,255,.02)}
+.stats-tab--active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)}
+.stat-card-mini{background:var(--bg-surface);padding:16px 18px;display:flex;flex-direction:column;gap:3px}
+.stat-card-mini .stat-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint)}
+.stat-card-mini .stat-value{font-size:20px;font-weight:700;color:var(--text-primary);line-height:1.2}
+.stat-delta{display:flex;align-items:center;gap:3px;font-size:11px;font-weight:500;margin-top:2px}
+.stat-delta--up{color:var(--success)}
+.stat-delta--down{color:var(--danger)}
+
+.stats-commission-row{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--border);background:var(--bg-base)}
+.commission-highlight{padding:12px 18px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--border)}
+.commission-highlight:last-child{border-right:none}
+.commission-highlight__label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);font-weight:600}
+.commission-highlight__value{font-size:16px;font-weight:700;color:var(--accent)}
+
 /* 24. FEATURES SECTION (Landing Page v2) =================================== */
 .features-section{padding:clamp(64px,8vw,120px) 0;background:#0e0e10}
 .features-container{max-width:1100px;margin:0 auto;padding:0 24px}

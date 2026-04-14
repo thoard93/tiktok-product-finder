@@ -129,6 +129,18 @@ def create_app():
             return f'{value / 1_000:.1f}K'
         return str(value)
 
+    @flask_app.template_filter('format_currency')
+    def format_currency_filter(value):
+        try:
+            v = float(value or 0)
+            if v >= 1_000_000:
+                return f'{v / 1_000_000:.2f}M'
+            if v >= 1_000:
+                return f'{v / 1_000:.1f}K'
+            return f'{v:,.2f}'
+        except Exception:
+            return str(value)
+
     # --- Ensure data/ directory exists (for scraper cookies, etc.) ---
     os.makedirs(os.path.join(project_root, 'data'), exist_ok=True)
 

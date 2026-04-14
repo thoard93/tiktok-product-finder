@@ -61,6 +61,38 @@
 
   {# ===== RIGHT: Analytics ===== #}
   <div>
+    {# Stats panel with tabs #}
+    <div class="stats-panel mb-4">
+      <div class="stats-tabs">
+        <button class="stats-tab stats-tab--active" data-tab="7d">7 Days</button>
+        <button class="stats-tab" data-tab="30d">30 Days</button>
+        <button class="stats-tab" data-tab="all">All Time</button>
+      </div>
+      <div class="stats-grid" id="stats-7d" data-panel="7d">
+        <div class="stat-card-mini"><span class="stat-label">Units Sold</span><span class="stat-value">{{ stats.sales_7d | format_number }}</span>{% if stats.growth_7d %}<span class="stat-delta {% if stats.growth_7d >= 0 %}stat-delta--up{% else %}stat-delta--down{% endif %}"><i data-lucide="{% if stats.growth_7d >= 0 %}trending-up{% else %}trending-down{% endif %}" style="width:12px;height:12px"></i> {{ stats.growth_7d | abs | round(1) }}%</span>{% endif %}</div>
+        <div class="stat-card-mini"><span class="stat-label">Revenue (Est.)</span><span class="stat-value">${{ stats.revenue_7d | format_currency }}</span></div>
+        <div class="stat-card-mini"><span class="stat-label">Creators</span><span class="stat-value">{{ stats.creator_count | format_number }}</span></div>
+        <div class="stat-card-mini"><span class="stat-label">Videos</span><span class="stat-value">{{ stats.video_count | format_number }}</span></div>
+      </div>
+      <div class="stats-grid" id="stats-30d" data-panel="30d" style="display:none">
+        <div class="stat-card-mini"><span class="stat-label">Units Sold</span><span class="stat-value">{{ stats.sales_30d | format_number }}</span></div>
+        <div class="stat-card-mini"><span class="stat-label">Revenue (Est.)</span><span class="stat-value">${{ stats.revenue_30d | format_currency }}</span></div>
+        <div class="stat-card-mini"><span class="stat-label">Creators</span><span class="stat-value">{{ stats.creator_count | format_number }}</span></div>
+        <div class="stat-card-mini"><span class="stat-label">Videos</span><span class="stat-value">{{ stats.video_count | format_number }}</span></div>
+      </div>
+      <div class="stats-grid" id="stats-all" data-panel="all" style="display:none">
+        <div class="stat-card-mini"><span class="stat-label">Total Units</span><span class="stat-value">{{ stats.total_sales | format_number }}</span></div>
+        <div class="stat-card-mini"><span class="stat-label">Total Revenue</span><span class="stat-value">${{ stats.total_revenue | format_currency }}</span></div>
+        <div class="stat-card-mini"><span class="stat-label">Score</span><span class="stat-value"><span class="badge {{ 'badge-green' if stats.trending_score >= 80 else ('badge-gold' if stats.trending_score >= 50 else 'badge-red') }}" style="font-size:var(--text-lg);padding:4px 12px">{{ stats.trending_score }}</span></span></div>
+        <div class="stat-card-mini"><span class="stat-label">Avg Price</span><span class="stat-value">${{ stats.avg_order_value | round(2) }}</span></div>
+      </div>
+      <div class="stats-commission-row">
+        <div class="commission-highlight"><span class="commission-highlight__label">Commission</span><span class="commission-highlight__value">{{ stats.commission_rate }}%</span></div>
+        <div class="commission-highlight"><span class="commission-highlight__label">Avg Price</span><span class="commission-highlight__value">${{ stats.avg_order_value | round(2) }}</span></div>
+        <div class="commission-highlight"><span class="commission-highlight__label">Score</span><span class="commission-highlight__value">{{ stats.trending_score }}</span></div>
+      </div>
+    </div>
+
     {# Sales trend #}
     <div class="chart-card mb-4">
       <div class="chart-title">Sales trend (30 days)</div>
@@ -139,5 +171,17 @@
   }
   createLineChart("detailSalesChart", labels, values, CHART_COLORS.teal);
 })();
+
+/* Stats tab switching */
+document.querySelectorAll(".stats-tab").forEach(function(tab) {
+  tab.addEventListener("click", function() {
+    var target = tab.dataset.tab;
+    document.querySelectorAll(".stats-tab").forEach(function(t) { t.classList.remove("stats-tab--active"); });
+    tab.classList.add("stats-tab--active");
+    document.querySelectorAll(".stats-grid").forEach(function(p) {
+      p.style.display = p.dataset.panel === target ? "" : "none";
+    });
+  });
+});
 </script>
 {% endblock %}

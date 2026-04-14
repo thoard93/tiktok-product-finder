@@ -205,10 +205,27 @@ def product_detail(product_id):
     product.trending_score = min(99, int((product.sales_7d or 0) / 10 + (product.influencer_count or 0) * 3 + (product.commission_rate or 0) * 200))
     ctx['product'] = product
 
-    # Lazy-load trend data (cache 24h)
+    # Build stats dict from existing model fields
+    ctx['stats'] = {
+        'sales_7d': product.sales_7d or 0,
+        'revenue_7d': product.gmv or 0,
+        'sales_30d': product.sales_30d or 0,
+        'revenue_30d': product.gmv_30d or 0,
+        'total_sales': product.sales or 0,
+        'total_revenue': product.gmv or 0,
+        'trending_score': product.trending_score,
+        'commission_rate': round((product.commission_rate or 0) * 100, 1),
+        'creator_count': product.influencer_count or 0,
+        'video_count': product.video_count or 0,
+        'avg_order_value': product.price or 0,
+        'growth_7d': product.gmv_growth or 0,
+    }
+
+    # Lazy-load trend data (cache 24h) — defensive if columns don't exist yet
     trend_data = []
-    if not product.trend_last_synced or product.trend_last_synced < datetime.utcnow() - timedelta(hours=24):
-        try:
+    try:
+        trend_synced = getattr(product, 'trend_last_synced', None)
+        if not trend_synced or trend_synced < datetime.utcnow() - timedelta(hours=24):
             from app.services.echotik import fetch_product_trend
             raw_id = product_id.replace('shop_', '')
             trend = fetch_product_trend(raw_id)
@@ -216,21 +233,22 @@ def product_detail(product_id):
                 product.trend_data_json = json.dumps(trend)
                 product.trend_last_synced = datetime.utcnow()
                 db.session.commit()
-        except Exception:
-            pass
-    if product.trend_data_json:
-        try:
-            trend_data = json.loads(product.trend_data_json)
-        except Exception:
-            pass
+        raw_json = getattr(product, 'trend_data_json', None)
+        if raw_json:
+            trend_data = json.loads(raw_json)
+    except Exception:
+        pass
     ctx['trend_data'] = trend_data
 
-    # Videos (<=15s, from DB)
-    ctx['videos'] = ProductVideo.query.filter_by(
-        product_id=product_id
-    ).filter(
-        ProductVideo.duration_seconds <= 15
-    ).order_by(desc(ProductVideo.view_count)).limit(5).all()
+    # Videos (<=15s, from DB) — defensive if table doesn't exist yet
+    try:
+        ctx['videos'] = ProductVideo.query.filter_by(
+            product_id=product_id
+        ).filter(
+            ProductVideo.duration_seconds <= 15
+        ).order_by(desc(ProductVideo.view_count)).limit(5).all()
+    except Exception:
+        ctx['videos'] = []
 
     # Similar products (same category)
     similar = []
@@ -291,31 +309,40 @@ def brands_list():
     category = request.args.get('category', '').strip()
     search = request.args.get('q', '').strip()
 
-    query = Brand.query
-    if category:
-        query = query.filter(Brand.category == category)
-    if search:
-        query = query.filter(Brand.name.ilike(f'%{search}%'))
-    if sort == 'followers':
-        query = query.order_by(desc(Brand.follower_count))
-    elif sort == 'trending':
-        query = query.order_by(desc(Brand.trending_score))
-    elif sort == 'products':
-        query = query.order_by(desc(Brand.product_count))
-    else:
-        query = query.order_by(desc(Brand.gmv_30d))
+    try:
+        query = Brand.query
+        if category:
+            query = query.filter(Brand.category == category)
+        if search:
+            query = query.filter(Brand.name.ilike(f'%{search}%'))
+        if sort == 'followers':
+            query = query.order_by(desc(Brand.follower_count))
+        elif sort == 'trending':
+            query = query.order_by(desc(Brand.trending_score))
+        elif sort == 'products':
+            query = query.order_by(desc(Brand.product_count))
+        else:
+            query = query.order_by(desc(Brand.gmv_30d))
 
-    pagination = query.paginate(page=page, per_page=30, error_out=False)
+        pagination = query.paginate(page=page, per_page=30, error_out=False)
 
-    categories = db.session.query(Brand.category).filter(
-        Brand.category.isnot(None), Brand.category != ''
-    ).distinct().order_by(Brand.category).all()
+        categories = db.session.query(Brand.category).filter(
+            Brand.category.isnot(None), Brand.category != ''
+        ).distinct().order_by(Brand.category).all()
 
-    ctx['brands'] = pagination.items
-    ctx['page'] = page
-    ctx['total_pages'] = pagination.pages
-    ctx['total_count'] = pagination.total
-    ctx['categories'] = [c[0] for c in categories if c[0]]
+        ctx['brands'] = pagination.items
+        ctx['page'] = page
+        ctx['total_pages'] = pagination.pages
+        ctx['total_count'] = pagination.total
+        ctx['categories'] = [c[0] for c in categories if c[0]]
+    except Exception:
+        # Table may not exist yet — show empty state
+        ctx['brands'] = []
+        ctx['page'] = 1
+        ctx['total_pages'] = 0
+        ctx['total_count'] = 0
+        ctx['categories'] = []
+
     ctx['current_sort'] = sort
     ctx['current_category'] = category
     ctx['current_search'] = search
@@ -336,7 +363,10 @@ def admin_panel():
     ctx['active_products'] = Product.query.filter(_active_filter).count()
     ctx['blacklisted_count'] = BlacklistedBrand.query.count()
     ctx['user_count'] = User.query.count()
-    ctx['brand_count'] = Brand.query.count()
+    try:
+        ctx['brand_count'] = Brand.query.count()
+    except Exception:
+        ctx['brand_count'] = 0
 
     # Last sync: most recent last_echotik_sync across all products
     last = db.session.query(func.max(Product.last_echotik_sync)).scalar()
