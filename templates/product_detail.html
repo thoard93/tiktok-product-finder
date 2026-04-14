@@ -9,11 +9,9 @@
   {# ===== LEFT: Product Info ===== #}
   <div>
     <div class="detail-image">
-      {% if product.image_url or product.cached_image_url %}
-        <img src="{{ product.cached_image_url or product.image_url }}" alt="{{ product.product_name }}">
-      {% else %}
-        <div class="product-card-img-fallback" style="height:100%"><i data-lucide="package" style="width:64px;height:64px"></i></div>
-      {% endif %}
+      <img src="/api/image-proxy/{{ product.product_id }}" alt="{{ product.product_name }}"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="product-card-img-fallback" style="height:100%;display:none"><i data-lucide="package" style="width:64px;height:64px"></i></div>
     </div>
 
     <h1 style="font-size:var(--text-2xl);margin-bottom:var(--space-3)">{{ product.product_name }}</h1>
@@ -53,7 +51,6 @@
       {% if product.product_url %}
         <a href="{{ product.product_url }}" target="_blank" rel="noopener" class="btn btn-ghost"><i data-lucide="external-link" style="width:16px;height:16px"></i> View on TikTok Shop</a>
       {% endif %}
-      <button class="btn btn-ghost" onclick="blacklistProduct('{{ product.product_id }}', this)"><i data-lucide="ban" style="width:16px;height:16px"></i> Add to Blacklist</button>
     </div>
   </div>
 

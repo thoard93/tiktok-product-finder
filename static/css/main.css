@@ -252,6 +252,11 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .product-card-gmv-bar{height:4px;background:var(--bg-elevated);border-radius:var(--radius-full);overflow:hidden}
 .product-card-gmv-fill{height:100%;background:var(--teal);border-radius:var(--radius-full);transition:width var(--dur-slow) var(--ease)}
 
+.product-card-stats{display:flex;gap:var(--space-3);margin:var(--space-3) 0;padding:var(--space-3) 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.product-card-stat{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted)}
+.product-card-stat i{color:var(--text-faint)}
+.product-card-stat small{color:var(--text-faint)}
+
 .product-card-actions{display:flex;gap:var(--space-2)}
 .product-card-actions .btn{flex:1;height:36px;font-size:var(--text-xs)}
 

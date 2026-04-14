@@ -6,7 +6,7 @@ Existing API routes remain unchanged in their respective blueprints.
 
 from functools import wraps
 from flask import Blueprint, render_template, redirect, session, request, jsonify
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 from app import db
 from app.models import Product, BlacklistedBrand, Subscription, User
 from app.routes.auth import get_current_user
@@ -32,6 +32,9 @@ def api_auth(f):
     return decorated
 
 views_bp = Blueprint('views', __name__)
+
+# Products with status='active' or NULL (new products may not have status set)
+_active_filter = or_(_active_filter, Product.product_status.is_(None))
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -88,14 +91,14 @@ def dashboard():
     user = ctx['current_user']
 
     # Stats
-    total = Product.query.filter_by(product_status='active').count()
+    total = Product.query.filter(_active_filter).count()
     trending = Product.query.filter(
-        Product.product_status == 'active',
+        _active_filter,
         Product.sales_7d > 50
     ).count()
     from sqlalchemy import func
     avg_comm = db.session.query(func.avg(Product.commission_rate)).filter(
-        Product.product_status == 'active',
+        _active_filter,
         Product.commission_rate > 0
     ).scalar() or 0
     saved = Product.query.filter_by(is_favorite=True).count()
@@ -109,7 +112,7 @@ def dashboard():
 
     # Trending products (top 6 by 7d sales)
     ctx['trending_products'] = Product.query.filter(
-        Product.product_status == 'active'
+        _active_filter
     ).order_by(desc(Product.sales_7d)).limit(6).all()
 
     # Add trending_score attribute for template
@@ -118,7 +121,7 @@ def dashboard():
 
     # Recent products (last updated)
     ctx['recent_products'] = Product.query.filter(
-        Product.product_status == 'active'
+        _active_filter
     ).order_by(desc(Product.last_updated)).limit(5).all()
     for p in ctx['recent_products']:
         p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
@@ -136,7 +139,7 @@ def products_list():
     sort = request.args.get('sort', 'trending')
     search = request.args.get('search', '').strip()
 
-    query = Product.query.filter(Product.product_status == 'active')
+    query = Product.query.filter(_active_filter)
 
     if search:
         query = query.filter(Product.product_name.ilike(f'%{search}%'))
@@ -178,7 +181,7 @@ def product_detail(product_id):
         similar = Product.query.filter(
             Product.category == product.category,
             Product.product_id != product_id,
-            Product.product_status == 'active'
+            _active_filter
         ).order_by(desc(Product.sales_7d)).limit(4).all()
     ctx['similar_products'] = similar
 
@@ -194,7 +197,7 @@ def analytics():
     ctx = _base_context('analytics')
 
     ctx['top_products'] = Product.query.filter(
-        Product.product_status == 'active'
+        _active_filter
     ).order_by(desc(Product.gmv)).limit(10).all()
 
     for p in ctx['top_products']:
@@ -235,7 +238,7 @@ def admin_panel():
 
     from sqlalchemy import func
     ctx['total_products'] = Product.query.count()
-    ctx['active_products'] = Product.query.filter_by(product_status='active').count()
+    ctx['active_products'] = Product.query.filter(_active_filter).count()
     ctx['blacklisted_count'] = BlacklistedBrand.query.count()
     ctx['user_count'] = User.query.count()
 
