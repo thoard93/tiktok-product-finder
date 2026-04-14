@@ -330,6 +330,142 @@ def fetch_batch_images(cover_urls: list[str]) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Public API — fetch_product_videos
+# ---------------------------------------------------------------------------
+
+def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
+    """
+    Fetch top videos for a product from EchoTik.
+
+    Args:
+        product_id: Raw product ID (without shop_ prefix).
+        page_size: Number of videos to fetch (default 10).
+
+    Returns:
+        List of video dicts with normalized field names.
+    """
+    raw_id = str(product_id).replace('shop_', '')
+
+    try:
+        data = _request('GET', f"{ECHOTIK_V3_BASE}/product/video",
+                        params={'product_id': raw_id, 'page_size': page_size, 'page_num': 1})
+    except EchoTikError as exc:
+        log.warning("fetch_product_videos(%s) failed: %s", raw_id, exc)
+        return []
+
+    raw_list = data.get('data', [])
+    if isinstance(raw_list, dict):
+        raw_list = raw_list.get('list', [])
+
+    videos = []
+    for v in (raw_list or []):
+        vid = {
+            'video_id': str(v.get('video_id') or v.get('videoId') or v.get('id', '')),
+            'video_url': v.get('video_url') or v.get('play_url') or v.get('share_url', ''),
+            'cover_url': _extract_image_url(v.get('cover') or v.get('cover_url') or v.get('dynamic_cover')),
+            'creator_name': v.get('author_name') or v.get('nickname') or v.get('authorName', ''),
+            'creator_handle': v.get('author_unique_id') or v.get('unique_id') or v.get('authorUniqueId', ''),
+            'creator_avatar': _extract_image_url(v.get('author_avatar') or v.get('avatar')),
+            'view_count': _safe_int(v.get('play_count') or v.get('vv') or v.get('view_count')),
+            'like_count': _safe_int(v.get('digg_count') or v.get('like_count') or v.get('likeCount')),
+            'duration': _safe_int(v.get('duration') or v.get('video_duration') or v.get('duration_seconds')),
+        }
+        # Normalize duration: if >1000, assume milliseconds
+        if vid['duration'] > 1000:
+            vid['duration'] = vid['duration'] // 1000
+        videos.append(vid)
+
+    return videos
+
+
+# ---------------------------------------------------------------------------
+# Public API — fetch_top_shops
+# ---------------------------------------------------------------------------
+
+def fetch_top_shops(page: int = 1, page_size: int = 20) -> list[dict]:
+    """
+    Fetch top TikTok Shop brands/shops from EchoTik.
+
+    Args:
+        page: Page number.
+        page_size: Shops per page (max 20).
+
+    Returns:
+        List of shop dicts.
+    """
+    try:
+        data = _request('GET', f"{ECHOTIK_V3_BASE}/shop/list",
+                        params={
+                            'region': 'US',
+                            'page_num': page,
+                            'page_size': min(page_size, 20),
+                            'sort_field': 4,  # Sort by GMV
+                            'sort_type': 1,   # Descending
+                        })
+    except EchoTikError as exc:
+        log.warning("fetch_top_shops failed: %s", exc)
+        return []
+
+    raw_list = data.get('data', [])
+    if isinstance(raw_list, dict):
+        raw_list = raw_list.get('list', [])
+
+    shops = []
+    for s in (raw_list or []):
+        shop = {
+            'shop_id': str(s.get('shop_id') or s.get('shopId') or s.get('id', '')),
+            'name': s.get('shop_name') or s.get('shopName') or s.get('name', ''),
+            'avatar_url': _extract_image_url(s.get('avatar') or s.get('logo_url') or s.get('shop_logo')),
+            'country': s.get('country') or s.get('region', 'US'),
+            'category': s.get('category_name') or s.get('categoryName') or s.get('category', ''),
+            'follower_count': _safe_int(s.get('follower_count') or s.get('followerCount')),
+            'gmv_30d': _safe_float(s.get('total_sale_gmv_30d_amt') or s.get('gmv_30d') or s.get('sales_30d')),
+            'product_count': _safe_int(s.get('product_count') or s.get('productCount') or s.get('spu_cnt')),
+            'trending_score': _safe_float(s.get('trending_score') or s.get('score')),
+            'shop_url': s.get('shop_url') or s.get('shopUrl', ''),
+        }
+        if shop['shop_id']:
+            shops.append(shop)
+
+    return shops
+
+
+# ---------------------------------------------------------------------------
+# Public API — fetch_product_trend
+# ---------------------------------------------------------------------------
+
+def fetch_product_trend(product_id: str) -> list[dict]:
+    """
+    Fetch 30-day trend data for a product from EchoTik.
+
+    Returns:
+        List of dicts with 'date', 'sales', 'gmv' keys.
+    """
+    raw_id = str(product_id).replace('shop_', '')
+
+    try:
+        data = _request('GET', f"{ECHOTIK_V3_BASE}/product/trend",
+                        params={'product_id': raw_id})
+    except EchoTikError as exc:
+        log.warning("fetch_product_trend(%s) failed: %s", raw_id, exc)
+        return []
+
+    raw_list = data.get('data', [])
+    if isinstance(raw_list, dict):
+        raw_list = raw_list.get('list') or raw_list.get('trend', [])
+
+    trend = []
+    for item in (raw_list or []):
+        trend.append({
+            'date': item.get('date') or item.get('day', ''),
+            'sales': _safe_int(item.get('sale_cnt') or item.get('sales') or item.get('saleCnt')),
+            'gmv': _safe_float(item.get('sale_gmv_amt') or item.get('gmv') or item.get('saleGmvAmt')),
+        })
+
+    return trend
+
+
+# ---------------------------------------------------------------------------
 # Public API — sync_to_db
 # ---------------------------------------------------------------------------
 

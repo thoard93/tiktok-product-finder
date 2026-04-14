@@ -67,21 +67,31 @@
       <div class="chart-wrap"><canvas id="detailSalesChart"></canvas></div>
     </div>
 
-    {# Top creator videos #}
+    {# Short videos (<=15s) #}
     <div class="card mb-4">
-      <div class="text-sm font-semibold text-muted mb-4">Top Creator Videos</div>
-      {% if creator_videos and creator_videos | length > 0 %}
-        {% for v in creator_videos[:3] %}
-        <div class="video-card">
-          <div class="video-thumb">{% if v.thumbnail %}<img src="{{ v.thumbnail }}" alt="">{% endif %}</div>
-          <div>
-            <div class="video-creator">@{{ v.creator_handle | default('creator') }}</div>
-            <div class="video-views">{{ "{:,}".format(v.views or 0) }} views</div>
+      <div class="flex items-center gap-2 mb-4">
+        <div class="text-sm font-semibold text-muted">Top Short Videos</div>
+        <span class="badge badge-muted" style="font-size:10px">&le;15s</span>
+      </div>
+      {% if videos and videos | length > 0 %}
+        {% for v in videos[:5] %}
+        <a href="{{ v.video_url }}" target="_blank" rel="noopener noreferrer" class="video-card" style="text-decoration:none">
+          <div class="video-thumb">
+            {% if v.cover_url %}<img src="{{ v.cover_url }}" alt="" loading="lazy">{% endif %}
+            {% if v.duration_seconds %}<span class="badge badge-muted" style="position:absolute;bottom:4px;right:4px;font-size:10px">{{ v.duration_seconds }}s</span>{% endif %}
           </div>
-        </div>
+          <div style="overflow:hidden">
+            <div class="video-creator">@{{ v.creator_handle or 'Unknown' }}</div>
+            <div class="video-views">
+              <span><i data-lucide="eye" style="width:11px;height:11px"></i> {{ v.view_count | format_number }}</span>
+              &middot;
+              <span><i data-lucide="heart" style="width:11px;height:11px"></i> {{ v.like_count | format_number }}</span>
+            </div>
+          </div>
+        </a>
         {% endfor %}
       {% else %}
-        <p class="text-sm text-faint text-center" style="padding:var(--space-4) 0">No creator videos tracked yet</p>
+        <p class="text-sm text-faint text-center" style="padding:var(--space-4) 0">No short videos (&le;15s) found yet</p>
       {% endif %}
     </div>
 
@@ -109,16 +119,25 @@
 {% block scripts %}
 <script src="/static/js/dashboard.js"></script>
 <script>
-/* Sales chart — placeholder data (real data would come from API) */
+/* Sales trend chart — uses real trend data if available, otherwise placeholder */
 (function() {
-  var labels = [], data = [];
-  var base = {{ product.sales_7d or 10 }} / 7;
-  for (var i = 0; i < 30; i++) {
-    var d = new Date(); d.setDate(d.getDate() - 29 + i);
-    labels.push(d.toLocaleDateString("en-US", {month:"short", day:"numeric"}));
-    data.push(Math.floor(base * (0.5 + Math.random())));
+  var trendData = {{ trend_data | tojson | default('[]') }};
+  var labels = [], values = [];
+
+  if (trendData && trendData.length > 0) {
+    for (var i = 0; i < trendData.length; i++) {
+      labels.push(trendData[i].date || "");
+      values.push(trendData[i].sales || 0);
+    }
+  } else {
+    var base = {{ product.sales_7d or 10 }} / 7;
+    for (var i = 0; i < 30; i++) {
+      var d = new Date(); d.setDate(d.getDate() - 29 + i);
+      labels.push(d.toLocaleDateString("en-US", {month:"short", day:"numeric"}));
+      values.push(Math.floor(base * (0.5 + Math.random())));
+    }
   }
-  createLineChart("detailSalesChart", labels, data, CHART_COLORS.teal);
+  createLineChart("detailSalesChart", labels, values, CHART_COLORS.teal);
 })();
 </script>
 {% endblock %}

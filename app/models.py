@@ -155,6 +155,10 @@ class Product(db.Model):
     price_trend = db.Column(db.String(20))  # 'rising', 'falling', 'stable'
     last_echotik_sync = db.Column(db.DateTime)
 
+    # Trend data cache (lazy-loaded on detail page view)
+    trend_data_json = db.Column(db.Text, nullable=True)
+    trend_last_synced = db.Column(db.DateTime, nullable=True)
+
     # Composite indexes for common query patterns
     __table_args__ = (
         db.Index('idx_influencer_sales', 'influencer_count', 'sales_7d'),
@@ -164,6 +168,7 @@ class Product(db.Model):
         db.Index('idx_influencer_price', 'influencer_count', 'price'),
         db.Index('idx_favorite_sales', 'is_favorite', 'sales_7d'),
         db.Index('idx_firstseen_influencer', 'first_seen', 'influencer_count'),
+        db.Index('ix_product_category', 'category'),
     )
 
     def to_dict(self):
@@ -367,3 +372,47 @@ class Subscription(db.Model):
             'cancelled_at': self.cancelled_at.isoformat() if self.cancelled_at else None,
             'is_active': self.status == 'active',
         }
+
+
+class ProductVideo(db.Model):
+    """Short videos (<=15s) associated with a product"""
+    __tablename__ = 'product_videos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.String(50), db.ForeignKey('products.product_id'), nullable=False)
+    video_id = db.Column(db.String(100), nullable=True)
+    video_url = db.Column(db.String(500), nullable=True)
+    cover_url = db.Column(db.String(500), nullable=True)
+    creator_name = db.Column(db.String(200), nullable=True)
+    creator_handle = db.Column(db.String(200), nullable=True)
+    creator_avatar = db.Column(db.String(500), nullable=True)
+    view_count = db.Column(db.BigInteger, default=0)
+    like_count = db.Column(db.BigInteger, default=0)
+    duration_seconds = db.Column(db.Integer, nullable=True)
+    synced_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    product = db.relationship('Product', backref=db.backref('videos', lazy=True))
+
+    __table_args__ = (
+        db.Index('ix_pv_product_id', 'product_id'),
+        db.UniqueConstraint('product_id', 'video_id', name='uq_product_video'),
+    )
+
+
+class Brand(db.Model):
+    """TikTok Shop brands/shops for Brand Hunter"""
+    __tablename__ = 'brands'
+
+    id = db.Column(db.Integer, primary_key=True)
+    shop_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(300), nullable=False)
+    avatar_url = db.Column(db.String(500), nullable=True)
+    country = db.Column(db.String(50), nullable=True)
+    category = db.Column(db.String(100), nullable=True)
+    follower_count = db.Column(db.BigInteger, default=0)
+    gmv_30d = db.Column(db.Float, default=0)
+    product_count = db.Column(db.Integer, default=0)
+    trending_score = db.Column(db.Float, default=0)
+    tiktok_shop_url = db.Column(db.String(500), nullable=True)
+    last_synced = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

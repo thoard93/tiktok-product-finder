@@ -100,6 +100,18 @@ def create_app():
     def vantage_static(filename):
         return flask.send_from_directory(static_dir, filename)
 
+    # --- Jinja2 template filters ---
+    @flask_app.template_filter('format_number')
+    def format_number_filter(value):
+        if not value:
+            return '0'
+        value = int(value)
+        if value >= 1_000_000:
+            return f'{value / 1_000_000:.1f}M'
+        if value >= 1_000:
+            return f'{value / 1_000:.1f}K'
+        return str(value)
+
     # --- Ensure data/ directory exists (for scraper cookies, etc.) ---
     os.makedirs(os.path.join(project_root, 'data'), exist_ok=True)
 
@@ -157,6 +169,8 @@ from app.models import (  # noqa: E402, F401
     ApiKey,
     ScanJob,
     Subscription,
+    ProductVideo,
+    Brand,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)

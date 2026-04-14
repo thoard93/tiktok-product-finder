@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Brand Hunter{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Brand Hunter</h1>
+  <p class="page-subtitle">Top TikTok Shop brands ranked by 30-day GMV</p>
+</div>
+
+{# ===== FILTER BAR ===== #}
+<form class="filter-bar" id="brandFilterForm" method="GET" action="/app/brands">
+  <select class="select" name="category" onchange="this.form.submit()">
+    <option value="">All Categories</option>
+    {% for cat in categories | default([]) %}
+      <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
+    {% endfor %}
+  </select>
+  <select class="select" name="sort" onchange="this.form.submit()" style="min-width:140px">
+    <option value="gmv" {% if current_sort == 'gmv' %}selected{% endif %}>Sort: 30d GMV</option>
+    <option value="followers" {% if current_sort == 'followers' %}selected{% endif %}>Sort: Followers</option>
+    <option value="products" {% if current_sort == 'products' %}selected{% endif %}>Sort: Products</option>
+    <option value="trending" {% if current_sort == 'trending' %}selected{% endif %}>Sort: Trending</option>
+  </select>
+  <div class="topbar-search" style="flex:1;max-width:240px">
+    <i data-lucide="search"></i>
+    <input type="text" class="input" name="q" placeholder="Search brands..." value="{{ current_search | default('') }}">
+  </div>
+  <button type="submit" class="btn btn-ghost btn-sm">Search</button>
+  {% if current_category or current_search %}<a href="/app/brands" class="btn btn-ghost btn-sm" style="color:var(--danger)">Clear</a>{% endif %}
+  <div class="filter-count">{{ total_count | default(0) }} brands</div>
+</form>
+
+{# ===== BRAND GRID ===== #}
+{% if brands and brands | length > 0 %}
+<div class="product-grid" id="brandGrid">
+  {% for b in brands %}
+  <div class="product-card">
+    <div class="product-card-img" style="aspect-ratio:16/9;background:var(--bg-elevated)">
+      {% if b.avatar_url %}
+        <img src="{{ b.avatar_url }}" alt="{{ b.name }}" loading="lazy" style="object-fit:contain;padding:var(--space-4)"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="product-card-img-fallback" style="display:none">
+          <i data-lucide="store"></i>
+          <span>{{ b.category or 'Brand' }}</span>
+        </div>
+      {% else %}
+        <div class="product-card-img-fallback">
+          <i data-lucide="store"></i>
+          <span>{{ b.category or 'Brand' }}</span>
+        </div>
+      {% endif %}
+      {% if b.category %}<span class="badge badge-muted badge-overlay-tl">{{ b.category }}</span>{% endif %}
+    </div>
+    <div class="product-card-body">
+      <div class="product-card-name">{{ b.name }}</div>
+
+      <div class="product-card-stats">
+        <div class="product-card-stat">
+          <i data-lucide="dollar-sign" style="width:12px;height:12px"></i>
+          <span>${{ b.gmv_30d | format_number }} <small>30d GMV</small></span>
+        </div>
+        <div class="product-card-stat">
+          <i data-lucide="users" style="width:12px;height:12px"></i>
+          <span>{{ b.follower_count | format_number }} <small>followers</small></span>
+        </div>
+        <div class="product-card-stat">
+          <i data-lucide="package" style="width:12px;height:12px"></i>
+          <span>{{ b.product_count or 0 }} <small>products</small></span>
+        </div>
+      </div>
+
+      <div class="product-card-actions">
+        {% if b.tiktok_shop_url %}
+          <button class="btn btn-primary w-full" onclick="openOnTikTok('{{ b.tiktok_shop_url }}', '')">View Shop</button>
+        {% else %}
+          <span class="btn btn-ghost w-full" style="opacity:.5;pointer-events:none">No shop link</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{# Pagination #}
+{% if total_pages is defined and total_pages > 1 %}
+<div class="pagination">
+  <button class="page-btn" {% if page <= 1 %}disabled{% endif %} onclick="goPage({{ page - 1 }})">
+    <i data-lucide="chevron-left" style="width:16px;height:16px"></i>
+  </button>
+  {% for pg in range(1, total_pages + 1) %}
+    {% if pg <= 5 or pg == total_pages or (pg >= page - 1 and pg <= page + 1) %}
+      <button class="page-btn {% if pg == page %}active{% endif %}" onclick="goPage({{ pg }})">{{ pg }}</button>
+    {% elif pg == 6 or pg == page - 2 %}
+      <span class="page-btn" style="cursor:default;opacity:.3">&hellip;</span>
+    {% endif %}
+  {% endfor %}
+  <button class="page-btn" {% if page >= total_pages %}disabled{% endif %} onclick="goPage({{ page + 1 }})">
+    <i data-lucide="chevron-right" style="width:16px;height:16px"></i>
+  </button>
+  <span class="text-sm text-muted" style="margin-left:var(--space-3)">Page {{ page }} of {{ total_pages }}</span>
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon"><i data-lucide="store" style="width:80px;height:80px"></i></div>
+  <h3 class="empty-title">No brands synced yet</h3>
+  <p class="empty-desc">Run a brand sync from the Admin Panel to populate this page with top TikTok Shop brands.</p>
+  {% if current_user and current_user.is_admin %}
+    <a href="/app/admin" class="btn btn-primary">Go to Admin Panel</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function goPage(p) {
+  var params = new URLSearchParams(window.location.search);
+  params.set("page", p);
+  window.location.href = "/app/brands?" + params.toString();
+}
+</script>
+{% endblock %}

@@ -5,10 +5,11 @@ Existing API routes remain unchanged in their respective blueprints.
 """
 
 from functools import wraps
+from datetime import datetime
 from flask import Blueprint, render_template, redirect, session, request, jsonify
 from sqlalchemy import desc, or_
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription, User
+from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo
 from app.routes.auth import get_current_user
 
 
@@ -196,11 +197,40 @@ def products_list():
 @views_bp.route('/app/products/<product_id>')
 @login_required
 def product_detail(product_id):
+    import json
+    from datetime import timedelta
     ctx = _base_context('products')
 
     product = Product.query.get_or_404(product_id)
     product.trending_score = min(99, int((product.sales_7d or 0) / 10 + (product.influencer_count or 0) * 3 + (product.commission_rate or 0) * 200))
     ctx['product'] = product
+
+    # Lazy-load trend data (cache 24h)
+    trend_data = []
+    if not product.trend_last_synced or product.trend_last_synced < datetime.utcnow() - timedelta(hours=24):
+        try:
+            from app.services.echotik import fetch_product_trend
+            raw_id = product_id.replace('shop_', '')
+            trend = fetch_product_trend(raw_id)
+            if trend:
+                product.trend_data_json = json.dumps(trend)
+                product.trend_last_synced = datetime.utcnow()
+                db.session.commit()
+        except Exception:
+            pass
+    if product.trend_data_json:
+        try:
+            trend_data = json.loads(product.trend_data_json)
+        except Exception:
+            pass
+    ctx['trend_data'] = trend_data
+
+    # Videos (<=15s, from DB)
+    ctx['videos'] = ProductVideo.query.filter_by(
+        product_id=product_id
+    ).filter(
+        ProductVideo.duration_seconds <= 15
+    ).order_by(desc(ProductVideo.view_count)).limit(5).all()
 
     # Similar products (same category)
     similar = []
@@ -211,9 +241,6 @@ def product_detail(product_id):
             _active_filter
         ).order_by(desc(Product.sales_7d)).limit(4).all()
     ctx['similar_products'] = similar
-
-    # Creator videos placeholder (would come from API)
-    ctx['creator_videos'] = []
 
     return render_template('product_detail.html', **ctx)
 
@@ -255,6 +282,47 @@ def subscribe():
     return render_template('subscribe.html', **ctx)
 
 
+@views_bp.route('/app/brands')
+@login_required
+def brands_list():
+    ctx = _base_context('brands')
+    page = request.args.get('page', 1, type=int)
+    sort = request.args.get('sort', 'gmv')
+    category = request.args.get('category', '').strip()
+    search = request.args.get('q', '').strip()
+
+    query = Brand.query
+    if category:
+        query = query.filter(Brand.category == category)
+    if search:
+        query = query.filter(Brand.name.ilike(f'%{search}%'))
+    if sort == 'followers':
+        query = query.order_by(desc(Brand.follower_count))
+    elif sort == 'trending':
+        query = query.order_by(desc(Brand.trending_score))
+    elif sort == 'products':
+        query = query.order_by(desc(Brand.product_count))
+    else:
+        query = query.order_by(desc(Brand.gmv_30d))
+
+    pagination = query.paginate(page=page, per_page=30, error_out=False)
+
+    categories = db.session.query(Brand.category).filter(
+        Brand.category.isnot(None), Brand.category != ''
+    ).distinct().order_by(Brand.category).all()
+
+    ctx['brands'] = pagination.items
+    ctx['page'] = page
+    ctx['total_pages'] = pagination.pages
+    ctx['total_count'] = pagination.total
+    ctx['categories'] = [c[0] for c in categories if c[0]]
+    ctx['current_sort'] = sort
+    ctx['current_category'] = category
+    ctx['current_search'] = search
+
+    return render_template('brands.html', **ctx)
+
+
 @views_bp.route('/app/admin')
 @login_required
 def admin_panel():
@@ -268,6 +336,7 @@ def admin_panel():
     ctx['active_products'] = Product.query.filter(_active_filter).count()
     ctx['blacklisted_count'] = BlacklistedBrand.query.count()
     ctx['user_count'] = User.query.count()
+    ctx['brand_count'] = Brand.query.count()
 
     # Last sync: most recent last_echotik_sync across all products
     last = db.session.query(func.max(Product.last_echotik_sync)).scalar()
@@ -338,56 +407,50 @@ def api_sync_images():
     return jsonify({'success': True, 'signed': signed, 'missing': still_missing, 'total': Product.query.count()})
 
 
-@views_bp.route('/api/admin/sync-categories', methods=['POST'])
+@views_bp.route('/api/admin/sync-brands', methods=['POST'])
 @api_auth
-def api_sync_categories():
-    """Fetch category data from EchoTik detail API for products missing categories."""
+def api_sync_brands():
+    """Fetch top shops from EchoTik and upsert to Brand table."""
     user = get_current_user()
     if not user or not user.is_admin:
         return jsonify({'error': 'Admin required'}), 403
 
-    import logging, time
+    import logging
     log = logging.getLogger(__name__)
 
-    products = Product.query.filter(
-        _active_filter,
-        or_(Product.category.is_(None), Product.category == '')
-    ).limit(50).all()
-
-    if not products:
-        return jsonify({'success': True, 'enriched': 0, 'remaining': 0})
-
-    enriched = 0
     try:
-        from app.services.echotik import fetch_product_detail
+        from app.services.echotik import fetch_top_shops
     except ImportError:
         return jsonify({'error': 'echotik module not available'}), 500
 
-    for p in products:
-        try:
-            raw_id = p.product_id.replace('shop_', '')
-            detail = fetch_product_detail(raw_id)
-            if detail:
-                if detail.get('category'):
-                    p.category = str(detail['category'])[:100]
-                    enriched += 1
-                if detail.get('subcategory') and not p.subcategory:
-                    p.subcategory = str(detail['subcategory'])[:100]
-                # Also grab image if missing
-                if not p.image_url and detail.get('image_url'):
-                    p.image_url = str(detail['image_url'])[:500]
-            time.sleep(0.3)  # Rate limit
-        except Exception as e:
-            log.warning("Category enrich failed for %s: %s", p.product_id, e)
+    total_synced = 0
+    for page in range(1, 6):  # 5 pages x 20 = 100 brands max
+        shops = fetch_top_shops(page=page, page_size=20)
+        if not shops:
+            break
+        for s in shops:
+            sid = s.get('shop_id', '')
+            if not sid:
+                continue
+            brand = Brand.query.filter_by(shop_id=sid).first()
+            if not brand:
+                brand = Brand(shop_id=sid, name=s.get('name', 'Unknown'))
+                db.session.add(brand)
+            brand.name = (s.get('name') or brand.name)[:300]
+            brand.avatar_url = (s.get('avatar_url') or '')[:500] or brand.avatar_url
+            brand.country = s.get('country', 'US')
+            brand.category = (s.get('category') or '')[:100] or brand.category
+            brand.follower_count = s.get('follower_count', 0)
+            brand.gmv_30d = s.get('gmv_30d', 0)
+            brand.product_count = s.get('product_count', 0)
+            brand.trending_score = s.get('trending_score', 0)
+            brand.tiktok_shop_url = (s.get('shop_url') or '')[:500]
+            brand.last_synced = datetime.utcnow()
+            total_synced += 1
 
     db.session.commit()
+    return jsonify({'success': True, 'synced': total_synced, 'total': Brand.query.count()})
 
-    remaining = Product.query.filter(
-        _active_filter,
-        or_(Product.category.is_(None), Product.category == '')
-    ).count()
-
-    return jsonify({'success': True, 'enriched': enriched, 'remaining': remaining})
 
 @views_bp.route('/api/blacklist/add', methods=['POST'])
 @api_auth
