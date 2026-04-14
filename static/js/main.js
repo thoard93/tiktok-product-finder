@@ -238,7 +238,13 @@ function sendChat() {
     loadDiv.remove();
     var aiDiv = document.createElement("div");
     aiDiv.className = "chat-msg chat-msg--ai";
-    aiDiv.textContent = data.response || data.error || "Sorry, I couldn't process that.";
+    var text = data.response || data.error || "Sorry, I couldn't process that.";
+    // Basic markdown-like formatting
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\n- /g, '<br>• ');
+    text = text.replace(/\n\d+\. /g, function(m) { return '<br>' + m.trim() + ' '; });
+    text = text.replace(/\n/g, '<br>');
+    aiDiv.innerHTML = text;
     messages.appendChild(aiDiv);
     messages.scrollTop = messages.scrollHeight;
   })

@@ -800,7 +800,7 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .chat-input-wrap .input{flex:1}
 
 /* 39. FAVORITE / WATCHLIST BUTTON ========================================== */
-.fav-btn{position:absolute;top:8px;right:8px;z-index:5;width:32px;height:32px;border-radius:var(--radius-full);background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--dur-fast);border:none;color:rgba(255,255,255,0.6)}
+.fav-btn{position:absolute;bottom:8px;right:8px;z-index:5;width:32px;height:32px;border-radius:var(--radius-full);background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--dur-fast);border:none;color:rgba(255,255,255,0.7)}
 .fav-btn:hover{background:rgba(0,0,0,0.6);color:#fff;transform:scale(1.1)}
 .fav-btn.active{color:var(--accent);background:rgba(232,56,77,0.2)}
 .fav-btn .lucide{width:16px;height:16px}

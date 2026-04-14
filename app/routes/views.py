@@ -134,7 +134,28 @@ def dashboard():
 @login_required
 def products_list():
     ctx = _base_context('products')
+    try:
+        return _products_list_inner(ctx)
+    except Exception as e:
+        import logging, traceback
+        logging.getLogger(__name__).error("Products page error: %s\n%s", e, traceback.format_exc())
+        ctx['products'] = []
+        ctx['page'] = 1
+        ctx['total_pages'] = 0
+        ctx['total_count'] = 0
+        ctx['has_filters'] = False
+        ctx['categories'] = []
+        ctx['current_sort'] = 'trending'
+        ctx['current_category'] = ''
+        ctx['current_search'] = ''
+        ctx['current_min_commission'] = 0
+        ctx['current_max_price'] = 0
+        ctx['current_max_videos'] = 0
+        from flask import flash
+        flash(f'Error loading products: {str(e)[:200]}', 'error')
+        return render_template('products.html', **ctx)
 
+def _products_list_inner(ctx):
     page = request.args.get('page', 1, type=int)
     per_page = 30
     sort = request.args.get('sort', 'trending')
