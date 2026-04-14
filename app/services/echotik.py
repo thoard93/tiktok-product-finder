@@ -386,51 +386,61 @@ def fetch_top_shops(country: str = "US", page_size: int = 20) -> list[dict]:
     """
     Fetch top TikTok Shop sellers from EchoTik v3.
 
-    Uses open.echotik.live/api/v3/echotik/seller/list (correct base + prefix).
-    Auth: HTTP Basic (same ECHOTIK_USERNAME/PASSWORD as product API).
-
-    Returns:
-        List of normalized shop dicts.
+    Endpoint: GET https://open.echotik.live/api/v3/echotik/seller/list
+    Auth: HTTP Basic — tries ECHOTIK_USERNAME:PASSWORD first, then
+          ECHOTIK_API_KEY with empty password as fallback.
     """
-    # All endpoints use ECHOTIK_V3_BASE = "https://open.echotik.live/api/v3/echotik"
-    endpoints_to_try = [
-        {
-            "path": f"{ECHOTIK_V3_BASE}/seller/list",
-            "params": {"page_num": 1, "page_size": page_size, "country": country},
-        },
-        {
-            "path": f"{ECHOTIK_V3_BASE}/seller/rank/list",
-            "params": {"page_num": 1, "page_size": page_size, "country": country, "date_type": 1},
-        },
-        {
-            "path": f"{ECHOTIK_V3_BASE}/shop/list",
-            "params": {"page_num": 1, "page_size": page_size, "country": country},
-        },
-    ]
+    import base64
+
+    url = f"{ECHOTIK_V3_BASE}/seller/list"
+    params = {"region": country, "page_num": 1, "page_size": page_size}
+
+    # Auth method 1: standard username:password (works for product endpoints)
+    auth = _get_auth()
+
+    # Auth method 2: API key as username, empty password
+    api_key = os.environ.get('ECHOTIK_API_KEY', '')
 
     raw_items = []
 
-    for ep in endpoints_to_try:
-        try:
-            # Use _request() which handles Basic Auth + retries automatically
-            data = _request('GET', ep["path"], params=ep["params"])
-            log.info("[EchoTik] %s -> code=%s", ep["path"].split("/echotik/")[-1], data.get('code'))
-
-            items = data.get("data") or {}
-            if isinstance(items, dict):
-                result = items.get("list") or items.get("records") or items.get("sellers") or []
-            elif isinstance(items, list):
-                result = items
-            else:
-                result = []
-
-            if result:
-                log.info("[EchoTik] Got %d sellers from %s", len(result), ep["path"].split("/echotik/")[-1])
-                raw_items = result
-                break
-        except EchoTikError as exc:
-            log.info("[EchoTik] %s failed: %s", ep["path"].split("/echotik/")[-1], exc)
+    # Try standard auth first
+    for attempt_label, attempt_auth in [
+        ("username:password", auth),
+        ("api_key:empty", HTTPBasicAuth(api_key, '') if api_key else None),
+    ]:
+        if attempt_auth is None:
             continue
+        try:
+            resp = requests.get(url, params=params, auth=attempt_auth, timeout=15)
+            log.info("[EchoTik] seller/list (%s) -> status=%d", attempt_label, resp.status_code)
+            log.info("[EchoTik] seller/list response: %s", resp.text[:500])
+
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get('code') == 0:
+                    items = data.get("data") or {}
+                    if isinstance(items, dict):
+                        result = items.get("list") or items.get("records") or items.get("sellers") or []
+                    elif isinstance(items, list):
+                        result = items
+                    else:
+                        result = []
+                    if result:
+                        log.info("[EchoTik] Got %d sellers via %s", len(result), attempt_label)
+                        raw_items = result
+                        break
+                    else:
+                        log.info("[EchoTik] seller/list returned code=0 but empty data via %s", attempt_label)
+                else:
+                    log.info("[EchoTik] seller/list code=%s msg=%s via %s",
+                             data.get('code'), data.get('message', ''), attempt_label)
+            elif resp.status_code in (401, 403):
+                log.info("[EchoTik] seller/list auth failed (%s) via %s", resp.status_code, attempt_label)
+            else:
+                log.info("[EchoTik] seller/list HTTP %s via %s: %s",
+                         resp.status_code, attempt_label, resp.text[:200])
+        except Exception as exc:
+            log.warning("[EchoTik] seller/list error via %s: %s", attempt_label, exc)
 
     if not raw_items:
         log.warning("[EchoTik] All brand/shop endpoints returned no data — API plan may not include seller data")
