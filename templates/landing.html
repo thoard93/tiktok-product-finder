@@ -67,85 +67,177 @@
 </div>
 
 {# ===== FEATURES ===== #}
-<section class="features" id="features">
-  {# Row 1: asymmetric #}
-  <div class="features-row features-row-asym">
-    <div class="feature-card feature-card-lg">
-      <div style="flex:1;display:flex;align-items:center;justify-content:center;margin-bottom:var(--space-6)">
-        {# Inline mock product card #}
-        <div class="card" style="width:200px;padding:var(--space-4)">
-          <div style="aspect-ratio:1;background:var(--bg-elevated);border-radius:var(--radius);margin-bottom:var(--space-3);display:flex;align-items:center;justify-content:center;color:var(--text-faint)">
-            <i data-lucide="package" style="width:28px;height:28px"></i>
+<section class="features-section" id="features">
+  <div class="features-container">
+    <div class="features-header">
+      <span class="features-eyebrow">What you get</span>
+      <h2 class="features-title">Everything you need to find<br>winning products fast</h2>
+    </div>
+
+    {# Feature 1: Full-width hero with product card mockups #}
+    <div class="feature-hero">
+      <div class="feature-hero__content">
+        <span class="feature-tag">Core Feature</span>
+        <h3>Real-time trending product feed</h3>
+        <p>Every 6 hours, Vantage pulls fresh data from EchoTik across every TikTok Shop category. See what's gaining momentum before it goes viral.</p>
+        <ul class="feature-list">
+          <li><i data-lucide="check"></i> Trending score updated every 6 hours</li>
+          <li><i data-lucide="check"></i> GMV estimates from real sales data</li>
+          <li><i data-lucide="check"></i> Filter by category, commission rate, price range</li>
+        </ul>
+      </div>
+      <div class="feature-hero__mockup">
+        <div class="mockup-card-stack">
+          <div class="mockup-product-card">
+            <div class="mockup-img mockup-img--1"></div>
+            <div class="mockup-card-body">
+              <span class="mockup-badge mockup-badge--hot">&#x1f525; 92 Score</span>
+              <div class="mockup-title">Portable Mini Blender</div>
+              <div class="mockup-meta">
+                <span class="mockup-commission">18% commission</span>
+                <span class="mockup-price">$24.99</span>
+              </div>
+              <div class="mockup-bar"><div class="mockup-bar-fill" style="width:92%"></div></div>
+            </div>
           </div>
-          <div style="font-size:var(--text-sm);font-weight:600;margin-bottom:4px">Portable Blender Pro</div>
-          <div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2)">
-            <span class="badge badge-green">92</span>
-            <span style="font-size:10px;color:var(--text-faint)">trending</span>
+          <div class="mockup-product-card mockup-product-card--2">
+            <div class="mockup-img mockup-img--2"></div>
+            <div class="mockup-card-body">
+              <span class="mockup-badge mockup-badge--warm">&#x26a1; 78 Score</span>
+              <div class="mockup-title">LED Strip Lights 5M</div>
+              <div class="mockup-meta">
+                <span class="mockup-commission">22% commission</span>
+                <span class="mockup-price">$18.99</span>
+              </div>
+              <div class="mockup-bar"><div class="mockup-bar-fill" style="width:78%"></div></div>
+            </div>
           </div>
-          <div style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:800;color:var(--accent)">18%</div>
-          <div style="font-size:var(--text-xs);color:var(--text-faint);margin-top:2px">$14.99 &ndash; $24.99</div>
+          <div class="mockup-product-card mockup-product-card--3">
+            <div class="mockup-img mockup-img--3"></div>
+            <div class="mockup-card-body">
+              <span class="mockup-badge mockup-badge--warm">&#x26a1; 71 Score</span>
+              <div class="mockup-title">Neck Massager Pillow</div>
+              <div class="mockup-meta">
+                <span class="mockup-commission">25% commission</span>
+                <span class="mockup-price">$39.99</span>
+              </div>
+              <div class="mockup-bar"><div class="mockup-bar-fill" style="width:71%"></div></div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="feature-icon accent"><i data-lucide="trending-up"></i></div>
-      <h3 class="feature-title">Real-time trending products</h3>
-      <p class="feature-desc">See what's gaining traction right now. Our scoring algorithm weighs sales velocity, creator adoption, and commission rates to surface winners early.</p>
     </div>
 
-    <div style="display:flex;flex-direction:column;gap:var(--space-5)">
-      <div class="feature-card">
-        <div class="feature-icon teal"><i data-lucide="brain"></i></div>
-        <h3 class="feature-title">AI demand scoring</h3>
-        <p class="feature-desc">Every product gets a composite trending score from 7-day sales velocity, creator adoption, and GMV growth.</p>
+    {# Feature 2+3+4: Asymmetric grid #}
+    <div class="features-grid">
+      <div class="feature-card feature-card--large">
+        <i data-lucide="bar-chart-2" class="feature-icon"></i>
+        <h3>Commission calculator</h3>
+        <p>Input your expected daily sales volume and instantly see projected monthly revenue for any product. Know your ROI before you promote.</p>
+        <div class="mini-calc-mockup">
+          <div class="calc-row"><span>Daily sales</span><span class="calc-value">50 units</span></div>
+          <div class="calc-row"><span>Commission rate</span><span class="calc-value">18%</span></div>
+          <div class="calc-row calc-row--total"><span>Est. monthly revenue</span><span class="calc-value calc-value--highlight">$1,347</span></div>
+        </div>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon accent"><i data-lucide="calculator"></i></div>
-        <h3 class="feature-title">Commission calculator</h3>
-        <p class="feature-desc">Estimate your monthly revenue instantly based on commission rates and daily sales volume.</p>
+      <div class="features-stack">
+        <div class="feature-card">
+          <i data-lucide="video" class="feature-icon"></i>
+          <h3>Top creator videos</h3>
+          <p>See which TikTok creators are driving sales for each product. Find the right creators to partner with or replicate what's working.</p>
+        </div>
+        <div class="feature-card">
+          <i data-lucide="shield-off" class="feature-icon"></i>
+          <h3>Personal blacklist</h3>
+          <p>Mark products you've already promoted or want to skip. Your blacklist syncs across Discord bot and web — never re-research the same product twice.</p>
+        </div>
       </div>
     </div>
-  </div>
 
-  {# Row 2: three equal #}
-  <div class="features-row features-row-3">
-    <div class="feature-card">
-      <div class="feature-icon teal"><i data-lucide="video"></i></div>
-      <h3 class="feature-title">Creator video tracking</h3>
-      <p class="feature-desc">See which creators are pushing a product, video counts, and total view performance.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon gold"><i data-lucide="ban"></i></div>
-      <h3 class="feature-title">Blacklist products</h3>
-      <p class="feature-desc">Hide products you've already sold or evaluated so your feed stays fresh and focused.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon accent"><i data-lucide="bell-ring"></i></div>
-      <h3 class="feature-title">Discord alerts</h3>
-      <p class="feature-desc">Get notified in Discord when new products break into the top trending scores.</p>
+    {# Feature 5: Discord banner #}
+    <div class="feature-discord-banner">
+      <div class="feature-discord-banner__text">
+        <i data-lucide="message-square" class="feature-icon"></i>
+        <div>
+          <h3>Discord bot included</h3>
+          <p>Use the <code>!lookup [product]</code> command directly in your Discord server. Auto-posts trending products to your #product-lookup channel every 6 hours.</p>
+        </div>
+      </div>
+      <div class="feature-discord-banner__mockup">
+        <div class="discord-msg-mockup">
+          <div class="discord-avatar"></div>
+          <div class="discord-content">
+            <span class="discord-name">Vantage Bot</span>
+            <div class="discord-bubble">&#x1f525; <strong>New trending product:</strong> Portable Mini Blender — 92 score, 18% commission <a href="#">View &rarr;</a></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
 {# ===== PRICING ===== #}
-<section class="pricing" id="pricing">
-  <h2 class="pricing-heading">Simple, transparent pricing</h2>
-  <p class="pricing-sub">Everything you need. No hidden fees. Cancel anytime.</p>
-
-  <div class="pricing-card">
-    <div class="pricing-amount">$19.99 <span>/ month</span></div>
-    <div class="pricing-features">
-      <div class="pricing-feature"><i data-lucide="check"></i> Unlimited product research</div>
-      <div class="pricing-feature"><i data-lucide="check"></i> Real-time trending scores</div>
-      <div class="pricing-feature"><i data-lucide="check"></i> Commission rate tracking</div>
-      <div class="pricing-feature"><i data-lucide="check"></i> Creator &amp; video analytics</div>
-      <div class="pricing-feature"><i data-lucide="check"></i> GMV estimates &amp; sales velocity</div>
-      <div class="pricing-feature"><i data-lucide="check"></i> Personal blacklist manager</div>
-      <div class="pricing-feature"><i data-lucide="check"></i> Daily EchoTik data sync</div>
-      <div class="pricing-feature"><i data-lucide="check"></i> Discord community access</div>
+<section class="pricing-section" id="pricing">
+  <div class="pricing-container">
+    <div class="pricing-header">
+      <span class="features-eyebrow">Simple pricing</span>
+      <h2 class="features-title">One plan. Everything included.</h2>
+      <p class="pricing-sub">No feature tiers. No upsells. Everything Vantage offers, for one flat rate.</p>
     </div>
-    <a href="/register" class="btn btn-primary btn-lg w-full">Start your free trial</a>
-    <div class="coupon-pill">
-      <div class="coupon-code">LAUNCH50</div>
-      <div class="coupon-desc">50% off your first month &rarr;</div>
+
+    <div class="pricing-layout">
+      <div class="pricing-card">
+        <div class="pricing-card__header">
+          <div>
+            <div class="pricing-plan-name">Vantage Pro</div>
+            <div class="pricing-price">
+              <span class="pricing-amount">$19.99</span>
+              <span class="pricing-period">/ month</span>
+            </div>
+          </div>
+          <div class="pricing-badge">Most Popular</div>
+        </div>
+
+        <div class="pricing-coupon-callout">
+          <i data-lucide="tag"></i>
+          Use code <strong>LAUNCH50</strong> — 50% off your first month ($9.99)
+        </div>
+
+        <ul class="pricing-features">
+          <li><i data-lucide="check"></i> Unlimited product searches</li>
+          <li><i data-lucide="check"></i> Real-time trending product feed (updated every 6 hrs)</li>
+          <li><i data-lucide="check"></i> EchoTik-powered sales &amp; GMV data</li>
+          <li><i data-lucide="check"></i> Commission calculator for every product</li>
+          <li><i data-lucide="check"></i> Top creator video tracking</li>
+          <li><i data-lucide="check"></i> Personal product blacklist</li>
+          <li><i data-lucide="check"></i> Discord bot with auto-trending posts</li>
+          <li><i data-lucide="check"></i> <code>!lookup</code> command in your Discord server</li>
+          <li><i data-lucide="check"></i> Full analytics dashboard (30/60/90 day views)</li>
+          <li><i data-lucide="check"></i> Referral program — earn free months</li>
+        </ul>
+
+        <a href="/register" class="btn-pricing-cta">Get started free &rarr;</a>
+        <p class="pricing-card__note">Billed monthly via PayPal. Cancel anytime.</p>
+      </div>
+
+      <div class="pricing-value-props">
+        <div class="value-prop">
+          <i data-lucide="refresh-cw"></i>
+          <div><strong>Cancel anytime</strong><p>No contracts, no lock-in. Cancel from your settings with one click.</p></div>
+        </div>
+        <div class="value-prop">
+          <i data-lucide="shield-check"></i>
+          <div><strong>PayPal protected</strong><p>All payments processed securely through PayPal's subscription billing.</p></div>
+        </div>
+        <div class="value-prop">
+          <i data-lucide="users"></i>
+          <div><strong>Referral rewards</strong><p>Share your referral link. Earn 1 free month for every 3 active referrals.</p></div>
+        </div>
+        <div class="value-prop">
+          <i data-lucide="zap"></i>
+          <div><strong>Instant access</strong><p>Subscribe and get full access in under 60 seconds.</p></div>
+        </div>
+      </div>
     </div>
   </div>
 </section>

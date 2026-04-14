@@ -224,6 +224,31 @@ def subscribe():
     ctx = _base_context('subscribe')
     return render_template('subscribe.html', **ctx)
 
+
+@views_bp.route('/app/admin')
+@login_required
+def admin_panel():
+    ctx = _base_context('admin')
+    user = ctx['current_user']
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+
+    from sqlalchemy import func
+    ctx['total_products'] = Product.query.count()
+    ctx['active_products'] = Product.query.filter_by(product_status='active').count()
+    ctx['blacklisted_count'] = BlacklistedBrand.query.count()
+    ctx['user_count'] = User.query.count()
+
+    # Last sync: most recent last_echotik_sync across all products
+    last = db.session.query(func.max(Product.last_echotik_sync)).scalar()
+    if last:
+        ctx['last_sync'] = last.strftime('%b %d, %Y at %I:%M %p UTC')
+    else:
+        ctx['last_sync'] = None
+
+    return render_template('admin.html', **ctx)
+
+
 # ---------------------------------------------------------------------------
 # API endpoints for frontend (blacklist CRUD, profile update)
 # ---------------------------------------------------------------------------

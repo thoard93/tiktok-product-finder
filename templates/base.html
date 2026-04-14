@@ -37,6 +37,13 @@
         <a href="/app/settings" class="sidebar-link {% if active_page == 'settings' %}active{% endif %}">
           <i data-lucide="settings"></i> Settings
         </a>
+
+        {% if current_user and current_user.is_admin %}
+        <span class="sidebar-section">Admin</span>
+        <a href="/app/admin" class="sidebar-link {% if active_page == 'admin' %}active{% endif %}">
+          <i data-lucide="shield"></i> Admin Panel
+        </a>
+        {% endif %}
       </nav>
 
       <div class="sidebar-footer">
@@ -79,6 +86,15 @@
         </div>
       </header>
 
+      {# Upgrade banner for non-subscribers #}
+      {% if current_user and not current_user.is_admin and (not subscription or subscription.status != 'active') %}
+      <div class="upgrade-banner">
+        <i data-lucide="zap" style="width:16px;height:16px"></i>
+        <span>You're on the free plan — unlock full product data and analytics.</span>
+        <a href="/app/subscribe" class="upgrade-banner__cta">Upgrade for $19.99/mo &rarr;</a>
+      </div>
+      {% endif %}
+
       <div class="page-content">
         {% block content %}{% endblock %}
       </div>
@@ -102,6 +118,14 @@
       </div>
     </nav>
   </div>
+
+  {# Upgrade FAB for non-subscribers #}
+  {% if current_user and not current_user.is_admin and (not subscription or subscription.status != 'active') %}
+  <a href="/app/subscribe" class="upgrade-fab" aria-label="Upgrade to Pro">
+    <i data-lucide="zap"></i>
+    <span>Upgrade</span>
+  </a>
+  {% endif %}
 
   {# Flash messages #}
   <div class="flash-container" id="flashContainer">
