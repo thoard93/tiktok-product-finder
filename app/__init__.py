@@ -14,6 +14,23 @@ db = SQLAlchemy()
 executor = ThreadPoolExecutor(max_workers=4)
 
 
+def _auto_migrate(app, db):
+    """Safely add missing columns to existing tables. Idempotent."""
+    migrations = [
+        ("products", "trend_data_json", "TEXT"),
+        ("products", "trend_last_synced", "TIMESTAMP"),
+    ]
+    for table, column, col_type in migrations:
+        try:
+            db.session.execute(db.text(
+                f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+            ))
+            db.session.commit()
+            print(f"[MIGRATE] Added {table}.{column}")
+        except Exception:
+            db.session.rollback()  # Column already exists — safe to ignore
+
+
 def create_app():
     """Create and configure the Flask application."""
     # root_path must point to the PROJECT root (one level up from this file)
@@ -122,6 +139,9 @@ def create_app():
             db.create_all()
         except Exception as e:
             print(f"Error during DB init: {e}")
+
+        # Auto-add missing columns to existing tables (safe for Postgres)
+        _auto_migrate(flask_app, db)
 
     # --- Response caching headers for read-heavy API endpoints ---
     @flask_app.after_request
