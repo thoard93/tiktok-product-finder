@@ -155,6 +155,27 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
+/* --- TikTok Deep Link ----------------------------------------------------- */
+function openOnTikTok(shopUrl, productId) {
+  var ua = navigator.userAgent || navigator.vendor || window.opera;
+  var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  var isAndroid = /android/i.test(ua);
+  var webUrl = shopUrl || (productId ? "https://www.tiktok.com/view/product/" + productId : "https://www.tiktok.com/shop");
+
+  if (isIOS || isAndroid) {
+    var scheme = isIOS ? "snssdk1233" : "snssdk1128";
+    var deepLink = productId ? scheme + "://aweme/detail/product?product_id=" + productId : scheme + "://";
+    var timer = setTimeout(function () { window.location.href = webUrl; }, 1500);
+    document.addEventListener("visibilitychange", function handler() {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handler);
+    });
+    window.location.href = deepLink;
+  } else {
+    window.open(webUrl, "_blank", "noopener,noreferrer");
+  }
+}
+
 /* --- Utility -------------------------------------------------------------- */
 function esc(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
 function formatNum(n) { if (n >= 1e6) return (n / 1e6).toFixed(1) + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1) + "K"; return n.toString(); }

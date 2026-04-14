@@ -52,9 +52,10 @@
     {% endif %}
 
     <div style="margin-top:var(--space-6);display:flex;gap:var(--space-3);flex-wrap:wrap">
-      {% if product.product_url %}
-        <a href="{{ product.product_url }}" target="_blank" rel="noopener" class="btn btn-ghost"><i data-lucide="external-link" style="width:16px;height:16px"></i> View on TikTok Shop</a>
-      {% endif %}
+      <button class="btn btn-primary" onclick="openOnTikTok('{{ product.product_url | default('') }}', '{{ product.product_id | replace('shop_', '') }}')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.2 8.2 0 004.79 1.53V6.79a4.85 4.85 0 01-1.02-.1z"/></svg>
+        View on TikTok Shop
+      </button>
     </div>
   </div>
 
@@ -64,19 +65,6 @@
     <div class="chart-card mb-4">
       <div class="chart-title">Sales trend (30 days)</div>
       <div class="chart-wrap"><canvas id="detailSalesChart"></canvas></div>
-    </div>
-
-    {# Commission calculator #}
-    <div class="calc-widget mb-4">
-      <div class="calc-widget-title"><i data-lucide="calculator" style="width:18px;height:18px"></i> Commission Calculator</div>
-      <div class="input-group">
-        <label class="input-label">Est. daily orders</label>
-        <input type="number" class="input" id="calcDailySales" value="10" min="1">
-      </div>
-      <div class="calc-result">
-        <div class="calc-result-value" id="calcRevenue">$0.00</div>
-        <div class="calc-result-label">Est. monthly commission</div>
-      </div>
     </div>
 
     {# Top creator videos #}
@@ -121,9 +109,6 @@
 {% block scripts %}
 <script src="/static/js/dashboard.js"></script>
 <script>
-/* Commission calculator */
-initCalc({{ product.price or 0 }}, {{ product.commission_rate or 0 }});
-
 /* Sales chart — placeholder data (real data would come from API) */
 (function() {
   var labels = [], data = [];

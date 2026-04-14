@@ -30,6 +30,24 @@
   </button>
 </div>
 
+{# ===== Image Sync ===== #}
+<div class="card mb-6" style="max-width:640px">
+  <div class="flex items-center gap-3 mb-4">
+    <div class="feature-icon teal" style="width:36px;height:36px;margin-bottom:0"><i data-lucide="image" style="width:18px;height:18px"></i></div>
+    <div>
+      <h2 style="font-size:var(--text-lg);font-weight:700">Product Image Sync</h2>
+      <p class="text-sm text-muted">Sign image URLs via EchoTik for products with missing images.</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-4 mb-4">
+    <div class="text-sm"><span class="text-faint">Missing images:</span> <strong id="missingCount">{{ missing_images | default(0) }}</strong></div>
+  </div>
+  <div id="imageSyncStatus" class="mb-4" style="display:none"></div>
+  <button class="btn btn-ghost btn-lg" id="imageSyncBtn" onclick="syncImages()">
+    <i data-lucide="image" style="width:18px;height:18px"></i> Sync Missing Images
+  </button>
+</div>
+
 {# ===== Quick Stats ===== #}
 <div class="card" style="max-width:640px">
   <h3 style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-4)">System Stats</h3>
@@ -141,6 +159,33 @@ async function runScan() {
   }
   btn.disabled = false;
   btn.style.opacity = "";
+}
+
+/* Image sync */
+async function syncImages() {
+  var btn = document.getElementById("imageSyncBtn");
+  btn.disabled = true; btn.style.opacity = "0.6";
+  var el = document.getElementById("imageSyncStatus");
+  el.style.display = "block";
+  el.className = "scan-status-box scan-status-info";
+  el.innerHTML = '<span class="anim-pulse">Signing images...</span>';
+
+  try {
+    var res = await fetch("/api/admin/sync-images", { method: "POST" });
+    var data = await res.json();
+    if (data.success) {
+      el.className = "scan-status-box scan-status-success";
+      el.innerHTML = "<strong>Done!</strong> " + data.signed + " images signed. " + data.missing + " still missing.";
+      document.getElementById("missingCount").textContent = data.missing;
+    } else {
+      el.className = "scan-status-box scan-status-error";
+      el.innerHTML = data.error || "Failed";
+    }
+  } catch(e) {
+    el.className = "scan-status-box scan-status-error";
+    el.innerHTML = "Network error: " + e.message;
+  }
+  btn.disabled = false; btn.style.opacity = "";
 }
 
 /* Check EchoTik API status on load */

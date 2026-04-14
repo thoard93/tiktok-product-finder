@@ -29,8 +29,8 @@
     <input type="text" class="input" name="search" placeholder="Search products..." value="{{ current_search | default('') }}">
   </div>
   <button type="submit" class="btn btn-ghost btn-sm">Search</button>
-  <a href="/app/products" class="btn btn-ghost btn-sm">Clear</a>
-  <div class="filter-count">{{ products | length }} products</div>
+  {% if has_filters %}<a href="/app/products" class="btn btn-ghost btn-sm" style="color:var(--danger)">Clear filters</a>{% endif %}
+  <div class="filter-count">{{ total_count | default(0) }} products</div>
 </form>
 
 {# ===== PRODUCT GRID ===== #}
@@ -42,9 +42,15 @@
       {% if p.cached_image_url or p.image_url %}
         <img src="{{ p.cached_image_url or p.image_url }}" alt="{{ p.product_name }}" loading="lazy"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="product-card-img-fallback" style="display:none"><i data-lucide="package"></i></div>
+        <div class="product-card-img-fallback" style="display:none">
+          <i data-lucide="package"></i>
+          <span>{{ p.category or 'Product' }}</span>
+        </div>
       {% else %}
-        <div class="product-card-img-fallback"><i data-lucide="package"></i></div>
+        <div class="product-card-img-fallback">
+          <i data-lucide="package"></i>
+          <span>{{ p.category or 'Product' }}</span>
+        </div>
       {% endif %}
       {% if p.category %}<span class="badge badge-muted badge-overlay-tl">{{ p.category }}</span>{% endif %}
       <span class="badge badge-overlay-tr {{ 'badge-green' if p.trending_score >= 80 else ('badge-gold' if p.trending_score >= 50 else 'badge-red') }}">{{ p.trending_score }}</span>

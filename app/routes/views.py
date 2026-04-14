@@ -147,7 +147,7 @@ def products_list():
         query = query.filter(Product.product_name.ilike(f'%{search}%'))
 
     if category:
-        query = query.filter(Product.category.ilike(f'%{category}%'))
+        query = query.filter(Product.category == category)
 
     if min_comm > 0:
         query = query.filter(Product.commission_rate >= min_comm / 100.0)
@@ -187,6 +187,8 @@ def products_list():
     ctx['products'] = products
     ctx['page'] = page
     ctx['total_pages'] = pagination.pages
+    ctx['total_count'] = pagination.total
+    ctx['has_filters'] = bool(category or search or min_comm > 0)
 
     return render_template('products.html', **ctx)
 
@@ -274,12 +276,66 @@ def admin_panel():
     else:
         ctx['last_sync'] = None
 
+    # Count products missing images
+    ctx['missing_images'] = Product.query.filter(
+        _active_filter,
+        or_(Product.image_url.is_(None), Product.image_url == '',
+            Product.cached_image_url.is_(None))
+    ).count()
+
     return render_template('admin.html', **ctx)
 
 
 # ---------------------------------------------------------------------------
-# API endpoints for frontend (blacklist CRUD, profile update)
+# API endpoints for frontend (blacklist CRUD, profile update, image sync)
 # ---------------------------------------------------------------------------
+
+@views_bp.route('/api/admin/sync-images', methods=['POST'])
+@api_auth
+def api_sync_images():
+    """Sign images for products missing cached_image_url."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    from app.services.echotik import fetch_batch_images
+    import logging
+    log = logging.getLogger(__name__)
+
+    products = Product.query.filter(
+        _active_filter,
+        Product.image_url.isnot(None),
+        Product.image_url != '',
+        or_(Product.cached_image_url.is_(None), Product.cached_image_url == '')
+    ).limit(100).all()
+
+    if not products:
+        return jsonify({'success': True, 'signed': 0, 'missing': 0, 'total': Product.query.count()})
+
+    signed = 0
+    for i in range(0, len(products), 10):
+        batch = products[i:i + 10]
+        urls = [p.image_url for p in batch if p.image_url and p.image_url.startswith('http')]
+        if not urls:
+            continue
+        try:
+            result = fetch_batch_images(urls)
+            for p in batch:
+                if p.image_url in result:
+                    p.cached_image_url = result[p.image_url][:500]
+                    signed += 1
+        except Exception as e:
+            log.warning("Batch sign failed: %s", e)
+
+    db.session.commit()
+
+    still_missing = Product.query.filter(
+        _active_filter,
+        or_(Product.image_url.is_(None), Product.image_url == '',
+            Product.cached_image_url.is_(None))
+    ).count()
+
+    return jsonify({'success': True, 'signed': signed, 'missing': still_missing, 'total': Product.query.count()})
 
 @views_bp.route('/api/blacklist/add', methods=['POST'])
 @api_auth
