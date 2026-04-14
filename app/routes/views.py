@@ -479,10 +479,8 @@ def api_sync_brands():
 
     try:
         total_synced = 0
-        for page in range(1, 6):  # 5 pages x 20 = 100 brands max
-            shops = fetch_top_shops(page=page, page_size=20)
-            if not shops:
-                break
+        shops = fetch_top_shops(country="US", page_size=20)
+        if shops:
             for s in shops:
                 sid = s.get('shop_id', '')
                 if not sid:

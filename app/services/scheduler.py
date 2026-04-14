@@ -78,10 +78,8 @@ def _run_brand_sync(app):
         log.info("[SCHEDULER] Brand sync starting")
         total = 0
 
-        for page in range(1, 6):  # 5 pages x 20 = 100 brands
-            shops = fetch_top_shops(page=page, page_size=20)
-            if not shops:
-                break
+        shops = fetch_top_shops(country="US", page_size=20)
+        if shops:
             for s in shops:
                 sid = s.get('shop_id', '')
                 if not sid:
@@ -101,7 +99,6 @@ def _run_brand_sync(app):
                 brand.tiktok_shop_url = (s.get('shop_url') or '')[:500]
                 brand.last_synced = datetime.utcnow()
                 total += 1
-            time.sleep(0.5)
 
         db.session.commit()
         log.info("[SCHEDULER] Brand sync complete: %d brands", total)
