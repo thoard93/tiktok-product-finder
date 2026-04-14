@@ -141,6 +141,8 @@ def products_list():
     search = request.args.get('search', '').strip()
     category = request.args.get('category', '').strip()
     min_comm = request.args.get('min_commission', 0, type=float)
+    max_price = request.args.get('max_price', 0, type=float)
+    max_videos = request.args.get('max_videos', 0, type=int)
 
     query = Product.query.filter(_active_filter)
 
@@ -153,6 +155,12 @@ def products_list():
     if min_comm > 0:
         query = query.filter(Product.commission_rate >= min_comm / 100.0)
 
+    if max_price > 0:
+        query = query.filter(Product.price <= max_price)
+
+    if max_videos > 0:
+        query = query.filter(Product.video_count <= max_videos)
+
     if sort == 'commission':
         query = query.order_by(desc(Product.commission_rate))
     elif sort == 'new':
@@ -161,6 +169,8 @@ def products_list():
         query = query.order_by(desc(Product.gmv))
     elif sort == 'sales':
         query = query.order_by(desc(Product.sales_7d))
+    elif sort == 'videos_low':
+        query = query.order_by(Product.video_count.asc())
     else:  # trending (default)
         query = query.order_by(desc(Product.sales_7d))
 
@@ -181,6 +191,8 @@ def products_list():
     ctx['current_category'] = category
     ctx['current_search'] = search
     ctx['current_min_commission'] = min_comm
+    ctx['current_max_price'] = max_price
+    ctx['current_max_videos'] = max_videos
 
     for p in products:
         p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
@@ -189,7 +201,7 @@ def products_list():
     ctx['page'] = page
     ctx['total_pages'] = pagination.pages
     ctx['total_count'] = pagination.total
-    ctx['has_filters'] = bool(category or search or min_comm > 0)
+    ctx['has_filters'] = bool(category or search or min_comm > 0 or max_price > 0 or max_videos > 0)
 
     return render_template('products.html', **ctx)
 
@@ -364,29 +376,35 @@ def admin_panel():
     if not user or not user.is_admin:
         return redirect('/app/dashboard')
 
-    from sqlalchemy import func
-    ctx['total_products'] = Product.query.count()
-    ctx['active_products'] = Product.query.filter(_active_filter).count()
-    ctx['blacklisted_count'] = BlacklistedBrand.query.count()
-    ctx['user_count'] = User.query.count()
+    try:
+        from sqlalchemy import func
+        ctx['total_products'] = Product.query.count()
+        ctx['active_products'] = Product.query.filter(_active_filter).count()
+        ctx['blacklisted_count'] = BlacklistedBrand.query.count()
+        ctx['user_count'] = User.query.count()
+
+        last = db.session.query(func.max(Product.last_echotik_sync)).scalar()
+        ctx['last_sync'] = last.strftime('%b %d, %Y at %I:%M %p UTC') if last else None
+
+        ctx['missing_images'] = Product.query.filter(
+            _active_filter,
+            or_(Product.image_url.is_(None), Product.image_url == '',
+                Product.cached_image_url.is_(None))
+        ).count()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Admin stats query failed: %s", e)
+        ctx.setdefault('total_products', 0)
+        ctx.setdefault('active_products', 0)
+        ctx.setdefault('blacklisted_count', 0)
+        ctx.setdefault('user_count', 0)
+        ctx.setdefault('last_sync', None)
+        ctx.setdefault('missing_images', 0)
+
     try:
         ctx['brand_count'] = Brand.query.count()
     except Exception:
         ctx['brand_count'] = 0
-
-    # Last sync: most recent last_echotik_sync across all products
-    last = db.session.query(func.max(Product.last_echotik_sync)).scalar()
-    if last:
-        ctx['last_sync'] = last.strftime('%b %d, %Y at %I:%M %p UTC')
-    else:
-        ctx['last_sync'] = None
-
-    # Count products missing images
-    ctx['missing_images'] = Product.query.filter(
-        _active_filter,
-        or_(Product.image_url.is_(None), Product.image_url == '',
-            Product.cached_image_url.is_(None))
-    ).count()
 
     return render_template('admin.html', **ctx)
 

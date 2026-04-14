@@ -8,28 +8,33 @@
 </div>
 
 {# ===== FILTER BAR ===== #}
-<form class="filter-bar" id="filterForm" method="GET" action="/app/products">
+<form class="filter-bar" id="filterForm" method="GET" action="/app/products" style="flex-wrap:wrap">
   <select class="select" name="category" onchange="this.form.submit()">
     <option value="">All Categories</option>
     {% for cat in categories | default([]) %}
       <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
     {% endfor %}
   </select>
-  <input type="number" class="input" name="min_commission" placeholder="Min comm %" style="width:120px"
+  <input type="number" class="input" name="min_commission" placeholder="Min comm %" style="width:110px"
          value="{{ current_min_commission if current_min_commission else '' }}" onchange="this.form.submit()">
-  <select class="select" name="sort" onchange="this.form.submit()" style="min-width:140px">
+  <input type="number" class="input" name="max_price" placeholder="Max price $" style="width:110px"
+         value="{{ current_max_price if current_max_price else '' }}" onchange="this.form.submit()">
+  <input type="number" class="input" name="max_videos" placeholder="Max videos" style="width:110px"
+         value="{{ current_max_videos if current_max_videos else '' }}" onchange="this.form.submit()">
+  <select class="select" name="sort" onchange="this.form.submit()" style="min-width:150px">
     <option value="trending" {% if current_sort == 'trending' %}selected{% endif %}>Sort: Trending</option>
     <option value="commission" {% if current_sort == 'commission' %}selected{% endif %}>Sort: Commission</option>
     <option value="sales" {% if current_sort == 'sales' %}selected{% endif %}>Sort: 7d Sales</option>
+    <option value="videos_low" {% if current_sort == 'videos_low' %}selected{% endif %}>Sort: Fewest Videos</option>
     <option value="new" {% if current_sort == 'new' %}selected{% endif %}>Sort: Newest</option>
     <option value="gmv" {% if current_sort == 'gmv' %}selected{% endif %}>Sort: GMV</option>
   </select>
-  <div class="topbar-search" style="flex:1;max-width:240px">
+  <div class="topbar-search" style="flex:1;max-width:200px">
     <i data-lucide="search"></i>
-    <input type="text" class="input" name="search" placeholder="Search products..." value="{{ current_search | default('') }}">
+    <input type="text" class="input" name="search" placeholder="Search..." value="{{ current_search | default('') }}">
   </div>
-  <button type="submit" class="btn btn-ghost btn-sm">Search</button>
-  {% if has_filters %}<a href="/app/products" class="btn btn-ghost btn-sm" style="color:var(--danger)">Clear filters</a>{% endif %}
+  <button type="submit" class="btn btn-ghost btn-sm">Go</button>
+  {% if has_filters %}<a href="/app/products" class="btn btn-ghost btn-sm" style="color:var(--danger)">Clear</a>{% endif %}
   <div class="filter-count">{{ total_count | default(0) }} products</div>
 </form>
 
