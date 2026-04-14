@@ -15,12 +15,13 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 
 def _auto_migrate(app, db):
-    """Safely add missing columns to existing tables. Idempotent."""
-    migrations = [
+    """Safely add missing columns and fix broken tables. Idempotent."""
+    # Add missing columns to existing tables
+    column_migrations = [
         ("products", "trend_data_json", "TEXT"),
         ("products", "trend_last_synced", "TIMESTAMP"),
     ]
-    for table, column, col_type in migrations:
+    for table, column, col_type in column_migrations:
         try:
             db.session.execute(db.text(
                 f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
@@ -28,7 +29,35 @@ def _auto_migrate(app, db):
             db.session.commit()
             print(f"[MIGRATE] Added {table}.{column}")
         except Exception:
-            db.session.rollback()  # Column already exists — safe to ignore
+            db.session.rollback()
+
+    # Fix brands table if it was created without id column
+    try:
+        db.session.execute(db.text("SELECT id FROM brands LIMIT 1"))
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        try:
+            db.session.execute(db.text("DROP TABLE IF EXISTS brands"))
+            db.session.commit()
+            db.create_all()
+            print("[MIGRATE] Recreated brands table with correct schema")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[MIGRATE] brands table fix failed: {e}")
+
+    # Fix product_videos table if missing
+    try:
+        db.session.execute(db.text("SELECT id FROM product_videos LIMIT 1"))
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        try:
+            db.create_all()
+            print("[MIGRATE] Created product_videos table")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[MIGRATE] product_videos creation failed: {e}")
 
 
 def create_app():

@@ -477,33 +477,42 @@ def api_sync_brands():
     except ImportError:
         return jsonify({'error': 'echotik module not available'}), 500
 
-    total_synced = 0
-    for page in range(1, 6):  # 5 pages x 20 = 100 brands max
-        shops = fetch_top_shops(page=page, page_size=20)
-        if not shops:
-            break
-        for s in shops:
-            sid = s.get('shop_id', '')
-            if not sid:
-                continue
-            brand = Brand.query.filter_by(shop_id=sid).first()
-            if not brand:
-                brand = Brand(shop_id=sid, name=s.get('name', 'Unknown'))
-                db.session.add(brand)
-            brand.name = (s.get('name') or brand.name)[:300]
-            brand.avatar_url = (s.get('avatar_url') or '')[:500] or brand.avatar_url
-            brand.country = s.get('country', 'US')
-            brand.category = (s.get('category') or '')[:100] or brand.category
-            brand.follower_count = s.get('follower_count', 0)
-            brand.gmv_30d = s.get('gmv_30d', 0)
-            brand.product_count = s.get('product_count', 0)
-            brand.trending_score = s.get('trending_score', 0)
-            brand.tiktok_shop_url = (s.get('shop_url') or '')[:500]
-            brand.last_synced = datetime.utcnow()
-            total_synced += 1
+    try:
+        total_synced = 0
+        for page in range(1, 6):  # 5 pages x 20 = 100 brands max
+            shops = fetch_top_shops(page=page, page_size=20)
+            if not shops:
+                break
+            for s in shops:
+                sid = s.get('shop_id', '')
+                if not sid:
+                    continue
+                brand = Brand.query.filter_by(shop_id=sid).first()
+                if not brand:
+                    brand = Brand(shop_id=sid, name=s.get('name', 'Unknown'))
+                    db.session.add(brand)
+                brand.name = (s.get('name') or brand.name)[:300]
+                brand.avatar_url = (s.get('avatar_url') or '')[:500] or brand.avatar_url
+                brand.country = s.get('country', 'US')
+                brand.category = (s.get('category') or '')[:100] or brand.category
+                brand.follower_count = s.get('follower_count', 0)
+                brand.gmv_30d = s.get('gmv_30d', 0)
+                brand.product_count = s.get('product_count', 0)
+                brand.trending_score = s.get('trending_score', 0)
+                brand.tiktok_shop_url = (s.get('shop_url') or '')[:500]
+                brand.last_synced = datetime.utcnow()
+                total_synced += 1
 
-    db.session.commit()
-    return jsonify({'success': True, 'synced': total_synced, 'total': Brand.query.count()})
+        db.session.commit()
+        total = 0
+        try:
+            total = Brand.query.count()
+        except Exception:
+            pass
+        return jsonify({'success': True, 'synced': total_synced, 'total': total})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @views_bp.route('/api/blacklist/add', methods=['POST'])

@@ -393,17 +393,33 @@ def fetch_top_shops(page: int = 1, page_size: int = 20) -> list[dict]:
     Returns:
         List of shop dicts.
     """
-    try:
-        data = _request('GET', f"{ECHOTIK_V3_BASE}/shop/list",
-                        params={
-                            'region': 'US',
-                            'page_num': page,
-                            'page_size': min(page_size, 20),
-                            'sort_field': 4,  # Sort by GMV
-                            'sort_type': 1,   # Descending
-                        })
-    except EchoTikError as exc:
-        log.warning("fetch_top_shops failed: %s", exc)
+    params = {
+        'region': 'US',
+        'page_num': page,
+        'page_size': min(page_size, 20),
+        'sort_field': 4,
+        'sort_type': 1,
+    }
+
+    # Try multiple endpoint paths — EchoTik API naming varies
+    endpoints = [
+        f"{ECHOTIK_V3_BASE}/shop/list",
+        f"{ECHOTIK_V3_BASE}/seller/list",
+        f"{ECHOTIK_V3_BASE}/store/list",
+        "https://open.echotik.live/api/v1/shop/list",
+    ]
+
+    data = None
+    for url in endpoints:
+        try:
+            data = _request('GET', url, params=params)
+            if data and data.get('data'):
+                break
+        except EchoTikError:
+            continue
+
+    if not data:
+        log.warning("fetch_top_shops: all endpoint variants returned no data")
         return []
 
     raw_list = data.get('data', [])
@@ -434,18 +450,32 @@ def fetch_top_shops(page: int = 1, page_size: int = 20) -> list[dict]:
 # Public API — fetch_product_trend
 # ---------------------------------------------------------------------------
 
-def fetch_product_trend(product_id: str) -> list[dict]:
+def fetch_product_trend(product_id: str, days: int = 30) -> list[dict]:
     """
-    Fetch 30-day trend data for a product from EchoTik.
+    Fetch trend data for a product from EchoTik.
+
+    Args:
+        product_id: Raw product ID (without shop_ prefix).
+        days: Number of days of history (default 30).
 
     Returns:
         List of dicts with 'date', 'sales', 'gmv' keys.
     """
+    from datetime import timedelta
+
     raw_id = str(product_id).replace('shop_', '')
+    end = datetime.utcnow()
+    start = end - timedelta(days=days)
 
     try:
         data = _request('GET', f"{ECHOTIK_V3_BASE}/product/trend",
-                        params={'product_id': raw_id})
+                        params={
+                            'product_id': raw_id,
+                            'start_date': start.strftime('%Y-%m-%d'),
+                            'end_date': end.strftime('%Y-%m-%d'),
+                            'page_num': 1,
+                            'page_size': days,
+                        })
     except EchoTikError as exc:
         log.warning("fetch_product_trend(%s) failed: %s", raw_id, exc)
         return []
