@@ -48,6 +48,14 @@ def create_app():
         print("WARNING: SECRET_KEY not set — using deterministic fallback. Set SECRET_KEY env var in production!")
     flask_app.config['SECRET_KEY'] = secret
 
+    # --- Session cookie config (persist login across deploys) ---
+    from datetime import timedelta
+    flask_app.config['SESSION_COOKIE_SECURE'] = True          # HTTPS only
+    flask_app.config['SESSION_COOKIE_HTTPONLY'] = True         # No JS access
+    flask_app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'       # CSRF protection
+    flask_app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # 30-day sessions
+    flask_app.config['SESSION_COOKIE_NAME'] = 'vantage_session'
+
     # Fix Render's postgres:// URL
     if flask_app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
         flask_app.config['SQLALCHEMY_DATABASE_URI'] = flask_app.config[

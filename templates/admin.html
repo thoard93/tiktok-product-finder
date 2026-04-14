@@ -72,8 +72,9 @@ function showStatus(type, msg) {
 }
 
 async function runScan() {
+  console.log("[Admin] runScan() called");
   var btn = document.getElementById("scanBtn");
-  setLoading(btn, true);
+  try { setLoading(btn, true); } catch(e) { console.error("[Admin] setLoading error:", e); btn.disabled = true; }
   showStatus("info", '<span class="anim-pulse">&#x23f3; Scan in progress... This may take 1-3 minutes. Do not close this page.</span>');
 
   try {

@@ -402,7 +402,8 @@ def discord_callback():
 
         db.session.commit()
 
-        # Set session
+        # Set session (permanent = survives browser close for 30 days)
+        session.permanent = True
         session['user_id'] = user.id
         session['discord_username'] = username
         session['is_admin'] = user.is_admin
@@ -439,6 +440,7 @@ def passkey_login():
         user.last_login = datetime.utcnow()
         db.session.commit()
 
+    session.permanent = True
     session['user_id'] = user.id
     session['discord_username'] = 'Developer'
     session['is_admin'] = True
