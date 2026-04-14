@@ -387,106 +387,81 @@ def fetch_top_shops(country: str = "US", page_size: int = 20) -> list[dict]:
     Fetch top TikTok Shop sellers from EchoTik v3.
 
     Endpoint: GET https://open.echotik.live/api/v3/echotik/seller/list
-    Auth: HTTP Basic — tries ECHOTIK_USERNAME:PASSWORD first, then
-          ECHOTIK_API_KEY with empty password as fallback.
+    Auth: HTTP Basic (ECHOTIK_USERNAME:PASSWORD) — same as product API.
+    Response: {"code":0, "data": [{seller}, {seller}, ...]}
     """
-    import base64
-
-    url = f"{ECHOTIK_V3_BASE}/seller/list"
-    params = {"region": country, "page_num": 1, "page_size": page_size}
-
-    # Auth method 1: standard username:password (works for product endpoints)
-    auth = _get_auth()
-
-    # Auth method 2: API key as username, empty password
-    api_key = os.environ.get('ECHOTIK_API_KEY', '')
-
-    raw_items = []
-
-    # Try standard auth first
-    for attempt_label, attempt_auth in [
-        ("username:password", auth),
-        ("api_key:empty", HTTPBasicAuth(api_key, '') if api_key else None),
-    ]:
-        if attempt_auth is None:
-            continue
-        try:
-            resp = requests.get(url, params=params, auth=attempt_auth, timeout=15)
-            log.info("[EchoTik] seller/list (%s) -> status=%d", attempt_label, resp.status_code)
-            log.info("[EchoTik] seller/list response: %s", resp.text[:500])
-
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get('code') == 0:
-                    items = data.get("data") or {}
-                    if isinstance(items, dict):
-                        result = items.get("list") or items.get("records") or items.get("sellers") or []
-                    elif isinstance(items, list):
-                        result = items
-                    else:
-                        result = []
-                    if result:
-                        log.info("[EchoTik] Got %d sellers via %s", len(result), attempt_label)
-                        raw_items = result
-                        break
-                    else:
-                        log.info("[EchoTik] seller/list returned code=0 but empty data via %s", attempt_label)
-                else:
-                    log.info("[EchoTik] seller/list code=%s msg=%s via %s",
-                             data.get('code'), data.get('message', ''), attempt_label)
-            elif resp.status_code in (401, 403):
-                log.info("[EchoTik] seller/list auth failed (%s) via %s", resp.status_code, attempt_label)
-            else:
-                log.info("[EchoTik] seller/list HTTP %s via %s: %s",
-                         resp.status_code, attempt_label, resp.text[:200])
-        except Exception as exc:
-            log.warning("[EchoTik] seller/list error via %s: %s", attempt_label, exc)
-
-    if not raw_items:
-        log.warning("[EchoTik] All brand/shop endpoints returned no data — API plan may not include seller data")
+    try:
+        data = _request('GET', f"{ECHOTIK_V3_BASE}/seller/list",
+                        params={"region": country, "page_num": 1, "page_size": page_size})
+    except EchoTikError as exc:
+        log.warning("[EchoTik] seller/list failed: %s", exc)
         return []
 
-    # Normalize to common shape
-    shops = []
-    for s in raw_items:
-        shop = {
-            'shop_id': str(
-                s.get('shop_id') or s.get('shopId') or s.get('seller_id')
-                or s.get('sellerId') or s.get('id', '')
-            ),
-            'name': (
-                s.get('shop_name') or s.get('shopName') or s.get('seller_name')
-                or s.get('sellerName') or s.get('name', '')
-            ),
-            'avatar_url': _extract_image_url(
-                s.get('avatar') or s.get('logo_url') or s.get('shop_logo')
-                or s.get('seller_logo') or s.get('avatar_url')
-            ),
-            'country': s.get('country') or s.get('region', country),
-            'category': (
-                s.get('category_name') or s.get('categoryName')
-                or s.get('main_category') or s.get('category', '')
-            ),
-            'follower_count': _safe_int(
-                s.get('follower_count') or s.get('followerCount')
-                or s.get('fans_count') or s.get('fansCount')
-            ),
-            'gmv_30d': _safe_float(
-                s.get('total_sale_gmv_30d_amt') or s.get('gmv_30d')
-                or s.get('sales_30d') or s.get('gmv')
-            ),
-            'product_count': _safe_int(
-                s.get('product_count') or s.get('productCount')
-                or s.get('spu_cnt') or s.get('product_num')
-            ),
-            'trending_score': _safe_float(
-                s.get('trending_score') or s.get('score') or s.get('rank_score')
-            ),
-            'shop_url': s.get('shop_url') or s.get('shopUrl') or s.get('seller_url', ''),
-        }
-        if shop['shop_id']:
-            shops.append(shop)
+    # Response data can be a list directly or {"list": [...]}
+    raw = data.get("data") or []
+    if isinstance(raw, dict):
+        raw = raw.get("list") or raw.get("records") or []
 
+    if not raw:
+        log.info("[EchoTik] seller/list returned empty data")
+        return []
+
+    # Log first item keys so we can see the actual field names
+    if raw:
+        log.info("[EchoTik] seller/list: %d items, keys=%s", len(raw), list(raw[0].keys())[:20])
+
+    # Normalize — use every possible field name from EchoTik seller response
+    shops = []
+    for s in raw:
+        # ID — try every variant
+        sid = str(s.get('shop_id') or s.get('seller_id') or s.get('shopId')
+                  or s.get('sellerId') or s.get('id') or '')
+
+        # Name
+        name = (s.get('shop_name') or s.get('seller_name') or s.get('shopName')
+                or s.get('sellerName') or s.get('name') or s.get('title') or '')
+
+        # Avatar/cover
+        avatar = _extract_image_url(
+            s.get('cover_url') or s.get('avatar') or s.get('logo_url')
+            or s.get('shop_logo') or s.get('seller_logo') or s.get('avatar_url')
+        )
+
+        # Category
+        cat = (s.get('category_name') or s.get('categoryName')
+               or s.get('first_category_name') or s.get('main_category')
+               or s.get('category') or '')
+
+        # Stats
+        followers = _safe_int(
+            s.get('total_fans_cnt') or s.get('follower_count') or s.get('followerCount')
+            or s.get('fans_count') or s.get('fansCount')
+        )
+        gmv = _safe_float(
+            s.get('total_sale_gmv_amt') or s.get('total_sale_gmv_30d_amt')
+            or s.get('gmv_30d') or s.get('gmv') or s.get('sales_30d')
+        )
+        products = _safe_int(
+            s.get('total_spu_cnt') or s.get('product_count') or s.get('productCount')
+            or s.get('spu_cnt') or s.get('product_num')
+        )
+        score = _safe_float(
+            s.get('trending_score') or s.get('score') or s.get('rank_score')
+        )
+
+        # Shop URL
+        shop_url = s.get('shop_url') or s.get('shopUrl') or s.get('seller_url') or ''
+
+        if sid:
+            shops.append({
+                'shop_id': sid, 'name': name, 'avatar_url': avatar,
+                'country': s.get('country') or s.get('region') or country,
+                'category': cat, 'follower_count': followers,
+                'gmv_30d': gmv, 'product_count': products,
+                'trending_score': score, 'shop_url': shop_url,
+            })
+
+    log.info("[EchoTik] Normalized %d sellers", len(shops))
     return shops
 
 
