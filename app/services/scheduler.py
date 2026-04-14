@@ -33,7 +33,7 @@ def echotik_daily_sync(app):
 
         try:
             from app.routes.scan import run_echotik_sync
-            result = run_echotik_sync(max_pages=10, page_size=50)
+            result = run_echotik_sync(max_pages=25, page_size=10)  # EchoTik API max page_size=10
             log.info(
                 "[SCHEDULER] Daily sync complete: %d fetched, %d filtered, "
                 "%d new, %d updated, %d errors",

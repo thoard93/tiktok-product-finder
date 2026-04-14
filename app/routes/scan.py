@@ -76,8 +76,8 @@ def echotik_sync_trigger():
                          start_time=datetime.utcnow().isoformat())
 
         data = request.get_json(silent=True) or {}
-        max_pages = min(int(data.get('pages', 10)), 25)
-        page_size = min(int(data.get('page_size', 50)), 50)
+        max_pages = min(int(data.get('pages', 25)), 25)
+        page_size = min(int(data.get('page_size', 10)), 10)  # EchoTik API max is 10
 
         result = run_echotik_sync(max_pages=max_pages, page_size=page_size)
 
