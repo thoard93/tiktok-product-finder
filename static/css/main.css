@@ -528,7 +528,50 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .upgrade-banner__cta{margin-left:auto;color:var(--accent);font-weight:600;text-decoration:none;white-space:nowrap}
 .upgrade-banner__cta:hover{text-decoration:underline}
 
-/* 27. STATS PANEL (Product Detail) ========================================= */
+/* 27. SCORE RING =========================================================== */
+.score-ring-wrap{position:relative;width:44px;height:44px;flex-shrink:0}
+.score-ring{position:absolute;top:0;left:0}
+.score-number{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;font-weight:700;color:var(--text-primary)}
+
+/* 28. CATEGORY GRADIENT PLACEHOLDERS ======================================= */
+.product-img-placeholder{border-radius:var(--radius);width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:rgba(255,255,255,.5)}
+.cat-beauty{background:linear-gradient(135deg,#f953c6,#b91d73)}
+.cat-electronics{background:linear-gradient(135deg,#4776e6,#1cb5e0)}
+.cat-fashion{background:linear-gradient(135deg,#f7971e,#ffd200)}
+.cat-home{background:linear-gradient(135deg,#56ab2f,#a8e063)}
+.cat-health{background:linear-gradient(135deg,#11998e,#38ef7d)}
+.cat-food{background:linear-gradient(135deg,#f46b45,#eea849)}
+.cat-sports{background:linear-gradient(135deg,#396afc,#2948ff)}
+.cat-pets{background:linear-gradient(135deg,#f7971e,#ff6b6b)}
+.cat-default{background:linear-gradient(135deg,#434343,#2c2c2c)}
+
+/* 29. TAP BADGE + CALLOUT ================================================== */
+.tap-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--teal);background:var(--teal-dim);border:1px solid rgba(54,217,196,.25);border-radius:var(--radius-full);padding:3px 8px}
+
+.tap-callout{background:linear-gradient(135deg,rgba(54,217,196,.06),rgba(54,217,196,.02));border:1px solid rgba(54,217,196,.25);border-radius:var(--radius-lg);padding:20px 24px;margin-bottom:24px}
+.tap-callout__header{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.tap-callout__title{font-size:14px;font-weight:700;color:var(--teal)}
+.tap-callout__partner{font-size:12px;color:var(--text-muted);margin-left:auto}
+.tap-callout__expiry{font-size:12px;color:var(--text-muted);margin:10px 0 14px}
+.tap-callout__rates{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.tap-rate{display:flex;flex-direction:column;gap:2px}
+.tap-rate-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+.tap-rate-value{font-size:24px;font-weight:800;color:var(--text-primary)}
+.tap-rate-value--highlight{color:var(--teal)}
+.tap-rate-arrow{font-size:18px;color:var(--text-faint)}
+
+.btn-tap-copy{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:var(--teal-dim);border:1px solid rgba(54,217,196,.3);border-radius:var(--radius);color:var(--teal);font-size:13px;font-weight:600;cursor:pointer;transition:background var(--dur)}
+.btn-tap-copy:hover{background:rgba(54,217,196,.2)}
+
+/* 30. NAV BADGE ============================================================ */
+.nav-badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;padding:0 5px}
+
+/* 31. USER TIER BADGE ====================================================== */
+.user-tier-badge{font-size:9px;font-weight:800;letter-spacing:.08em;padding:2px 6px;border-radius:4px}
+.user-tier-badge--pro{background:var(--accent-glow);color:var(--accent);border:1px solid rgba(255,82,114,.3)}
+.user-tier-badge--free{background:rgba(255,255,255,.06);color:var(--text-muted);border:1px solid var(--border)}
+
+/* 32. STATS PANEL (Product Detail) ========================================= */
 .stats-panel{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
 .stats-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg-base)}
 .stats-tab{flex:1;padding:12px 8px;font-size:13px;font-weight:500;color:var(--text-secondary);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all var(--dur-fast)}

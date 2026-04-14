@@ -416,3 +416,22 @@ class Brand(db.Model):
     tiktok_shop_url = db.Column(db.String(500), nullable=True)
     last_synced = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TapProduct(db.Model):
+    """TAP (boosted commission) links for products"""
+    __tablename__ = 'tap_products'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.String(50), db.ForeignKey('products.product_id'), nullable=False)
+    tap_link = db.Column(db.Text, nullable=False)
+    boosted_commission = db.Column(db.Float, nullable=False)
+    base_commission = db.Column(db.Float, nullable=True)
+    partner_name = db.Column(db.String(100), default='Affiliate Automated')
+    partner_logo_url = db.Column(db.String(500), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    clicks = db.Column(db.Integer, default=0)
+
+    product = db.relationship('Product', backref=db.backref('tap_data', uselist=False))

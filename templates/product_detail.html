@@ -57,6 +57,35 @@
         View on TikTok Shop
       </button>
     </div>
+
+    {# TAP Boosted Commission #}
+    {% if product.tap_data and product.tap_data.is_active %}
+    <div class="tap-callout" style="margin-top:var(--space-6)">
+      <div class="tap-callout__header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:var(--teal)"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <span class="tap-callout__title">Boosted Commission Available</span>
+        <span class="tap-callout__partner">via {{ product.tap_data.partner_name }}</span>
+      </div>
+      <div class="tap-callout__rates">
+        <div class="tap-rate">
+          <span class="tap-rate-label">Standard rate</span>
+          <span class="tap-rate-value">{{ "%.1f" | format((product.tap_data.base_commission or 0) * 100) }}%</span>
+        </div>
+        <div class="tap-rate-arrow">&rarr;</div>
+        <div class="tap-rate">
+          <span class="tap-rate-label">Your rate</span>
+          <span class="tap-rate-value tap-rate-value--highlight">{{ "%.1f" | format((product.tap_data.boosted_commission or 0) * 100) }}%</span>
+        </div>
+      </div>
+      {% if product.tap_data.expires_at %}
+      <div class="tap-callout__expiry">Offer expires {{ product.tap_data.expires_at.strftime('%B %d, %Y') }}</div>
+      {% endif %}
+      <button class="btn-tap-copy" onclick="copyTapLink('/api/tap/click/{{ product.product_id }}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copy Boosted Link
+      </button>
+    </div>
+    {% endif %}
   </div>
 
   {# ===== RIGHT: Analytics ===== #}

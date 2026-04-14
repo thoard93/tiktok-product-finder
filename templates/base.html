@@ -43,6 +43,9 @@
         <a href="/app/admin" class="sidebar-link {% if active_page == 'admin' %}active{% endif %}">
           <i data-lucide="shield"></i> Admin Panel
         </a>
+        <a href="/app/admin/tap" class="sidebar-link {% if active_page == 'tap' %}active{% endif %}">
+          <i data-lucide="zap"></i> TAP Links
+        </a>
         {% endif %}
       </nav>
 
@@ -57,12 +60,12 @@
           </div>
           <div class="user-meta">
             <div class="user-name">{{ current_user.discord_username if current_user else 'Guest' }}</div>
-            {% if subscription and subscription.status == 'active' %}
-              <span class="badge badge-green">Active</span>
-            {% elif current_user and current_user.is_admin %}
-              <span class="badge badge-teal">Admin</span>
+            {% if current_user and current_user.is_admin %}
+              <span class="user-tier-badge user-tier-badge--pro">ADMIN</span>
+            {% elif subscription and subscription.status == 'active' %}
+              <span class="user-tier-badge user-tier-badge--pro">PRO</span>
             {% else %}
-              <span class="badge badge-red">Inactive</span>
+              <span class="user-tier-badge user-tier-badge--free">FREE</span>
             {% endif %}
           </div>
         </div>

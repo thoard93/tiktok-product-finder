@@ -155,6 +155,22 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
+/* --- TAP Link Copy -------------------------------------------------------- */
+function copyTapLink(url) {
+  var fullUrl = window.location.origin + url;
+  navigator.clipboard.writeText(fullUrl).then(function() {
+    var btn = document.querySelector(".btn-tap-copy");
+    if (btn) {
+      var orig = btn.innerHTML;
+      btn.textContent = "\u2713 Copied!";
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    }
+    showFlash("Boosted link copied to clipboard", "success");
+  }).catch(function() {
+    showFlash("Failed to copy link", "error");
+  });
+}
+
 /* --- TikTok Deep Link ----------------------------------------------------- */
 function openOnTikTok(shopUrl, productId) {
   var ua = navigator.userAgent || navigator.vendor || window.opera;

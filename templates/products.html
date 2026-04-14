@@ -42,43 +42,56 @@
 {% if products and products | length > 0 %}
 <div class="product-grid" id="productGrid">
   {% for p in products %}
+  {% set cat_lower = (p.category or '')|lower %}
+  {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'apparel' in cat_lower or 'women' in cat_lower or 'men' in cat_lower else ('cat-home' if 'home' in cat_lower or 'kitchen' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-food' if 'food' in cat_lower else ('cat-sports' if 'sport' in cat_lower else ('cat-pets' if 'pet' in cat_lower else 'cat-default'))))))) %}
+  {% set score_color = '#36d9c4' if p.trending_score >= 80 else ('#f5a623' if p.trending_score >= 50 else '#ff5272') %}
   <div class="product-card">
     <div class="product-card-img">
       {% if p.cached_image_url or p.image_url %}
         <img src="{{ p.cached_image_url or p.image_url }}" alt="{{ p.product_name }}" loading="lazy"
+             data-category="{{ cat_lower }}" data-name="{{ (p.product_name or '?')[0] }}" class="product-img"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="product-card-img-fallback" style="display:none">
-          <i data-lucide="package"></i>
-          <span>{{ p.category or 'Product' }}</span>
-        </div>
+        <div class="product-img-placeholder {{ cat_class }}" style="display:none">{{ (p.product_name or '?')[0] | upper }}</div>
       {% else %}
-        <div class="product-card-img-fallback">
-          <i data-lucide="package"></i>
-          <span>{{ p.category or 'Product' }}</span>
-        </div>
+        <div class="product-img-placeholder {{ cat_class }}">{{ (p.product_name or '?')[0] | upper }}</div>
       {% endif %}
       {% if p.category %}<span class="badge badge-muted badge-overlay-tl">{{ p.category }}</span>{% endif %}
-      <span class="badge badge-overlay-tr {{ 'badge-green' if p.trending_score >= 80 else ('badge-gold' if p.trending_score >= 50 else 'badge-red') }}">{{ p.trending_score }}</span>
+      {# Score ring #}
+      <div class="badge-overlay-tr">
+        <div class="score-ring-wrap">
+          <svg class="score-ring" viewBox="0 0 36 36" width="44" height="44">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/>
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke-width="2.5" stroke-linecap="round"
+                    stroke-dasharray="{{ p.trending_score }}, 100" stroke="{{ score_color }}"
+                    transform="rotate(-90 18 18)"/>
+          </svg>
+          <span class="score-number">{{ p.trending_score }}</span>
+        </div>
+      </div>
     </div>
     <div class="product-card-body">
       <div class="product-card-name" {% if p.product_name | length > 40 %}data-tooltip="{{ p.product_name }}"{% endif %}>{{ p.product_name }}</div>
-      <div class="product-card-commission">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</div>
-      <div class="product-card-price">${{ "%.2f" | format(p.price or 0) }}</div>
+      <div class="flex items-center gap-3 mb-2">
+        <div>
+          <div class="product-card-commission" style="font-size:22px;font-weight:800;color:var(--accent);line-height:1">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Commission</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:var(--text-base);font-weight:600;color:var(--text-primary)">${{ "%.2f" | format(p.price or 0) }}</div>
+        </div>
+      </div>
 
-      {# Key stats row #}
+      {% if p.tap_data and p.tap_data.is_active %}
+      <div class="tap-badge mb-2">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        +{{ "%.0f" | format(((p.tap_data.boosted_commission or 0) - (p.tap_data.base_commission or 0)) * 100) }}% boosted
+      </div>
+      {% endif %}
+
       <div class="product-card-stats">
-        <div class="product-card-stat">
-          <i data-lucide="shopping-cart" style="width:12px;height:12px"></i>
-          <span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d sales</small></span>
-        </div>
-        <div class="product-card-stat">
-          <i data-lucide="users" style="width:12px;height:12px"></i>
-          <span>{{ p.influencer_count or 0 }} <small>creators</small></span>
-        </div>
-        <div class="product-card-stat">
-          <i data-lucide="video" style="width:12px;height:12px"></i>
-          <span>{{ p.video_count or 0 }} <small>videos</small></span>
-        </div>
+        <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d</small></span></div>
+        <div class="product-card-stat"><i data-lucide="users" style="width:12px;height:12px"></i><span>{{ p.influencer_count or 0 }}</span></div>
+        <div class="product-card-stat"><i data-lucide="video" style="width:12px;height:12px"></i><span>{{ p.video_count or 0 }}</span></div>
       </div>
 
       <div class="product-card-actions">

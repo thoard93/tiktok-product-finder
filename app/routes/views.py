@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, redirect, session, request, jsonify
 from sqlalchemy import desc, or_
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo
+from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct
 from app.routes.auth import get_current_user
 
 
@@ -689,6 +689,75 @@ def api_echotik_debug():
                 results.append({"url": url, "status": "error", "body": str(e)[:200]})
 
     return jsonify({'results': results})
+
+
+# ---------------------------------------------------------------------------
+# TAP (Boosted Commission) routes
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/app/admin/tap')
+@login_required
+def admin_tap():
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    ctx = _base_context('admin')
+    try:
+        ctx['taps'] = TapProduct.query.order_by(desc(TapProduct.created_at)).all()
+        ctx['products'] = Product.query.filter(_active_filter).order_by(Product.product_name).limit(500).all()
+    except Exception:
+        ctx['taps'] = []
+        ctx['products'] = []
+    return render_template('admin_tap.html', **ctx)
+
+
+@views_bp.route('/app/admin/tap/add', methods=['POST'])
+@login_required
+def admin_tap_add():
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    data = request.form
+    product_id = data.get('product_id')
+    if not product_id:
+        return redirect('/app/admin/tap')
+    # Remove existing TAP for this product
+    TapProduct.query.filter_by(product_id=product_id).delete()
+    tap = TapProduct(
+        product_id=product_id,
+        tap_link=data.get('tap_link', ''),
+        boosted_commission=float(data.get('boosted_commission', 0)) / 100,
+        base_commission=float(data.get('base_commission', 0)) / 100,
+        partner_name=data.get('partner_name', 'Affiliate Automated'),
+        expires_at=datetime.strptime(data['expires_at'], '%Y-%m-%d') if data.get('expires_at') else None,
+    )
+    db.session.add(tap)
+    db.session.commit()
+    return redirect('/app/admin/tap')
+
+
+@views_bp.route('/app/admin/tap/delete/<int:tap_id>', methods=['POST'])
+@login_required
+def admin_tap_delete(tap_id):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    tap = TapProduct.query.get(tap_id)
+    if tap:
+        db.session.delete(tap)
+        db.session.commit()
+    return redirect('/app/admin/tap')
+
+
+@views_bp.route('/api/tap/click/<path:product_id>')
+def tap_click_track(product_id):
+    """Track click and redirect to TAP link."""
+    tap = TapProduct.query.filter_by(product_id=product_id, is_active=True).first()
+    if not tap:
+        return redirect('/app/products')
+    tap.clicks = (tap.clicks or 0) + 1
+    db.session.commit()
+    return redirect(tap.tap_link)
 
 
 @views_bp.route('/api/blacklist/add', methods=['POST'])

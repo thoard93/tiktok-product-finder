@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}TAP Links{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">TAP Links</h1>
+  <p class="page-subtitle">Manage boosted commission affiliate links for products</p>
+</div>
+
+{# ===== ADD NEW TAP ===== #}
+<div class="card mb-6" style="max-width:700px">
+  <h3 style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-4)">Add New TAP Link</h3>
+  <form method="POST" action="/app/admin/tap/add">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div class="input-group">
+        <label class="input-label">Product</label>
+        <select name="product_id" class="select" required>
+          <option value="">Select a product...</option>
+          {% for p in products %}
+            <option value="{{ p.product_id }}">{{ p.product_name | truncate(60) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Partner Name</label>
+        <input type="text" name="partner_name" class="input" value="Affiliate Automated" placeholder="e.g. Affiliate Automated">
+      </div>
+    </div>
+    <div class="input-group mb-4">
+      <label class="input-label">TAP Link URL</label>
+      <input type="url" name="tap_link" class="input" placeholder="https://..." required>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div class="input-group">
+        <label class="input-label">Base Commission %</label>
+        <input type="number" name="base_commission" class="input" placeholder="e.g. 10" step="0.1" min="0" max="100">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Boosted Commission %</label>
+        <input type="number" name="boosted_commission" class="input" placeholder="e.g. 20" step="0.1" min="0" max="100" required>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Expires (optional)</label>
+        <input type="date" name="expires_at" class="input">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Add TAP Link
+    </button>
+  </form>
+</div>
+
+{# ===== EXISTING TAP LINKS ===== #}
+<div class="section-header">
+  <h2 class="section-title">Active TAP Links</h2>
+  <span class="text-sm text-secondary">{{ taps | length }} total</span>
+</div>
+
+{% if taps and taps | length > 0 %}
+<div class="table-wrap" style="max-width:900px">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Partner</th>
+        <th>Base</th>
+        <th>Boosted</th>
+        <th>Clicks</th>
+        <th>Expires</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tap in taps %}
+      <tr>
+        <td style="max-width:200px">
+          {% if tap.product %}
+            <a href="/app/products/{{ tap.product_id }}" style="color:var(--text-primary);font-weight:500">{{ tap.product.product_name | truncate(40) }}</a>
+          {% else %}
+            <span class="text-muted">{{ tap.product_id }}</span>
+          {% endif %}
+        </td>
+        <td class="text-secondary">{{ tap.partner_name or '--' }}</td>
+        <td>{{ "%.1f" | format((tap.base_commission or 0) * 100) }}%</td>
+        <td style="color:var(--teal);font-weight:600">{{ "%.1f" | format((tap.boosted_commission or 0) * 100) }}%</td>
+        <td>{{ tap.clicks or 0 }}</td>
+        <td class="text-muted">{% if tap.expires_at %}{{ tap.expires_at.strftime('%b %d') }}{% else %}--{% endif %}</td>
+        <td>
+          <form method="POST" action="/app/admin/tap/delete/{{ tap.id }}" style="display:inline">
+            <button type="submit" class="btn btn-ghost btn-icon btn-sm" style="color:var(--danger)" title="Delete">
+              <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="padding:var(--space-8);text-align:center;max-width:700px">
+  <div style="color:var(--text-muted);margin-bottom:var(--space-3)"><i data-lucide="zap" style="width:40px;height:40px"></i></div>
+  <div class="text-lg font-semibold mb-2">No TAP links yet</div>
+  <p class="text-sm text-secondary">Add a boosted commission link above to get started.</p>
+</div>
+{% endif %}
+{% endblock %}
