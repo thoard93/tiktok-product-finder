@@ -582,13 +582,34 @@ def _normalize_product(d: dict) -> dict:
     )
 
     # --- Category ---
+    # EchoTik uses many different key names across endpoints
     category = _pick(
         d.get('category'), d.get('category_name'), d.get('categoryName'),
-        d.get('first_category_name'),
+        d.get('first_category_name'), d.get('firstCategoryName'),
+        d.get('cate_name'), d.get('cateName'),
+        d.get('product_category'), d.get('productCategory'),
     )
+    # Check nested category objects
+    if not category:
+        cat_obj = d.get('category_info') or d.get('categoryInfo') or d.get('cate') or {}
+        if isinstance(cat_obj, dict):
+            category = cat_obj.get('name') or cat_obj.get('category_name') or cat_obj.get('first_name')
+        elif isinstance(cat_obj, str):
+            category = cat_obj
+    # Check first_cate_list array
+    if not category:
+        cate_list = d.get('first_cate_list') or d.get('firstCateList') or d.get('cate_list') or []
+        if isinstance(cate_list, list) and cate_list:
+            first = cate_list[0]
+            if isinstance(first, dict):
+                category = first.get('name') or first.get('cate_name')
+            elif isinstance(first, str):
+                category = first
+
     subcategory = _pick(
         d.get('subcategory'), d.get('sub_category'),
-        d.get('second_category_name'),
+        d.get('second_category_name'), d.get('secondCategoryName'),
+        d.get('sub_cate_name'), d.get('subCateName'),
     )
 
     return {

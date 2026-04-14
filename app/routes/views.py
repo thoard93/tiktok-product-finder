@@ -337,6 +337,58 @@ def api_sync_images():
 
     return jsonify({'success': True, 'signed': signed, 'missing': still_missing, 'total': Product.query.count()})
 
+
+@views_bp.route('/api/admin/sync-categories', methods=['POST'])
+@api_auth
+def api_sync_categories():
+    """Fetch category data from EchoTik detail API for products missing categories."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    import logging, time
+    log = logging.getLogger(__name__)
+
+    products = Product.query.filter(
+        _active_filter,
+        or_(Product.category.is_(None), Product.category == '')
+    ).limit(50).all()
+
+    if not products:
+        return jsonify({'success': True, 'enriched': 0, 'remaining': 0})
+
+    enriched = 0
+    try:
+        from app.services.echotik import fetch_product_detail
+    except ImportError:
+        return jsonify({'error': 'echotik module not available'}), 500
+
+    for p in products:
+        try:
+            raw_id = p.product_id.replace('shop_', '')
+            detail = fetch_product_detail(raw_id)
+            if detail:
+                if detail.get('category'):
+                    p.category = str(detail['category'])[:100]
+                    enriched += 1
+                if detail.get('subcategory') and not p.subcategory:
+                    p.subcategory = str(detail['subcategory'])[:100]
+                # Also grab image if missing
+                if not p.image_url and detail.get('image_url'):
+                    p.image_url = str(detail['image_url'])[:500]
+            time.sleep(0.3)  # Rate limit
+        except Exception as e:
+            log.warning("Category enrich failed for %s: %s", p.product_id, e)
+
+    db.session.commit()
+
+    remaining = Product.query.filter(
+        _active_filter,
+        or_(Product.category.is_(None), Product.category == '')
+    ).count()
+
+    return jsonify({'success': True, 'enriched': enriched, 'remaining': remaining})
+
 @views_bp.route('/api/blacklist/add', methods=['POST'])
 @api_auth
 def api_blacklist_add():
