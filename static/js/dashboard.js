@@ -4,15 +4,15 @@
    ============================================================================= */
 
 var CHART_COLORS = {
-  accent: "#ff4d6d",
-  teal: "#2dd4bf",
-  gold: "#f59e0b",
-  success: "#4ade80",
-  danger: "#f87171",
+  accent: "#ff5272",
+  teal: "#36d9c4",
+  gold: "#f5a623",
+  success: "#5ee89c",
+  danger: "#ff6b6b",
   purple: "#a78bfa",
   orange: "#fb923c",
   grid: "rgba(255,255,255,0.06)",
-  tick: "#4a4845"
+  tick: "#8d8a84"
 };
 
 var CHART_SCALE_DEFAULTS = {
