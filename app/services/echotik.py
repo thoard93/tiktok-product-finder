@@ -392,7 +392,7 @@ def fetch_top_shops(country: str = "US", page_size: int = 20) -> list[dict]:
     """
     try:
         data = _request('GET', f"{ECHOTIK_V3_BASE}/seller/list",
-                        params={"region": country, "page_num": 1, "page_size": page_size})
+                        params={"region": country, "page_num": 1, "page_size": min(page_size, 10)})
     except EchoTikError as exc:
         log.warning("[EchoTik] seller/list failed: %s", exc)
         return []
