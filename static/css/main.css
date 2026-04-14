@@ -708,3 +708,55 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .scan-status-info{background:var(--teal-dim);border:1px solid rgba(45,212,191,.2);color:var(--teal)}
 .scan-status-success{background:var(--success-dim);border:1px solid rgba(74,222,128,.2);color:var(--success)}
 .scan-status-error{background:var(--danger-dim);border:1px solid rgba(248,113,113,.2);color:var(--danger)}
+
+/* 34. VIEW TOGGLE ========================================================== */
+.view-toggle{display:flex;gap:2px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);padding:2px}
+.view-toggle-btn{padding:6px 10px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-muted);transition:all var(--dur-fast);display:flex;align-items:center}
+.view-toggle-btn:hover{color:var(--text-primary)}
+.view-toggle-btn.active{background:var(--accent);color:#fff}
+.view-toggle-btn .lucide{width:16px;height:16px}
+
+/* 35. PRODUCT TABLE VIEW =================================================== */
+.product-table-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--border)}
+.product-table{width:100%;border-collapse:collapse;font-size:var(--text-sm);font-variant-numeric:tabular-nums}
+.product-table th{text-align:left;padding:10px 14px;font-weight:600;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);background:var(--bg-elevated);border-bottom:1px solid var(--border);white-space:nowrap}
+.product-table td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+.product-table tbody tr{transition:background var(--dur-fast)}
+.product-table tbody tr:hover{background:var(--bg-hover)}
+.product-table tbody tr:last-child td{border-bottom:none}
+.product-table .product-row-name{display:flex;align-items:center;gap:10px;min-width:200px}
+.product-row-thumb{width:40px;height:40px;border-radius:var(--radius-sm);object-fit:cover;background:var(--bg-elevated);flex-shrink:0}
+.product-row-thumb-fallback{width:40px;height:40px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:rgba(255,255,255,.5);flex-shrink:0}
+.product-table .commission-cell{color:var(--accent);font-weight:700;font-size:var(--text-base)}
+.product-table .growth-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--radius-full)}
+.growth-badge--up{background:var(--success-dim);color:var(--success)}
+.growth-badge--down{background:var(--danger-dim);color:var(--danger)}
+.growth-badge--flat{background:var(--bg-hover);color:var(--text-muted)}
+
+/* 36. FEE CALCULATOR ======================================================= */
+.fee-calc{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-5)}
+.fee-calc-title{font-size:var(--text-sm);font-weight:600;color:var(--text-secondary);margin-bottom:var(--space-4);display:flex;align-items:center;gap:var(--space-2)}
+.fee-calc-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:var(--text-sm)}
+.fee-calc-row:last-child{border-bottom:none}
+.fee-calc-row .label{color:var(--text-muted)}
+.fee-calc-row .value{font-weight:600;color:var(--text-primary);font-variant-numeric:tabular-nums}
+.fee-calc-row .value.highlight{color:var(--teal);font-size:var(--text-lg)}
+.fee-calc-inputs{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-4)}
+
+/* 37. LIGHT MODE (app only, not landing) =================================== */
+.app-shell.light-mode{--bg-base:#f5f6f8;--bg-surface:#ffffff;--bg-elevated:#f0f1f3;--bg-hover:#e8e9ec;--bg-active:#dfe0e3;--border:rgba(0,0,0,0.08);--border-strong:rgba(0,0,0,0.14);--text-primary:#111827;--text-secondary:#4b5563;--text-muted:#6b7280;--text-faint:#9ca3af;--shadow-sm:0 1px 3px rgba(0,0,0,0.08);--shadow-md:0 4px 16px rgba(0,0,0,0.06);--shadow-lg:0 12px 40px rgba(0,0,0,0.1)}
+.app-shell.light-mode .sidebar{background:#fff;border-color:rgba(0,0,0,0.08)}
+.app-shell.light-mode .topbar{background:rgba(255,255,255,0.85)}
+.app-shell.light-mode .card,.app-shell.light-mode .product-card{background:#fff;box-shadow:var(--shadow-sm)}
+.app-shell.light-mode .product-table th{background:#f5f6f8}
+.app-shell.light-mode .stat-card{background:#fff}
+.app-shell.light-mode .chart-card{background:#fff}
+.app-shell.light-mode .input,.app-shell.light-mode .select{background:#f5f6f8;border-color:rgba(0,0,0,0.12);color:#111827}
+.app-shell.light-mode .mobile-tabs{background:#fff}
+.app-shell.light-mode .modal-dialog{background:#fff}
+.app-shell.light-mode .flash-msg{background:#fff}
+.app-shell.light-mode .badge-muted{background:#e8e9ec;color:#4b5563}
+
+/* Theme toggle button */
+.theme-toggle{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius);cursor:pointer;color:var(--text-muted);transition:all var(--dur-fast)}
+.theme-toggle:hover{color:var(--text-primary);background:var(--bg-hover)}

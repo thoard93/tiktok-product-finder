@@ -80,6 +80,9 @@
           <input type="text" class="input" placeholder="Search products, categories, creators..." id="globalSearch">
         </div>
         <div class="topbar-right">
+          <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+            <i data-lucide="sun" id="themeIcon"></i>
+          </button>
           {% if not (subscription and subscription.status == 'active') and not (current_user and current_user.is_admin) %}
             <a href="/app/subscribe" class="btn btn-primary btn-sm">Upgrade</a>
           {% endif %}
@@ -159,6 +162,7 @@
   </div>
 
   <script src="/static/js/main.js"></script>
+  <script src="/static/js/dashboard.js"></script>
   {% block scripts %}{% endblock %}
   <script>lucide.createIcons();</script>
 </body>

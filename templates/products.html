@@ -38,8 +38,83 @@
   <div class="filter-count">{{ total_count | default(0) }} products</div>
 </form>
 
-{# ===== PRODUCT GRID ===== #}
+{# ===== VIEW TOGGLE ===== #}
+<div class="flex items-center justify-between mb-4">
+  <div></div>
+  <div class="view-toggle">
+    <button class="view-toggle-btn" data-view="table" onclick="setView('table')" title="Table view"><i data-lucide="list" style="width:16px;height:16px"></i></button>
+    <button class="view-toggle-btn" data-view="grid" onclick="setView('grid')" title="Grid view"><i data-lucide="layout-grid" style="width:16px;height:16px"></i></button>
+  </div>
+</div>
+
 {% if products and products | length > 0 %}
+
+{# ===== TABLE VIEW ===== #}
+<div class="product-table-wrap" id="productTable" style="display:none">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th style="width:40px">#</th>
+        <th>Product</th>
+        <th>Commission</th>
+        <th>Price</th>
+        <th>7d Sales</th>
+        <th>Creators</th>
+        <th>Videos</th>
+        <th>Score</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      {% set cat_lower = (p.category or '')|lower %}
+      {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-food' if 'food' in cat_lower else 'cat-default'))))) %}
+      {% set score_color = '#36d9c4' if p.trending_score >= 80 else ('#f5a623' if p.trending_score >= 50 else '#ff5272') %}
+      <tr>
+        <td style="color:var(--text-muted);font-weight:600">{{ loop.index + (page - 1) * 30 }}</td>
+        <td>
+          <div class="product-row-name">
+            {% if p.cached_image_url or p.image_url %}
+              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy"
+                   onerror="this.outerHTML='<div class=\'product-row-thumb-fallback {{ cat_class }}\'>{{ (p.product_name or \'?\')[0] | upper }}</div>'">
+            {% else %}
+              <div class="product-row-thumb-fallback {{ cat_class }}">{{ (p.product_name or '?')[0] | upper }}</div>
+            {% endif %}
+            <div style="min-width:0">
+              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px">{{ p.product_name }}</a>
+              {% if p.category %}<span style="font-size:11px;color:var(--text-muted)">{{ p.category }}</span>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td class="commission-cell">
+          {{ "%.0f" | format((p.commission_rate or 0) * 100) }}%
+          {% if p.tap_data and p.tap_data.is_active %}
+            <span class="tap-badge" style="margin-left:4px;font-size:10px">&#x26a1; TAP</span>
+          {% endif %}
+        </td>
+        <td>${{ "%.2f" | format(p.price or 0) }}</td>
+        <td style="font-weight:600">{{ "{:,}".format(p.sales_7d or 0) }}</td>
+        <td>{{ p.influencer_count or 0 }}</td>
+        <td>{{ p.video_count or 0 }}</td>
+        <td>
+          <div class="score-ring-wrap" style="width:32px;height:32px">
+            <svg viewBox="0 0 36 36" width="32" height="32">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="3"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke-width="3" stroke-linecap="round"
+                      stroke-dasharray="{{ p.trending_score }}, 100" stroke="{{ score_color }}"
+                      transform="rotate(-90 18 18)"/>
+            </svg>
+            <span class="score-number" style="font-size:10px">{{ p.trending_score }}</span>
+          </div>
+        </td>
+        <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ===== GRID VIEW ===== #}
 <div class="product-grid" id="productGrid">
   {% for p in products %}
   {% set cat_lower = (p.category or '')|lower %}

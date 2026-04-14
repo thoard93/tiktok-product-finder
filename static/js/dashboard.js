@@ -219,6 +219,93 @@ function sortTable(tableId, colIndex) {
   rows.forEach(function (r) { tbody.appendChild(r); });
 }
 
+/* --- Sparkline SVG -------------------------------------------------------- */
+function sparklineSVG(values, w, h) {
+  w = w || 80; h = h || 24;
+  if (!values || values.length < 2) return "";
+  var max = Math.max.apply(null, values), min = Math.min.apply(null, values);
+  var range = max - min || 1;
+  var points = values.map(function(v, i) {
+    var x = (i / (values.length - 1)) * w;
+    var y = h - 2 - ((v - min) / range) * (h - 4);
+    return x.toFixed(1) + "," + y.toFixed(1);
+  }).join(" ");
+  var trending = values[values.length - 1] >= values[0];
+  var color = trending ? "#36d9c4" : "#ff5272";
+  return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h + '" style="overflow:visible">' +
+    '<polyline points="' + points + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.8"/></svg>';
+}
+
+/* Render all sparkline containers */
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelectorAll("[data-sparkline]").forEach(function(el) {
+    var vals = el.dataset.sparkline.split(",").map(Number);
+    el.innerHTML = sparklineSVG(vals);
+  });
+});
+
+/* --- View Toggle (grid/table) --------------------------------------------- */
+function setView(mode) {
+  var grid = document.getElementById("productGrid");
+  var table = document.getElementById("productTable");
+  if (!grid || !table) return;
+  grid.style.display = mode === "grid" ? "" : "none";
+  table.style.display = mode === "table" ? "" : "none";
+  document.querySelectorAll(".view-toggle-btn").forEach(function(b) {
+    b.classList.toggle("active", b.dataset.view === mode);
+  });
+  localStorage.setItem("vantage_view", mode);
+}
+
+/* Restore saved view on load */
+document.addEventListener("DOMContentLoaded", function() {
+  var saved = localStorage.getItem("vantage_view") || "table";
+  setView(saved);
+});
+
+/* --- Theme Toggle (light/dark) -------------------------------------------- */
+function toggleTheme() {
+  var shell = document.querySelector(".app-shell");
+  if (!shell) return;
+  var isLight = shell.classList.toggle("light-mode");
+  localStorage.setItem("vantage_theme", isLight ? "light" : "dark");
+  // Update toggle icon
+  var icon = document.getElementById("themeIcon");
+  if (icon) icon.setAttribute("data-lucide", isLight ? "moon" : "sun");
+  if (window.lucide) lucide.createIcons();
+}
+
+/* Restore saved theme on load */
+document.addEventListener("DOMContentLoaded", function() {
+  var saved = localStorage.getItem("vantage_theme");
+  if (saved === "light") {
+    var shell = document.querySelector(".app-shell");
+    if (shell) shell.classList.add("light-mode");
+    var icon = document.getElementById("themeIcon");
+    if (icon) icon.setAttribute("data-lucide", "moon");
+  }
+});
+
+/* --- Fee Calculator ------------------------------------------------------- */
+function updateFeeCalc() {
+  var cost = parseFloat(document.getElementById("feeCalcCost").value) || 0;
+  var fee = parseFloat(document.getElementById("feeCalcFee").value) || 2;
+  var comm = parseFloat(document.getElementById("feeCalcComm").value) || 0;
+  var price = parseFloat(document.getElementById("feeCalcPrice").value) || 0;
+  var daily = parseFloat(document.getElementById("feeCalcDaily").value) || 10;
+
+  var revenue = price * (comm / 100);
+  var platformFee = price * (fee / 100);
+  var profit = revenue - cost - platformFee;
+  var margin = price > 0 ? (profit / price * 100) : 0;
+  var monthly = profit * daily * 30;
+
+  document.getElementById("feeCalcMargin").textContent = margin.toFixed(1) + "%";
+  document.getElementById("feeCalcProfit").textContent = "$" + profit.toFixed(2);
+  document.getElementById("feeCalcMonthly").textContent = "$" + monthly.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  document.getElementById("feeCalcMonthly").className = "value " + (monthly >= 0 ? "highlight" : "");
+}
+
 /* --- Lazy Images ---------------------------------------------------------- */
 document.addEventListener("DOMContentLoaded", function () {
   if (!("IntersectionObserver" in window)) return;
