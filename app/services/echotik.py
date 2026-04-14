@@ -382,63 +382,106 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
 # Public API — fetch_top_shops
 # ---------------------------------------------------------------------------
 
-def fetch_top_shops(page: int = 1, page_size: int = 20) -> list[dict]:
+def fetch_top_shops(country: str = "US", page_size: int = 20) -> list[dict]:
     """
-    Fetch top TikTok Shop brands/shops from EchoTik.
+    Fetch top TikTok Shop brands/sellers from EchoTik v3.
 
-    Args:
-        page: Page number.
-        page_size: Shops per page (max 20).
+    Tries ranked seller endpoints on echoes.echotik.live, then falls back
+    to the open.echotik.live product/brand endpoint.
 
     Returns:
-        List of shop dicts.
+        List of normalized shop dicts.
     """
-    params = {
-        'region': 'US',
-        'page_num': page,
-        'page_size': min(page_size, 20),
-        'sort_field': 4,
-        'sort_type': 1,
-    }
+    ECHOES_BASE = "https://echoes.echotik.live/api/v3"
 
-    # Try multiple endpoint paths — EchoTik API naming varies
-    endpoints = [
-        f"{ECHOTIK_V3_BASE}/shop/list",
-        f"{ECHOTIK_V3_BASE}/seller/list",
-        f"{ECHOTIK_V3_BASE}/store/list",
-        "https://open.echotik.live/api/v1/shop/list",
+    endpoints_to_try = [
+        {
+            "path": "/seller/rank/list",
+            "params": {"page_num": 1, "page_size": page_size, "country": country, "date_type": 1},
+        },
+        {
+            "path": "/seller/rank",
+            "params": {"page_num": 1, "page_size": page_size, "date_type": 7, "country": country},
+        },
+        {
+            "path": "/product/brand/list",
+            "params": {"page_num": 1, "page_size": page_size, "country": country},
+        },
     ]
 
-    data = None
-    for url in endpoints:
+    # Also try open.echotik.live with basic auth
+    auth = _get_auth()
+
+    raw_items = []
+
+    for ep in endpoints_to_try:
+        url = f"{ECHOES_BASE}{ep['path']}"
         try:
-            data = _request('GET', url, params=params)
-            if data and data.get('data'):
-                break
-        except EchoTikError:
+            # Try with basic auth (same creds as product API)
+            resp = requests.get(url, params=ep["params"], auth=auth, timeout=15)
+            log.info("[EchoTik] Trying %s -> status %d", ep["path"], resp.status_code)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("data") or {}
+                if isinstance(items, dict):
+                    result = items.get("list") or items.get("records") or items.get("sellers") or []
+                elif isinstance(items, list):
+                    result = items
+                else:
+                    result = []
+
+                if result:
+                    log.info("[EchoTik] Got %d brands from %s", len(result), ep["path"])
+                    raw_items = result
+                    break
+            else:
+                log.info("[EchoTik] %s returned %d: %s", ep["path"], resp.status_code, resp.text[:200])
+        except Exception as exc:
+            log.warning("[EchoTik] %s error: %s", ep["path"], exc)
             continue
 
-    if not data:
-        log.warning("fetch_top_shops: all endpoint variants returned no data")
+    if not raw_items:
+        log.warning("[EchoTik] All brand/shop endpoints returned no data — API plan may not include seller data")
         return []
 
-    raw_list = data.get('data', [])
-    if isinstance(raw_list, dict):
-        raw_list = raw_list.get('list', [])
-
+    # Normalize to common shape
     shops = []
-    for s in (raw_list or []):
+    for s in raw_items:
         shop = {
-            'shop_id': str(s.get('shop_id') or s.get('shopId') or s.get('id', '')),
-            'name': s.get('shop_name') or s.get('shopName') or s.get('name', ''),
-            'avatar_url': _extract_image_url(s.get('avatar') or s.get('logo_url') or s.get('shop_logo')),
-            'country': s.get('country') or s.get('region', 'US'),
-            'category': s.get('category_name') or s.get('categoryName') or s.get('category', ''),
-            'follower_count': _safe_int(s.get('follower_count') or s.get('followerCount')),
-            'gmv_30d': _safe_float(s.get('total_sale_gmv_30d_amt') or s.get('gmv_30d') or s.get('sales_30d')),
-            'product_count': _safe_int(s.get('product_count') or s.get('productCount') or s.get('spu_cnt')),
-            'trending_score': _safe_float(s.get('trending_score') or s.get('score')),
-            'shop_url': s.get('shop_url') or s.get('shopUrl', ''),
+            'shop_id': str(
+                s.get('shop_id') or s.get('shopId') or s.get('seller_id')
+                or s.get('sellerId') or s.get('id', '')
+            ),
+            'name': (
+                s.get('shop_name') or s.get('shopName') or s.get('seller_name')
+                or s.get('sellerName') or s.get('name', '')
+            ),
+            'avatar_url': _extract_image_url(
+                s.get('avatar') or s.get('logo_url') or s.get('shop_logo')
+                or s.get('seller_logo') or s.get('avatar_url')
+            ),
+            'country': s.get('country') or s.get('region', country),
+            'category': (
+                s.get('category_name') or s.get('categoryName')
+                or s.get('main_category') or s.get('category', '')
+            ),
+            'follower_count': _safe_int(
+                s.get('follower_count') or s.get('followerCount')
+                or s.get('fans_count') or s.get('fansCount')
+            ),
+            'gmv_30d': _safe_float(
+                s.get('total_sale_gmv_30d_amt') or s.get('gmv_30d')
+                or s.get('sales_30d') or s.get('gmv')
+            ),
+            'product_count': _safe_int(
+                s.get('product_count') or s.get('productCount')
+                or s.get('spu_cnt') or s.get('product_num')
+            ),
+            'trending_score': _safe_float(
+                s.get('trending_score') or s.get('score') or s.get('rank_score')
+            ),
+            'shop_url': s.get('shop_url') or s.get('shopUrl') or s.get('seller_url', ''),
         }
         if shop['shop_id']:
             shops.append(shop)
