@@ -513,6 +513,106 @@ def api_sync_brands():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@views_bp.route('/api/admin/echotik-debug', methods=['POST'])
+@api_auth
+def api_echotik_debug():
+    """Brute-force test every EchoTik base URL + path + auth combo for shop data."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    import os, requests as req
+    from requests.auth import HTTPBasicAuth
+
+    username = os.environ.get('ECHOTIK_USERNAME', '')
+    password = os.environ.get('ECHOTIK_PASSWORD', '')
+    api_key = os.environ.get('ECHOTIK_API_KEY', '')
+
+    BASE_URLS = [
+        "https://open.echotik.live/api/v3/echotik",
+        "https://open.echotik.live/api/v3",
+        "https://open.echotik.live/api/v1",
+        "https://echoes.echotik.live/api/v3",
+        "https://api.echotik.live/v3",
+        "https://api.echotik.live/api/v3",
+    ]
+
+    PATHS = [
+        "/seller/list",
+        "/shop/list",
+        "/shop/rank/list",
+        "/shop/rank",
+        "/shop/top/list",
+        "/seller/rank/list",
+    ]
+
+    PARAMS = {"country": "US", "region": "US", "page_num": 1, "page_size": 5, "date_type": 7}
+
+    # Build auth variants
+    auth_methods = []
+    if username and password:
+        auth_methods.append(("basic_user_pass", {"auth": HTTPBasicAuth(username, password)}))
+    if api_key:
+        import base64
+        cred = base64.b64encode(f"{api_key}:".encode()).decode()
+        auth_methods.append(("basic_apikey_empty", {"headers": {"Authorization": f"Basic {cred}"}}))
+        auth_methods.append(("bearer_apikey", {"headers": {"Authorization": f"Bearer {api_key}"}}))
+        auth_methods.append(("header_token", {"headers": {"token": api_key}}))
+        auth_methods.append(("header_api-key", {"headers": {"api-key": api_key}}))
+        auth_methods.append(("raw_auth_header", {"headers": {"Authorization": api_key}}))
+    if not auth_methods:
+        auth_methods.append(("no_auth", {}))
+
+    results = []
+
+    # First: test auth methods on one known-working endpoint (product/list)
+    test_url = "https://open.echotik.live/api/v3/echotik/product/list"
+    test_params = {"region": "US", "page_num": 1, "page_size": 1}
+    results.append({"section": "=== AUTH METHOD TEST (product/list) ==="})
+    for label, kwargs in auth_methods:
+        try:
+            r = req.get(test_url, params=test_params, timeout=10,
+                        auth=kwargs.get('auth'), headers=kwargs.get('headers'))
+            body = r.text[:200]
+            has_data = '"data"' in body or '"list"' in body
+            results.append({
+                "auth": label, "url": "product/list", "status": r.status_code,
+                "has_data": has_data, "body": body
+            })
+        except Exception as e:
+            results.append({"auth": label, "url": "product/list", "status": "error", "body": str(e)})
+
+    # Second: test all base+path combos with the first working auth
+    working_auth = auth_methods[0]  # default to first
+    for label, kwargs in auth_methods:
+        for r in results:
+            if r.get('auth') == label and r.get('status') == 200 and r.get('has_data'):
+                working_auth = (label, kwargs)
+                break
+
+    results.append({"section": f"=== SHOP ENDPOINT SCAN (using {working_auth[0]}) ==="})
+    for base in BASE_URLS:
+        for path in PATHS:
+            url = f"{base}{path}"
+            try:
+                r = req.get(url, params=PARAMS, timeout=8,
+                            auth=working_auth[1].get('auth'),
+                            headers=working_auth[1].get('headers'))
+                body = r.text[:300]
+                has_data = '"data"' in body and ('"list"' in body or '"records"' in body)
+                entry = {
+                    "url": url, "status": r.status_code,
+                    "has_data": has_data, "body": body
+                }
+                if has_data and r.status_code == 200:
+                    entry["MATCH"] = True
+                results.append(entry)
+            except Exception as e:
+                results.append({"url": url, "status": "error", "body": str(e)[:200]})
+
+    return jsonify({'results': results})
+
+
 @views_bp.route('/api/blacklist/add', methods=['POST'])
 @api_auth
 def api_blacklist_add():

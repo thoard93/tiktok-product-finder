@@ -70,6 +70,21 @@
   </button>
 </div>
 
+{# ===== EchoTik API Debug ===== #}
+<div class="card mb-6" style="max-width:640px">
+  <div class="flex items-center gap-3 mb-4">
+    <div class="feature-icon accent" style="width:36px;height:36px;margin-bottom:0"><i data-lucide="bug" style="width:18px;height:18px"></i></div>
+    <div>
+      <h2 style="font-size:var(--text-lg);font-weight:700">EchoTik API Debug</h2>
+      <p class="text-sm text-muted">Tests every base URL + path + auth combo to find working shop/seller endpoint.</p>
+    </div>
+  </div>
+  <button class="btn btn-ghost btn-lg mb-4" id="debugBtn" onclick="runDebug()">
+    <i data-lucide="bug" style="width:18px;height:18px"></i> Run EchoTik Debug
+  </button>
+  <div id="debugOutput" style="display:none;max-height:500px;overflow-y:auto;background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);padding:var(--space-4);font-family:monospace;font-size:12px;line-height:1.6;white-space:pre-wrap;color:var(--text-secondary)"></div>
+</div>
+
 {# ===== Quick Stats ===== #}
 <div class="card mb-6" style="max-width:640px">
   <h3 style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-4)">System Stats</h3>
@@ -105,6 +120,34 @@
 
 {% block scripts %}
 <script>
+async function runDebug() {
+  var btn = document.getElementById("debugBtn");
+  var out = document.getElementById("debugOutput");
+  btn.disabled = true; btn.style.opacity = "0.6";
+  out.style.display = "block";
+  out.textContent = "Running debug... testing all endpoint + auth combos (may take 30-60s)...\n";
+
+  try {
+    var res = await fetch("/api/admin/echotik-debug", { method: "POST" });
+    var data = await res.json();
+    var lines = "";
+    (data.results || []).forEach(function(r) {
+      if (r.section) {
+        lines += "\n" + r.section + "\n";
+      } else {
+        var marker = r.MATCH ? " *** MATCH ***" : "";
+        var auth = r.auth ? "[" + r.auth + "] " : "";
+        lines += auth + (r.url || "?") + " -> " + r.status + (r.has_data ? " [HAS DATA]" : "") + marker + "\n";
+        if (r.body) lines += "  " + r.body.substring(0, 250) + "\n";
+      }
+    });
+    out.textContent = lines;
+  } catch(e) {
+    out.textContent = "Error: " + e.message;
+  }
+  btn.disabled = false; btn.style.opacity = "";
+}
+
 function showScanStatus(type, msg) {
   var el = document.getElementById("scanStatus");
   el.style.display = "block";
