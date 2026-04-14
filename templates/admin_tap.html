@@ -10,20 +10,28 @@
 {# ===== ADD NEW TAP ===== #}
 <div class="card mb-6" style="max-width:700px">
   <h3 style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-4)">Add New TAP Link</h3>
-  <form method="POST" action="/app/admin/tap/add">
+  <form method="POST" action="/app/admin/tap/add" id="tapForm">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
       <div class="input-group">
         <label class="input-label">Product</label>
-        <select name="product_id" class="select" required>
-          <option value="">Select a product...</option>
-          {% for p in products %}
-            <option value="{{ p.product_id }}">{{ p.product_name | truncate(60) }}</option>
-          {% endfor %}
-        </select>
+        <div style="position:relative">
+          <input type="text" id="productSearch" class="input" placeholder="Search products..." autocomplete="off"
+                 oninput="filterProducts(this.value)">
+          <input type="hidden" name="product_id" id="selectedProductId" required>
+          <div id="productDropdown" class="tap-product-dropdown" style="display:none">
+            {% for p in products %}
+            <div class="tap-product-option" data-id="{{ p.product_id }}" data-name="{{ p.product_name }}"
+                 onclick="selectProduct('{{ p.product_id }}', '{{ p.product_name | replace("'", "\\'") | truncate(55) }}')">
+              <span style="font-size:var(--text-sm)">{{ p.product_name | truncate(55) }}</span>
+              <span style="font-size:var(--text-xs);color:var(--accent)">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
       </div>
       <div class="input-group">
         <label class="input-label">Partner Name</label>
-        <input type="text" name="partner_name" class="input" value="Affiliate Automated" placeholder="e.g. Affiliate Automated">
+        <input type="text" name="partner_name" class="input" value="Affiliate Automated">
       </div>
     </div>
     <div class="input-group mb-4">
@@ -105,4 +113,47 @@
   <p class="text-sm text-secondary">Add a boosted commission link above to get started.</p>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+var searchInput = document.getElementById("productSearch");
+var dropdown = document.getElementById("productDropdown");
+var options = dropdown ? dropdown.querySelectorAll(".tap-product-option") : [];
+
+function filterProducts(query) {
+  query = query.toLowerCase().trim();
+  dropdown.style.display = query.length >= 2 ? "block" : "none";
+  var count = 0;
+  options.forEach(function(opt) {
+    var name = (opt.dataset.name || "").toLowerCase();
+    var show = name.indexOf(query) !== -1 && count < 15;
+    opt.style.display = show ? "" : "none";
+    if (show) count++;
+  });
+}
+
+function selectProduct(id, name) {
+  document.getElementById("selectedProductId").value = id;
+  searchInput.value = name;
+  dropdown.style.display = "none";
+}
+
+/* Close dropdown on outside click */
+document.addEventListener("click", function(e) {
+  if (!e.target.closest("#productSearch") && !e.target.closest("#productDropdown")) {
+    dropdown.style.display = "none";
+  }
+});
+
+/* Prevent form submit if no product selected */
+document.getElementById("tapForm").addEventListener("submit", function(e) {
+  if (!document.getElementById("selectedProductId").value) {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.style.borderColor = "var(--danger)";
+    setTimeout(function() { searchInput.style.borderColor = ""; }, 2000);
+  }
+});
+</script>
 {% endblock %}

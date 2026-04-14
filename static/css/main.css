@@ -571,7 +571,13 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .user-tier-badge--pro{background:var(--accent-glow);color:var(--accent);border:1px solid rgba(255,82,114,.3)}
 .user-tier-badge--free{background:rgba(255,255,255,.06);color:var(--text-muted);border:1px solid var(--border)}
 
-/* 32. STATS PANEL (Product Detail) ========================================= */
+/* 32. TAP PRODUCT SEARCH DROPDOWN ========================================== */
+.tap-product-dropdown{position:absolute;top:100%;left:0;right:0;max-height:280px;overflow-y:auto;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--radius);z-index:50;box-shadow:var(--shadow-lg);margin-top:4px}
+.tap-product-option{padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);transition:background var(--dur-fast)}
+.tap-product-option:hover{background:var(--bg-hover)}
+.tap-product-option:last-child{border-bottom:none}
+
+/* 33. STATS PANEL (Product Detail) ========================================= */
 .stats-panel{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
 .stats-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg-base)}
 .stats-tab{flex:1;padding:12px 8px;font-size:13px;font-weight:500;color:var(--text-secondary);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all var(--dur-fast)}
