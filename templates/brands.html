@@ -35,9 +35,9 @@
 <div class="product-grid" id="brandGrid">
   {% for b in brands %}
   <div class="product-card">
-    <div class="product-card-img" style="aspect-ratio:16/9;background:var(--bg-elevated)">
+    <div class="product-card-img" style="aspect-ratio:16/10;background:var(--bg-elevated)">
       {% if b.avatar_url %}
-        <img src="{{ b.avatar_url }}" alt="{{ b.name }}" loading="lazy" style="object-fit:contain;padding:var(--space-4)"
+        <img src="{{ b.avatar_url }}" alt="{{ b.name }}" loading="lazy" style="object-fit:cover;width:100%;height:100%"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         <div class="product-card-img-fallback" style="display:none">
           <i data-lucide="store"></i>
@@ -52,7 +52,7 @@
       {% if b.category %}<span class="badge badge-muted badge-overlay-tl">{{ b.category }}</span>{% endif %}
     </div>
     <div class="product-card-body">
-      <div class="product-card-name">{{ b.name }}</div>
+      <div class="product-card-name"><a href="/app/brands/{{ b.id }}" style="color:inherit;text-decoration:none">{{ b.name }}</a></div>
 
       <div class="product-card-stats">
         <div class="product-card-stat">
@@ -70,10 +70,9 @@
       </div>
 
       <div class="product-card-actions">
+        <a href="/app/brands/{{ b.id }}" class="btn btn-ghost" style="flex:1">View Products</a>
         {% if b.tiktok_shop_url %}
-          <button class="btn btn-primary w-full" onclick="openOnTikTok('{{ b.tiktok_shop_url }}', '')">View Shop</button>
-        {% else %}
-          <span class="btn btn-ghost w-full" style="opacity:.5;pointer-events:none">No shop link</span>
+          <button class="btn btn-primary" style="flex:1" onclick="openOnTikTok('{{ b.tiktok_shop_url }}', '')">TikTok Shop</button>
         {% endif %}
       </div>
     </div>

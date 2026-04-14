@@ -93,7 +93,7 @@ def echotik_sync_trigger():
         SCAN_LOCK.update(locked=False, locked_by=None, scan_type=None, start_time=None)
 
 
-def run_echotik_sync(max_pages: int = 10, page_size: int = 50) -> dict:
+def run_echotik_sync(max_pages: int = 10, page_size: int = 10) -> dict:
     """
     Core sync logic — usable from both the API route and the scheduler.
 
@@ -351,7 +351,7 @@ def api_scan_brand_pages(seller_id):
                     'sort_by': 'total_sale_7d_cnt',
                     'sort_order': 'desc',
                     'page_num': page_num,
-                    'page_size': 20,
+                    'page_size': 10,  # EchoTik max is 10
                 },
                 auth=get_auth(),
                 timeout=30,

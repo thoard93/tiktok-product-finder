@@ -239,7 +239,7 @@ def fetch_trending_products(page: int = 1, category: Optional[str] = None,
     params = {
         'region': 'US',
         'page_num': page,
-        'page_size': min(page_size, 50),
+        'page_size': min(page_size, 10),  # EchoTik API hard limit is 10
         'product_sort_field': 4,   # Sort by 7-day sales (descending)
         'sort_type': 1,            # Descending
     }
@@ -348,7 +348,7 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
 
     try:
         data = _request('GET', f"{ECHOTIK_V3_BASE}/product/video",
-                        params={'product_id': raw_id, 'page_size': page_size, 'page_num': 1})
+                        params={'product_id': raw_id, 'page_size': min(page_size, 10), 'page_num': 1})
     except EchoTikError as exc:
         log.warning("fetch_product_videos(%s) failed: %s", raw_id, exc)
         return []
@@ -382,7 +382,7 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
 # Public API — fetch_top_shops
 # ---------------------------------------------------------------------------
 
-def fetch_top_shops(country: str = "US", page_size: int = 20) -> list[dict]:
+def fetch_top_shops(country: str = "US", page_size: int = 10, page: int = 1) -> list[dict]:
     """
     Fetch top TikTok Shop sellers from EchoTik v3.
 
@@ -392,7 +392,7 @@ def fetch_top_shops(country: str = "US", page_size: int = 20) -> list[dict]:
     """
     try:
         data = _request('GET', f"{ECHOTIK_V3_BASE}/seller/list",
-                        params={"region": country, "page_num": 1, "page_size": min(page_size, 10)})
+                        params={"region": country, "page_num": page, "page_size": min(page_size, 10)})
     except EchoTikError as exc:
         log.warning("[EchoTik] seller/list failed: %s", exc)
         return []
@@ -466,6 +466,52 @@ def fetch_top_shops(country: str = "US", page_size: int = 20) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Public API — fetch_brand_products
+# ---------------------------------------------------------------------------
+
+def fetch_brand_products(shop_id: str, page: int = 1, page_size: int = 10) -> list[dict]:
+    """
+    Fetch products for a specific seller/shop from EchoTik.
+
+    Args:
+        shop_id: The seller's shop ID from EchoTik.
+        page: Page number.
+        page_size: Products per page (max 10).
+
+    Returns:
+        List of normalized product dicts.
+    """
+    params = {
+        'shop_id': str(shop_id),
+        'page_num': page,
+        'page_size': min(page_size, 10),
+    }
+
+    # Try seller-specific product endpoint first, then general product list
+    endpoints = [
+        f"{ECHOTIK_V3_BASE}/seller/product/list",
+        f"{ECHOTIK_V3_BASE}/product/list",
+    ]
+
+    for url in endpoints:
+        try:
+            data = _request('GET', url, params=params)
+            raw = data.get('data') or []
+            if isinstance(raw, dict):
+                raw = raw.get('list') or raw.get('records') or []
+            if raw:
+                log.info("[EchoTik] Got %d products for shop %s from %s",
+                         len(raw), shop_id, url.split('/echotik/')[-1])
+                return [_normalize_product(p) for p in raw if p]
+        except EchoTikError as exc:
+            log.debug("[EchoTik] %s failed for shop %s: %s",
+                      url.split('/echotik/')[-1], shop_id, exc)
+            continue
+
+    return []
+
+
+# ---------------------------------------------------------------------------
 # Public API — fetch_product_trend
 # ---------------------------------------------------------------------------
 
@@ -493,7 +539,7 @@ def fetch_product_trend(product_id: str, days: int = 30) -> list[dict]:
                             'start_date': start.strftime('%Y-%m-%d'),
                             'end_date': end.strftime('%Y-%m-%d'),
                             'page_num': 1,
-                            'page_size': days,
+                            'page_size': min(days, 10),
                         })
     except EchoTikError as exc:
         log.warning("fetch_product_trend(%s) failed: %s", raw_id, exc)

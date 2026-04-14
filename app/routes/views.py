@@ -368,6 +368,39 @@ def brands_list():
     return render_template('brands.html', **ctx)
 
 
+@views_bp.route('/app/brands/<int:brand_id>')
+@login_required
+def brand_detail(brand_id):
+    ctx = _base_context('brands')
+    brand = Brand.query.get_or_404(brand_id)
+    ctx['brand'] = brand
+
+    # Try fetching live products from EchoTik for this seller
+    live_products = []
+    try:
+        from app.services.echotik import fetch_brand_products
+        if brand.shop_id:
+            live_products = fetch_brand_products(brand.shop_id, page=1, page_size=10)
+    except Exception:
+        pass
+
+    # Fallback: products in our DB matching this seller name
+    db_products = []
+    if not live_products and brand.name:
+        db_products = Product.query.filter(
+            Product.seller_name.ilike(f'%{brand.name}%'),
+            _active_filter
+        ).order_by(desc(Product.sales_7d)).limit(20).all()
+        for p in db_products:
+            p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
+
+    ctx['live_products'] = live_products
+    ctx['db_products'] = db_products
+    ctx['source'] = 'live' if live_products else 'db'
+
+    return render_template('brand_detail.html', **ctx)
+
+
 @views_bp.route('/app/admin')
 @login_required
 def admin_panel():
@@ -478,10 +511,17 @@ def api_sync_brands():
         return jsonify({'error': 'echotik module not available'}), 500
 
     try:
+        import time as _time
         total_synced = 0
-        shops = fetch_top_shops(country="US", page_size=20)
-        if shops:
-            for s in shops:
+        all_shops = []
+        for pg in range(1, 6):  # 5 pages x 10 = 50 sellers
+            page_shops = fetch_top_shops(country="US", page_size=10, page=pg)
+            if not page_shops:
+                break
+            all_shops.extend(page_shops)
+            _time.sleep(0.3)
+        if all_shops:
+            for s in all_shops:
                 sid = s.get('shop_id', '')
                 if not sid:
                     continue

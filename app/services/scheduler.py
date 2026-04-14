@@ -78,9 +78,15 @@ def _run_brand_sync(app):
         log.info("[SCHEDULER] Brand sync starting")
         total = 0
 
-        shops = fetch_top_shops(country="US", page_size=20)
-        if shops:
-            for s in shops:
+        all_shops = []
+        for pg in range(1, 6):  # 5 pages x 10 = 50 sellers
+            page_shops = fetch_top_shops(country="US", page_size=10, page=pg)
+            if not page_shops:
+                break
+            all_shops.extend(page_shops)
+            time.sleep(0.3)
+        if all_shops:
+            for s in all_shops:
                 sid = s.get('shop_id', '')
                 if not sid:
                     continue

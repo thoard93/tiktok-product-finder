@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{{ brand.name }}{% endblock %}
+
+{% block content %}
+<a href="/app/brands" class="detail-back"><i data-lucide="arrow-left"></i> Back to Brands</a>
+
+{# ===== BRAND HEADER ===== #}
+<div class="card mb-6">
+  <div class="flex gap-4 items-center" style="flex-wrap:wrap">
+    {% if brand.avatar_url %}
+      <img src="{{ brand.avatar_url }}" alt="{{ brand.name }}" style="width:72px;height:72px;border-radius:var(--radius-lg);object-fit:cover;background:var(--bg-elevated)"
+           onerror="this.style.display='none'">
+    {% else %}
+      <div style="width:72px;height:72px;border-radius:var(--radius-lg);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;color:var(--text-muted)">
+        <i data-lucide="store" style="width:32px;height:32px"></i>
+      </div>
+    {% endif %}
+    <div style="flex:1">
+      <h1 style="font-size:var(--text-2xl);margin-bottom:var(--space-2)">{{ brand.name }}</h1>
+      <div class="flex gap-3 items-center" style="flex-wrap:wrap">
+        {% if brand.category %}<span class="badge badge-muted">{{ brand.category }}</span>{% endif %}
+        <span class="badge badge-teal">${{ brand.gmv_30d | format_number }} GMV</span>
+        <span class="text-sm text-secondary">{{ brand.follower_count | format_number }} followers</span>
+        <span class="text-sm text-secondary">{{ brand.product_count or 0 }} products</span>
+      </div>
+    </div>
+    {% if brand.tiktok_shop_url %}
+      <button class="btn btn-primary" onclick="openOnTikTok('{{ brand.tiktok_shop_url }}', '')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.2 8.2 0 004.79 1.53V6.79a4.85 4.85 0 01-1.02-.1z"/></svg>
+        View on TikTok
+      </button>
+    {% endif %}
+  </div>
+</div>
+
+{# ===== SOURCE BANNER ===== #}
+{% if source == 'db' and db_products %}
+<div style="padding:var(--space-3) var(--space-5);background:var(--teal-dim);border:1px solid rgba(54,217,196,.15);border-radius:var(--radius);margin-bottom:var(--space-5);font-size:var(--text-sm);color:var(--teal)">
+  <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i>
+  Showing products from our database matching this seller name.
+</div>
+{% endif %}
+
+{# ===== PRODUCTS ===== #}
+<div class="section-header">
+  <h2 class="section-title">Products by {{ brand.name }}</h2>
+</div>
+
+{% if live_products %}
+<div class="product-grid">
+  {% for p in live_products %}
+  <div class="product-card">
+    <div class="product-card-img">
+      {% set img = p.image_url or '' %}
+      {% if img %}
+        <img src="{{ img }}" alt="{{ p.product_name or '' }}" loading="lazy"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="product-card-img-fallback" style="display:none"><i data-lucide="package"></i></div>
+      {% else %}
+        <div class="product-card-img-fallback"><i data-lucide="package"></i></div>
+      {% endif %}
+    </div>
+    <div class="product-card-body">
+      <div class="product-card-name">{{ p.product_name or 'Unknown Product' }}</div>
+      <div class="product-card-commission">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</div>
+      <div class="product-card-price">${{ "%.2f" | format(p.price or 0) }}</div>
+      <div class="product-card-stats">
+        <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d</small></span></div>
+        <div class="product-card-stat"><i data-lucide="video" style="width:12px;height:12px"></i><span>{{ p.video_count_7d or p.get('video_count_alltime', 0) or 0 }}</span></div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% elif db_products %}
+<div class="product-grid">
+  {% for p in db_products %}
+  <div class="product-card">
+    <div class="product-card-img">
+      {% if p.cached_image_url or p.image_url %}
+        <img src="{{ p.cached_image_url or p.image_url }}" alt="{{ p.product_name }}" loading="lazy"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="product-card-img-fallback" style="display:none"><i data-lucide="package"></i></div>
+      {% else %}
+        <div class="product-card-img-fallback"><i data-lucide="package"></i></div>
+      {% endif %}
+    </div>
+    <div class="product-card-body">
+      <div class="product-card-name"><a href="/app/products/{{ p.product_id }}" style="color:inherit">{{ p.product_name }}</a></div>
+      <div class="product-card-commission">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</div>
+      <div class="product-card-price">${{ "%.2f" | format(p.price or 0) }}</div>
+      <div class="product-card-stats">
+        <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d</small></span></div>
+        <div class="product-card-stat"><i data-lucide="users" style="width:12px;height:12px"></i><span>{{ p.influencer_count or 0 }}</span></div>
+        <div class="product-card-stat"><i data-lucide="video" style="width:12px;height:12px"></i><span>{{ p.video_count or 0 }}</span></div>
+      </div>
+      <div class="product-card-actions">
+        <a href="/app/products/{{ p.product_id }}" class="btn btn-primary w-full">View Details</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon"><i data-lucide="package-search" style="width:80px;height:80px"></i></div>
+  <h3 class="empty-title">No products found for this brand</h3>
+  <p class="empty-desc">Products will appear after the next daily sync if this seller has active listings.</p>
+</div>
+{% endif %}
+{% endblock %}
