@@ -8,38 +8,36 @@
 </div>
 
 {# ===== FILTER BAR ===== #}
-<div class="filter-bar">
-  <select class="select" id="filterCategory" onchange="applyFilters()">
+<form class="filter-bar" id="filterForm" method="GET" action="/app/products">
+  <select class="select" name="category" onchange="this.form.submit()">
     <option value="">All Categories</option>
-    <option value="Beauty">Beauty &amp; Personal Care</option>
-    <option value="Health">Health &amp; Wellness</option>
-    <option value="Home">Home &amp; Kitchen</option>
-    <option value="Fashion">Fashion</option>
-    <option value="Electronics">Electronics Accessories</option>
-    <option value="Pets">Pet Supplies</option>
-    <option value="Sports">Sports &amp; Outdoors</option>
-    <option value="Food">Food &amp; Beverage</option>
+    {% for cat in categories | default([]) %}
+      <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
+    {% endfor %}
   </select>
-  <input type="number" class="input" id="filterCommission" placeholder="Min comm %" style="width:120px" oninput="applyFilters()">
-  <select class="select" id="filterSort" onchange="applyFilters()" style="min-width:140px">
-    <option value="trending">Sort: Trending</option>
-    <option value="commission">Sort: Commission</option>
-    <option value="new">Sort: Newest</option>
-    <option value="gmv">Sort: GMV</option>
+  <input type="number" class="input" name="min_commission" placeholder="Min comm %" style="width:120px"
+         value="{{ current_min_commission if current_min_commission else '' }}" onchange="this.form.submit()">
+  <select class="select" name="sort" onchange="this.form.submit()" style="min-width:140px">
+    <option value="trending" {% if current_sort == 'trending' %}selected{% endif %}>Sort: Trending</option>
+    <option value="commission" {% if current_sort == 'commission' %}selected{% endif %}>Sort: Commission</option>
+    <option value="sales" {% if current_sort == 'sales' %}selected{% endif %}>Sort: 7d Sales</option>
+    <option value="new" {% if current_sort == 'new' %}selected{% endif %}>Sort: Newest</option>
+    <option value="gmv" {% if current_sort == 'gmv' %}selected{% endif %}>Sort: GMV</option>
   </select>
   <div class="topbar-search" style="flex:1;max-width:240px">
     <i data-lucide="search"></i>
-    <input type="text" class="input" placeholder="Search products..." id="filterSearch" oninput="applyFilters()">
+    <input type="text" class="input" name="search" placeholder="Search products..." value="{{ current_search | default('') }}">
   </div>
-  <button class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
-  <div class="filter-count" id="filterCount"></div>
-</div>
+  <button type="submit" class="btn btn-ghost btn-sm">Search</button>
+  <a href="/app/products" class="btn btn-ghost btn-sm">Clear</a>
+  <div class="filter-count">{{ products | length }} products</div>
+</form>
 
 {# ===== PRODUCT GRID ===== #}
 {% if products and products | length > 0 %}
 <div class="product-grid" id="productGrid">
   {% for p in products %}
-  <div class="product-card" data-category="{{ p.category | default('') }}" data-commission="{{ (p.commission_rate or 0) * 100 }}" data-name="{{ p.product_name | lower }}">
+  <div class="product-card">
     <div class="product-card-img">
       {% if p.cached_image_url or p.image_url %}
         <img src="{{ p.cached_image_url or p.image_url }}" alt="{{ p.product_name }}" loading="lazy"
@@ -108,48 +106,27 @@
   </div>
   <h3 class="empty-title">No products match your filters</h3>
   <p class="empty-desc">Try broadening your search or clearing filters to see all tracked products.</p>
-  <button class="btn btn-ghost" onclick="clearFilters()">Clear all filters</button>
+  <a href="/app/products" class="btn btn-ghost">Clear all filters</a>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/dashboard.js"></script>
 <script>
-function applyFilters() {
-  var cat = document.getElementById("filterCategory").value.toLowerCase();
-  var minComm = parseFloat(document.getElementById("filterCommission").value) || 0;
-  var search = document.getElementById("filterSearch").value.toLowerCase();
-  var cards = document.querySelectorAll(".product-card");
-  var visible = 0;
-
-  cards.forEach(function(c) {
-    var cCat = (c.dataset.category || "").toLowerCase();
-    var cComm = parseFloat(c.dataset.commission || 0);
-    var cName = c.dataset.name || "";
-    var show = (!cat || cCat.indexOf(cat) !== -1) && cComm >= minComm && (!search || cName.indexOf(search) !== -1);
-    c.style.display = show ? "" : "none";
-    if (show) visible++;
-  });
-
-  var counter = document.getElementById("filterCount");
-  if (counter) counter.textContent = visible + " products";
-}
-
-function clearFilters() {
-  document.getElementById("filterCategory").value = "";
-  document.getElementById("filterCommission").value = "";
-  document.getElementById("filterSearch").value = "";
-  applyFilters();
-}
-
-function goPage(p) { window.location.href = "?page=" + p; }
-
-/* Init filter count */
-document.addEventListener("DOMContentLoaded", function() {
+function goPage(p) {
   var params = new URLSearchParams(window.location.search);
-  if (params.get("sort")) document.getElementById("filterSort").value = params.get("sort");
-  applyFilters();
+  params.set("page", p);
+  window.location.href = "/app/products?" + params.toString();
+}
+
+/* Submit search on Enter */
+document.addEventListener("DOMContentLoaded", function() {
+  var searchInput = document.querySelector('[name="search"]');
+  if (searchInput) {
+    searchInput.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") { e.preventDefault(); document.getElementById("filterForm").submit(); }
+    });
+  }
 });
 </script>
 {% endblock %}

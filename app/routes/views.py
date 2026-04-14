@@ -138,11 +138,19 @@ def products_list():
     per_page = 30
     sort = request.args.get('sort', 'trending')
     search = request.args.get('search', '').strip()
+    category = request.args.get('category', '').strip()
+    min_comm = request.args.get('min_commission', 0, type=float)
 
     query = Product.query.filter(_active_filter)
 
     if search:
         query = query.filter(Product.product_name.ilike(f'%{search}%'))
+
+    if category:
+        query = query.filter(Product.category.ilike(f'%{category}%'))
+
+    if min_comm > 0:
+        query = query.filter(Product.commission_rate >= min_comm / 100.0)
 
     if sort == 'commission':
         query = query.order_by(desc(Product.commission_rate))
@@ -150,11 +158,28 @@ def products_list():
         query = query.order_by(desc(Product.first_seen))
     elif sort == 'gmv':
         query = query.order_by(desc(Product.gmv))
-    else:
+    elif sort == 'sales':
+        query = query.order_by(desc(Product.sales_7d))
+    else:  # trending (default)
         query = query.order_by(desc(Product.sales_7d))
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     products = pagination.items
+
+    # Get distinct categories for filter dropdown
+    from sqlalchemy import func as sqlfunc
+    categories = db.session.query(Product.category).filter(
+        _active_filter,
+        Product.category.isnot(None),
+        Product.category != '',
+    ).distinct().order_by(Product.category).all()
+    ctx['categories'] = [c[0] for c in categories if c[0]]
+
+    # Pass current filter values back for form state
+    ctx['current_sort'] = sort
+    ctx['current_category'] = category
+    ctx['current_search'] = search
+    ctx['current_min_commission'] = min_comm
 
     for p in products:
         p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
