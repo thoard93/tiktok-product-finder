@@ -192,6 +192,83 @@ function openOnTikTok(shopUrl, productId) {
   }
 }
 
+/* --- AI Chat Widget ------------------------------------------------------- */
+function toggleChat() {
+  var drawer = document.getElementById("chatDrawer");
+  if (!drawer) return;
+  var isOpen = drawer.classList.toggle("open");
+  var icon = document.getElementById("chatFabIcon");
+  if (icon) {
+    icon.setAttribute("data-lucide", isOpen ? "x" : "message-circle");
+    if (window.lucide) lucide.createIcons();
+  }
+  if (isOpen) {
+    var input = document.getElementById("chatInput");
+    if (input) setTimeout(function() { input.focus(); }, 200);
+  }
+}
+
+function sendChat() {
+  var input = document.getElementById("chatInput");
+  var msg = (input.value || "").trim();
+  if (!msg) return;
+  input.value = "";
+
+  var messages = document.getElementById("chatMessages");
+  // Add user message
+  var userDiv = document.createElement("div");
+  userDiv.className = "chat-msg chat-msg--user";
+  userDiv.textContent = msg;
+  messages.appendChild(userDiv);
+
+  // Add loading
+  var loadDiv = document.createElement("div");
+  loadDiv.className = "chat-msg chat-msg--ai chat-msg--loading";
+  loadDiv.textContent = "Thinking...";
+  messages.appendChild(loadDiv);
+  messages.scrollTop = messages.scrollHeight;
+
+  fetch("/api/ai/chat", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({message: msg})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    loadDiv.remove();
+    var aiDiv = document.createElement("div");
+    aiDiv.className = "chat-msg chat-msg--ai";
+    aiDiv.textContent = data.response || data.error || "Sorry, I couldn't process that.";
+    messages.appendChild(aiDiv);
+    messages.scrollTop = messages.scrollHeight;
+  })
+  .catch(function() {
+    loadDiv.remove();
+    var errDiv = document.createElement("div");
+    errDiv.className = "chat-msg chat-msg--ai";
+    errDiv.textContent = "Network error. Please try again.";
+    messages.appendChild(errDiv);
+  });
+}
+
+/* --- Favorite Toggle ------------------------------------------------------ */
+function toggleFavorite(productId, btn) {
+  fetch("/api/favorite/" + productId, { method: "POST" })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.success) {
+      btn.classList.toggle("active", data.is_favorite);
+      var icon = btn.querySelector(".lucide, i");
+      if (icon) {
+        icon.setAttribute("data-lucide", data.is_favorite ? "heart" : "heart");
+        // Heart filled vs outline handled by active class color
+      }
+      showFlash(data.is_favorite ? "Added to watchlist" : "Removed from watchlist", "success");
+    }
+  })
+  .catch(function() { showFlash("Failed to update", "error"); });
+}
+
 /* --- Utility -------------------------------------------------------------- */
 function esc(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
 function formatNum(n) { if (n >= 1e6) return (n / 1e6).toFixed(1) + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1) + "K"; return n.toString(); }

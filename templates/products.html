@@ -125,6 +125,10 @@
       {% else %}
         <div class="product-img-placeholder {{ cat_class }}">{{ (p.product_name or '?')[0] | upper }}</div>
       {% endif %}
+      {# Favorite button #}
+      <button class="fav-btn {{ 'active' if p.is_favorite else '' }}" onclick="event.preventDefault();event.stopPropagation();toggleFavorite('{{ p.product_id }}',this)" title="Add to watchlist">
+        <i data-lucide="heart"></i>
+      </button>
       {% if p.category %}<span class="badge badge-muted badge-overlay-tl">{{ p.category }}</span>{% endif %}
       {# Score ring #}
       <div class="badge-overlay-tr">
