@@ -86,12 +86,7 @@
             </div>
           </div>
         </td>
-        <td class="commission-cell">
-          {{ "%.0f" | format((p.commission_rate or 0) * 100) }}%
-          {% if p.tap_data and p.tap_data.is_active %}
-            <span class="tap-badge" style="margin-left:4px;font-size:10px">&#x26a1; TAP</span>
-          {% endif %}
-        </td>
+        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
         <td>${{ "%.2f" | format(p.price or 0) }}</td>
         <td style="font-weight:600">{{ "{:,}".format(p.sales_7d or 0) }}</td>
         <td>{{ p.influencer_count or 0 }}</td>
@@ -155,13 +150,6 @@
           <div style="font-size:var(--text-base);font-weight:600;color:var(--text-primary)">${{ "%.2f" | format(p.price or 0) }}</div>
         </div>
       </div>
-
-      {% if p.tap_data and p.tap_data.is_active %}
-      <div class="tap-badge mb-2">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-        +{{ "%.0f" | format(((p.tap_data.boosted_commission or 0) - (p.tap_data.base_commission or 0)) * 100) }}% boosted
-      </div>
-      {% endif %}
 
       <div class="product-card-stats">
         <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d</small></span></div>

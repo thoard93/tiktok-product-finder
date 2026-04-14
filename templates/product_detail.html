@@ -128,34 +128,6 @@
       <div class="chart-wrap"><canvas id="detailSalesChart"></canvas></div>
     </div>
 
-    {# Affiliate Revenue Estimator #}
-    <div class="card mb-4">
-      <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-secondary);margin-bottom:var(--space-4);display:flex;align-items:center;gap:var(--space-2)">
-        <i data-lucide="dollar-sign" style="width:16px;height:16px;color:var(--teal)"></i> Affiliate Revenue Estimator
-      </div>
-      <div class="input-group mb-4">
-        <label class="input-label">Expected daily sales</label>
-        <input type="number" class="input" id="revEstDaily" value="10" min="1" oninput="updateRevEstimate()">
-      </div>
-      <div style="display:flex;flex-direction:column;gap:var(--space-3)">
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:var(--text-sm);color:var(--text-muted)">Daily earnings</span>
-          <span style="font-weight:600;color:var(--teal);font-variant-numeric:tabular-nums" id="revEstDailyOut">$0</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:var(--text-sm);color:var(--text-muted)">Monthly earnings</span>
-          <span style="font-weight:700;font-size:var(--text-lg);color:var(--teal);font-variant-numeric:tabular-nums" id="revEstMonthlyOut">$0</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:8px 0">
-          <span style="font-size:var(--text-sm);color:var(--text-muted)">Yearly earnings</span>
-          <span style="font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums" id="revEstYearlyOut">$0</span>
-        </div>
-      </div>
-      <div style="margin-top:var(--space-3);font-size:11px;color:var(--text-faint)">
-        Based on ${{ "%.2f" | format(product.price or 0) }} price &times; {{ "%.0f" | format((product.commission_rate or 0) * 100) }}% commission
-      </div>
-    </div>
-
     {# Short videos (<=15s) #}
     <div class="card mb-4">
       <div class="flex items-center gap-2 mb-4">
@@ -228,22 +200,6 @@
   }
   createLineChart("detailSalesChart", labels, values, CHART_COLORS.teal);
 })();
-
-/* Revenue estimator */
-var _revPrice = {{ product.price or 0 }};
-var _revComm = {{ product.commission_rate or 0 }};
-function updateRevEstimate() {
-  var daily = parseInt(document.getElementById("revEstDaily").value) || 0;
-  var perSale = _revPrice * _revComm;
-  var d = perSale * daily;
-  var m = d * 30;
-  var y = m * 12;
-  function fmt(n) { return "$" + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
-  document.getElementById("revEstDailyOut").textContent = fmt(d);
-  document.getElementById("revEstMonthlyOut").textContent = fmt(m);
-  document.getElementById("revEstYearlyOut").textContent = fmt(y);
-}
-updateRevEstimate();
 
 /* Stats tab switching */
 document.querySelectorAll(".stats-tab").forEach(function(tab) {
