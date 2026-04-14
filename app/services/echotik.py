@@ -473,41 +473,36 @@ def fetch_brand_products(shop_id: str, page: int = 1, page_size: int = 10) -> li
     """
     Fetch products for a specific seller/shop from EchoTik.
 
-    Args:
-        shop_id: The seller's shop ID from EchoTik.
-        page: Page number.
-        page_size: Products per page (max 10).
-
-    Returns:
-        List of normalized product dicts.
+    Tries multiple endpoint + param name combos since EchoTik uses
+    different field names across endpoints.
     """
-    params = {
-        'shop_id': str(shop_id),
-        'page_num': page,
-        'page_size': min(page_size, 10),
-    }
+    sid = str(shop_id)
 
-    # Try seller-specific product endpoint first, then general product list
-    endpoints = [
-        f"{ECHOTIK_V3_BASE}/seller/product/list",
-        f"{ECHOTIK_V3_BASE}/product/list",
+    # Try different endpoint + param name combos
+    attempts = [
+        (f"{ECHOTIK_V3_BASE}/seller/product/list", {'seller_id': sid}),
+        (f"{ECHOTIK_V3_BASE}/seller/product/list", {'shop_id': sid}),
+        (f"{ECHOTIK_V3_BASE}/product/list", {'seller_id': sid}),
+        (f"{ECHOTIK_V3_BASE}/product/list", {'shop_id': sid}),
     ]
 
-    for url in endpoints:
+    for url, id_param in attempts:
         try:
+            params = {**id_param, 'page_num': page, 'page_size': min(page_size, 10)}
             data = _request('GET', url, params=params)
             raw = data.get('data') or []
             if isinstance(raw, dict):
                 raw = raw.get('list') or raw.get('records') or []
             if raw:
-                log.info("[EchoTik] Got %d products for shop %s from %s",
-                         len(raw), shop_id, url.split('/echotik/')[-1])
+                endpoint = url.split('/echotik/')[-1]
+                log.info("[EchoTik] Got %d products for seller %s via %s (%s)",
+                         len(raw), sid, endpoint, list(id_param.keys())[0])
                 return [_normalize_product(p) for p in raw if p]
         except EchoTikError as exc:
-            log.debug("[EchoTik] %s failed for shop %s: %s",
-                      url.split('/echotik/')[-1], shop_id, exc)
+            log.debug("[EchoTik] brand products %s failed: %s", url.split('/echotik/')[-1], exc)
             continue
 
+    log.info("[EchoTik] No products found for seller %s via any endpoint", sid)
     return []
 
 

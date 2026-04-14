@@ -384,13 +384,21 @@ def brand_detail(brand_id):
     except Exception:
         pass
 
-    # Fallback: products in our DB matching this seller name
+    # Fallback: products in our DB matching this seller ID or name
     db_products = []
-    if not live_products and brand.name:
-        db_products = Product.query.filter(
-            Product.seller_name.ilike(f'%{brand.name}%'),
-            _active_filter
-        ).order_by(desc(Product.sales_7d)).limit(20).all()
+    if not live_products:
+        # Try by seller_id first (exact match)
+        if brand.shop_id:
+            db_products = Product.query.filter(
+                Product.seller_id == brand.shop_id,
+                _active_filter
+            ).order_by(desc(Product.sales_7d)).limit(20).all()
+        # Then by seller name (fuzzy)
+        if not db_products and brand.name:
+            db_products = Product.query.filter(
+                Product.seller_name.ilike(f'%{brand.name}%'),
+                _active_filter
+            ).order_by(desc(Product.sales_7d)).limit(20).all()
         for p in db_products:
             p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
 
@@ -506,13 +514,14 @@ def api_sync_brands():
     log = logging.getLogger(__name__)
 
     try:
-        from app.services.echotik import fetch_top_shops
+        from app.services.echotik import fetch_top_shops, fetch_batch_images
     except ImportError:
         return jsonify({'error': 'echotik module not available'}), 500
 
     try:
         import time as _time
         total_synced = 0
+        images_with = 0
         all_shops = []
         for pg in range(1, 6):  # 5 pages x 10 = 50 sellers
             page_shops = fetch_top_shops(country="US", page_size=10, page=pg)
@@ -520,6 +529,11 @@ def api_sync_brands():
                 break
             all_shops.extend(page_shops)
             _time.sleep(0.3)
+
+        # Log first seller for debugging
+        if all_shops:
+            log.info("[BrandSync] First seller raw: %s", {k: str(v)[:80] for k, v in all_shops[0].items()})
+
         if all_shops:
             for s in all_shops:
                 sid = s.get('shop_id', '')
@@ -540,14 +554,38 @@ def api_sync_brands():
                 brand.tiktok_shop_url = (s.get('shop_url') or '')[:500]
                 brand.last_synced = datetime.utcnow()
                 total_synced += 1
+                if brand.avatar_url:
+                    images_with += 1
 
         db.session.commit()
+
+        # Sign brand images that are EchoTik CDN URLs
+        try:
+            brands_needing_sign = Brand.query.filter(
+                Brand.avatar_url.isnot(None),
+                Brand.avatar_url != '',
+                Brand.avatar_url.like('%echosell-images%')
+            ).limit(50).all()
+            if brands_needing_sign:
+                urls = [b.avatar_url for b in brands_needing_sign if b.avatar_url]
+                for i in range(0, len(urls), 10):
+                    batch = urls[i:i+10]
+                    signed = fetch_batch_images(batch)
+                    for b in brands_needing_sign:
+                        if b.avatar_url in signed:
+                            b.avatar_url = signed[b.avatar_url][:500]
+                db.session.commit()
+                log.info("[BrandSync] Signed %d brand images", len(brands_needing_sign))
+        except Exception as e:
+            log.warning("[BrandSync] Image signing failed: %s", e)
+
         total = 0
         try:
             total = Brand.query.count()
         except Exception:
             pass
-        return jsonify({'success': True, 'synced': total_synced, 'total': total})
+        return jsonify({'success': True, 'synced': total_synced, 'total': total,
+                        'with_images': images_with})
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
