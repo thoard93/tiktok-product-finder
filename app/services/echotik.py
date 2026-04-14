@@ -384,61 +384,52 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
 
 def fetch_top_shops(country: str = "US", page_size: int = 20) -> list[dict]:
     """
-    Fetch top TikTok Shop brands/sellers from EchoTik v3.
+    Fetch top TikTok Shop sellers from EchoTik v3.
 
-    Tries ranked seller endpoints on echoes.echotik.live, then falls back
-    to the open.echotik.live product/brand endpoint.
+    Uses open.echotik.live/api/v3/echotik/seller/list (correct base + prefix).
+    Auth: HTTP Basic (same ECHOTIK_USERNAME/PASSWORD as product API).
 
     Returns:
         List of normalized shop dicts.
     """
-    ECHOES_BASE = "https://echoes.echotik.live/api/v3"
-
+    # All endpoints use ECHOTIK_V3_BASE = "https://open.echotik.live/api/v3/echotik"
     endpoints_to_try = [
         {
-            "path": "/seller/rank/list",
+            "path": f"{ECHOTIK_V3_BASE}/seller/list",
+            "params": {"page_num": 1, "page_size": page_size, "country": country},
+        },
+        {
+            "path": f"{ECHOTIK_V3_BASE}/seller/rank/list",
             "params": {"page_num": 1, "page_size": page_size, "country": country, "date_type": 1},
         },
         {
-            "path": "/seller/rank",
-            "params": {"page_num": 1, "page_size": page_size, "date_type": 7, "country": country},
-        },
-        {
-            "path": "/product/brand/list",
+            "path": f"{ECHOTIK_V3_BASE}/shop/list",
             "params": {"page_num": 1, "page_size": page_size, "country": country},
         },
     ]
 
-    # Also try open.echotik.live with basic auth
-    auth = _get_auth()
-
     raw_items = []
 
     for ep in endpoints_to_try:
-        url = f"{ECHOES_BASE}{ep['path']}"
         try:
-            # Try with basic auth (same creds as product API)
-            resp = requests.get(url, params=ep["params"], auth=auth, timeout=15)
-            log.info("[EchoTik] Trying %s -> status %d", ep["path"], resp.status_code)
+            # Use _request() which handles Basic Auth + retries automatically
+            data = _request('GET', ep["path"], params=ep["params"])
+            log.info("[EchoTik] %s -> code=%s", ep["path"].split("/echotik/")[-1], data.get('code'))
 
-            if resp.status_code == 200:
-                data = resp.json()
-                items = data.get("data") or {}
-                if isinstance(items, dict):
-                    result = items.get("list") or items.get("records") or items.get("sellers") or []
-                elif isinstance(items, list):
-                    result = items
-                else:
-                    result = []
-
-                if result:
-                    log.info("[EchoTik] Got %d brands from %s", len(result), ep["path"])
-                    raw_items = result
-                    break
+            items = data.get("data") or {}
+            if isinstance(items, dict):
+                result = items.get("list") or items.get("records") or items.get("sellers") or []
+            elif isinstance(items, list):
+                result = items
             else:
-                log.info("[EchoTik] %s returned %d: %s", ep["path"], resp.status_code, resp.text[:200])
-        except Exception as exc:
-            log.warning("[EchoTik] %s error: %s", ep["path"], exc)
+                result = []
+
+            if result:
+                log.info("[EchoTik] Got %d sellers from %s", len(result), ep["path"].split("/echotik/")[-1])
+                raw_items = result
+                break
+        except EchoTikError as exc:
+            log.info("[EchoTik] %s failed: %s", ep["path"].split("/echotik/")[-1], exc)
             continue
 
     if not raw_items:
