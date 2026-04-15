@@ -112,6 +112,19 @@ def _auto_migrate(app, db):
                 db.session.rollback()
                 print(f"[MIGRATE] {tbl} creation failed: {e}")
 
+    # Fix campaign_banners table if missing
+    try:
+        db.session.execute(db.text("SELECT id FROM campaign_banners LIMIT 1"))
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        try:
+            db.create_all()
+            print("[MIGRATE] Created campaign_banners table")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[MIGRATE] campaign_banners creation failed: {e}")
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -249,6 +262,25 @@ def create_app():
             response.headers['Cache-Control'] = 'private, max-age=30'
         return response
 
+    # --- Campaign banner context processor (inject into every template) ---
+    @flask_app.context_processor
+    def inject_campaign_banner():
+        try:
+            from app.models import CampaignBanner
+            from datetime import datetime as dt
+            now = dt.utcnow()
+            # Get highest-priority active campaign that's either live or upcoming
+            campaign = CampaignBanner.query.filter(
+                CampaignBanner.is_active == True,
+                db.or_(
+                    CampaignBanner.ends_at.is_(None),
+                    CampaignBanner.ends_at > now
+                )
+            ).order_by(CampaignBanner.priority.desc()).first()
+            return {'active_campaign': campaign}
+        except Exception:
+            return {'active_campaign': None}
+
     # --- Start background scheduler ---
     from app.services.scheduler import init_scheduler
     init_scheduler(flask_app)
@@ -292,6 +324,7 @@ from app.models import (  # noqa: E402, F401
     EbayWatchlistItem,
     EbaySearchHistory,
     ProductView,
+    CampaignBanner,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)

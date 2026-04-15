@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Campaign Banners{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Campaign Banners</h1>
+  <p class="page-subtitle">Create animated announcement banners shown at the top of every page</p>
+</div>
+
+{# ===== ADD NEW CAMPAIGN ===== #}
+<div class="card mb-6">
+  <h2 style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-4)">New Campaign</h2>
+  <form action="/app/admin/campaigns/add" method="POST">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div>
+        <label class="label">Title <span style="color:var(--accent)">*</span></label>
+        <input type="text" name="title" class="input" placeholder="Spring Sale" required maxlength="200">
+      </div>
+      <div>
+        <label class="label">Color Scheme</label>
+        <select name="color_scheme" class="input">
+          <option value="fire">Fire (Red/Orange)</option>
+          <option value="gold">Gold (Yellow/Amber)</option>
+          <option value="teal">Teal (Green/Cyan)</option>
+          <option value="purple">Purple (Violet/Indigo)</option>
+          <option value="coral">Coral (Pink/Rose)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-bottom:var(--space-4)">
+      <label class="label">Message <span style="color:var(--accent)">*</span></label>
+      <input type="text" name="message" class="input" placeholder="Get 30% boosted commissions on all Beauty products this week!" required maxlength="500">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div>
+        <label class="label">Link URL (optional)</label>
+        <input type="url" name="link_url" class="input" placeholder="https://...">
+      </div>
+      <div>
+        <label class="label">Link Text (optional)</label>
+        <input type="text" name="link_text" class="input" placeholder="Shop Now" maxlength="100">
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div>
+        <label class="label">Starts At (UTC, optional)</label>
+        <input type="datetime-local" name="starts_at" class="input">
+      </div>
+      <div>
+        <label class="label">Ends At (UTC, optional)</label>
+        <input type="datetime-local" name="ends_at" class="input">
+      </div>
+      <div>
+        <label class="label">Priority</label>
+        <input type="number" name="priority" class="input" value="0" min="0" max="100">
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <label style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);cursor:pointer">
+        <input type="checkbox" name="is_dismissible" checked style="accent-color:var(--accent)">
+        Users can dismiss
+      </label>
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Create Campaign
+    </button>
+  </form>
+</div>
+
+{# ===== COLOR SCHEME PREVIEW ===== #}
+<div class="card mb-6">
+  <h2 style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-4)">Color Scheme Preview</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:var(--space-3)">
+    {% for scheme in ['fire','gold','teal','purple','coral'] %}
+    <div class="campaign-banner campaign-banner--{{ scheme }}" style="position:relative;width:180px;border-radius:var(--radius-lg);overflow:hidden">
+      <div class="campaign-banner__inner" style="justify-content:center;padding:var(--space-3)">
+        <span style="font-weight:700;font-size:var(--text-sm);text-transform:capitalize">{{ scheme }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ===== EXISTING CAMPAIGNS TABLE ===== #}
+<div class="section-header">
+  <h2 class="section-title">Active & Past Campaigns</h2>
+</div>
+
+<div class="product-table-wrap">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th style="width:40px">#</th>
+        <th style="min-width:200px">Title</th>
+        <th>Scheme</th>
+        <th>Status</th>
+        <th>Starts</th>
+        <th>Ends</th>
+        <th>Priority</th>
+        <th style="width:160px">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if campaigns %}
+        {% for c in campaigns %}
+        <tr style="{% if not c.is_active %}opacity:0.5{% endif %}">
+          <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ c.id }}</td>
+          <td>
+            <div style="font-weight:600;font-size:13px">{{ c.title }}</div>
+            <div style="font-size:11px;color:var(--text-faint);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.message }}</div>
+          </td>
+          <td>
+            <span class="campaign-scheme-dot campaign-scheme-dot--{{ c.color_scheme }}"></span>
+            {{ c.color_scheme }}
+          </td>
+          <td>
+            {% if c.is_active and c.is_live() %}
+              <span class="status-badge status-badge--live">LIVE</span>
+            {% elif c.is_active and c.is_upcoming() %}
+              <span class="status-badge status-badge--upcoming">UPCOMING</span>
+            {% elif c.is_active %}
+              <span class="status-badge status-badge--active">ACTIVE</span>
+            {% else %}
+              <span class="status-badge status-badge--off">OFF</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;font-variant-numeric:tabular-nums">{{ c.starts_at.strftime('%m/%d %I:%M%p') if c.starts_at else '—' }}</td>
+          <td style="font-size:12px;font-variant-numeric:tabular-nums">{{ c.ends_at.strftime('%m/%d %I:%M%p') if c.ends_at else '—' }}</td>
+          <td style="text-align:center;font-weight:600">{{ c.priority }}</td>
+          <td>
+            <div style="display:flex;gap:var(--space-2)">
+              <form action="/app/admin/campaigns/{{ c.id }}/toggle" method="POST" style="margin:0">
+                <button type="submit" class="btn btn-ghost btn-sm" style="font-size:12px">
+                  {% if c.is_active %}Disable{% else %}Enable{% endif %}
+                </button>
+              </form>
+              <form action="/app/admin/campaigns/{{ c.id }}/delete" method="POST" style="margin:0"
+                    onsubmit="return confirm('Delete this campaign?')">
+                <button type="submit" class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--accent)">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="8" class="text-center text-muted" style="padding:var(--space-8)">No campaigns created yet</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -472,6 +472,60 @@ class ProductView(db.Model):
 # EBAY PRICE BLADE (admin-only)
 # =============================================================================
 
+class CampaignBanner(db.Model):
+    """Animated announcement banners displayed at the top of every page"""
+    __tablename__ = 'campaign_banners'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)            # e.g. "Spring Sale"
+    message = db.Column(db.String(500), nullable=False)           # Scrolling marquee text
+    link_url = db.Column(db.String(500), nullable=True)           # Optional CTA link
+    link_text = db.Column(db.String(100), nullable=True)          # e.g. "Shop Now →"
+    color_scheme = db.Column(db.String(20), default='fire')       # fire, gold, teal, purple, coral
+    starts_at = db.Column(db.DateTime, nullable=True)             # Countdown target / start time
+    ends_at = db.Column(db.DateTime, nullable=True)               # Auto-deactivate after this
+    is_active = db.Column(db.Boolean, default=True)
+    is_dismissible = db.Column(db.Boolean, default=True)          # Can users close it?
+    priority = db.Column(db.Integer, default=0)                   # Higher = shown first
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def is_live(self):
+        """Check if campaign is currently active and within date range"""
+        if not self.is_active:
+            return False
+        now = datetime.utcnow()
+        if self.starts_at and now < self.starts_at:
+            return False  # Not started yet — but show countdown
+        if self.ends_at and now > self.ends_at:
+            return False
+        return True
+
+    def is_upcoming(self):
+        """Returns True if campaign has a future start date"""
+        if not self.is_active:
+            return False
+        now = datetime.utcnow()
+        return self.starts_at and now < self.starts_at
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'message': self.message,
+            'link_url': self.link_url,
+            'link_text': self.link_text,
+            'color_scheme': self.color_scheme,
+            'starts_at': self.starts_at.isoformat() if self.starts_at else None,
+            'ends_at': self.ends_at.isoformat() if self.ends_at else None,
+            'is_active': self.is_active,
+            'is_dismissible': self.is_dismissible,
+            'priority': self.priority,
+            'is_live': self.is_live(),
+            'is_upcoming': self.is_upcoming(),
+        }
+
+
 class EbayWatchlistItem(db.Model):
     __tablename__ = 'ebay_watchlist'
     id = db.Column(db.Integer, primary_key=True)

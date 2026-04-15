@@ -869,3 +869,57 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
 .fav-btn-inline{width:28px;height:28px;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;background:transparent;color:var(--text-faint);transition:all var(--dur-fast)}
 .fav-btn-inline:hover{color:var(--accent);background:var(--accent-glow)}
 .fav-btn-inline.active{color:var(--accent)}
+
+/* 40. CAMPAIGN ANNOUNCEMENT BANNER ======================================== */
+.campaign-banner{overflow:hidden;max-height:44px;transition:all .3s ease}
+.campaign-banner__inner{display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-4);height:44px;font-size:13px;font-weight:500;color:#fff;position:relative}
+.campaign-banner__icon{flex-shrink:0;display:flex;align-items:center;opacity:.9}
+.campaign-banner__marquee{flex:1;overflow:hidden;position:relative;mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
+.campaign-banner__track{display:flex;gap:var(--space-16);white-space:nowrap;animation:marquee 25s linear infinite}
+.campaign-banner__track:hover{animation-play-state:paused}
+.campaign-banner__text{display:inline-flex;gap:var(--space-2);align-items:center}
+.campaign-banner__text strong{font-weight:800;letter-spacing:.02em}
+.campaign-banner__link{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:700;margin-left:var(--space-2);opacity:.9;transition:opacity .2s}
+.campaign-banner__link:hover{opacity:1}
+.campaign-banner__right{display:flex;align-items:center;gap:var(--space-3);flex-shrink:0}
+.campaign-banner__countdown{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;background:rgba(0,0,0,.2);padding:2px 8px;border-radius:var(--radius-full);letter-spacing:.03em}
+.campaign-banner__close{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;display:flex;align-items:center;padding:4px;border-radius:var(--radius-full);transition:all .2s}
+.campaign-banner__close:hover{color:#fff;background:rgba(255,255,255,.15)}
+
+@keyframes marquee{
+  0%{transform:translateX(0)}
+  100%{transform:translateX(-50%)}
+}
+
+/* Color schemes */
+.campaign-banner--fire{background:linear-gradient(135deg,#e8384d 0%,#f97316 50%,#e8384d 100%);background-size:200% 200%;animation:bannerShimmer 4s ease infinite}
+.campaign-banner--gold{background:linear-gradient(135deg,#d97706 0%,#f59e0b 50%,#d97706 100%);background-size:200% 200%;animation:bannerShimmer 4s ease infinite}
+.campaign-banner--teal{background:linear-gradient(135deg,#0d9488 0%,#2dd4bf 50%,#0d9488 100%);background-size:200% 200%;animation:bannerShimmer 4s ease infinite}
+.campaign-banner--purple{background:linear-gradient(135deg,#7c3aed 0%,#a78bfa 50%,#7c3aed 100%);background-size:200% 200%;animation:bannerShimmer 4s ease infinite}
+.campaign-banner--coral{background:linear-gradient(135deg,#e8384d 0%,#f472b6 50%,#e8384d 100%);background-size:200% 200%;animation:bannerShimmer 4s ease infinite}
+
+@keyframes bannerShimmer{
+  0%,100%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+}
+
+/* Admin campaign page helpers */
+.campaign-scheme-dot{width:10px;height:10px;border-radius:var(--radius-full);display:inline-block;margin-right:4px;vertical-align:middle}
+.campaign-scheme-dot--fire{background:#e8384d}
+.campaign-scheme-dot--gold{background:#d97706}
+.campaign-scheme-dot--teal{background:#0d9488}
+.campaign-scheme-dot--purple{background:#7c3aed}
+.campaign-scheme-dot--coral{background:#f472b6}
+
+.status-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:var(--radius-full);letter-spacing:.05em;text-transform:uppercase}
+.status-badge--live{background:rgba(13,148,136,.15);color:#0d9488}
+.status-badge--upcoming{background:rgba(217,119,6,.15);color:#d97706}
+.status-badge--active{background:rgba(37,99,235,.15);color:#2563eb}
+.status-badge--off{background:rgba(156,163,175,.15);color:#9ca3af}
+
+/* Mobile: smaller banner */
+@media(max-width:768px){
+  .campaign-banner__inner{height:38px;font-size:12px;padding:0 var(--space-3)}
+  .campaign-banner{max-height:38px}
+  .campaign-banner__countdown{font-size:10px;padding:2px 6px}
+}

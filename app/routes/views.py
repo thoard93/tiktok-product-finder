@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, redirect, session, request, jsonify
 from sqlalchemy import desc, or_
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView
+from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView, CampaignBanner
 from app.routes.auth import get_current_user
 
 
@@ -1472,3 +1472,88 @@ def api_profile_update():
         user.discord_username = data['display_name'].strip()[:100]
     db.session.commit()
     return jsonify({'success': True})
+
+
+# ---------------------------------------------------------------------------
+# Admin — Campaign Banner Management
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/app/admin/campaigns')
+@login_required
+def admin_campaigns():
+    ctx = _base_context('campaigns')
+    user = ctx['current_user']
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    ctx['campaigns'] = CampaignBanner.query.order_by(
+        CampaignBanner.priority.desc(), CampaignBanner.created_at.desc()
+    ).all()
+    return render_template('admin_campaigns.html', **ctx)
+
+
+@views_bp.route('/app/admin/campaigns/add', methods=['POST'])
+@login_required
+def admin_campaign_add():
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+
+    title = request.form.get('title', '').strip()
+    message = request.form.get('message', '').strip()
+    if not title or not message:
+        return redirect('/app/admin/campaigns')
+
+    campaign = CampaignBanner(
+        title=title[:200],
+        message=message[:500],
+        link_url=request.form.get('link_url', '').strip()[:500] or None,
+        link_text=request.form.get('link_text', '').strip()[:100] or None,
+        color_scheme=request.form.get('color_scheme', 'fire'),
+        is_dismissible=request.form.get('is_dismissible') == 'on',
+        priority=int(request.form.get('priority', 0) or 0),
+        is_active=True,
+    )
+
+    # Parse dates
+    starts = request.form.get('starts_at', '').strip()
+    ends = request.form.get('ends_at', '').strip()
+    if starts:
+        try:
+            campaign.starts_at = datetime.fromisoformat(starts)
+        except ValueError:
+            pass
+    if ends:
+        try:
+            campaign.ends_at = datetime.fromisoformat(ends)
+        except ValueError:
+            pass
+
+    db.session.add(campaign)
+    db.session.commit()
+    return redirect('/app/admin/campaigns')
+
+
+@views_bp.route('/app/admin/campaigns/<int:cid>/toggle', methods=['POST'])
+@login_required
+def admin_campaign_toggle(cid):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    c = CampaignBanner.query.get(cid)
+    if c:
+        c.is_active = not c.is_active
+        db.session.commit()
+    return redirect('/app/admin/campaigns')
+
+
+@views_bp.route('/app/admin/campaigns/<int:cid>/delete', methods=['POST'])
+@login_required
+def admin_campaign_delete(cid):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    c = CampaignBanner.query.get(cid)
+    if c:
+        db.session.delete(c)
+        db.session.commit()
+    return redirect('/app/admin/campaigns')
