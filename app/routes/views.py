@@ -37,6 +37,29 @@ views_bp = Blueprint('views', __name__)
 # Products with status='active' or NULL (new products may not have status set)
 _active_filter = or_(Product.product_status == 'active', Product.product_status.is_(None))
 
+
+def _calc_score(p):
+    """Calculate a 0-99 trending score from product metrics.
+    Uses log-scaled sales + commission + influencer diversity."""
+    import math
+    sales = p.sales_7d or 0
+    creators = p.influencer_count or 0
+    comm = (p.commission_rate or 0) * 100  # as percentage
+    videos = p.video_count or 0
+
+    # Log-scale sales (0-40 points): 100 sales=13, 1000=20, 10000=27, 50000=32
+    sales_score = min(40, math.log10(max(sales, 1)) * 8.5)
+    # Commission (0-25 points): 10%=10, 20%=20, 25%=25
+    comm_score = min(25, comm)
+    # Creator diversity (0-20 points): log-scaled
+    creator_score = min(20, math.log10(max(creators, 1)) * 6)
+    # Video saturation penalty: too many videos = lower opportunity
+    video_penalty = min(14, math.log10(max(videos, 1)) * 3)
+    # Combine
+    raw = sales_score + comm_score + creator_score - video_penalty
+    return max(1, min(99, int(raw)))
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -117,14 +140,14 @@ def dashboard():
     ).order_by(desc(Product.sales_7d)).limit(6).all()
 
     for p in ctx['trending_products']:
-        p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
+        p.trending_score = _calc_score(p)
 
     # Recent products (last updated, min 5 videos)
     ctx['recent_products'] = Product.query.filter(
         _active_filter, Product.video_count >= 5
     ).order_by(desc(Product.last_updated)).limit(5).all()
     for p in ctx['recent_products']:
-        p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
+        p.trending_score = _calc_score(p)
 
     return render_template('dashboard.html', **ctx)
 
@@ -218,7 +241,7 @@ def _products_list_inner(ctx):
     ctx['current_max_videos'] = max_videos
 
     for p in products:
-        p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
+        p.trending_score = _calc_score(p)
 
     ctx['products'] = products
     ctx['page'] = page
@@ -237,7 +260,7 @@ def product_detail(product_id):
     ctx = _base_context('products')
 
     product = Product.query.get_or_404(product_id)
-    product.trending_score = min(99, int((product.sales_7d or 0) / 10 + (product.influencer_count or 0) * 3 + (product.commission_rate or 0) * 200))
+    product.trending_score = _calc_score(product)
     ctx['product'] = product
 
     # Build stats dict from existing model fields — per time period
@@ -312,7 +335,7 @@ def analytics():
     ).order_by(desc(Product.gmv)).limit(10).all()
 
     for p in ctx['top_products']:
-        p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
+        p.trending_score = _calc_score(p)
 
     return render_template('analytics.html', **ctx)
 
@@ -397,33 +420,26 @@ def brand_detail(brand_id):
     brand_sort = request.args.get('sort', 'sales')
     ctx['brand'] = brand
 
-    # Try fetching live products from EchoTik for this seller
-    live_products = []
+    # Try fetching live products from EchoTik and save to DB
     try:
-        from app.services.echotik import fetch_brand_products, fetch_batch_images, _extract_image_url
+        from app.services.echotik import fetch_brand_products, sync_to_db
         if brand.shop_id:
-            live_products = fetch_brand_products(brand.shop_id, page=1, page_size=10)
-            # Sign images for live products
-            if live_products:
-                urls_to_sign = [p.get('image_url', '') for p in live_products if p.get('image_url', '').startswith('http')]
-                if urls_to_sign:
-                    try:
-                        signed = fetch_batch_images(urls_to_sign[:10])
-                        for p in live_products:
-                            if p.get('image_url') in signed:
-                                p['image_url'] = signed[p['image_url']]
-                    except Exception:
-                        pass
+            raw_products = fetch_brand_products(brand.shop_id, page=1, page_size=10)
+            if raw_products:
+                # Save to our DB so detail pages work
+                try:
+                    sync_to_db(raw_products)
+                except Exception:
+                    pass
                 # Update brand product count
-                if not brand.product_count or brand.product_count == 0:
-                    brand.product_count = len(live_products)
-                    db.session.commit()
+                brand.product_count = max(brand.product_count or 0, len(raw_products))
+                db.session.commit()
     except Exception:
         pass
 
-    # Fallback: products in our DB matching this seller ID or name
+    # Get products from DB (includes any just-synced live products)
     db_products = []
-    if not live_products:
+    if True:
         # Build query — try seller_id first, then name
         db_q = None
         if brand.shop_id:
@@ -446,14 +462,12 @@ def brand_detail(brand_id):
             db_products = db_q.limit(30).all()
 
         for p in db_products:
-            p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
+            p.trending_score = _calc_score(p)
         if db_products and (not brand.product_count or brand.product_count == 0):
             brand.product_count = len(db_products)
             db.session.commit()
 
-    ctx['live_products'] = live_products
-    ctx['db_products'] = db_products
-    ctx['source'] = 'live' if live_products else 'db'
+    ctx['products'] = db_products
     ctx['brand_sort'] = brand_sort
 
     return render_template('brand_detail.html', **ctx)

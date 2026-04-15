@@ -8,135 +8,108 @@
 <div class="card mb-6">
   <div class="flex gap-4 items-center" style="flex-wrap:wrap">
     {% if brand.avatar_url %}
-      <img src="{{ brand.avatar_url }}" alt="{{ brand.name }}" style="width:72px;height:72px;border-radius:var(--radius-lg);object-fit:cover;background:var(--bg-elevated)"
+      <img src="{{ brand.avatar_url }}" alt="{{ brand.name }}" style="width:64px;height:64px;border-radius:var(--radius-lg);object-fit:cover;background:var(--bg-elevated);border:1px solid var(--border)"
            onerror="this.style.display='none'">
     {% else %}
-      <div style="width:72px;height:72px;border-radius:var(--radius-lg);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;color:var(--text-muted)">
-        <i data-lucide="store" style="width:32px;height:32px"></i>
+      <div style="width:64px;height:64px;border-radius:var(--radius-lg);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;color:var(--text-muted)">
+        <i data-lucide="store" style="width:28px;height:28px"></i>
       </div>
     {% endif %}
     <div style="flex:1">
-      <h1 style="font-size:var(--text-2xl);margin-bottom:var(--space-2)">{{ brand.name }}</h1>
+      <h1 style="font-size:var(--text-xl);font-weight:700;margin-bottom:4px">{{ brand.name }}</h1>
       <div class="flex gap-3 items-center" style="flex-wrap:wrap">
         {% if brand.category %}<span class="badge badge-muted">{{ brand.category }}</span>{% endif %}
-        <span class="badge badge-teal">${{ brand.gmv_30d | format_number }} GMV</span>
-        <span class="text-sm text-secondary">{{ brand.follower_count | format_number }} followers</span>
-        <span class="text-sm text-secondary">{{ brand.product_count or 0 }} products</span>
+        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">${{ brand.gmv_30d | format_number }}</strong> GMV</span>
+        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.follower_count | format_number }}</strong> followers</span>
+        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.product_count or 0 }}</strong> products</span>
       </div>
     </div>
     {% if brand.tiktok_shop_url %}
       <button class="btn btn-primary" onclick="openOnTikTok('{{ brand.tiktok_shop_url }}', '')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.2 8.2 0 004.79 1.53V6.79a4.85 4.85 0 01-1.02-.1z"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.2 8.2 0 004.79 1.53V6.79a4.85 4.85 0 01-1.02-.1z"/></svg>
         View on TikTok
       </button>
     {% endif %}
   </div>
 </div>
 
-{# ===== SOURCE BANNER ===== #}
-{% if source == 'db' and db_products %}
-<div style="padding:var(--space-3) var(--space-5);background:var(--teal-dim);border:1px solid rgba(54,217,196,.15);border-radius:var(--radius);margin-bottom:var(--space-5);font-size:var(--text-sm);color:var(--teal)">
-  <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i>
-  Showing products from our database matching this seller.
-</div>
-{% endif %}
-
-{# ===== PRODUCTS SECTION ===== #}
-<div class="section-header">
-  <h2 class="section-title">Products by {{ brand.name }}</h2>
-  <span class="text-sm text-secondary">{{ (live_products | length) if live_products else (db_products | length) }} found</span>
-</div>
-
-{# Sort bar #}
-<div class="flex gap-2 mb-4" style="flex-wrap:wrap">
-  {% for val, label in [('sales', '7d Sales'), ('commission', 'Commission'), ('price', 'Price'), ('videos', 'Videos'), ('new', 'Newest')] %}
-    <a href="/app/brands/{{ brand.id }}?sort={{ val }}" class="btn btn-sm {{ 'btn-primary' if brand_sort == val else 'btn-ghost' }}">{{ label }}</a>
-  {% endfor %}
-</div>
-
-{% macro render_product_card(p, is_live=false) %}
-  {% set cat_lower = (p.category if not is_live else (p.get('category', '') or ''))|lower %}
-  {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else 'cat-default'))) %}
-  <div class="product-card">
-    <div class="product-card-img">
-      {% if is_live %}
-        {% set img_url = p.get('image_url', '') %}
-      {% else %}
-        {% set img_url = p.cached_image_url or p.image_url or '' %}
-      {% endif %}
-      {% if img_url %}
-        <img src="{{ img_url }}" alt="{{ p.product_name if not is_live else p.get('product_name', '') }}" loading="lazy"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="product-img-placeholder {{ cat_class }}" style="display:none">{{ ((p.product_name if not is_live else p.get('product_name', '?')) or '?')[0] | upper }}</div>
-      {% else %}
-        <div class="product-img-placeholder {{ cat_class }}">{{ ((p.product_name if not is_live else p.get('product_name', '?')) or '?')[0] | upper }}</div>
-      {% endif %}
-    </div>
-    <div class="product-card-body">
-      {% if is_live %}
-        {% set pid = p.get('product_id', '') %}
-        <div class="product-card-name">{{ p.get('product_name', 'Unknown Product') }}</div>
-        <div class="flex items-center gap-3 mb-2">
-          <div>
-            <div style="font-size:20px;font-weight:800;color:var(--accent);line-height:1">{{ "%.0f" | format((p.get('commission_rate', 0) or 0) * 100) }}%</div>
-            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Commission</div>
-          </div>
-          <div style="margin-left:auto;font-size:var(--text-base);font-weight:600">${{ "%.2f" | format(p.get('price', 0) or 0) }}</div>
-        </div>
-        <div class="product-card-stats">
-          <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.get('sales_7d', 0) or 0) }} <small>7d</small></span></div>
-          <div class="product-card-stat"><i data-lucide="users" style="width:12px;height:12px"></i><span>{{ p.get('influencer_count', 0) or 0 }}</span></div>
-          <div class="product-card-stat"><i data-lucide="video" style="width:12px;height:12px"></i><span>{{ p.get('video_count_alltime', 0) or p.get('video_count_7d', 0) or 0 }}</span></div>
-        </div>
-        <div class="product-card-actions">
-          {% if pid %}
-            <a href="/app/products/shop_{{ pid }}" class="btn btn-ghost" style="flex:1">Details</a>
-            <button class="btn btn-primary" style="flex:1" onclick="openOnTikTok('', '{{ pid }}')">TikTok Shop</button>
-          {% else %}
-            <button class="btn btn-primary w-full" onclick="openOnTikTok('{{ p.get('product_url', '') }}', '')">View on TikTok</button>
-          {% endif %}
-        </div>
-      {% else %}
-        <div class="product-card-name"><a href="/app/products/{{ p.product_id }}" style="color:inherit">{{ p.product_name }}</a></div>
-        <div class="flex items-center gap-3 mb-2">
-          <div>
-            <div style="font-size:20px;font-weight:800;color:var(--accent);line-height:1">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</div>
-            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Commission</div>
-          </div>
-          <div style="margin-left:auto;font-size:var(--text-base);font-weight:600">${{ "%.2f" | format(p.price or 0) }}</div>
-        </div>
-        <div class="product-card-stats">
-          <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d</small></span></div>
-          <div class="product-card-stat"><i data-lucide="users" style="width:12px;height:12px"></i><span>{{ p.influencer_count or 0 }}</span></div>
-          <div class="product-card-stat"><i data-lucide="video" style="width:12px;height:12px"></i><span>{{ p.video_count or 0 }}</span></div>
-        </div>
-        <div class="product-card-actions">
-          <a href="/app/products/{{ p.product_id }}" class="btn btn-primary w-full">View Details</a>
-        </div>
-      {% endif %}
-    </div>
+{# ===== SORT BAR ===== #}
+<div class="flex items-center justify-between mb-4">
+  <div class="flex gap-2" style="flex-wrap:wrap">
+    {% for val, label in [('sales', '7d Sales'), ('commission', 'Commission'), ('price', 'Price'), ('videos', 'Videos'), ('new', 'Newest')] %}
+      <a href="/app/brands/{{ brand.id }}?sort={{ val }}" class="btn btn-sm {{ 'btn-primary' if brand_sort == val else 'btn-ghost' }}">{{ label }}</a>
+    {% endfor %}
   </div>
-{% endmacro %}
-
-{% if live_products %}
-<div class="product-grid">
-  {% for p in live_products %}
-    {{ render_product_card(p, is_live=true) }}
-  {% endfor %}
+  <span class="text-sm text-muted">{{ products | length }} products</span>
 </div>
 
-{% elif db_products %}
-<div class="product-grid">
-  {% for p in db_products %}
-    {{ render_product_card(p, is_live=false) }}
-  {% endfor %}
+{# ===== PRODUCTS TABLE ===== #}
+{% if products and products | length > 0 %}
+<div class="product-table-wrap">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th style="width:36px">#</th>
+        <th style="min-width:240px">Product Info</th>
+        <th>Commission</th>
+        <th>Price</th>
+        <th>7d Sales</th>
+        <th>Creators</th>
+        <th>Videos</th>
+        <th>Score</th>
+        <th style="width:60px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      {% set cat_lower = (p.category or '')|lower %}
+      {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-health' if 'health' in cat_lower else 'cat-default')))) %}
+      {% set score_color = '#0d9488' if p.trending_score >= 80 else ('#d97706' if p.trending_score >= 50 else '#dc2626') %}
+      <tr>
+        <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
+        <td>
+          <div class="product-row-name">
+            {% if p.cached_image_url or p.image_url %}
+              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+              <div class="product-row-thumb-fallback {{ cat_class }}" style="display:none">{{ (p.product_name or '?')[0] | upper }}</div>
+            {% else %}
+              <div class="product-row-thumb-fallback {{ cat_class }}">{{ (p.product_name or '?')[0] | upper }}</div>
+            {% endif %}
+            <div style="min-width:0">
+              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>
+              {% if p.category %}<span style="font-size:11px;color:var(--text-faint)">{{ p.category }}</span>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
+        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
+        <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.influencer_count or 0) }}</td>
+        <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.video_count or 0) }}</td>
+        <td>
+          <div class="score-ring-wrap" style="width:30px;height:30px">
+            <svg viewBox="0 0 36 36" width="30" height="30">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke-width="3" stroke-linecap="round"
+                      stroke-dasharray="{{ p.trending_score }}, 100" stroke="{{ score_color }}"
+                      transform="rotate(-90 18 18)"/>
+            </svg>
+            <span class="score-number" style="font-size:9px">{{ p.trending_score }}</span>
+          </div>
+        </td>
+        <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 
 {% else %}
 <div class="empty-state">
-  <div class="empty-icon"><i data-lucide="package-search" style="width:80px;height:80px"></i></div>
+  <div class="empty-icon"><i data-lucide="package-search" style="width:64px;height:64px"></i></div>
   <h3 class="empty-title">No products found for this brand</h3>
-  <p class="empty-desc">Products will appear after the next daily sync if this seller has active listings.</p>
+  <p class="empty-desc">Products will appear after the next sync. Try running a manual scan from the Admin Panel.</p>
 </div>
 {% endif %}
 {% endblock %}
