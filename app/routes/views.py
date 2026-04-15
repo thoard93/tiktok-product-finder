@@ -399,9 +399,24 @@ def brand_detail(brand_id):
     # Try fetching live products from EchoTik for this seller
     live_products = []
     try:
-        from app.services.echotik import fetch_brand_products
+        from app.services.echotik import fetch_brand_products, fetch_batch_images, _extract_image_url
         if brand.shop_id:
             live_products = fetch_brand_products(brand.shop_id, page=1, page_size=10)
+            # Sign images for live products
+            if live_products:
+                urls_to_sign = [p.get('image_url', '') for p in live_products if p.get('image_url', '').startswith('http')]
+                if urls_to_sign:
+                    try:
+                        signed = fetch_batch_images(urls_to_sign[:10])
+                        for p in live_products:
+                            if p.get('image_url') in signed:
+                                p['image_url'] = signed[p['image_url']]
+                    except Exception:
+                        pass
+                # Update brand product count
+                if not brand.product_count or brand.product_count == 0:
+                    brand.product_count = len(live_products)
+                    db.session.commit()
     except Exception:
         pass
 
@@ -422,6 +437,10 @@ def brand_detail(brand_id):
             ).order_by(desc(Product.sales_7d)).limit(20).all()
         for p in db_products:
             p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
+        # Update brand product count from DB
+        if db_products and (not brand.product_count or brand.product_count == 0):
+            brand.product_count = len(db_products)
+            db.session.commit()
 
     ctx['live_products'] = live_products
     ctx['db_products'] = db_products

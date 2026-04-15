@@ -67,6 +67,7 @@
     </div>
     <div class="product-card-body">
       {% if is_live %}
+        {% set pid = p.get('product_id', '') %}
         <div class="product-card-name">{{ p.get('product_name', 'Unknown Product') }}</div>
         <div class="flex items-center gap-3 mb-2">
           <div>
@@ -79,6 +80,14 @@
           <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.get('sales_7d', 0) or 0) }} <small>7d</small></span></div>
           <div class="product-card-stat"><i data-lucide="users" style="width:12px;height:12px"></i><span>{{ p.get('influencer_count', 0) or 0 }}</span></div>
           <div class="product-card-stat"><i data-lucide="video" style="width:12px;height:12px"></i><span>{{ p.get('video_count_alltime', 0) or p.get('video_count_7d', 0) or 0 }}</span></div>
+        </div>
+        <div class="product-card-actions">
+          {% if pid %}
+            <a href="/app/products/shop_{{ pid }}" class="btn btn-ghost" style="flex:1">Details</a>
+            <button class="btn btn-primary" style="flex:1" onclick="openOnTikTok('', '{{ pid }}')">TikTok Shop</button>
+          {% else %}
+            <button class="btn btn-primary w-full" onclick="openOnTikTok('{{ p.get('product_url', '') }}', '')">View on TikTok</button>
+          {% endif %}
         </div>
       {% else %}
         <div class="product-card-name"><a href="/app/products/{{ p.product_id }}" style="color:inherit">{{ p.product_name }}</a></div>
