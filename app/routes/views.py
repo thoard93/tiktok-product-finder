@@ -191,12 +191,22 @@ def _products_list_inner(ctx):
     min_comm = request.args.get('min_commission', 0, type=float)
     max_price = request.args.get('max_price', 0, type=float)
     max_videos = request.args.get('max_videos', 0, type=int)
+    tap_only = request.args.get('tap_only', '') == '1'
 
     query = Product.query.filter(
         _active_filter,
         Product.video_count >= 5,   # Filter out placeholder products
         Product.sales_7d > 0        # Must have recent sales momentum
     )
+
+    # TAP boosted filter — only show products with active TAP links
+    if tap_only:
+        try:
+            query = query.join(TapProduct, Product.product_id == TapProduct.product_id).filter(
+                TapProduct.is_active == True
+            )
+        except Exception:
+            pass
 
     if search:
         query = query.filter(Product.product_name.ilike(f'%{search}%'))
@@ -246,14 +256,29 @@ def _products_list_inner(ctx):
     ctx['current_max_price'] = max_price
     ctx['current_max_videos'] = max_videos
 
+    # Load TAP data for products (safe — won't crash if table missing)
+    tap_map = {}
+    try:
+        tap_ids = [p.product_id for p in products]
+        if tap_ids:
+            taps = TapProduct.query.filter(
+                TapProduct.product_id.in_(tap_ids),
+                TapProduct.is_active == True
+            ).all()
+            tap_map = {t.product_id: t for t in taps}
+    except Exception:
+        pass
+
     for p in products:
         p.trending_score = _calc_score(p)
+        p._tap = tap_map.get(p.product_id)
 
     ctx['products'] = products
     ctx['page'] = page
     ctx['total_pages'] = pagination.pages
     ctx['total_count'] = pagination.total
     ctx['has_filters'] = bool(category or search or min_comm > 0 or max_price > 0 or max_videos > 0)
+    ctx['tap_filter'] = request.args.get('tap_only', '') == '1'
 
     return render_template('products.html', **ctx)
 

@@ -36,8 +36,13 @@
     </div>
   </div>
   <div class="filter-actions">
+    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:1px solid {{ 'var(--teal)' if tap_filter else 'var(--border)' }};background:{{ 'var(--teal-dim)' if tap_filter else 'transparent' }};color:{{ 'var(--teal)' if tap_filter else 'var(--text-muted)' }}">
+      <input type="checkbox" name="tap_only" value="1" {{ 'checked' if tap_filter else '' }} onchange="this.form.submit()" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      TAP Boosted
+    </label>
     <button type="submit" class="btn btn-primary btn-sm">Apply</button>
-    {% if has_filters %}<a href="/app/products" class="btn btn-ghost btn-sm">Reset</a>{% endif %}
+    {% if has_filters or tap_filter %}<a href="/app/products" class="btn btn-ghost btn-sm">Reset</a>{% endif %}
     <span class="filter-count-label">{{ total_count | default(0) }} products</span>
   </div>
 </form>
@@ -106,7 +111,14 @@
         </td>
         <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
         <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
-        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
+        <td class="commission-cell">
+          {% if p._tap %}
+            <span style="color:var(--teal);font-weight:700">{{ "%.0f" | format((p._tap.boosted_commission or 0) * 100) }}%</span>
+            <span class="tap-badge" style="font-size:10px;margin-left:3px">&#x26a1;</span>
+          {% else %}
+            {{ "%.0f" | format((p.commission_rate or 0) * 100) }}%
+          {% endif %}
+        </td>
         <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.influencer_count or 0) }}</td>
         <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.video_count or 0) }}</td>
         <td>
