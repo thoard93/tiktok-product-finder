@@ -178,7 +178,7 @@ def create_subscription():
             'shipping_preference': 'NO_SHIPPING',
             'user_action': 'SUBSCRIBE_NOW',
             'return_url': f'{PRISM_BASE_URL}/api/subscribe/return',
-            'cancel_url': f'{PRISM_BASE_URL}/subscribe?cancelled=true',
+            'cancel_url': f'{PRISM_BASE_URL}/app/subscribe?cancelled=true',
         },
         'custom_id': str(user.id),
     }
@@ -236,7 +236,7 @@ def subscription_return():
     """PayPal redirects here after user approves the subscription."""
     pp_sub_id = request.args.get('subscription_id')
     if not pp_sub_id:
-        return redirect(f'{PRISM_BASE_URL}/subscribe?error=missing_id')
+        return redirect(f'{PRISM_BASE_URL}/app/subscribe?error=missing_id')
 
     try:
         # Get subscription details from PayPal
@@ -249,7 +249,7 @@ def subscription_return():
         pp_data = resp.json()
     except Exception as exc:
         log.error('[PAYMENTS] PayPal subscription return error: %s', exc)
-        return redirect(f'{PRISM_BASE_URL}/subscribe?error=paypal_error')
+        return redirect(f'{PRISM_BASE_URL}/app/subscribe?error=paypal_error')
 
     pp_status = pp_data.get('status', '').upper()
 
@@ -274,7 +274,7 @@ def subscription_return():
         db.session.commit()
         log_activity(sub.user_id, 'subscription_activated', {'paypal_status': pp_status})
 
-    return redirect(f'{PRISM_BASE_URL}/?subscribed=true')
+    return redirect(f'{PRISM_BASE_URL}/app/dashboard?subscribed=true')
 
 
 @payments_bp.route('/api/subscribe/webhook', methods=['POST'])
