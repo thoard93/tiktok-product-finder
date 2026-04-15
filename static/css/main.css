@@ -257,7 +257,11 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 
 /* 5. STAT CARDS ============================================================ */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-4);margin-bottom:var(--space-6)}
-.stat-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-5)}
+.stat-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-5);transition:all var(--dur) var(--ease)}
+.stat-card--link{text-decoration:none;cursor:pointer;display:block}
+.stat-card--link:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.stat-hint{font-size:11px;color:var(--text-faint);margin-top:6px;opacity:0;transition:opacity var(--dur)}
+.stat-card--link:hover .stat-hint{opacity:1}
 .stat-label{font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:var(--space-2)}
 .stat-value{font-family:var(--font-display);font-size:var(--text-3xl);font-weight:800;line-height:1;color:var(--text-primary)}
 .stat-trend{display:inline-flex;align-items:center;gap:var(--space-1);margin-top:var(--space-2);font-size:var(--text-xs);font-weight:600}
@@ -302,6 +306,11 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 /* Fade gradient on scroll row right edge */
 .scroll-row-wrap{position:relative}
 .scroll-row-wrap::after{content:'';position:absolute;top:0;right:0;bottom:0;width:60px;background:linear-gradient(to right,transparent,var(--bg-base));pointer-events:none;z-index:2}
+.scroll-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:36px;height:36px;border-radius:var(--radius-full);background:var(--bg-surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-sm);color:var(--text-muted);transition:all var(--dur-fast)}
+.scroll-arrow:hover{color:var(--text-primary);box-shadow:var(--shadow-md)}
+.scroll-arrow--left{left:-8px}
+.scroll-arrow--right{right:-8px}
+@media(max-width:768px){.scroll-arrow{display:none}}
 
 /* 7. SECTION HEADERS ======================================================= */
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4)}
@@ -671,6 +680,10 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
 .commission-highlight__value{font-size:16px;font-weight:700;color:var(--accent)}
 
 /* 24. FEATURES SECTION (Landing Page v2) =================================== */
+/* Landing section backgrounds */
+.landing-section--alt{background:rgba(255,255,255,0.03)}
+.landing-section--dark{background:#0a0a0c}
+
 .features-section{padding:clamp(64px,8vw,120px) 0;background:#0e0e10}
 .features-container{max-width:1100px;margin:0 auto;padding:0 24px}
 .features-header{margin-bottom:56px}

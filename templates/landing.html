@@ -61,8 +61,8 @@
 </section>
 
 {# ===== HOW IT WORKS ===== #}
-<section style="padding:clamp(48px,6vw,80px) 0;max-width:900px;margin:0 auto;text-align:center">
-  <div style="padding:0 24px">
+<section class="landing-section--alt" style="padding:clamp(48px,6vw,80px) 0">
+  <div style="max-width:900px;margin:0 auto;padding:0 24px;text-align:center">
     <span class="features-eyebrow">How it works</span>
     <h2 class="features-title" style="margin-bottom:48px">Three steps to your first commission</h2>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px;text-align:left">
@@ -80,6 +80,35 @@
         <div style="width:40px;height:40px;border-radius:var(--radius);background:var(--success-dim);color:var(--success);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;margin-bottom:16px">3</div>
         <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Create content and earn</h3>
         <p style="font-size:14px;color:var(--text-muted);line-height:1.6">Promote high-commission products to your audience. Track performance with Vantage analytics.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ===== TRENDING PREVIEW ===== #}
+<section class="landing-section--dark" style="padding:clamp(48px,6vw,80px) 0;text-align:center">
+  <div style="max-width:1000px;margin:0 auto;padding:0 24px">
+    <span class="features-eyebrow" style="color:var(--teal)">Live data</span>
+    <h2 class="features-title" style="margin-bottom:12px">See what's trending right now</h2>
+    <p style="font-size:15px;color:var(--text-muted);margin-bottom:40px;max-width:500px;margin-left:auto;margin-right:auto">Real product data from TikTok Shop — updated daily. Sign up free to see the full database.</p>
+
+    {# Preview product rows #}
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;text-align:left">
+      <div style="display:grid;grid-template-columns:40px 1fr 80px 80px 80px;gap:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06)">#<span></span><span>Product</span><span>Commission</span><span>7d Sales</span><span>Videos</span></div>
+      {% for i in range(5) %}
+      <div style="display:grid;grid-template-columns:40px 1fr 80px 80px 80px;gap:0;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);align-items:center">
+        <span style="color:var(--text-faint);font-weight:600;font-size:12px">{{ i + 1 }}</span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:6px;background:linear-gradient(135deg,{{ ['#f953c6,#b91d73','#4776e6,#1cb5e0','#56ab2f,#a8e063','#f7971e,#ffd200','#11998e,#38ef7d'][i] }});flex-shrink:0"></div>
+          <span style="font-size:13px;font-weight:500;color:var(--text-primary)">{{ ['Portable Mini Blender Pro','LED Strip Lights 5M RGB','Vitamin C Serum Set','Wireless Earbuds TWS','Neck Massager Pillow'][i] }}</span>
+        </span>
+        <span style="color:var(--accent);font-weight:700;font-size:14px">{{ ['25%','18%','35%','15%','22%'][i] }}</span>
+        <span style="font-weight:600;font-size:13px;color:var(--text-primary);font-variant-numeric:tabular-nums">{{ ['12,450','8,230','6,870','5,100','4,560'][i] }}</span>
+        <span style="font-size:13px;color:var(--text-muted)">{{ ['1,240','890','2,100','450','780'][i] }}</span>
+      </div>
+      {% endfor %}
+      <div style="padding:16px;text-align:center;background:rgba(255,255,255,0.02)">
+        <a href="/register" style="color:var(--accent);font-weight:600;font-size:14px;text-decoration:none">Sign up to see all {{ '200+' }} products &rarr;</a>
       </div>
     </div>
   </div>

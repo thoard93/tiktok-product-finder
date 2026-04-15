@@ -9,22 +9,26 @@
 
 {# ===== KPI ROW ===== #}
 <div class="stat-grid">
-  <div class="stat-card anim-slide-up">
+  <a href="/app/products" class="stat-card stat-card--link anim-slide-up">
     <div class="stat-label">Products Tracked</div>
     <div class="stat-value" data-count-to="{{ stats.tracked_count | default(0) }}">0</div>
-  </div>
-  <div class="stat-card anim-slide-up" style="animation-delay:.05s">
+    <div class="stat-hint">View all &rarr;</div>
+  </a>
+  <a href="/app/products?sort=trending" class="stat-card stat-card--link anim-slide-up" style="animation-delay:.05s">
     <div class="stat-label">Trending Today</div>
     <div class="stat-value" style="color:var(--teal)" data-count-to="{{ stats.trending_today | default(0) }}">0</div>
-  </div>
-  <div class="stat-card anim-slide-up" style="animation-delay:.1s">
-    <div class="stat-label">Avg Commission</div>
-    <div class="stat-value" data-count-to="{{ stats.avg_commission | default(0) | round(1) }}" data-count-suffix="%" data-count-decimals="1">0%</div>
-  </div>
-  <div class="stat-card anim-slide-up" style="animation-delay:.15s">
-    <div class="stat-label">Saved Products</div>
+    <div class="stat-hint">See trending &rarr;</div>
+  </a>
+  <a href="/app/tap-lists" class="stat-card stat-card--link anim-slide-up" style="animation-delay:.1s">
+    <div class="stat-label">&#x26a1; Boosted Lists</div>
+    <div class="stat-value" style="color:var(--accent)">TAP</div>
+    <div class="stat-hint">Earn more &rarr;</div>
+  </a>
+  <a href="/app/brands" class="stat-card stat-card--link anim-slide-up" style="animation-delay:.15s">
+    <div class="stat-label">Brand Hunter</div>
     <div class="stat-value" data-count-to="{{ stats.saved_count | default(0) }}">0</div>
-  </div>
+    <div class="stat-hint">Explore brands &rarr;</div>
+  </a>
 </div>
 
 {# ===== TRENDING NOW ===== #}
@@ -35,7 +39,13 @@
 
 {% if trending_products and trending_products | length > 0 %}
 <div class="scroll-row-wrap">
-  <div class="scroll-row">
+  <button class="scroll-arrow scroll-arrow--left" onclick="document.getElementById('trendingScroll').scrollBy({left:-260,behavior:'smooth'})" aria-label="Scroll left">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <button class="scroll-arrow scroll-arrow--right" onclick="document.getElementById('trendingScroll').scrollBy({left:260,behavior:'smooth'})" aria-label="Scroll right">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+  <div class="scroll-row" id="trendingScroll">
     {% for p in trending_products[:6] %}
     <div class="scroll-card">
       <div class="card card-hover" style="padding:0;overflow:hidden">
