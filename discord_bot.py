@@ -29,13 +29,95 @@ from app import app, db, Product, User, ApiKey, Subscription
 
 # Discord Config
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
+XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
+
+# Legacy single-server channel IDs (kept as fallback)
 HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
-BRAND_HUNTER_CHANNEL_ID = int(os.environ.get('BRAND_HUNTER_CHANNEL_ID', 0))  # For daily brand hunter posts
+BRAND_HUNTER_CHANNEL_ID = int(os.environ.get('BRAND_HUNTER_CHANNEL_ID', 0))
 PRODUCT_LOOKUP_CHANNEL_ID = int(os.environ.get('PRODUCT_LOOKUP_CHANNEL_ID', 1461053839800139959))
 BLACKLIST_CHANNEL_ID = int(os.environ.get('BLACKLIST_CHANNEL_ID', 1440369747467174019))
-AI_CHAT_CHANNEL_ID = int(os.environ.get('AI_CHAT_CHANNEL_ID', 1473031651599847631))  # PRISM AI insights channel
-AI_CHAT_CATEGORY_ID = int(os.environ.get('AI_CHAT_CATEGORY_ID', 1444029219951874129))  # Category for private AI chat channels
-XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
+AI_CHAT_CHANNEL_ID = int(os.environ.get('AI_CHAT_CHANNEL_ID', 1473031651599847631))
+AI_CHAT_CATEGORY_ID = int(os.environ.get('AI_CHAT_CATEGORY_ID', 1444029219951874129))
+
+# ---------------------------------------------------------------------------
+# Multi-server guild config
+# ---------------------------------------------------------------------------
+# Env var format (JSON):
+#   GUILD_CONFIGS_JSON={"GUILD_ID":{"product_lookup_channel":123,"blacklist_channel":456,"ai_chat_channel":789,"ai_chat_category":111}}
+#
+# Falls back to legacy single-server env vars if GUILD_CONFIGS_JSON is empty.
+# ---------------------------------------------------------------------------
+
+GUILD_CONFIGS = {}
+_guild_configs_raw = os.environ.get('GUILD_CONFIGS_JSON', '').strip()
+if _guild_configs_raw:
+    try:
+        GUILD_CONFIGS = json.loads(_guild_configs_raw)
+        log.info(f"[Config] Loaded GUILD_CONFIGS for {len(GUILD_CONFIGS)} server(s): {list(GUILD_CONFIGS.keys())}")
+    except Exception as _e:
+        log.error(f"[Config] Failed to parse GUILD_CONFIGS_JSON: {_e}")
+
+# Fallback: build config from legacy env vars for the primary guild
+if not GUILD_CONFIGS:
+    _primary_guild = os.environ.get('DISCORD_GUILD_ID', '')
+    if _primary_guild:
+        GUILD_CONFIGS[_primary_guild] = {
+            'product_lookup_channel': PRODUCT_LOOKUP_CHANNEL_ID,
+            'blacklist_channel': BLACKLIST_CHANNEL_ID,
+            'ai_chat_channel': AI_CHAT_CHANNEL_ID,
+            'ai_chat_category': AI_CHAT_CATEGORY_ID,
+        }
+        log.info(f"[Config] Using legacy single-server config for guild {_primary_guild}")
+
+
+def get_guild_config(guild_id):
+    """Get the channel config for a guild, or empty dict if not configured."""
+    return GUILD_CONFIGS.get(str(guild_id), {})
+
+
+def is_product_lookup_channel(channel):
+    """Check if a channel is a product-lookup channel in ANY configured guild."""
+    if not hasattr(channel, 'guild') or not channel.guild:
+        return False
+    cfg = get_guild_config(channel.guild.id)
+    lookup_id = cfg.get('product_lookup_channel')
+    if lookup_id and channel.id == int(lookup_id):
+        return True
+    # Legacy fallback: match the old single env var
+    if channel.id == PRODUCT_LOOKUP_CHANNEL_ID:
+        return True
+    return False
+
+
+def is_ai_chat_channel(channel):
+    """Check if a channel is the AI chat channel in ANY configured guild."""
+    if not hasattr(channel, 'guild') or not channel.guild:
+        return False
+    cfg = get_guild_config(channel.guild.id)
+    ai_id = cfg.get('ai_chat_channel')
+    if ai_id and channel.id == int(ai_id):
+        return True
+    # Legacy fallback
+    if channel.id == AI_CHAT_CHANNEL_ID:
+        return True
+    return False
+
+
+def is_ai_chat_category(channel):
+    """Check if a channel is in an AI chat category in ANY configured guild."""
+    cat_id = getattr(channel, 'category_id', None)
+    if not cat_id:
+        return False
+    if not hasattr(channel, 'guild') or not channel.guild:
+        return False
+    cfg = get_guild_config(channel.guild.id)
+    cfg_cat = cfg.get('ai_chat_category')
+    if cfg_cat and cat_id == int(cfg_cat):
+        return True
+    # Legacy fallback
+    if cat_id == AI_CHAT_CATEGORY_ID:
+        return True
+    return False
 
 # Track active private AI channels: {user_id: channel_id}
 active_ai_channels = {}
@@ -511,9 +593,14 @@ def create_product_embed(p, title_prefix=""):
 @bot.event
 async def on_ready():
     print(f'🤖 Bot logged in as {bot.user}')
+    print(f'   Guilds: {[g.name for g in bot.guilds]}')
+    print(f'   Configured servers: {len(GUILD_CONFIGS)}')
+    for gid, cfg in GUILD_CONFIGS.items():
+        guild = bot.get_guild(int(gid)) if gid.isdigit() else None
+        gname = guild.name if guild else gid
+        print(f'   [{gname}] lookup={cfg.get("product_lookup_channel")}, blacklist={cfg.get("blacklist_channel")}')
     print(f'   Hot Products Channel: {HOT_PRODUCTS_CHANNEL_ID}')
     print(f'   Brand Hunter Channel: {BRAND_HUNTER_CHANNEL_ID}')
-    print(f'   Product Lookup Channel: {PRODUCT_LOOKUP_CHANNEL_ID}')
     
     # Start the daily hot products task
     if not daily_hot_products.is_running():
@@ -708,8 +795,8 @@ async def on_message(message):
     if message.author.bot:
         return
     
-    # ── PRISM AI Chat Channel ──────────────────────────────────────────
-    if message.channel.id == AI_CHAT_CHANNEL_ID:
+    # ── PRISM AI Chat Channel (any configured guild) ─────────────────
+    if is_ai_chat_channel(message.channel):
         user_msg = message.content.strip()
         # Ignore empty, very short, or bot-command messages
         if not user_msg or len(user_msg) < 2 or user_msg.startswith('!'):
@@ -748,7 +835,7 @@ async def on_message(message):
     if message.channel.id in active_ai_channels.values():
         await handle_ai_chat(message)
         return
-    if hasattr(message.channel, 'category_id') and message.channel.category_id == AI_CHAT_CATEGORY_ID:
+    if is_ai_chat_category(message.channel):
         if message.channel.name.startswith('ai-'):
             active_ai_channels[message.author.id] = message.channel.id
             await handle_ai_chat(message)
@@ -758,8 +845,8 @@ async def on_message(message):
     if hasattr(message.channel, 'parent_id') and message.channel.parent_id == INSPO_CHAT_CHANNEL_ID:
         log.info(f"📨 Message in thread {message.channel.id} ({getattr(message.channel, 'name', '?')}): {message.content[:50]}")
     
-    # Check if message is in the product lookup channel
-    if message.channel.id == PRODUCT_LOOKUP_CHANNEL_ID:
+    # Check if message is in any configured product lookup channel
+    if is_product_lookup_channel(message.channel):
         # Look for TikTok product links
         tiktok_patterns = [
             r'tiktok\.com.*product',
@@ -778,9 +865,9 @@ async def on_message(message):
             has_sub, _user = check_user_subscription(str(message.author.id))
             if not has_sub:
                 await message.reply(
-                    f"🔒 **PRISM Subscription Required**\n"
+                    f"🔒 **Vantage Subscription Required**\n"
                     f"Product lookups require an active subscription.\n"
-                    f"[Subscribe here]({PRISM_BASE_URL}/subscribe) for $19.99/month to unlock full access!",
+                    f"[Subscribe here]({PRISM_BASE_URL}/app/subscribe) for $19.99/month to unlock full access!",
                     mention_author=False,
                 )
                 return
@@ -1168,9 +1255,9 @@ async def lookup_command(ctx, *, query: str = None):
 
     if not has_sub:
         await ctx.reply(
-            f"🔒 **PRISM Subscription Required**\n"
+            f"🔒 **Vantage Subscription Required**\n"
             f"Product lookups require an active subscription.\n"
-            f"[Subscribe here]({PRISM_BASE_URL}/subscribe) for $19.99/month to unlock full access!",
+            f"[Subscribe here]({PRISM_BASE_URL}/app/subscribe) for $19.99/month to unlock full access!",
             mention_author=False,
         )
         return
