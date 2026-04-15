@@ -8,34 +8,38 @@
 </div>
 
 {# ===== FILTER BAR ===== #}
-<form class="filter-bar" id="filterForm" method="GET" action="/app/products" style="flex-wrap:wrap">
-  <select class="select" name="category" onchange="this.form.submit()">
-    <option value="">All Categories</option>
-    {% for cat in categories | default([]) %}
-      <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
-    {% endfor %}
-  </select>
-  <input type="number" class="input" name="min_commission" placeholder="Min comm %" style="width:110px"
-         value="{{ current_min_commission if current_min_commission else '' }}" onchange="this.form.submit()">
-  <input type="number" class="input" name="max_price" placeholder="Max price $" style="width:110px"
-         value="{{ current_max_price if current_max_price else '' }}" onchange="this.form.submit()">
-  <input type="number" class="input" name="max_videos" placeholder="Max videos" style="width:110px"
-         value="{{ current_max_videos if current_max_videos else '' }}" onchange="this.form.submit()">
-  <select class="select" name="sort" onchange="this.form.submit()" style="min-width:150px">
-    <option value="trending" {% if current_sort == 'trending' %}selected{% endif %}>Sort: Trending</option>
-    <option value="commission" {% if current_sort == 'commission' %}selected{% endif %}>Sort: Commission</option>
-    <option value="sales" {% if current_sort == 'sales' %}selected{% endif %}>Sort: 7d Sales</option>
-    <option value="videos_low" {% if current_sort == 'videos_low' %}selected{% endif %}>Sort: Fewest Videos</option>
-    <option value="new" {% if current_sort == 'new' %}selected{% endif %}>Sort: Newest</option>
-    <option value="gmv" {% if current_sort == 'gmv' %}selected{% endif %}>Sort: GMV</option>
-  </select>
-  <div class="topbar-search" style="flex:1;max-width:200px">
-    <i data-lucide="search"></i>
-    <input type="text" class="input" name="search" placeholder="Search..." value="{{ current_search | default('') }}">
+<form class="filter-card" id="filterForm" method="GET" action="/app/products">
+  <div class="filter-row">
+    <select class="filter-input" name="category" onchange="this.form.submit()">
+      <option value="">All Categories</option>
+      {% for cat in categories | default([]) %}
+        <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+    <input type="number" class="filter-input" name="min_commission" placeholder="Min comm %" style="width:110px"
+           value="{{ current_min_commission if current_min_commission else '' }}" onchange="this.form.submit()">
+    <input type="number" class="filter-input" name="max_price" placeholder="Max price $" style="width:110px"
+           value="{{ current_max_price if current_max_price else '' }}" onchange="this.form.submit()">
+    <input type="number" class="filter-input" name="max_videos" placeholder="Max videos" style="width:110px"
+           value="{{ current_max_videos if current_max_videos else '' }}" onchange="this.form.submit()">
+    <select class="filter-input" name="sort" onchange="this.form.submit()" style="min-width:155px">
+      <option value="trending" {% if current_sort == 'trending' %}selected{% endif %}>Sort: Trending</option>
+      <option value="commission" {% if current_sort == 'commission' %}selected{% endif %}>Sort: Commission</option>
+      <option value="sales" {% if current_sort == 'sales' %}selected{% endif %}>Sort: 7d Sales</option>
+      <option value="videos_low" {% if current_sort == 'videos_low' %}selected{% endif %}>Sort: Fewest Videos</option>
+      <option value="new" {% if current_sort == 'new' %}selected{% endif %}>Sort: Newest</option>
+      <option value="gmv" {% if current_sort == 'gmv' %}selected{% endif %}>Sort: Revenue</option>
+    </select>
+    <div style="position:relative;flex:1;min-width:140px">
+      <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-faint);pointer-events:none"></i>
+      <input type="text" class="filter-input" name="search" placeholder="Search products..." value="{{ current_search | default('') }}" style="padding-left:32px;width:100%">
+    </div>
   </div>
-  <button type="submit" class="btn btn-ghost btn-sm">Go</button>
-  {% if has_filters %}<a href="/app/products" class="btn btn-ghost btn-sm" style="color:var(--danger)">Clear</a>{% endif %}
-  <div class="filter-count">{{ total_count | default(0) }} products</div>
+  <div class="filter-actions">
+    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+    {% if has_filters %}<a href="/app/products" class="btn btn-ghost btn-sm">Reset</a>{% endif %}
+    <span class="filter-count-label">{{ total_count | default(0) }} products</span>
+  </div>
 </form>
 
 {# ===== VIEW TOGGLE ===== #}
@@ -54,55 +58,69 @@
   <table class="product-table">
     <thead>
       <tr>
-        <th style="width:40px">#</th>
-        <th>Product</th>
+        <th style="width:36px">#</th>
+        <th style="min-width:280px">Product Info</th>
+        <th>Revenue</th>
+        <th>Growth</th>
+        <th>Items Sold</th>
+        <th>Avg Price</th>
         <th>Commission</th>
-        <th>Price</th>
-        <th>7d Sales</th>
         <th>Creators</th>
         <th>Videos</th>
         <th>Score</th>
-        <th></th>
+        <th style="width:60px"></th>
       </tr>
     </thead>
     <tbody>
       {% for p in products %}
       {% set cat_lower = (p.category or '')|lower %}
       {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-food' if 'food' in cat_lower else 'cat-default'))))) %}
-      {% set score_color = '#36d9c4' if p.trending_score >= 80 else ('#f5a623' if p.trending_score >= 50 else '#ff5272') %}
+      {% set score_color = '#0d9488' if p.trending_score >= 80 else ('#d97706' if p.trending_score >= 50 else '#dc2626') %}
+      {% set growth = p.gmv_growth or 0 %}
       <tr>
-        <td style="color:var(--text-muted);font-weight:600">{{ loop.index + (page - 1) * 30 }}</td>
+        <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index + (page - 1) * 30 }}</td>
         <td>
           <div class="product-row-name">
             {% if p.cached_image_url or p.image_url %}
               <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy"
-                   onerror="this.style.display='none'">
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+              <div class="product-row-thumb-fallback {{ cat_class }}" style="display:none">{{ (p.product_name or '?')[0] | upper }}</div>
             {% else %}
               <div class="product-row-thumb-fallback {{ cat_class }}">{{ (p.product_name or '?')[0] | upper }}</div>
             {% endif %}
             <div style="min-width:0">
-              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px">{{ p.product_name }}</a>
-              {% if p.category %}<span style="font-size:11px;color:var(--text-muted)">{{ p.category }}</span>{% endif %}
+              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">{{ p.product_name }}</a>
+              {% if p.category %}<span style="font-size:11px;color:var(--text-faint)">{{ p.category }}</span>{% endif %}
             </div>
           </div>
         </td>
-        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
-        <td>${{ "%.2f" | format(p.price or 0) }}</td>
-        <td style="font-weight:600">{{ "{:,}".format(p.sales_7d or 0) }}</td>
-        <td>{{ p.influencer_count or 0 }}</td>
-        <td>{{ p.video_count or 0 }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">${{ p.gmv | format_number if p.gmv else '—' }}</td>
         <td>
-          <div class="score-ring-wrap" style="width:32px;height:32px">
-            <svg viewBox="0 0 36 36" width="32" height="32">
-              <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="3"/>
+          {% if growth > 0 %}
+            <span class="growth-badge growth-badge--up">+{{ "%.0f" | format(growth) }}%</span>
+          {% elif growth < 0 %}
+            <span class="growth-badge growth-badge--down">{{ "%.0f" | format(growth) }}%</span>
+          {% else %}
+            <span class="growth-badge growth-badge--flat">—</span>
+          {% endif %}
+        </td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
+        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
+        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
+        <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.influencer_count or 0) }}</td>
+        <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.video_count or 0) }}</td>
+        <td>
+          <div class="score-ring-wrap" style="width:30px;height:30px">
+            <svg viewBox="0 0 36 36" width="30" height="30">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
               <circle cx="18" cy="18" r="15.9" fill="none" stroke-width="3" stroke-linecap="round"
                       stroke-dasharray="{{ p.trending_score }}, 100" stroke="{{ score_color }}"
                       transform="rotate(-90 18 18)"/>
             </svg>
-            <span class="score-number" style="font-size:10px">{{ p.trending_score }}</span>
+            <span class="score-number" style="font-size:9px">{{ p.trending_score }}</span>
           </div>
         </td>
-        <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm">View</a></td>
+        <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
       </tr>
       {% endfor %}
     </tbody>

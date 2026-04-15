@@ -311,6 +311,16 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 
 /* 8. FILTER BAR ============================================================ */
 .filter-bar{position:sticky;top:var(--topbar-h);z-index:40;display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:var(--space-5);box-shadow:var(--shadow-sm)}
+
+/* Filter card (products page) */
+.filter-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:var(--space-5);box-shadow:var(--shadow-sm)}
+.filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.filter-input{height:36px;padding:0 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;transition:border-color var(--dur-fast)}
+.filter-input:focus{border-color:var(--accent)}
+.filter-input::placeholder{color:var(--text-faint)}
+select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:28px;cursor:pointer}
+.filter-actions{display:flex;align-items:center;gap:8px}
+.filter-count-label{margin-left:auto;font-size:13px;color:var(--text-muted);font-weight:500}
 .filter-bar .input,.filter-bar .select{width:auto;min-width:160px;height:40px;background:var(--bg-surface)}
 .filter-count{font-size:var(--text-sm);color:var(--text-secondary);margin-left:auto;white-space:nowrap}
 
@@ -750,21 +760,21 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .view-toggle-btn .lucide{width:16px;height:16px}
 
 /* 35. PRODUCT TABLE VIEW =================================================== */
-.product-table-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--border)}
-.product-table{width:100%;border-collapse:collapse;font-size:var(--text-sm);font-variant-numeric:tabular-nums}
-.product-table th{text-align:left;padding:10px 14px;font-weight:600;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);background:var(--bg-elevated);border-bottom:1px solid var(--border);white-space:nowrap}
-.product-table td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
-.product-table tbody tr{transition:background var(--dur-fast)}
+.product-table-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--bg-surface);box-shadow:var(--shadow-sm)}
+.product-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.product-table th{text-align:left;padding:11px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);background:var(--bg-elevated);border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:2}
+.product-table td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text-primary)}
+.product-table tbody tr{transition:background 100ms ease}
 .product-table tbody tr:hover{background:var(--bg-hover)}
 .product-table tbody tr:last-child td{border-bottom:none}
-.product-table .product-row-name{display:flex;align-items:center;gap:10px;min-width:200px}
-.product-row-thumb{width:40px;height:40px;border-radius:var(--radius-sm);object-fit:cover;background:var(--bg-elevated);flex-shrink:0}
-.product-row-thumb-fallback{width:40px;height:40px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:rgba(255,255,255,.5);flex-shrink:0}
-.product-table .commission-cell{color:var(--accent);font-weight:700;font-size:var(--text-base)}
-.product-table .growth-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--radius-full)}
+.product-table .product-row-name{display:flex;align-items:center;gap:12px;min-width:240px}
+.product-row-thumb{width:48px;height:48px;border-radius:var(--radius);object-fit:cover;background:var(--bg-elevated);flex-shrink:0;border:1px solid var(--border)}
+.product-row-thumb-fallback{width:48px;height:48px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:rgba(255,255,255,.5);flex-shrink:0}
+.product-table .commission-cell{color:var(--accent);font-weight:700;font-size:15px}
+.product-table .growth-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:var(--radius-full)}
 .growth-badge--up{background:var(--success-dim);color:var(--success)}
 .growth-badge--down{background:var(--danger-dim);color:var(--danger)}
-.growth-badge--flat{background:var(--bg-hover);color:var(--text-muted)}
+.growth-badge--flat{background:transparent;color:var(--text-faint)}
 
 /* 36. FEE CALCULATOR ======================================================= */
 .fee-calc{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-5)}
