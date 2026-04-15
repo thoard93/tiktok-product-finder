@@ -328,12 +328,63 @@ def product_detail(product_id):
 @views_bp.route('/app/analytics')
 @login_required
 def analytics():
+    import json
+    from sqlalchemy import func
     ctx = _base_context('analytics')
 
-    ctx['top_products'] = Product.query.filter(
-        _active_filter
-    ).order_by(desc(Product.gmv)).limit(10).all()
+    days = request.args.get('days', 30, type=int)
+    if days not in (7, 30, 90):
+        days = 30
+    ctx['days'] = days
 
+    base_q = Product.query.filter(_active_filter, Product.video_count >= 5)
+
+    # KPI stats
+    ctx['total_products'] = base_q.count()
+    ctx['total_gmv'] = db.session.query(func.sum(Product.gmv)).filter(
+        _active_filter, Product.video_count >= 5).scalar() or 0
+    ctx['avg_commission'] = (db.session.query(func.avg(Product.commission_rate)).filter(
+        _active_filter, Product.video_count >= 5, Product.commission_rate > 0).scalar() or 0) * 100
+    ctx['total_creators'] = db.session.query(func.sum(Product.influencer_count)).filter(
+        _active_filter, Product.video_count >= 5).scalar() or 0
+
+    # Top categories by GMV
+    cat_data = db.session.query(
+        Product.category, func.sum(Product.gmv).label('total_gmv'), func.count().label('cnt')
+    ).filter(
+        _active_filter, Product.video_count >= 5,
+        Product.category.isnot(None), Product.category != ''
+    ).group_by(Product.category).order_by(desc('total_gmv')).limit(8).all()
+    ctx['category_labels'] = json.dumps([c[0] for c in cat_data])
+    ctx['category_values'] = json.dumps([round(c[1] or 0, 0) for c in cat_data])
+
+    # Commission rate distribution
+    comm_ranges = []
+    for low, high, label in [(0, 0.05, '0-5%'), (0.05, 0.10, '5-10%'), (0.10, 0.15, '10-15%'),
+                              (0.15, 0.20, '15-20%'), (0.20, 0.25, '20-25%'), (0.25, 1.0, '25%+')]:
+        cnt = base_q.filter(Product.commission_rate >= low, Product.commission_rate < high).count()
+        comm_ranges.append({'label': label, 'count': cnt})
+    ctx['comm_labels'] = json.dumps([r['label'] for r in comm_ranges])
+    ctx['comm_values'] = json.dumps([r['count'] for r in comm_ranges])
+
+    # Score distribution
+    high_score = base_q.filter(Product.sales_7d > 5000).count()
+    mid_score = base_q.filter(Product.sales_7d.between(1000, 5000)).count()
+    low_score = base_q.filter(Product.sales_7d < 1000).count()
+    ctx['score_labels'] = json.dumps(['High Demand (5K+)', 'Medium (1K-5K)', 'Emerging (<1K)'])
+    ctx['score_values'] = json.dumps([high_score, mid_score, low_score])
+
+    # Price distribution
+    price_ranges = []
+    for low, high, label in [(0, 10, '<$10'), (10, 25, '$10-25'), (25, 50, '$25-50'),
+                              (50, 100, '$50-100'), (100, 9999, '$100+')]:
+        cnt = base_q.filter(Product.price >= low, Product.price < high).count()
+        price_ranges.append({'label': label, 'count': cnt})
+    ctx['price_labels'] = json.dumps([r['label'] for r in price_ranges])
+    ctx['price_values'] = json.dumps([r['count'] for r in price_ranges])
+
+    # Top 10 products by GMV
+    ctx['top_products'] = base_q.order_by(desc(Product.gmv)).limit(10).all()
     for p in ctx['top_products']:
         p.trending_score = _calc_score(p)
 

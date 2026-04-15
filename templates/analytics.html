@@ -5,69 +5,109 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">Analytics</h1>
-  <p class="page-subtitle">Store-wide performance insights across all tracked products</p>
+  <p class="page-subtitle">Market insights across all tracked TikTok Shop products</p>
 </div>
 
-{# Date range tabs #}
-<div class="pill-tabs mb-6">
-  <button class="pill-tab active" onclick="setRange(7,this)">7 days</button>
-  <button class="pill-tab" onclick="setRange(30,this)">30 days</button>
-  <button class="pill-tab" onclick="setRange(90,this)">90 days</button>
+{# ===== KPI CARDS ===== #}
+<div class="stat-grid mb-6">
+  <div class="stat-card">
+    <div class="stat-label">Total Products</div>
+    <div class="stat-value">{{ total_products | format_number }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total GMV</div>
+    <div class="stat-value">${{ total_gmv | format_number }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg Commission</div>
+    <div class="stat-value">{{ "%.1f" | format(avg_commission) }}%</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Creators</div>
+    <div class="stat-value">{{ total_creators | format_number }}</div>
+  </div>
 </div>
 
-{# ===== CHART GRID ===== #}
+{# ===== CHARTS ===== #}
 <div class="chart-grid mb-6">
   <div class="chart-card">
-    <div class="chart-title">Top Categories by GMV</div>
-    <div class="chart-wrap"><canvas id="analyticsGmvChart"></canvas></div>
+    <div class="chart-title">Top Categories by Revenue</div>
+    <div class="chart-wrap"><canvas id="catChart"></canvas></div>
   </div>
   <div class="chart-card">
-    <div class="chart-title">Trending Score Distribution</div>
-    <div class="chart-wrap"><canvas id="analyticsScoreChart"></canvas></div>
+    <div class="chart-title">Sales Volume Distribution</div>
+    <div class="chart-wrap"><canvas id="scoreChart"></canvas></div>
   </div>
   <div class="chart-card">
-    <div class="chart-title">Commission Rate Histogram</div>
-    <div class="chart-wrap"><canvas id="analyticsCommChart"></canvas></div>
+    <div class="chart-title">Commission Rate Distribution</div>
+    <div class="chart-wrap"><canvas id="commChart"></canvas></div>
   </div>
   <div class="chart-card">
-    <div class="chart-title">Products Added Over Time</div>
-    <div class="chart-wrap"><canvas id="analyticsTimeChart"></canvas></div>
+    <div class="chart-title">Price Range Distribution</div>
+    <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
   </div>
 </div>
 
-{# ===== TOP 10 TABLE ===== #}
+{# ===== TOP PRODUCTS TABLE ===== #}
 <div class="section-header">
-  <h2 class="section-title">Top 10 Products</h2>
+  <h2 class="section-title">Top 10 Products by Revenue</h2>
 </div>
 
-<div class="table-wrap">
-  <table class="table" id="analyticsTopTable">
+<div class="product-table-wrap">
+  <table class="product-table">
     <thead>
       <tr>
-        <th style="width:50px">Rank</th>
-        <th class="sortable" onclick="sortTable('analyticsTopTable',1)">Product</th>
-        <th class="sortable" onclick="sortTable('analyticsTopTable',2)">Category</th>
-        <th class="sortable" onclick="sortTable('analyticsTopTable',3)">Commission</th>
-        <th class="sortable" onclick="sortTable('analyticsTopTable',4)">Score</th>
-        <th class="sortable" onclick="sortTable('analyticsTopTable',5)">GMV Est</th>
+        <th style="width:36px">#</th>
+        <th style="min-width:240px">Product</th>
+        <th>Revenue</th>
+        <th>Commission</th>
+        <th>Price</th>
+        <th>7d Sales</th>
+        <th>Creators</th>
+        <th>Videos</th>
+        <th>Score</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
       {% if top_products %}
-        {% for p in top_products[:10] %}
+        {% for p in top_products %}
+        {% set score_color = '#0d9488' if p.trending_score >= 60 else ('#d97706' if p.trending_score >= 35 else '#dc2626') %}
         <tr>
+          <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
           <td>
-            <div class="rank-badge {{ 'rank-1' if loop.index == 1 else ('rank-2' if loop.index == 2 else ('rank-3' if loop.index == 3 else 'rank-default')) }}">{{ loop.index }}</div>
+            <div class="product-row-name">
+              {% if p.cached_image_url or p.image_url %}
+                <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy" onerror="this.style.display='none'">
+              {% endif %}
+              <div style="min-width:0">
+                <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>
+                {% if p.category %}<span style="font-size:11px;color:var(--text-faint)">{{ p.category }}</span>{% endif %}
+              </div>
+            </div>
           </td>
-          <td><a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:500">{{ p.product_name | truncate(40) }}</a></td>
-          <td><span class="badge badge-muted">{{ p.category | default('--') }}</span></td>
-          <td style="color:var(--accent);font-weight:600">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
-          <td><span class="badge {{ 'badge-green' if p.trending_score >= 80 else ('badge-gold' if p.trending_score >= 50 else 'badge-red') }}">{{ p.trending_score }}</span></td>
-          <td>${{ "{:,.0f}".format(p.gmv or 0) }}</td>
+          <td style="font-weight:600;font-variant-numeric:tabular-nums">${{ p.gmv | format_number }}</td>
+          <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
+          <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
+          <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
+          <td>{{ "{:,}".format(p.influencer_count or 0) }}</td>
+          <td>{{ "{:,}".format(p.video_count or 0) }}</td>
+          <td>
+            <div class="score-ring-wrap" style="width:30px;height:30px">
+              <svg viewBox="0 0 36 36" width="30" height="30">
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke-width="3" stroke-linecap="round"
+                        stroke-dasharray="{{ p.trending_score }}, 100" stroke="{{ score_color }}"
+                        transform="rotate(-90 18 18)"/>
+              </svg>
+              <span class="score-number" style="font-size:9px">{{ p.trending_score }}</span>
+            </div>
+          </td>
+          <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
         </tr>
         {% endfor %}
       {% else %}
-        <tr><td colspan="6" class="text-center text-muted" style="padding:var(--space-8)">No product data available yet</td></tr>
+        <tr><td colspan="10" class="text-center text-muted" style="padding:var(--space-8)">No product data available yet</td></tr>
       {% endif %}
     </tbody>
   </table>
@@ -75,43 +115,66 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/dashboard.js"></script>
 <script>
-/* Category GMV */
-createBarChart("analyticsGmvChart",
-  ["Beauty", "Health", "Home", "Electronics", "Fashion", "Food"],
-  [84200, 62100, 45800, 38400, 31200, 22600],
-  [CHART_COLORS.accent, CHART_COLORS.teal, CHART_COLORS.success, CHART_COLORS.gold, CHART_COLORS.purple, CHART_COLORS.orange]
-);
+var chartFont = {family: "Satoshi", size: 11};
+var gridColor = "rgba(0,0,0,0.04)";
+var tickColor = "var(--text-faint)";
 
-/* Score Distribution */
-createDoughnutChart("analyticsScoreChart",
-  ["High (80+)", "Medium (50-80)", "Low (<50)"],
-  [32, 45, 23],
-  [CHART_COLORS.success, CHART_COLORS.gold, CHART_COLORS.danger]
-);
+var defaultScales = {
+  x: {grid:{color:gridColor}, ticks:{color:"#9ca3af",font:chartFont}, border:{display:false}},
+  y: {grid:{color:gridColor}, ticks:{color:"#9ca3af",font:chartFont}, border:{display:false}, beginAtZero:true}
+};
 
-/* Commission Histogram */
-createBarChart("analyticsCommChart",
-  ["0-5%", "5-10%", "10-15%", "15-20%", "20-25%", "25%+"],
-  [12, 28, 45, 34, 18, 8],
-  CHART_COLORS.teal
-);
-
-/* Products Over Time */
-(function() {
-  var labels = [];
-  for (var i = 0; i < 14; i++) {
-    var d = new Date(); d.setDate(d.getDate() - 13 + i);
-    labels.push(d.toLocaleDateString("en-US", {month:"short", day:"numeric"}));
+/* Category bar chart */
+new Chart(document.getElementById("catChart"), {
+  type: "bar",
+  data: {
+    labels: {{ category_labels | safe }},
+    datasets: [{
+      data: {{ category_values | safe }},
+      backgroundColor: ["#e8384d","#0d9488","#d97706","#7c3aed","#059669","#ea580c","#2563eb","#db2777"],
+      borderRadius: 6, borderSkipped: false
+    }]
+  },
+  options: {responsive:true, maintainAspectRatio:false, indexAxis:"y",
+    plugins:{legend:{display:false}},
+    scales: {
+      x:{grid:{color:gridColor},ticks:{color:"#9ca3af",font:chartFont,callback:function(v){return "$"+v.toLocaleString()}},border:{display:false}},
+      y:{grid:{display:false},ticks:{color:"#4b5563",font:{...chartFont,size:12}},border:{display:false}}
+    }
   }
-  createLineChart("analyticsTimeChart", labels, [8,12,6,15,22,18,25,14,20,28,16,32,24,19], CHART_COLORS.accent);
-})();
+});
 
-function setRange(days, btn) {
-  document.querySelectorAll(".pill-tab").forEach(function(t){ t.classList.remove("active"); });
-  btn.classList.add("active");
-  /* In production: refetch data from /api/analytics?days=N */
-}
+/* Score / sales distribution doughnut */
+new Chart(document.getElementById("scoreChart"), {
+  type: "doughnut",
+  data: {
+    labels: {{ score_labels | safe }},
+    datasets: [{data: {{ score_values | safe }}, backgroundColor:["#0d9488","#d97706","#9ca3af"], borderWidth:0, spacing:2}]
+  },
+  options: {responsive:true, maintainAspectRatio:false, cutout:"62%",
+    plugins:{legend:{display:true, position:"bottom", labels:{color:"#6b7280",font:chartFont,padding:14,usePointStyle:true,pointStyleWidth:8}}}
+  }
+});
+
+/* Commission histogram */
+new Chart(document.getElementById("commChart"), {
+  type: "bar",
+  data: {
+    labels: {{ comm_labels | safe }},
+    datasets: [{data: {{ comm_values | safe }}, backgroundColor:"#0d9488", borderRadius:6, borderSkipped:false}]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:defaultScales}
+});
+
+/* Price distribution */
+new Chart(document.getElementById("priceChart"), {
+  type: "bar",
+  data: {
+    labels: {{ price_labels | safe }},
+    datasets: [{data: {{ price_values | safe }}, backgroundColor:"#e8384d", borderRadius:6, borderSkipped:false}]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:defaultScales}
+});
 </script>
 {% endblock %}
