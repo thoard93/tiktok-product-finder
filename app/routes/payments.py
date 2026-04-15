@@ -177,33 +177,8 @@ def create_subscription():
         'custom_id': str(user.id),
     }
 
-    # Apply coupon as trial discount on first billing cycle
-    if coupon_code and coupon_code in COUPON_CODES:
-        coupon = COUPON_CODES[coupon_code]
-        discount_pct = coupon['discount_percent']
-        discounted_price = round(19.99 * (1 - discount_pct / 100), 2)
-        sub_payload['plan'] = {
-            'billing_cycles': [
-                {
-                    'frequency': {'interval_unit': 'MONTH', 'interval_count': 1},
-                    'tenure_type': 'TRIAL',
-                    'sequence': 1,
-                    'total_cycles': 1,
-                    'pricing_scheme': {
-                        'fixed_price': {'value': str(discounted_price), 'currency_code': 'USD'},
-                    },
-                },
-                {
-                    'frequency': {'interval_unit': 'MONTH', 'interval_count': 1},
-                    'tenure_type': 'REGULAR',
-                    'sequence': 2,
-                    'total_cycles': 0,
-                    'pricing_scheme': {
-                        'fixed_price': {'value': '19.99', 'currency_code': 'USD'},
-                    },
-                },
-            ],
-        }
+    # Coupon is stored in the subscription record after creation
+    # (PayPal doesn't support inline billing cycle overrides on all plan types)
 
     try:
         resp = requests.post(
