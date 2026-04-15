@@ -19,12 +19,12 @@
     <div class="stat-value">${{ total_gmv | format_number }}</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Avg Commission</div>
-    <div class="stat-value">{{ "%.1f" | format(avg_commission) }}%</div>
-  </div>
-  <div class="stat-card">
     <div class="stat-label">Total Creators</div>
     <div class="stat-value">{{ total_creators | format_number }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Categories</div>
+    <div class="stat-value">{{ categories | length if categories else 0 }}</div>
   </div>
 </div>
 

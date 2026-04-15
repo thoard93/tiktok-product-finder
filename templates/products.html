@@ -60,14 +60,14 @@
       <tr>
         <th style="width:36px">#</th>
         <th style="min-width:280px">Product Info</th>
-        <th>Revenue</th>
+        <th><a href="?sort=gmv&{{ filter_params }}" class="th-sort {% if current_sort == 'gmv' %}th-sort--active{% endif %}">Revenue &#x25BE;</a></th>
         <th>Growth</th>
-        <th>Items Sold</th>
+        <th><a href="?sort=sales&{{ filter_params }}" class="th-sort {% if current_sort == 'sales' %}th-sort--active{% endif %}">Items Sold &#x25BE;</a></th>
         <th>Avg Price</th>
-        <th>Commission</th>
+        <th><a href="?sort=commission&{{ filter_params }}" class="th-sort {% if current_sort == 'commission' %}th-sort--active{% endif %}">Commission &#x25BE;</a></th>
         <th>Creators</th>
-        <th>Videos</th>
-        <th>Score</th>
+        <th><a href="?sort=videos_low&{{ filter_params }}" class="th-sort {% if current_sort == 'videos_low' %}th-sort--active{% endif %}">Videos &#x25B4;</a></th>
+        <th><a href="?sort=trending&{{ filter_params }}" class="th-sort {% if current_sort == 'trending' %}th-sort--active{% endif %}">Score &#x25BE;</a></th>
         <th style="width:60px"></th>
       </tr>
     </thead>
@@ -89,8 +89,15 @@
               <div class="product-row-thumb-fallback {{ cat_class }}">{{ (p.product_name or '?')[0] | upper }}</div>
             {% endif %}
             <div style="min-width:0">
-              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">{{ p.product_name }}</a>
-              {% if p.category %}<span style="font-size:11px;color:var(--text-faint)">{{ p.category }}</span>{% endif %}
+              <div style="display:flex;align-items:center;gap:4px">
+                <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>
+                {% if p.is_hot %}<span style="font-size:10px;background:#ff5272;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">HOT</span>{% endif %}
+                {% if p.lifecycle == 'rising' %}<span style="font-size:10px;background:var(--success-dim);color:var(--success);padding:1px 5px;border-radius:4px;font-weight:600">&#x2197;</span>{% endif %}
+              </div>
+              <div style="font-size:11px;color:var(--text-faint);display:flex;gap:6px">
+                {% if p.seller_name and p.seller_name != 'Unknown' %}<span>{{ p.seller_name | truncate(20) }}</span><span>&middot;</span>{% endif %}
+                {% if p.category %}<span>{{ p.category }}</span>{% endif %}
+              </div>
             </div>
           </div>
         </td>
@@ -197,9 +204,9 @@
       </div>
 
       <div class="product-card-stats">
-        <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d</small></span></div>
-        <div class="product-card-stat"><i data-lucide="users" style="width:12px;height:12px"></i><span>{{ p.influencer_count or 0 }}</span></div>
-        <div class="product-card-stat"><i data-lucide="video" style="width:12px;height:12px"></i><span>{{ p.video_count or 0 }}</span></div>
+        <div class="product-card-stat"><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d sales</small></span></div>
+        <div class="product-card-stat"><span>{{ "{:,}".format(p.influencer_count or 0) }} <small>creators</small></span></div>
+        <div class="product-card-stat"><span>{{ "{:,}".format(p.video_count or 0) }} <small>videos</small></span></div>
       </div>
 
       <div class="product-card-actions">

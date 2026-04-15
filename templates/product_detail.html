@@ -23,7 +23,12 @@
     <div class="flex gap-3 items-center mb-4" style="flex-wrap:wrap">
       {% if product.category %}<span class="badge badge-muted">{{ product.category }}</span>{% endif %}
       <span class="badge badge-accent" style="font-size:var(--text-sm);padding:4px 12px">{{ "%.0f" | format((product.commission_rate or 0) * 100) }}% commission</span>
-      <span class="text-sm text-muted">${{ "%.2f" | format(product.price or 0) }}</span>
+      <span class="text-sm" style="font-weight:600;color:var(--text-primary)">${{ "%.2f" | format(product.price or 0) }}</span>
+      {% if product.original_price and product.original_price > product.price %}
+        <span class="text-sm text-muted" style="text-decoration:line-through">${{ "%.2f" | format(product.original_price) }}</span>
+        {% set discount = ((1 - product.price / product.original_price) * 100) | round | int %}
+        <span style="font-size:12px;font-weight:700;color:#fff;background:#e8384d;padding:2px 6px;border-radius:4px">-{{ discount }}%</span>
+      {% endif %}
       {% if product.lifecycle == 'rising' %}
         <span class="badge badge-green" style="font-size:12px;padding:3px 10px">&#x2197; Rising</span>
       {% elif product.lifecycle == 'peak' %}
@@ -43,6 +48,13 @@
         <div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800">${{ "{:,.0f}".format(product.gmv_30d or 0) }}</div>
       </div>
     </div>
+
+    {% if product.seller_name and product.seller_name != 'Unknown' %}
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:var(--space-3)">
+      Sold by <strong style="color:var(--text-primary)">{{ product.seller_name }}</strong>
+      {% if product.has_free_shipping %}<span class="badge badge-teal" style="font-size:10px;margin-left:4px">Free shipping</span>{% endif %}
+    </div>
+    {% endif %}
 
     <div class="flex gap-4 mb-4" style="flex-wrap:wrap">
       <div class="text-sm"><span class="text-faint">Videos (7d):</span> <strong>{{ product.video_7d if product.video_7d else '--' }}</strong></div>

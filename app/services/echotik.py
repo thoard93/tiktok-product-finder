@@ -262,11 +262,16 @@ def fetch_trending_products(page: int = 1, category: Optional[str] = None,
     Returns:
         List of dicts, each with the canonical field set.
     """
+    # Sort fields: 1=total_sale, 2=revenue, 3=commission, 4=7d_sales, 5=video_count
+    # Rotate sort field based on page to discover different products
+    sort_fields = [4, 2, 3, 5, 1]  # 7d sales, revenue, commission, videos, total sales
+    sort_field = sort_fields[(page - 1) % len(sort_fields)]
+
     params = {
         'region': 'US',
         'page_num': page,
         'page_size': min(page_size, 10),  # EchoTik API hard limit is 10
-        'product_sort_field': 4,   # Sort by 7-day sales (descending)
+        'product_sort_field': sort_field,
         'sort_type': 1,            # Descending
     }
     if category:

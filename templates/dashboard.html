@@ -65,9 +65,9 @@
           <div class="product-card-commission">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</div>
           <div class="product-card-price">${{ "%.2f" | format(p.price or 0) }}</div>
           <div class="product-card-stats" style="margin:var(--space-2) 0">
-            <div class="product-card-stat"><i data-lucide="shopping-cart" style="width:12px;height:12px"></i><span>{{ "{:,}".format(p.sales_7d or 0) }}</span></div>
-            <div class="product-card-stat"><i data-lucide="users" style="width:12px;height:12px"></i><span>{{ p.influencer_count or 0 }}</span></div>
-            <div class="product-card-stat"><i data-lucide="video" style="width:12px;height:12px"></i><span>{{ p.video_count or 0 }}</span></div>
+            <div class="product-card-stat"><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d sales</small></span></div>
+            <div class="product-card-stat"><span>{{ "{:,}".format(p.influencer_count or 0) }} <small>creators</small></span></div>
+            <div class="product-card-stat"><span>{{ "{:,}".format(p.video_count or 0) }} <small>videos</small></span></div>
           </div>
           <div style="margin-top:var(--space-3)">
             <a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm w-full">View Details</a>

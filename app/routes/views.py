@@ -155,6 +155,49 @@ def _calc_lifecycle(p):
     return 'peak'
 
 
+def _is_seasonal_hot(p):
+    """Check if a product matches current seasonal trends using keywords."""
+    from datetime import datetime
+    month = datetime.utcnow().month
+    name = (p.product_name or '').lower()
+    cat = (p.category or '').lower()
+
+    # Seasonal keyword sets
+    summer = ['sunscreen', 'spf', 'sun protection', 'swimsuit', 'bikini', 'swimwear',
+              'pool float', 'beach', 'outdoor', 'patio', 'grill', 'bbq', 'cooler',
+              'fan', 'cooling', 'ice', 'summer', 'tank top', 'shorts', 'sandal',
+              'sunglasses', 'uv', 'water bottle', 'hydration', 'mosquito', 'bug spray',
+              'aloe vera', 'after sun', 'self tanner', 'tanning']
+    winter = ['jacket', 'coat', 'sweater', 'hoodie', 'beanie', 'glove', 'scarf',
+              'thermal', 'heated', 'blanket', 'hot chocolate', 'moisturizer',
+              'lip balm', 'humidifier', 'heater', 'winter', 'warm', 'fleece']
+    spring = ['allergy', 'garden', 'planting', 'seed', 'cleaning', 'organize',
+              'spring', 'floral', 'rain', 'umbrella', 'lightweight']
+    fall = ['pumpkin', 'halloween', 'costume', 'fall', 'autumn', 'flannel',
+            'boots', 'candle', 'cinnamon', 'apple cider', 'thanksgiving']
+    back_to_school = ['backpack', 'school', 'notebook', 'pencil', 'laptop',
+                      'desk', 'study', 'college', 'dorm']
+
+    # Determine current season keywords
+    if month in (6, 7, 8):  # Summer
+        hot_keywords = summer
+    elif month in (12, 1, 2):  # Winter
+        hot_keywords = winter
+    elif month in (3, 4, 5):  # Spring
+        hot_keywords = spring
+    elif month in (9, 10, 11):  # Fall
+        hot_keywords = fall + (back_to_school if month == 9 else [])
+    else:
+        hot_keywords = []
+
+    # Year-round hot categories
+    always_hot = ['vitamin', 'supplement', 'protein', 'collagen', 'probiotic',
+                  'teeth whitening', 'skincare set', 'led strip']
+
+    all_keywords = hot_keywords + always_hot
+    return any(kw in name for kw in all_keywords)
+
+
 def _score_breakdown(p):
     """Return a dict of individual score components for display."""
     import math
@@ -416,6 +459,15 @@ def _products_list_inner(ctx):
     ctx['current_max_price'] = max_price
     ctx['current_max_videos'] = max_videos
 
+    # Build filter params string for sort header links
+    params = []
+    if category: params.append(f'category={category}')
+    if search: params.append(f'search={search}')
+    if min_comm: params.append(f'min_commission={min_comm}')
+    if max_price: params.append(f'max_price={max_price}')
+    if max_videos: params.append(f'max_videos={max_videos}')
+    ctx['filter_params'] = '&'.join(params)
+
     # Load TAP data for products (safe — won't crash if table missing)
     tap_map = {}
     try:
@@ -433,6 +485,7 @@ def _products_list_inner(ctx):
         p.trending_score = _calc_score(p)
         p.lifecycle = _calc_lifecycle(p)
         p._tap = tap_map.get(p.product_id)
+        p.is_hot = _is_seasonal_hot(p)
 
     ctx['products'] = products
     ctx['page'] = page
@@ -596,6 +649,7 @@ def analytics():
     ).group_by(Product.category).order_by(desc('total_gmv')).limit(8).all()
     ctx['category_labels'] = json.dumps([c[0] for c in cat_data])
     ctx['category_values'] = json.dumps([round(c[1] or 0, 0) for c in cat_data])
+    ctx['categories'] = [c[0] for c in cat_data]
 
     # Commission rate distribution
     comm_ranges = []
