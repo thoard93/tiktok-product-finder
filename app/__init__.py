@@ -267,14 +267,14 @@ def create_app():
     def inject_campaign_banner():
         try:
             from app.models import CampaignBanner
-            from datetime import datetime as dt
-            now = dt.utcnow()
-            # Get highest-priority active campaign that's either live or upcoming
+            from datetime import datetime as dt, timedelta as td
+            now_est = dt.utcnow() - td(hours=5)
+            # Get highest-priority active campaign that's either live or upcoming (EST)
             campaign = CampaignBanner.query.filter(
                 CampaignBanner.is_active == True,
                 db.or_(
                     CampaignBanner.ends_at.is_(None),
-                    CampaignBanner.ends_at > now
+                    CampaignBanner.ends_at > now_est
                 )
             ).order_by(CampaignBanner.priority.desc()).first()
             return {'active_campaign': campaign}

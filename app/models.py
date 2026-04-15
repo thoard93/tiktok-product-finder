@@ -490,11 +490,16 @@ class CampaignBanner(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @staticmethod
+    def _now_est():
+        """Current time in EST (UTC-5)"""
+        return datetime.utcnow() - timedelta(hours=5)
+
     def is_live(self):
-        """Check if campaign is currently active and within date range"""
+        """Check if campaign is currently active and within date range (EST)"""
         if not self.is_active:
             return False
-        now = datetime.utcnow()
+        now = self._now_est()
         if self.starts_at and now < self.starts_at:
             return False  # Not started yet — but show countdown
         if self.ends_at and now > self.ends_at:
@@ -502,10 +507,10 @@ class CampaignBanner(db.Model):
         return True
 
     def is_upcoming(self):
-        """Returns True if campaign has a future start date"""
+        """Returns True if campaign has a future start date (EST)"""
         if not self.is_active:
             return False
-        now = datetime.utcnow()
+        now = self._now_est()
         return self.starts_at and now < self.starts_at
 
     def to_dict(self):
