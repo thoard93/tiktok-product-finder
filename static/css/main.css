@@ -165,7 +165,7 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 .main-area{flex:1;margin-left:var(--sidebar-w);min-height:100vh;display:flex;flex-direction:column}
 
 /* Topbar */
-.topbar{position:sticky;top:0;height:var(--topbar-h);display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-6);background:rgba(13,13,15,.82);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);z-index:50}
+.topbar{position:sticky;top:0;height:calc(var(--topbar-h) + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px);display:flex;align-items:center;gap:var(--space-4);padding-left:var(--space-6);padding-right:var(--space-6);background:var(--bg-surface);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);z-index:50}
 .topbar-search{flex:1;max-width:420px;position:relative}
 .topbar-search .lucide{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--text-muted);pointer-events:none}
 .topbar-search .input{padding-left:40px;height:40px;background:var(--bg-surface)}

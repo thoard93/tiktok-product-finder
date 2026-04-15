@@ -80,10 +80,18 @@
       {% if product.tap_data.expires_at %}
       <div class="tap-callout__expiry">Offer expires {{ product.tap_data.expires_at.strftime('%B %d, %Y') }}</div>
       {% endif %}
-      <button class="btn-tap-copy" onclick="copyTapLink('/api/tap/click/{{ product.product_id }}')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        Copy Boosted Link
-      </button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-tap-copy" onclick="copyTapLink('/api/tap/click/{{ product.product_id }}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy Boosted Link
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openOnTikTok('{{ product.tap_data.tap_link }}', '')">
+          Open in TikTok &rarr;
+        </button>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--text-faint);line-height:1.4">
+        &#x26a0;&#xfe0f; TikTok affiliate links work best when opened inside the TikTok app. Copy this link and paste it in TikTok &rarr; Creator tools &rarr; Affiliate.
+      </div>
     </div>
     {% endif %}
   </div>
