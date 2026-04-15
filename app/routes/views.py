@@ -395,11 +395,12 @@ def _products_list_inner(ctx):
     max_price = request.args.get('max_price', 0, type=float)
     max_videos = request.args.get('max_videos', 0, type=int)
     tap_only = request.args.get('tap_only', '') == '1'
+    on_sale = request.args.get('on_sale', '') == '1'
 
     query = Product.query.filter(
         _active_filter,
-        Product.video_count >= 5,   # Filter out placeholder products
-        Product.sales_7d > 0        # Must have recent sales momentum
+        Product.video_count >= 5,
+        Product.sales_7d > 0
     )
 
     # TAP boosted filter — only show products with active TAP links
@@ -425,6 +426,13 @@ def _products_list_inner(ctx):
 
     if max_videos > 0:
         query = query.filter(Product.video_count <= max_videos)
+
+    if on_sale:
+        query = query.filter(
+            Product.original_price > Product.price,
+            Product.original_price > 0,
+            Product.price > 0,
+        )
 
     if sort == 'commission':
         query = query.order_by(desc(Product.commission_rate))
@@ -466,6 +474,7 @@ def _products_list_inner(ctx):
     if min_comm: params.append(f'min_commission={min_comm}')
     if max_price: params.append(f'max_price={max_price}')
     if max_videos: params.append(f'max_videos={max_videos}')
+    if on_sale: params.append('on_sale=1')
     ctx['filter_params'] = '&'.join(params)
 
     # Load TAP data for products (safe — won't crash if table missing)
@@ -486,13 +495,18 @@ def _products_list_inner(ctx):
         p.lifecycle = _calc_lifecycle(p)
         p._tap = tap_map.get(p.product_id)
         p.is_hot = _is_seasonal_hot(p)
+        # Discount / sale logic
+        p.is_on_sale = bool(p.original_price and p.original_price > p.price and p.price > 0)
+        p.discount_pct = round((1 - p.price / p.original_price) * 100) if p.is_on_sale else 0
+        p.is_hot_deal = p.is_on_sale and p.trending_score >= 60
 
     ctx['products'] = products
     ctx['page'] = page
     ctx['total_pages'] = pagination.pages
     ctx['total_count'] = pagination.total
-    ctx['has_filters'] = bool(category or search or min_comm > 0 or max_price > 0 or max_videos > 0)
+    ctx['has_filters'] = bool(category or search or min_comm > 0 or max_price > 0 or max_videos > 0 or on_sale)
     ctx['tap_filter'] = request.args.get('tap_only', '') == '1'
+    ctx['on_sale_filter'] = on_sale
 
     return render_template('products.html', **ctx)
 

@@ -36,6 +36,10 @@
     </div>
   </div>
   <div class="filter-actions">
+    <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;padding:5px 10px;border-radius:var(--radius);border:1px solid {{ '#e8384d' if on_sale_filter else 'var(--border)' }};background:{{ 'rgba(232,56,77,.08)' if on_sale_filter else 'transparent' }};color:{{ '#e8384d' if on_sale_filter else 'var(--text-muted)' }}">
+      <input type="checkbox" name="on_sale" value="1" {{ 'checked' if on_sale_filter else '' }} onchange="this.form.submit()" style="display:none">
+      &#x1f525; On Sale
+    </label>
     <button type="submit" class="btn btn-primary btn-sm">Apply</button>
     {% if has_filters %}<a href="/app/products" class="btn btn-ghost btn-sm">Reset</a>{% endif %}
     <span class="filter-count-label">{{ total_count | default(0) }} products</span>
@@ -93,6 +97,7 @@
                 <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>
                 {% if p.is_hot %}<span style="font-size:10px;background:#ff5272;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">HOT</span>{% endif %}
                 {% if p.lifecycle == 'rising' %}<span style="font-size:10px;background:var(--success-dim);color:var(--success);padding:1px 5px;border-radius:4px;font-weight:600">&#x2197;</span>{% endif %}
+                {% if p.original_price and p.original_price > p.price and p.price > 0 %}{% set disc = ((1 - p.price / p.original_price) * 100) | round | int %}{% if disc >= 20 %}<span style="font-size:10px;background:#e8384d;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">-{{ disc }}%</span>{% endif %}{% endif %}
               </div>
               <div style="font-size:11px;color:var(--text-faint);display:flex;gap:6px">
                 {% if p.seller_name and p.seller_name != 'Unknown' %}<span>{{ p.seller_name | truncate(20) }}</span><span>&middot;</span>{% endif %}
@@ -112,7 +117,12 @@
           {% endif %}
         </td>
         <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
-        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
+        <td style="font-variant-numeric:tabular-nums">
+          ${{ "%.2f" | format(p.price or 0) }}
+          {% if p.is_on_sale and p.discount_pct >= 20 %}
+            <span style="font-size:10px;color:#e8384d;font-weight:700;margin-left:2px">-{{ p.discount_pct }}%</span>
+          {% endif %}
+        </td>
         <td class="commission-cell">
           {% if p._tap %}
             <span style="color:var(--teal);font-weight:700">{{ "%.0f" | format((p._tap.boosted_commission or 0) * 100) }}%</span>
