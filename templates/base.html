@@ -83,8 +83,11 @@
           <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
             <i data-lucide="sun" id="themeIcon"></i>
           </button>
-          {% if not (subscription and subscription.status == 'active') and not (current_user and current_user.is_admin) %}
-            <a href="/app/subscribe" class="btn btn-primary btn-sm">Upgrade</a>
+          {% if not is_pro %}
+            <a href="/app/subscribe" class="btn btn-primary btn-sm" style="font-weight:700;padding:6px 16px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              Upgrade to Pro
+            </a>
           {% endif %}
           <a href="/auth/logout" class="btn btn-ghost btn-icon btn-sm" title="Sign out">
             <i data-lucide="log-out"></i>
@@ -93,7 +96,7 @@
       </header>
 
       {# Upgrade banner for non-subscribers #}
-      {% if current_user and not current_user.is_admin and (not subscription or subscription.status != 'active') %}
+      {% if not is_pro %}
       <div class="upgrade-banner">
         <i data-lucide="zap" style="width:16px;height:16px"></i>
         <span>You're on the free plan — unlock full product data and analytics.</span>
@@ -126,7 +129,7 @@
   </div>
 
   {# Upgrade FAB for non-subscribers #}
-  {% if current_user and not current_user.is_admin and (not subscription or subscription.status != 'active') %}
+  {% if not is_pro %}
   <a href="/app/subscribe" class="upgrade-fab" aria-label="Upgrade to Pro">
     <i data-lucide="zap"></i>
     <span>Upgrade</span>

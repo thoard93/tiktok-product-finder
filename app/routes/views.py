@@ -75,10 +75,15 @@ def _base_context(active_page='dashboard'):
     """Build the common context dict shared by all app templates."""
     user = get_current_user()
     sub = _get_subscription(user)
+    is_pro = bool(
+        (sub and sub.status == 'active') or
+        (user and user.is_admin)
+    )
     return {
         'current_user': user,
         'subscription': sub,
         'active_page': active_page,
+        'is_pro': is_pro,
     }
 
 # ---------------------------------------------------------------------------
@@ -134,17 +139,17 @@ def dashboard():
         'saved_count': saved,
     }
 
-    # Trending products (top 6 by 7d sales, min 5 videos)
+    # Trending products (top 6 by 7d sales, min 5 videos, has sales)
     ctx['trending_products'] = Product.query.filter(
-        _active_filter, Product.video_count >= 5
+        _active_filter, Product.video_count >= 5, Product.sales_7d > 0
     ).order_by(desc(Product.sales_7d)).limit(6).all()
 
     for p in ctx['trending_products']:
         p.trending_score = _calc_score(p)
 
-    # Recent products (last updated, min 5 videos)
+    # Recent products (last updated, min 5 videos, has sales)
     ctx['recent_products'] = Product.query.filter(
-        _active_filter, Product.video_count >= 5
+        _active_filter, Product.video_count >= 5, Product.sales_7d > 0
     ).order_by(desc(Product.last_updated)).limit(5).all()
     for p in ctx['recent_products']:
         p.trending_score = _calc_score(p)
@@ -189,7 +194,8 @@ def _products_list_inner(ctx):
 
     query = Product.query.filter(
         _active_filter,
-        Product.video_count >= 5  # Filter out placeholder products with <5 videos
+        Product.video_count >= 5,   # Filter out placeholder products
+        Product.sales_7d > 0        # Must have recent sales momentum
     )
 
     if search:

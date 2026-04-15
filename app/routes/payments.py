@@ -167,7 +167,7 @@ def create_subscription():
     sub_payload = {
         'plan_id': PAYPAL_PLAN_ID,
         'application_context': {
-            'brand_name': 'PRISM Intelligence',
+            'brand_name': 'Vantage',
             'locale': 'en-US',
             'shipping_preference': 'NO_SHIPPING',
             'user_action': 'SUBSCRIBE_NOW',

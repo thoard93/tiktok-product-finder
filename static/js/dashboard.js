@@ -66,7 +66,7 @@ function applyCoupon() {
   fetch("/api/subscribe/coupon", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code: code })
+    body: JSON.stringify({ coupon_code: code })
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
