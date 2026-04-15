@@ -24,6 +24,13 @@
       {% if product.category %}<span class="badge badge-muted">{{ product.category }}</span>{% endif %}
       <span class="badge badge-accent" style="font-size:var(--text-sm);padding:4px 12px">{{ "%.0f" | format((product.commission_rate or 0) * 100) }}% commission</span>
       <span class="text-sm text-muted">${{ "%.2f" | format(product.price or 0) }}</span>
+      {% if product.lifecycle == 'rising' %}
+        <span class="badge badge-green" style="font-size:12px;padding:3px 10px">&#x2197; Rising</span>
+      {% elif product.lifecycle == 'peak' %}
+        <span class="badge badge-gold" style="font-size:12px;padding:3px 10px">&#x2B50; Peak</span>
+      {% elif product.lifecycle == 'declining' %}
+        <span class="badge badge-red" style="font-size:12px;padding:3px 10px">&#x2198; Declining</span>
+      {% endif %}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-5)">
@@ -98,6 +105,27 @@
 
   {# ===== RIGHT: Analytics ===== #}
   <div>
+    {# Opportunity Score Breakdown #}
+    {% if score_breakdown %}
+    <div class="card mb-4">
+      <div class="flex items-center justify-between mb-4">
+        <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-secondary)">Opportunity Score</div>
+        <div style="font-family:var(--font-display);font-size:28px;font-weight:800;color:{{ '#0d9488' if product.trending_score >= 60 else ('#d97706' if product.trending_score >= 35 else '#dc2626') }}">{{ product.trending_score }}</div>
+      </div>
+      {% for key, label, color in [('demand','Demand','#0d9488'),('momentum','Momentum','#2563eb'),('commission','Commission','#e8384d'),('saturation_gap','Saturation Gap','#7c3aed'),('price_fit','Price Fit','#d97706')] %}
+      <div style="margin-bottom:10px">
+        <div class="flex items-center justify-between" style="font-size:12px;margin-bottom:3px">
+          <span style="color:var(--text-muted)">{{ label }}</span>
+          <span style="font-weight:600;color:var(--text-primary)">{{ score_breakdown[key] }}/{{ score_breakdown[key + '_max'] }}</span>
+        </div>
+        <div style="height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:{{ (score_breakdown[key] / score_breakdown[key + '_max'] * 100) | round }}%;background:{{ color }};border-radius:3px;transition:width 0.5s ease"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     {# Stats panel with tabs #}
     <div class="stats-panel mb-4">
       <div class="stats-tabs">

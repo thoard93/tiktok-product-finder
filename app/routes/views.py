@@ -39,25 +39,172 @@ _active_filter = or_(Product.product_status == 'active', Product.product_status.
 
 
 def _calc_score(p):
-    """Calculate a 0-99 trending score from product metrics.
-    Uses log-scaled sales + commission + influencer diversity."""
-    import math
-    sales = p.sales_7d or 0
-    creators = p.influencer_count or 0
-    comm = (p.commission_rate or 0) * 100  # as percentage
-    videos = p.video_count or 0
+    """
+    Opportunity Score (0-99) — composite metric for affiliate product potential.
 
-    # Log-scale sales (0-40 points): 100 sales=13, 1000=20, 10000=27, 50000=32
-    sales_score = min(40, math.log10(max(sales, 1)) * 8.5)
-    # Commission (0-25 points): 10%=10, 20%=20, 25%=25
-    comm_score = min(25, comm)
-    # Creator diversity (0-20 points): log-scaled
-    creator_score = min(20, math.log10(max(creators, 1)) * 6)
-    # Video saturation penalty: too many videos = lower opportunity
-    video_penalty = min(14, math.log10(max(videos, 1)) * 3)
-    # Combine
-    raw = sales_score + comm_score + creator_score - video_penalty
+    Components:
+      - Demand (0-25): proven sales velocity, log-scaled
+      - Momentum (0-20): is it growing? sales_7d vs sales_30d ratio
+      - Commission (0-20): higher commission = more money per sale
+      - Saturation Gap (0-20): few creators relative to sales = untapped
+      - Price Sweet Spot (0-14): $10-60 range converts best on TikTok
+
+    The score answers: "How good is this product for an affiliate to promote RIGHT NOW?"
+    """
+    import math
+
+    sales_7d = p.sales_7d or 0
+    sales_30d = p.sales_30d or 0
+    creators = p.influencer_count or 0
+    comm = (p.commission_rate or 0) * 100
+    videos = p.video_count or 0
+    price = p.price or 0
+    growth = p.gmv_growth or 0
+
+    # --- DEMAND (0-25): proven sales, log-scaled ---
+    # 100 sales=11, 1000=17, 5000=21, 20000=25
+    demand = min(25, math.log10(max(sales_7d, 1)) * 5.8)
+
+    # --- MOMENTUM (0-20): is it accelerating? ---
+    if sales_30d > 0:
+        # Weekly rate: sales_7d / (sales_30d / 4.3)
+        weekly_avg = sales_30d / 4.3
+        if weekly_avg > 0:
+            accel = sales_7d / weekly_avg  # >1 = accelerating, <1 = slowing
+            momentum = min(20, max(0, (accel - 0.5) * 16))  # 0.5x=0, 1x=8, 1.5x=16, 1.75x=20
+        else:
+            momentum = 10
+    else:
+        momentum = 10 if sales_7d > 0 else 0
+
+    # Bonus for explicit growth percentage
+    if growth > 50:
+        momentum = min(20, momentum + 5)
+    elif growth > 20:
+        momentum = min(20, momentum + 2)
+
+    # --- COMMISSION (0-20): more money per sale ---
+    # 5%=4, 10%=8, 15%=12, 20%=16, 25%=20
+    commission_score = min(20, comm * 0.8)
+
+    # --- SATURATION GAP (0-20): opportunity vs competition ---
+    # High sales + few creators = massive untapped opportunity
+    # Low sales + many creators = oversaturated, avoid
+    if sales_7d > 0 and creators > 0:
+        sales_per_creator = sales_7d / creators
+        # 1 sale/creator = bad (2pts), 10 = okay (10pts), 100 = gold (18pts)
+        gap = min(20, math.log10(max(sales_per_creator, 0.1)) * 9)
+    elif sales_7d > 100 and creators == 0:
+        gap = 20  # No creators but selling = maximum opportunity
+    else:
+        gap = 5
+
+    # Video saturation penalty within gap score
+    if videos > 0 and sales_7d > 0:
+        sales_per_video = sales_7d / videos
+        if sales_per_video < 1:  # More videos than sales = oversaturated
+            gap = max(0, gap - 5)
+
+    # --- PRICE SWEET SPOT (0-14): TikTok impulse buy range ---
+    if 10 <= price <= 35:
+        price_score = 14  # Sweet spot
+    elif 35 < price <= 60:
+        price_score = 10  # Still good
+    elif 5 <= price < 10:
+        price_score = 8   # Cheap but low commission $
+    elif 60 < price <= 100:
+        price_score = 6   # Higher consideration
+    elif price > 100:
+        price_score = 3   # Hard sell on TikTok
+    else:
+        price_score = 2   # Too cheap or unknown
+
+    # --- COMBINE ---
+    raw = demand + momentum + commission_score + gap + price_score
     return max(1, min(99, int(raw)))
+
+
+def _calc_lifecycle(p):
+    """
+    Determine product lifecycle stage based on sales trajectory.
+    Returns: 'rising', 'peak', 'declining', or 'new'
+    """
+    sales_7d = p.sales_7d or 0
+    sales_30d = p.sales_30d or 0
+    growth = p.gmv_growth or 0
+
+    if sales_7d == 0:
+        return 'new'
+
+    if sales_30d > 0:
+        weekly_avg = sales_30d / 4.3
+        if weekly_avg > 0:
+            ratio = sales_7d / weekly_avg
+            if ratio > 1.3 or growth > 30:
+                return 'rising'
+            elif ratio > 0.85:
+                return 'peak'
+            else:
+                return 'declining'
+
+    if growth > 20:
+        return 'rising'
+    elif growth < -20:
+        return 'declining'
+
+    return 'peak'
+
+
+def _score_breakdown(p):
+    """Return a dict of individual score components for display."""
+    import math
+    sales_7d = p.sales_7d or 0
+    sales_30d = p.sales_30d or 0
+    creators = p.influencer_count or 0
+    comm = (p.commission_rate or 0) * 100
+    price = p.price or 0
+
+    demand = min(25, math.log10(max(sales_7d, 1)) * 5.8)
+
+    if sales_30d > 0:
+        weekly_avg = sales_30d / 4.3
+        accel = sales_7d / weekly_avg if weekly_avg > 0 else 1
+        momentum = min(20, max(0, (accel - 0.5) * 16))
+    else:
+        momentum = 10 if sales_7d > 0 else 0
+
+    commission_score = min(20, comm * 0.8)
+
+    if sales_7d > 0 and creators > 0:
+        gap = min(20, math.log10(max(sales_7d / creators, 0.1)) * 9)
+    elif sales_7d > 100:
+        gap = 20
+    else:
+        gap = 5
+
+    if 10 <= price <= 35:
+        price_score = 14
+    elif 35 < price <= 60:
+        price_score = 10
+    elif 5 <= price < 10:
+        price_score = 8
+    elif 60 < price <= 100:
+        price_score = 6
+    else:
+        price_score = 3
+
+    return {
+        'demand': round(demand),
+        'demand_max': 25,
+        'momentum': round(momentum),
+        'momentum_max': 20,
+        'commission': round(commission_score),
+        'commission_max': 20,
+        'saturation_gap': round(gap),
+        'saturation_gap_max': 20,
+        'price_fit': round(price_score),
+        'price_fit_max': 14,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +428,7 @@ def _products_list_inner(ctx):
 
     for p in products:
         p.trending_score = _calc_score(p)
+        p.lifecycle = _calc_lifecycle(p)
         p._tap = tap_map.get(p.product_id)
 
     ctx['products'] = products
@@ -302,7 +450,24 @@ def product_detail(product_id):
 
     product = Product.query.get_or_404(product_id)
     product.trending_score = _calc_score(product)
+    product.lifecycle = _calc_lifecycle(product)
     ctx['product'] = product
+    ctx['score_breakdown'] = _score_breakdown(product)
+
+    # Similar opportunities (same category, sorted by score)
+    similar = []
+    if product.category:
+        candidates = Product.query.filter(
+            Product.category == product.category,
+            Product.product_id != product_id,
+            _active_filter,
+            Product.sales_7d > 0,
+            Product.video_count >= 5,
+        ).order_by(desc(Product.sales_7d)).limit(20).all()
+        for c in candidates:
+            c.trending_score = _calc_score(c)
+        similar = sorted(candidates, key=lambda x: x.trending_score, reverse=True)[:4]
+    ctx['similar_products'] = similar
 
     # Track this view
     try:
