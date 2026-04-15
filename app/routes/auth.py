@@ -38,6 +38,10 @@ DISCORD_CLIENT_ID = os.environ.get('DISCORD_CLIENT_ID', '')
 DISCORD_CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
 DISCORD_REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://thoardburgersauce.com/auth/discord/callback')
 DISCORD_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '')  # Your Discord server ID
+DISCORD_GUILD_ID_AA = os.environ.get('DISCORD_GUILD_ID_AA', '')  # Affiliate Automated server
+
+# All allowed guild IDs (filter out empty strings)
+ALLOWED_GUILD_IDS = [gid for gid in [DISCORD_GUILD_ID, DISCORD_GUILD_ID_AA] if gid]
 
 # Developer passkey (set in Render environment variables)
 DEV_PASSKEY = os.environ.get('DEV_PASSKEY', 'change-this-passkey-123')
@@ -376,8 +380,8 @@ def discord_callback():
         username = discord_user.get('username')
         avatar = discord_user.get('avatar')
 
-        # Check if user is in the required guild
-        if DISCORD_GUILD_ID:
+        # Check if user is in ANY of the allowed guilds
+        if ALLOWED_GUILD_IDS:
             guilds_response = requests.get(
                 'https://discord.com/api/users/@me/guilds',
                 headers={'Authorization': f'Bearer {access_token}'}
@@ -385,9 +389,10 @@ def discord_callback():
 
             if guilds_response.status_code == 200:
                 guilds = guilds_response.json()
-                guild_ids = [g.get('id') for g in guilds]
+                user_guild_ids = [str(g.get('id')) for g in guilds]
 
-                if DISCORD_GUILD_ID not in guild_ids:
+                is_allowed = any(gid in user_guild_ids for gid in ALLOWED_GUILD_IDS)
+                if not is_allowed:
                     return redirect('/login?error=not_in_server')
 
         # Create or update user
