@@ -76,7 +76,7 @@
           <div class="product-row-name">
             {% if p.cached_image_url or p.image_url %}
               <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy"
-                   onerror="this.outerHTML='<div class=\'product-row-thumb-fallback {{ cat_class }}\'>{{ (p.product_name or \'?\')[0] | upper }}</div>'">
+                   onerror="this.style.display='none'">
             {% else %}
               <div class="product-row-thumb-fallback {{ cat_class }}">{{ (p.product_name or '?')[0] | upper }}</div>
             {% endif %}
