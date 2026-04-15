@@ -454,6 +454,20 @@ class TapList(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class ProductView(db.Model):
+    """Tracks which products each user has viewed"""
+    __tablename__ = 'product_views'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    product_id = db.Column(db.String(50), db.ForeignKey('products.product_id'), nullable=False)
+    viewed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index('ix_pv_user_product', 'user_id', 'product_id'),
+    )
+
+
 # =============================================================================
 # EBAY PRICE BLADE (admin-only)
 # =============================================================================

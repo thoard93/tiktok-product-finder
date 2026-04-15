@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, redirect, session, request, jsonify
 from sqlalchemy import desc, or_
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList
+from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView
 from app.routes.auth import get_current_user
 
 
@@ -147,12 +147,22 @@ def dashboard():
     for p in ctx['trending_products']:
         p.trending_score = _calc_score(p)
 
-    # Recent products (last updated, min 5 videos, has sales)
-    ctx['recent_products'] = Product.query.filter(
-        _active_filter, Product.video_count >= 5, Product.sales_7d > 0
-    ).order_by(desc(Product.last_updated)).limit(5).all()
-    for p in ctx['recent_products']:
-        p.trending_score = _calc_score(p)
+    # Recently viewed products (real user tracking)
+    recent_products = []
+    try:
+        user = ctx['current_user']
+        if user:
+            recent_views = db.session.query(ProductView, Product).join(
+                Product, ProductView.product_id == Product.product_id
+            ).filter(
+                ProductView.user_id == user.id
+            ).order_by(desc(ProductView.viewed_at)).limit(5).all()
+            recent_products = [p for _, p in recent_views]
+            for p in recent_products:
+                p.trending_score = _calc_score(p)
+    except Exception:
+        pass
+    ctx['recent_products'] = recent_products
 
     return render_template('dashboard.html', **ctx)
 
@@ -293,6 +303,22 @@ def product_detail(product_id):
     product = Product.query.get_or_404(product_id)
     product.trending_score = _calc_score(product)
     ctx['product'] = product
+
+    # Track this view
+    try:
+        user = ctx['current_user']
+        if user:
+            # Upsert — update timestamp if already viewed, else create
+            existing_view = ProductView.query.filter_by(
+                user_id=user.id, product_id=product_id
+            ).first()
+            if existing_view:
+                existing_view.viewed_at = datetime.utcnow()
+            else:
+                db.session.add(ProductView(user_id=user.id, product_id=product_id))
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     # Build stats dict from existing model fields — per time period
     ctx['stats'] = {

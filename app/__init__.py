@@ -85,6 +85,19 @@ def _auto_migrate(app, db):
             db.session.rollback()
             print(f"[MIGRATE] tap_lists creation failed: {e}")
 
+    # Fix product_views table if missing
+    try:
+        db.session.execute(db.text("SELECT id FROM product_views LIMIT 1"))
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        try:
+            db.create_all()
+            print("[MIGRATE] Created product_views table")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[MIGRATE] product_views creation failed: {e}")
+
     # Fix ebay tables if missing
     for tbl in ['ebay_watchlist', 'ebay_search_history']:
         try:
@@ -278,6 +291,7 @@ from app.models import (  # noqa: E402, F401
     TapList,
     EbayWatchlistItem,
     EbaySearchHistory,
+    ProductView,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)

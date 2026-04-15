@@ -93,25 +93,52 @@
 </div>
 
 {% if recent_products and recent_products | length > 0 %}
-<div class="table-wrap">
-  <table class="table">
+<div class="product-table-wrap">
+  <table class="product-table">
     <thead>
       <tr>
-        <th>Product</th>
-        <th>Category</th>
+        <th style="min-width:240px">Product</th>
         <th>Commission</th>
+        <th>Price</th>
+        <th>7d Sales</th>
+        <th>Creators</th>
+        <th>Videos</th>
         <th>Score</th>
-        <th>Last Updated</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
       {% for p in recent_products[:5] %}
+      {% set score_color = '#0d9488' if p.trending_score >= 60 else ('#d97706' if p.trending_score >= 35 else '#dc2626') %}
       <tr>
-        <td><a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:500">{{ p.product_name | truncate(50) }}</a></td>
-        <td><span class="badge badge-muted">{{ p.category | default('Uncategorized') }}</span></td>
-        <td style="color:var(--accent);font-weight:600">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
-        <td><span class="badge {{ 'badge-green' if p.trending_score >= 80 else ('badge-gold' if p.trending_score >= 50 else 'badge-red') }}">{{ p.trending_score }}</span></td>
-        <td class="text-sm text-muted">{% if p.last_updated %}{{ p.last_updated.strftime('%b %d') }}{% else %}--{% endif %}</td>
+        <td>
+          <div class="product-row-name">
+            {% if p.cached_image_url or p.image_url %}
+              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy" onerror="this.style.display='none'">
+            {% endif %}
+            <div style="min-width:0">
+              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>
+              {% if p.category %}<span style="font-size:11px;color:var(--text-faint)">{{ p.category }}</span>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
+        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
+        <td>{{ "{:,}".format(p.influencer_count or 0) }}</td>
+        <td>{{ "{:,}".format(p.video_count or 0) }}</td>
+        <td>
+          <div class="score-ring-wrap" style="width:30px;height:30px">
+            <svg viewBox="0 0 36 36" width="30" height="30">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke-width="3" stroke-linecap="round"
+                      stroke-dasharray="{{ p.trending_score }}, 100" stroke="{{ score_color }}"
+                      transform="rotate(-90 18 18)"/>
+            </svg>
+            <span class="score-number" style="font-size:9px">{{ p.trending_score }}</span>
+          </div>
+        </td>
+        <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
       </tr>
       {% endfor %}
     </tbody>
