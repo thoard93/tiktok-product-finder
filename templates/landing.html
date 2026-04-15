@@ -1,171 +1,133 @@
 {% extends "base_public.html" %}
-{% block title %}Find Winning TikTok Shop Products{% endblock %}
+{% block title %}Vantage — TikTok Shop Product Research Platform{% endblock %}
 
 {% block content %}
 {# ===== HERO ===== #}
 <section class="hero">
   <div>
     <div class="hero-eyebrow">
-      <i data-lucide="activity"></i> Live product data &middot; Updated daily
+      <i data-lucide="zap"></i> TikTok Shop Intelligence Platform
     </div>
-    <h1 class="hero-title">Find winning products before they go viral</h1>
-    <p class="hero-sub">Vantage surfaces high-commission TikTok Shop products with real sales data and trending scores. Stop guessing. Start selling.</p>
+    <h1 class="hero-title">Research products.<br>Find opportunities.<br><span style="color:var(--accent)">Earn commissions.</span></h1>
+    <p class="hero-sub">Vantage gives TikTok Shop affiliates the data they need to find high-commission products with proven demand — before the market catches on.</p>
     <div class="hero-ctas">
-      <a href="/register" class="btn btn-primary btn-lg"><span class="btn-label">Get started free</span></a>
-      <a href="#features" class="btn btn-ghost btn-lg">See how it works &rarr;</a>
+      <a href="/register" class="btn btn-primary btn-lg" style="font-size:15px;padding:14px 32px">Start for free &rarr;</a>
+      <a href="#pricing" class="btn btn-ghost btn-lg">View pricing</a>
+    </div>
+    <div style="margin-top:var(--space-6);display:flex;gap:var(--space-6);flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--text-muted)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#36d9c4" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+        200+ products tracked
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--text-muted)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#36d9c4" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+        Daily data updates
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--text-muted)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#36d9c4" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+        Cancel anytime
+      </div>
     </div>
   </div>
 
-  {# Mini dashboard mockup #}
+  {# Dashboard preview mockup #}
   <div class="hero-mockup">
-    <div style="font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:var(--space-4)">Trending products</div>
+    <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:var(--space-4)">Live product feed</div>
     <div class="mockup-row">
-      <div class="mockup-dot" style="background:var(--accent-glow)"></div>
-      <div class="mockup-lines">
-        <div class="mockup-line" style="width:85%"></div>
-        <div class="mockup-line" style="width:50%"></div>
-      </div>
-      <span class="mockup-badge-sm badge badge-green">92</span>
-      <span style="font-family:var(--font-display);font-weight:800;color:var(--accent);font-size:var(--text-sm)">18%</span>
+      <div class="mockup-dot" style="background:linear-gradient(135deg,#f953c6,#b91d73)"></div>
+      <div class="mockup-lines"><div class="mockup-line" style="width:85%"></div><div class="mockup-line" style="width:50%"></div></div>
+      <span style="font-size:12px;font-weight:700;color:#36d9c4">25%</span>
+      <span style="font-size:11px;color:var(--text-muted)">$24.99</span>
     </div>
     <div class="mockup-row">
-      <div class="mockup-dot" style="background:var(--teal-dim)"></div>
-      <div class="mockup-lines">
-        <div class="mockup-line" style="width:70%"></div>
-        <div class="mockup-line" style="width:40%"></div>
-      </div>
-      <span class="mockup-badge-sm badge badge-gold">67</span>
-      <span style="font-family:var(--font-display);font-weight:800;color:var(--accent);font-size:var(--text-sm)">22%</span>
+      <div class="mockup-dot" style="background:linear-gradient(135deg,#4776e6,#1cb5e0)"></div>
+      <div class="mockup-lines"><div class="mockup-line" style="width:70%"></div><div class="mockup-line" style="width:40%"></div></div>
+      <span style="font-size:12px;font-weight:700;color:#36d9c4">18%</span>
+      <span style="font-size:11px;color:var(--text-muted)">$16.99</span>
     </div>
     <div class="mockup-row">
-      <div class="mockup-dot" style="background:var(--gold-dim)"></div>
-      <div class="mockup-lines">
-        <div class="mockup-line" style="width:90%"></div>
-        <div class="mockup-line" style="width:55%"></div>
-      </div>
-      <span class="mockup-badge-sm badge badge-green">85</span>
-      <span style="font-family:var(--font-display);font-weight:800;color:var(--accent);font-size:var(--text-sm)">15%</span>
+      <div class="mockup-dot" style="background:linear-gradient(135deg,#56ab2f,#a8e063)"></div>
+      <div class="mockup-lines"><div class="mockup-line" style="width:90%"></div><div class="mockup-line" style="width:55%"></div></div>
+      <span style="font-size:12px;font-weight:700;color:#36d9c4">35%</span>
+      <span style="font-size:11px;color:var(--text-muted)">$29.49</span>
     </div>
     <div class="mockup-row">
-      <div class="mockup-dot" style="background:var(--success-dim)"></div>
-      <div class="mockup-lines">
-        <div class="mockup-line" style="width:60%"></div>
-        <div class="mockup-line" style="width:35%"></div>
-      </div>
-      <span class="mockup-badge-sm badge badge-gold">58</span>
-      <span style="font-family:var(--font-display);font-weight:800;color:var(--accent);font-size:var(--text-sm)">20%</span>
+      <div class="mockup-dot" style="background:linear-gradient(135deg,#f7971e,#ffd200)"></div>
+      <div class="mockup-lines"><div class="mockup-line" style="width:60%"></div><div class="mockup-line" style="width:35%"></div></div>
+      <span style="font-size:12px;font-weight:700;color:#36d9c4">20%</span>
+      <span style="font-size:11px;color:var(--text-muted)">$52.00</span>
     </div>
   </div>
 </section>
 
-{# ===== SOCIAL PROOF ===== #}
-<div class="social-proof">
-  <div class="social-stat"><strong>500+</strong> TikTok Shop sellers</div>
-  <div class="social-stat"><strong>$2.4M+</strong> commissions tracked</div>
-  <div class="social-stat"><strong>47</strong> product categories</div>
-  <div class="social-stat"><strong>Daily</strong> data refresh</div>
-</div>
+{# ===== HOW IT WORKS ===== #}
+<section style="padding:clamp(48px,6vw,80px) 0;max-width:900px;margin:0 auto;text-align:center">
+  <div style="padding:0 24px">
+    <span class="features-eyebrow">How it works</span>
+    <h2 class="features-title" style="margin-bottom:48px">Three steps to your first commission</h2>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px;text-align:left">
+      <div>
+        <div style="width:40px;height:40px;border-radius:var(--radius);background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;margin-bottom:16px">1</div>
+        <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Browse trending products</h3>
+        <p style="font-size:14px;color:var(--text-muted);line-height:1.6">Filter by category, commission rate, sales volume, and more. Find products with proven demand.</p>
+      </div>
+      <div>
+        <div style="width:40px;height:40px;border-radius:var(--radius);background:var(--teal-dim);color:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;margin-bottom:16px">2</div>
+        <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Analyze the opportunity</h3>
+        <p style="font-size:14px;color:var(--text-muted);line-height:1.6">See sales data, creator counts, video performance, and commission rates before you promote.</p>
+      </div>
+      <div>
+        <div style="width:40px;height:40px;border-radius:var(--radius);background:var(--success-dim);color:var(--success);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;margin-bottom:16px">3</div>
+        <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Create content and earn</h3>
+        <p style="font-size:14px;color:var(--text-muted);line-height:1.6">Promote high-commission products to your audience. Track performance with Vantage analytics.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
 {# ===== FEATURES ===== #}
 <section class="features-section" id="features">
   <div class="features-container">
     <div class="features-header">
-      <span class="features-eyebrow">What you get</span>
-      <h2 class="features-title">Everything you need to find<br>winning products fast</h2>
+      <span class="features-eyebrow">Platform features</span>
+      <h2 class="features-title">Built for TikTok Shop affiliates</h2>
     </div>
 
-    {# Feature 1: Trending product feed #}
-    <div class="feature-hero">
-      <div class="feature-hero__content">
-        <span class="feature-tag">Core Feature</span>
-        <h3>Real-time trending product feed</h3>
-        <p>Vantage pulls fresh data daily across every TikTok Shop category. See what's gaining momentum before it goes viral.</p>
-        <ul class="feature-list">
-          <li><i data-lucide="check"></i> Trending scores based on real sales velocity</li>
-          <li><i data-lucide="check"></i> GMV estimates from actual transaction data</li>
-          <li><i data-lucide="check"></i> Filter by category, commission rate, price range</li>
-        </ul>
-      </div>
-      <div class="feature-hero__mockup">
-        <div class="mockup-card-stack">
-          <div class="mockup-product-card">
-            <div class="mockup-img mockup-img--1"></div>
-            <div class="mockup-card-body">
-              <span class="mockup-badge mockup-badge--hot">&#x1f525; 92 Score</span>
-              <div class="mockup-title">Portable Mini Blender</div>
-              <div class="mockup-meta">
-                <span class="mockup-commission">18% commission</span>
-                <span class="mockup-price">$24.99</span>
-              </div>
-              <div class="mockup-bar"><div class="mockup-bar-fill" style="width:92%"></div></div>
-            </div>
-          </div>
-          <div class="mockup-product-card mockup-product-card--2">
-            <div class="mockup-img mockup-img--2"></div>
-            <div class="mockup-card-body">
-              <span class="mockup-badge mockup-badge--warm">&#x26a1; 78 Score</span>
-              <div class="mockup-title">LED Strip Lights 5M</div>
-              <div class="mockup-meta">
-                <span class="mockup-commission">22% commission</span>
-                <span class="mockup-price">$18.99</span>
-              </div>
-              <div class="mockup-bar"><div class="mockup-bar-fill" style="width:78%"></div></div>
-            </div>
-          </div>
-          <div class="mockup-product-card mockup-product-card--3">
-            <div class="mockup-img mockup-img--3"></div>
-            <div class="mockup-card-body">
-              <span class="mockup-badge mockup-badge--warm">&#x26a1; 71 Score</span>
-              <div class="mockup-title">Neck Massager Pillow</div>
-              <div class="mockup-meta">
-                <span class="mockup-commission">25% commission</span>
-                <span class="mockup-price">$39.99</span>
-              </div>
-              <div class="mockup-bar"><div class="mockup-bar-fill" style="width:71%"></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {# Feature 2+3: Brand Hunter + Creator Videos #}
-    <div class="features-grid">
+    <div class="features-grid" style="margin-bottom:24px">
       <div class="feature-card feature-card--large">
-        <i data-lucide="store" class="feature-icon"></i>
-        <h3>Brand Hunter</h3>
-        <p>Discover the top-performing TikTok Shop brands ranked by GMV, followers, and product count. See what each brand sells and find untapped opportunities.</p>
+        <i data-lucide="trending-up" class="feature-icon"></i>
+        <h3>Product Research</h3>
+        <p>Browse hundreds of trending products with real sales data, commission rates, and demand scores. Table and grid views with powerful filters.</p>
       </div>
       <div class="features-stack">
         <div class="feature-card">
-          <i data-lucide="video" class="feature-icon"></i>
-          <h3>Top creator videos</h3>
-          <p>See which TikTok creators are driving sales for each product. Find the right creators to partner with or replicate what's working.</p>
+          <i data-lucide="store" class="feature-icon" style="color:var(--teal)"></i>
+          <h3>Brand Hunter</h3>
+          <p>Discover top-performing TikTok Shop brands. See their product catalogs, GMV rankings, and find untapped niches.</p>
         </div>
         <div class="feature-card">
-          <i data-lucide="zap" class="feature-icon" style="color:var(--teal)"></i>
-          <h3>TAP boosted commissions</h3>
-          <p>Access exclusive boosted commission rates on select products. Earn more per sale with our partner affiliate programs.</p>
+          <i data-lucide="bar-chart-2" class="feature-icon"></i>
+          <h3>Market Analytics</h3>
+          <p>Category breakdowns, commission distributions, price analysis — understand the market before you enter it.</p>
         </div>
       </div>
     </div>
 
-    {# Feature 4: Discord banner #}
-    <div class="feature-discord-banner">
-      <div class="feature-discord-banner__text">
-        <i data-lucide="message-square" class="feature-icon"></i>
-        <div>
-          <h3>Discord bot included</h3>
-          <p>Use the <code>!lookup [product]</code> command directly in your Discord server to get instant product data, commission rates, and trending scores.</p>
-        </div>
+    <div class="features-row features-row-3">
+      <div class="feature-card">
+        <i data-lucide="video" class="feature-icon" style="color:var(--teal)"></i>
+        <h3>Top Creator Videos</h3>
+        <p>See which videos are driving sales for each product. Learn what content formats and creators are winning.</p>
       </div>
-      <div class="feature-discord-banner__mockup">
-        <div class="discord-msg-mockup">
-          <div class="discord-avatar"></div>
-          <div class="discord-content">
-            <span class="discord-name">Vantage Bot</span>
-            <div class="discord-bubble">&#x1f525; <strong>New trending product:</strong> Portable Mini Blender — 92 score, 18% commission <a href="#">View &rarr;</a></div>
-          </div>
-        </div>
+      <div class="feature-card">
+        <i data-lucide="zap" class="feature-icon"></i>
+        <h3>TAP Boosted Links</h3>
+        <p>Access exclusive boosted commission rates on select products. Earn more per sale with partner affiliate programs.</p>
+      </div>
+      <div class="feature-card">
+        <i data-lucide="message-circle" class="feature-icon" style="color:var(--teal)"></i>
+        <h3>AI Assistant</h3>
+        <p>Ask Vantage AI about trending products, market opportunities, and commission strategies — powered by your real-time data.</p>
       </div>
     </div>
   </div>
@@ -176,8 +138,8 @@
   <div class="pricing-container">
     <div class="pricing-header">
       <span class="features-eyebrow">Simple pricing</span>
-      <h2 class="features-title">One plan. Everything included.</h2>
-      <p class="pricing-sub">No feature tiers. No upsells. Everything Vantage offers, for one flat rate.</p>
+      <h2 class="features-title">One plan. Full access.</h2>
+      <p class="pricing-sub">No feature tiers or hidden fees. Everything Vantage offers, one flat monthly rate.</p>
     </div>
 
     <div class="pricing-layout">
@@ -190,50 +152,57 @@
               <span class="pricing-period">/ month</span>
             </div>
           </div>
-          <div class="pricing-badge">Most Popular</div>
+          <div class="pricing-badge">Full Access</div>
         </div>
 
         <div class="pricing-coupon-callout">
           <i data-lucide="tag"></i>
-          Use code <strong>LAUNCH50</strong> — 50% off your first month ($9.99)
+          Use code <strong>LAUNCH50</strong> — 50% off your first month
         </div>
 
         <ul class="pricing-features">
-          <li><i data-lucide="check"></i> Unlimited product searches</li>
-          <li><i data-lucide="check"></i> Real-time trending product feed (updated daily)</li>
-          <li><i data-lucide="check"></i> Real sales &amp; GMV data from TikTok Shop</li>
+          <li><i data-lucide="check"></i> Unlimited product research</li>
+          <li><i data-lucide="check"></i> Real-time sales &amp; revenue data</li>
           <li><i data-lucide="check"></i> Brand Hunter — top seller rankings</li>
           <li><i data-lucide="check"></i> Top creator video tracking</li>
           <li><i data-lucide="check"></i> TAP boosted commission links</li>
-          <li><i data-lucide="check"></i> Discord bot with <code>!lookup</code> product search</li>
-          <li><i data-lucide="check"></i> Community Discord server access</li>
-          <li><i data-lucide="check"></i> Full analytics dashboard</li>
-          <li><i data-lucide="check"></i> Referral program — earn free months</li>
+          <li><i data-lucide="check"></i> AI-powered product assistant</li>
+          <li><i data-lucide="check"></i> Market analytics dashboard</li>
+          <li><i data-lucide="check"></i> Discord community access</li>
+          <li><i data-lucide="check"></i> Daily data updates</li>
+          <li><i data-lucide="check"></i> Referral program</li>
         </ul>
 
-        <a href="/register" class="btn-pricing-cta">Get started free &rarr;</a>
-        <p class="pricing-card__note">Billed monthly via PayPal. Cancel anytime.</p>
+        <a href="/register" class="btn-pricing-cta">Start for free &rarr;</a>
+        <p class="pricing-card__note">Billed monthly via PayPal. Cancel anytime — no contracts.</p>
       </div>
 
       <div class="pricing-value-props">
         <div class="value-prop">
-          <i data-lucide="refresh-cw"></i>
-          <div><strong>Cancel anytime</strong><p>No contracts, no lock-in. Cancel from your settings with one click.</p></div>
+          <i data-lucide="shield-check"></i>
+          <div><strong>Trusted data</strong><p>Real TikTok Shop sales data updated daily. No estimates or guesswork.</p></div>
         </div>
         <div class="value-prop">
-          <i data-lucide="shield-check"></i>
-          <div><strong>PayPal protected</strong><p>All payments processed securely through PayPal's subscription billing.</p></div>
+          <i data-lucide="refresh-cw"></i>
+          <div><strong>Cancel anytime</strong><p>No contracts. Cancel from your settings with one click.</p></div>
         </div>
         <div class="value-prop">
           <i data-lucide="users"></i>
-          <div><strong>Referral rewards</strong><p>Share your referral link. Earn 1 free month for every 3 active referrals.</p></div>
+          <div><strong>Growing community</strong><p>Join other TikTok Shop affiliates sharing strategies and wins.</p></div>
         </div>
         <div class="value-prop">
           <i data-lucide="zap"></i>
-          <div><strong>Instant access</strong><p>Subscribe and get full access in under 60 seconds.</p></div>
+          <div><strong>Instant access</strong><p>Subscribe and start researching products in under 60 seconds.</p></div>
         </div>
       </div>
     </div>
   </div>
+</section>
+
+{# ===== FINAL CTA ===== #}
+<section style="padding:clamp(48px,6vw,80px) 24px;text-align:center">
+  <h2 style="font-size:clamp(24px,3vw,36px);font-weight:800;color:var(--text-primary);margin-bottom:16px">Ready to find your next winning product?</h2>
+  <p style="font-size:16px;color:var(--text-muted);margin-bottom:32px;max-width:480px;margin-left:auto;margin-right:auto">Join Vantage and get access to the product data that top TikTok Shop affiliates use every day.</p>
+  <a href="/register" class="btn btn-primary btn-lg" style="font-size:15px;padding:14px 36px">Get started free &rarr;</a>
 </section>
 {% endblock %}

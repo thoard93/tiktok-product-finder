@@ -443,7 +443,23 @@ def brands_list():
             Brand.category.isnot(None), Brand.category != ''
         ).distinct().order_by(Brand.category).all()
 
-        ctx['brands'] = pagination.items
+        brands = pagination.items
+        # Update product counts for brands showing 0
+        updated = False
+        for b in brands:
+            if not b.product_count or b.product_count == 0:
+                if b.shop_id:
+                    cnt = Product.query.filter(Product.seller_id == b.shop_id, _active_filter).count()
+                    if cnt > 0:
+                        b.product_count = cnt
+                        updated = True
+        if updated:
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+        ctx['brands'] = brands
         ctx['page'] = page
         ctx['total_pages'] = pagination.pages
         ctx['total_count'] = pagination.total
