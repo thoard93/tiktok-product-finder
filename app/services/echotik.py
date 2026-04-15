@@ -33,6 +33,32 @@ ECHOTIK_USERNAME = os.environ.get('ECHOTIK_USERNAME', '')
 ECHOTIK_PASSWORD = os.environ.get('ECHOTIK_PASSWORD', '')
 ECHOTIK_PROXY_STRING = os.environ.get('ECHOTIK_PROXY_STRING')
 
+# TikTok Shop top-level category ID → name mapping
+# These are the primary category IDs from EchoTik's product/list response
+TIKTOK_CATEGORIES = {
+    '600001': 'Womenswear & Underwear',
+    '600002': 'Menswear & Underwear',
+    '600003': 'Shoes',
+    '600004': 'Beauty & Personal Care',
+    '600005': 'Health',
+    '600006': 'Food & Beverages',
+    '600007': 'Electronics',
+    '600008': 'Home Supplies',
+    '600009': 'Baby & Maternity',
+    '600010': 'Sports & Outdoor',
+    '600011': 'Toys & Hobbies',
+    '600012': 'Pet Supplies',
+    '600013': 'Luggage & Bags',
+    '600014': 'Accessories',
+    '600015': 'Home Appliances',
+    '600016': 'Automotive',
+    '600017': 'Books & Stationery',
+    '600018': 'Kitchenware',
+    '824328': 'Health & Wellness',
+    '839944': 'Beauty',
+    '852104': 'Fashion',
+}
+
 # Retry config
 MAX_RETRIES = 3
 INITIAL_BACKOFF = 1.0  # seconds
@@ -641,8 +667,46 @@ def sync_to_db(products_list: list[dict]) -> dict:
     except Exception:
         log.exception("Post-sync image signing failed (non-fatal)")
 
+    # --- Post-sync: enrich categories for products missing them ---
+    try:
+        _enrich_missing_categories(db)
+    except Exception:
+        log.exception("Post-sync category enrichment failed (non-fatal)")
+
     log.info("sync_to_db: created=%d updated=%d errors=%d", created, updated, errors)
     return {'created': created, 'updated': updated, 'errors': errors}
+
+
+def _enrich_missing_categories(db):
+    """Fetch categories from product detail API for products missing category."""
+    from app.models import Product
+    import time as _time
+
+    products = Product.query.filter(
+        db.or_(Product.category.is_(None), Product.category == ''),
+        Product.sales_7d > 0,
+    ).limit(20).all()
+
+    if not products:
+        return
+
+    enriched = 0
+    for p in products:
+        try:
+            raw_id = p.product_id.replace('shop_', '')
+            detail = fetch_product_detail(raw_id)
+            if detail and detail.get('category'):
+                p.category = str(detail['category'])[:100]
+                enriched += 1
+            if detail and detail.get('subcategory') and not p.subcategory:
+                p.subcategory = str(detail['subcategory'])[:100]
+            _time.sleep(0.3)
+        except Exception:
+            continue
+
+    if enriched:
+        db.session.commit()
+        log.info("Category enrichment: %d products updated", enriched)
 
 
 def _sign_product_images(db):
@@ -831,6 +895,16 @@ def _normalize_product(d: dict) -> dict:
                 category = first.get('name') or first.get('cate_name')
             elif isinstance(first, str):
                 category = first
+
+    # Fallback: map category_id to a name using the TikTok category lookup
+    if not category:
+        cat_id = str(d.get('category_id') or d.get('categoryId') or d.get('first_cate_id') or '')
+        if cat_id and cat_id in TIKTOK_CATEGORIES:
+            category = TIKTOK_CATEGORIES[cat_id]
+        elif cat_id:
+            # Try parent category (first 4 digits)
+            parent_id = cat_id[:6] if len(cat_id) >= 6 else cat_id
+            category = TIKTOK_CATEGORIES.get(parent_id)
 
     subcategory = _pick(
         d.get('subcategory'), d.get('sub_category'),

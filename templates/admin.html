@@ -48,6 +48,21 @@
   </button>
 </div>
 
+{# ===== Category Sync ===== #}
+<div class="card mb-6" style="max-width:640px">
+  <div class="flex items-center gap-3 mb-4">
+    <div class="feature-icon accent" style="width:36px;height:36px;margin-bottom:0"><i data-lucide="tag" style="width:18px;height:18px"></i></div>
+    <div>
+      <h2 style="font-size:var(--text-lg);font-weight:700">Category Sync</h2>
+      <p class="text-sm text-muted">Fetch categories from EchoTik product detail API. Processes 50 products per batch.</p>
+    </div>
+  </div>
+  <div id="catSyncStatus" class="mb-4" style="display:none"></div>
+  <button class="btn btn-ghost btn-lg" id="catSyncBtn" onclick="syncCategories()">
+    <i data-lucide="tag" style="width:18px;height:18px"></i> Sync Missing Categories
+  </button>
+</div>
+
 {# ===== Brand Sync ===== #}
 <div class="card mb-6" style="max-width:640px">
   <div class="flex items-center gap-3 mb-4">
@@ -145,6 +160,23 @@ async function runDebug() {
   } catch(e) {
     out.textContent = "Error: " + e.message;
   }
+  btn.disabled = false; btn.style.opacity = "";
+}
+
+async function syncCategories() {
+  var btn = document.getElementById("catSyncBtn");
+  btn.disabled = true; btn.style.opacity = "0.6";
+  var el = document.getElementById("catSyncStatus");
+  el.style.display = "block"; el.className = "scan-status-box scan-status-info";
+  el.innerHTML = '<span class="anim-pulse">Fetching categories from EchoTik... (50 products, ~15s)</span>';
+  try {
+    var res = await fetch("/api/admin/sync-categories", {method:"POST"});
+    var data = await res.json();
+    if (data.success) {
+      el.className = "scan-status-box scan-status-success";
+      el.innerHTML = "<strong>Done!</strong> " + data.enriched + " products categorized. " + data.remaining + " still missing." + (data.remaining > 0 ? " Click again for next batch." : "");
+    } else { el.className = "scan-status-box scan-status-error"; el.innerHTML = data.error || "Failed"; }
+  } catch(e) { el.className = "scan-status-box scan-status-error"; el.innerHTML = "Network error"; }
   btn.disabled = false; btn.style.opacity = "";
 }
 

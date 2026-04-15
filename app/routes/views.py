@@ -736,6 +736,53 @@ def admin_panel():
 # API endpoints for frontend (blacklist CRUD, profile update, image sync)
 # ---------------------------------------------------------------------------
 
+@views_bp.route('/api/admin/sync-categories', methods=['POST'])
+@api_auth
+def api_sync_categories():
+    """Enrich categories for products missing them via product detail API."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    import logging, time as _time
+    log = logging.getLogger(__name__)
+
+    try:
+        from app.services.echotik import fetch_product_detail
+    except ImportError:
+        return jsonify({'error': 'echotik module not available'}), 500
+
+    products = Product.query.filter(
+        _active_filter,
+        or_(Product.category.is_(None), Product.category == ''),
+        Product.sales_7d > 0,
+    ).limit(50).all()
+
+    enriched = 0
+    for p in products:
+        try:
+            raw_id = p.product_id.replace('shop_', '')
+            detail = fetch_product_detail(raw_id)
+            if detail and detail.get('category'):
+                p.category = str(detail['category'])[:100]
+                enriched += 1
+            if detail and detail.get('subcategory') and not p.subcategory:
+                p.subcategory = str(detail['subcategory'])[:100]
+            _time.sleep(0.3)
+        except Exception as e:
+            log.warning("Category enrich failed for %s: %s", p.product_id, e)
+
+    db.session.commit()
+
+    remaining = Product.query.filter(
+        _active_filter,
+        or_(Product.category.is_(None), Product.category == ''),
+        Product.sales_7d > 0,
+    ).count()
+
+    return jsonify({'success': True, 'enriched': enriched, 'remaining': remaining})
+
+
 @views_bp.route('/api/admin/sync-images', methods=['POST'])
 @api_auth
 def api_sync_images():
