@@ -42,18 +42,23 @@ DISCORD_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '')  # Your Discord server
 # Developer passkey (set in Render environment variables)
 DEV_PASSKEY = os.environ.get('DEV_PASSKEY', 'change-this-passkey-123')
 
-# Admin Discord user IDs (comma-separated)
-ADMIN_DISCORD_IDS = os.environ.get('ADMIN_DISCORD_IDS', '').split(',')
+# Admin Discord user IDs (comma-separated, whitespace-stripped)
+ADMIN_DISCORD_IDS = [x.strip() for x in os.environ.get('ADMIN_DISCORD_IDS', '').split(',') if x.strip()]
 
 # =============================================================================
 # AUTHENTICATION HELPERS
 # =============================================================================
 
 def get_current_user():
-    """Get the current logged-in user or None"""
+    """Get the current logged-in user or None. Enforces admin whitelist."""
     if 'user_id' not in session:
         return None
-    return User.query.get(session['user_id'])
+    user = User.query.get(session['user_id'])
+    if user and user.discord_id and str(user.discord_id) in ADMIN_DISCORD_IDS:
+        if not user.is_admin:
+            user.is_admin = True
+            db.session.commit()
+    return user
 
 def login_required(f):
     @wraps(f)
@@ -392,13 +397,17 @@ def discord_callback():
                 discord_id=discord_id,
                 discord_username=username,
                 discord_avatar=avatar,
-                is_admin=discord_id in ADMIN_DISCORD_IDS
+                is_admin=str(discord_id) in ADMIN_DISCORD_IDS
             )
             db.session.add(user)
         else:
             user.discord_username = username
             user.discord_avatar = avatar
             user.last_login = datetime.utcnow()
+
+        # Always enforce admin whitelist from env var on every login
+        if str(discord_id) in ADMIN_DISCORD_IDS:
+            user.is_admin = True
 
         db.session.commit()
 
