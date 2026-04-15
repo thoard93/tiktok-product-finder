@@ -452,3 +452,36 @@ class TapList(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =============================================================================
+# EBAY PRICE BLADE (admin-only)
+# =============================================================================
+
+class EbayWatchlistItem(db.Model):
+    __tablename__ = 'ebay_watchlist'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(500))
+    keywords = db.Column(db.String(500))
+    avg_sold_price = db.Column(db.Float)
+    lowest_bin = db.Column(db.Float)
+    sell_through_rate = db.Column(db.Float)
+    active_listings = db.Column(db.Integer)
+    sold_last_30 = db.Column(db.Integer)
+    recommended_price = db.Column(db.Float)
+    notes = db.Column(db.Text)
+    last_checked = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EbaySearchHistory(db.Model):
+    __tablename__ = 'ebay_search_history'
+    id = db.Column(db.Integer, primary_key=True)
+    query = db.Column(db.String(500))
+    avg_sold_price = db.Column(db.Float)
+    lowest_bin = db.Column(db.Float)
+    sell_through_rate = db.Column(db.Float)
+    active_listings = db.Column(db.Integer)
+    sold_count = db.Column(db.Integer)
+    raw_results = db.Column(db.Text)
+    searched_at = db.Column(db.DateTime, default=datetime.utcnow)

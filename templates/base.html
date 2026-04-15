@@ -53,6 +53,9 @@
         <a href="/app/admin/tap-lists" class="sidebar-link {% if active_page == 'admin' and request and request.path == '/app/admin/tap-lists' %}active{% endif %}">
           <i data-lucide="list"></i> TAP Lists
         </a>
+        <a href="/ebay" class="sidebar-link {% if '/ebay' in request.path %}active{% endif %}" style="{% if '/ebay' in request.path %}border-left-color:#fdab43;color:#fdab43{% endif %}">
+          <i data-lucide="tag"></i> Price Blade
+        </a>
         {% endif %}
       </nav>
 

@@ -85,6 +85,20 @@ def _auto_migrate(app, db):
             db.session.rollback()
             print(f"[MIGRATE] tap_lists creation failed: {e}")
 
+    # Fix ebay tables if missing
+    for tbl in ['ebay_watchlist', 'ebay_search_history']:
+        try:
+            db.session.execute(db.text(f"SELECT id FROM {tbl} LIMIT 1"))
+            db.session.rollback()
+        except Exception:
+            db.session.rollback()
+            try:
+                db.create_all()
+                print(f"[MIGRATE] Created {tbl} table")
+            except Exception as e:
+                db.session.rollback()
+                print(f"[MIGRATE] {tbl} creation failed: {e}")
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -153,6 +167,7 @@ def create_app():
     from app.routes.extern import extern_bp
     from app.routes.payments import payments_bp
     from app.routes.views import views_bp
+    from app.routes.ebay import ebay_bp
 
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(products_bp)
@@ -163,6 +178,7 @@ def create_app():
     flask_app.register_blueprint(extern_bp)
     flask_app.register_blueprint(payments_bp)
     flask_app.register_blueprint(views_bp)
+    flask_app.register_blueprint(ebay_bp)
 
     # --- Serve /static/ from project static/ folder (CSS/JS for Jinja2 templates) ---
     import flask
@@ -260,6 +276,8 @@ from app.models import (  # noqa: E402, F401
     Brand,
     TapProduct,
     TapList,
+    EbayWatchlistItem,
+    EbaySearchHistory,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)

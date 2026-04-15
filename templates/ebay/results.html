@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Price Blade — {{ r.keywords }}{% endblock %}
+{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>{% endblock %}
+{% block content %}
+<a href="/ebay" class="detail-back"><i data-lucide="arrow-left"></i> Back to Price Blade</a>
+
+<div class="page-header">
+  <h1 class="page-title">"{{ r.keywords }}"</h1>
+  <p class="page-subtitle">eBay market analysis</p>
+</div>
+
+{# KPI Cards #}
+<div class="stat-grid mb-6">
+  <div class="stat-card" style="border-top:3px solid #fdab43">
+    <div class="stat-label">Avg Sold Price</div>
+    <div class="stat-value" style="color:#fdab43">${{ "%.2f" | format(r.avg_sold_price) }}</div>
+  </div>
+  <div class="stat-card" style="border-top:3px solid {{ '#059669' if r.sell_through_rate > 60 else ('#d97706' if r.sell_through_rate > 30 else '#dc2626') }}">
+    <div class="stat-label">Sell-Through Rate</div>
+    <div class="stat-value">{{ "%.0f" | format(r.sell_through_rate) }}%</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active Listings</div>
+    <div class="stat-value">{{ r.active_listings }}</div>
+    <div style="margin-top:4px">
+      <span class="badge {{ 'badge-green' if r.competition_level == 'Low' else ('badge-gold' if r.competition_level == 'Medium' else 'badge-red') }}">{{ r.competition_level }} competition</span>
+    </div>
+  </div>
+  <div class="stat-card" style="border-top:3px solid var(--accent)">
+    <div class="stat-label">Recommended Price</div>
+    <div class="stat-value" style="color:var(--accent)">${{ "%.2f" | format(r.recommended_price) }}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Start here</div>
+  </div>
+</div>
+
+<div class="detail-layout">
+  {# LEFT: Chart + Add to Watchlist #}
+  <div>
+    {# Additional stats #}
+    <div class="card mb-4">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)">
+        <div><div class="stat-label">Median Sold</div><div style="font-size:18px;font-weight:700">${{ "%.2f" | format(r.median_sold_price) }}</div></div>
+        <div><div class="stat-label">Lowest Sold</div><div style="font-size:18px;font-weight:700">${{ "%.2f" | format(r.lowest_sold) }}</div></div>
+        <div><div class="stat-label">Highest Sold</div><div style="font-size:18px;font-weight:700">${{ "%.2f" | format(r.highest_sold) }}</div></div>
+      </div>
+    </div>
+
+    {# Price distribution chart #}
+    {% if r.price_distribution %}
+    <div class="chart-card mb-4">
+      <div class="chart-title">Price Distribution (Sold Items)</div>
+      <div class="chart-wrap"><canvas id="priceDistChart"></canvas></div>
+    </div>
+    {% endif %}
+
+    {# Add to watchlist #}
+    <div class="card">
+      <h3 style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-4)">Add to Watchlist</h3>
+      <form method="POST" action="/ebay/watchlist/add">
+        <input type="hidden" name="keywords" value="{{ r.keywords }}">
+        <input type="hidden" name="title" value="{{ r.keywords }}">
+        <input type="hidden" name="avg_sold_price" value="{{ r.avg_sold_price }}">
+        <input type="hidden" name="lowest_bin" value="{{ r.lowest_bin }}">
+        <input type="hidden" name="sell_through_rate" value="{{ r.sell_through_rate }}">
+        <input type="hidden" name="active_listings" value="{{ r.active_listings }}">
+        <input type="hidden" name="sold_last_30" value="{{ r.sold_last_30 }}">
+        <input type="hidden" name="recommended_price" value="{{ r.recommended_price }}">
+        <div class="input-group mb-4">
+          <label class="input-label">Notes (optional)</label>
+          <textarea name="notes" class="input" style="height:60px;resize:vertical" placeholder="Any notes about this product..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="background:#fdab43;color:#000">
+          <i data-lucide="bookmark" style="width:14px;height:14px"></i> Add to Watchlist
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {# RIGHT: Recent sold listings #}
+  <div>
+    <div class="card">
+      <h3 style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-4)">Recent Sold Listings</h3>
+      {% if r.recent_sold %}
+      <div style="display:flex;flex-direction:column;gap:2px">
+        {% for item in r.recent_sold %}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px">
+              {% if item.url %}<a href="{{ item.url }}" target="_blank" rel="noopener" style="color:var(--text-primary)">{{ item.title }}</a>
+              {% else %}{{ item.title }}{% endif %}
+            </div>
+            {% if item.date %}<div style="font-size:11px;color:var(--text-faint)">{{ item.date }}</div>{% endif %}
+          </div>
+          <div style="font-weight:700;font-variant-numeric:tabular-nums;color:#fdab43">${{ "%.2f" | format(item.price) }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-muted">No sold listings found.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if r.price_distribution %}
+new Chart(document.getElementById("priceDistChart"), {
+  type: "bar",
+  data: {
+    labels: {{ r.price_distribution | map(attribute='label') | list | tojson }},
+    datasets: [{
+      data: {{ r.price_distribution | map(attribute='count') | list | tojson }},
+      backgroundColor: "#fdab43",
+      borderRadius: 6,
+      borderSkipped: false
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, indexAxis: "y",
+    plugins: {legend: {display: false}},
+    scales: {
+      x: {grid:{color:"rgba(0,0,0,0.04)"}, ticks:{color:"#9ca3af",font:{size:11}}, border:{display:false}},
+      y: {grid:{display:false}, ticks:{color:"#4b5563",font:{size:12}}, border:{display:false}}
+    }
+  }
+});
+{% endif %}
+</script>
+{% endblock %}

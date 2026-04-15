@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Price Blade{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title" style="display:flex;align-items:center;gap:8px">
+    <i data-lucide="tag" style="width:24px;height:24px;color:#fdab43"></i> Price Blade
+  </h1>
+  <p class="page-subtitle">eBay market research &amp; pricing intelligence</p>
+</div>
+
+{# Search bar #}
+<div class="card mb-6" style="max-width:700px">
+  <form method="POST" action="/ebay/analyze">
+    <div style="display:flex;gap:8px">
+      <input type="text" name="keywords" class="input" placeholder="Search eBay sold listings... (e.g. 'iPhone 15 Pro Max 256GB')" required style="flex:1">
+      <button type="submit" class="btn btn-primary" style="background:#fdab43;color:#000;font-weight:700">
+        <i data-lucide="search" style="width:16px;height:16px"></i> Analyze
+      </button>
+    </div>
+  </form>
+</div>
+
+{# Recent searches #}
+{% if recent and recent | length > 0 %}
+<div class="section-header"><h2 class="section-title">Recent Searches</h2></div>
+<div class="product-table-wrap mb-6" style="max-width:900px">
+  <table class="product-table">
+    <thead>
+      <tr><th>Query</th><th>Avg Sold</th><th>Sell-Through</th><th>Active</th><th>Date</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for h in recent %}
+      <tr>
+        <td style="font-weight:600">{{ h.query }}</td>
+        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(h.avg_sold_price or 0) }}</td>
+        <td>
+          {% set st = h.sell_through_rate or 0 %}
+          <span class="badge {{ 'badge-green' if st > 60 else ('badge-gold' if st > 30 else 'badge-red') }}">{{ "%.0f" | format(st) }}%</span>
+        </td>
+        <td>{{ h.active_listings or 0 }}</td>
+        <td class="text-muted" style="font-size:12px">{% if h.searched_at %}{{ h.searched_at.strftime('%b %d, %I:%M%p') }}{% endif %}</td>
+        <td><a href="/ebay/rerun/{{ h.id }}" class="btn btn-ghost btn-sm">Re-run</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# Watchlist #}
+<div class="section-header">
+  <h2 class="section-title">Watchlist</h2>
+  <span class="text-sm text-secondary">{{ watchlist | length }} items</span>
+</div>
+
+{% if watchlist and watchlist | length > 0 %}
+<div class="product-table-wrap" style="max-width:1100px">
+  <table class="product-table">
+    <thead>
+      <tr><th>Item</th><th>Avg Sold</th><th>Lowest BIN</th><th>Sell-Through</th><th>Competition</th><th>Last Checked</th><th>Notes</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for w in watchlist %}
+      <tr>
+        <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ w.title or w.keywords }}</td>
+        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(w.avg_sold_price or 0) }}</td>
+        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(w.lowest_bin or 0) }}</td>
+        <td>
+          {% set st = w.sell_through_rate or 0 %}
+          <span class="badge {{ 'badge-green' if st > 60 else ('badge-gold' if st > 30 else 'badge-red') }}">{{ "%.0f" | format(st) }}%</span>
+        </td>
+        <td>
+          {% if (w.active_listings or 0) > 200 %}<span class="badge badge-red">High</span>
+          {% elif (w.active_listings or 0) > 50 %}<span class="badge badge-gold">Medium</span>
+          {% else %}<span class="badge badge-green">Low</span>{% endif %}
+        </td>
+        <td class="text-muted" style="font-size:12px">{% if w.last_checked %}{{ w.last_checked.strftime('%b %d') }}{% endif %}</td>
+        <td class="text-muted" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ w.notes or '' }}</td>
+        <td style="display:flex;gap:4px">
+          <form method="POST" action="/ebay/watchlist/refresh/{{ w.id }}" style="display:inline"><button class="btn btn-ghost btn-sm" type="submit" title="Refresh"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i></button></form>
+          <form method="POST" action="/ebay/watchlist/remove/{{ w.id }}" style="display:inline"><button class="btn btn-ghost btn-sm" type="submit" style="color:var(--danger)" title="Remove"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="padding:var(--space-8);text-align:center;max-width:700px">
+  <p class="text-sm text-muted">No items in your watchlist. Analyze a product and add it.</p>
+</div>
+{% endif %}
+{% endblock %}
