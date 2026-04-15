@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Manage Coupons{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Coupon Codes</h1>
+  <p class="page-subtitle">Create and manage promo codes for free access or discounts</p>
+</div>
+
+{# ===== CREATE NEW COUPON ===== #}
+<div class="card mb-6">
+  <h2 style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-4)">New Coupon</h2>
+  <form action="/app/admin/coupons/add" method="POST">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div>
+        <label class="label">Code <span style="color:var(--accent)">*</span></label>
+        <input type="text" name="code" class="input" placeholder="VANTAGE-FREE" required maxlength="50"
+               style="text-transform:uppercase;font-weight:700;letter-spacing:.04em">
+      </div>
+      <div>
+        <label class="label">Discount Type</label>
+        <select name="discount_type" class="input">
+          <option value="free_months">Free Months (grant Pro access)</option>
+          <option value="percent_off">Percent Off</option>
+          <option value="fixed_off">Fixed $ Off</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div>
+        <label class="label">Value</label>
+        <input type="number" name="discount_value" class="input" value="1" min="1" max="365"
+               placeholder="1 = 1 month free">
+        <div class="text-xs text-faint" style="margin-top:2px">Months / percent / dollars</div>
+      </div>
+      <div>
+        <label class="label">Max Uses</label>
+        <input type="number" name="max_uses" class="input" value="1" min="1" max="999999"
+               placeholder="1 for single-use">
+        <div class="text-xs text-faint" style="margin-top:2px">Leave empty for unlimited</div>
+      </div>
+      <div>
+        <label class="label">Expires (EST, optional)</label>
+        <input type="datetime-local" name="expires_at" class="input">
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Create Coupon
+    </button>
+  </form>
+</div>
+
+{# ===== EXISTING COUPONS TABLE ===== #}
+<div class="section-header">
+  <h2 class="section-title">All Coupons</h2>
+</div>
+
+<div class="product-table-wrap">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th style="width:40px">#</th>
+        <th style="min-width:140px">Code</th>
+        <th>Type</th>
+        <th>Value</th>
+        <th>Uses</th>
+        <th>Status</th>
+        <th>Expires</th>
+        <th>Created</th>
+        <th style="width:160px">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if coupons %}
+        {% for c in coupons %}
+        <tr style="{% if not c.is_active %}opacity:0.5{% endif %}">
+          <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ c.id }}</td>
+          <td style="font-weight:700;letter-spacing:.04em;font-size:13px">{{ c.code }}</td>
+          <td style="font-size:12px">
+            {% if c.discount_type == 'free_months' %}Free months
+            {% elif c.discount_type == 'percent_off' %}% off
+            {% else %}$ off{% endif %}
+          </td>
+          <td style="font-weight:600">
+            {% if c.discount_type == 'free_months' %}{{ c.discount_value }} mo
+            {% elif c.discount_type == 'percent_off' %}{{ c.discount_value }}%
+            {% else %}${{ c.discount_value }}{% endif %}
+          </td>
+          <td style="font-variant-numeric:tabular-nums">{{ c.times_used }}{% if c.max_uses %}/{{ c.max_uses }}{% endif %}</td>
+          <td>
+            {% if c.is_valid() %}
+              <span class="status-badge status-badge--live">VALID</span>
+            {% elif not c.is_active %}
+              <span class="status-badge status-badge--off">DISABLED</span>
+            {% elif c.max_uses and c.times_used >= c.max_uses %}
+              <span class="status-badge status-badge--off">USED UP</span>
+            {% elif c.expires_at and c.expires_at < now %}
+              <span class="status-badge status-badge--off">EXPIRED</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;font-variant-numeric:tabular-nums">{{ c.expires_at.strftime('%m/%d/%y') if c.expires_at else '—' }}</td>
+          <td style="font-size:12px;color:var(--text-faint)">{{ c.created_at.strftime('%m/%d/%y') if c.created_at else '—' }}{% if c.created_by %} by {{ c.created_by }}{% endif %}</td>
+          <td>
+            <div style="display:flex;gap:var(--space-2)">
+              <form action="/app/admin/coupons/{{ c.id }}/toggle" method="POST" style="margin:0">
+                <button type="submit" class="btn btn-ghost btn-sm" style="font-size:12px">
+                  {% if c.is_active %}Disable{% else %}Enable{% endif %}
+                </button>
+              </form>
+              <form action="/app/admin/coupons/{{ c.id }}/delete" method="POST" style="margin:0"
+                    onsubmit="return confirm('Delete this coupon?')">
+                <button type="submit" class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--accent)">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="9" class="text-center text-muted" style="padding:var(--space-8)">No coupons created yet</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

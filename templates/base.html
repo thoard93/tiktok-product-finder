@@ -47,6 +47,9 @@
         </a>
 
         <span class="sidebar-section">Manage</span>
+        <a href="/app/redeem" class="sidebar-link {% if active_page == 'redeem' %}active{% endif %}">
+          <i data-lucide="gift"></i> Redeem Code
+        </a>
         <a href="/app/settings" class="sidebar-link {% if active_page == 'settings' %}active{% endif %}">
           <i data-lucide="settings"></i> Settings
         </a>
@@ -64,6 +67,9 @@
         </a>
         <a href="/app/admin/campaigns" class="sidebar-link {% if active_page == 'campaigns' %}active{% endif %}">
           <i data-lucide="megaphone"></i> Campaigns
+        </a>
+        <a href="/app/admin/coupons" class="sidebar-link {% if active_page == 'coupons' %}active{% endif %}">
+          <i data-lucide="ticket"></i> Coupons
         </a>
         <a href="/ebay" class="sidebar-link {% if '/ebay' in request.path %}active{% endif %}" style="{% if '/ebay' in request.path %}border-left-color:#fdab43;color:#fdab43{% endif %}">
           <i data-lucide="tag"></i> Price Blade

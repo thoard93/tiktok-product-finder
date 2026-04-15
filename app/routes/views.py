@@ -6,10 +6,11 @@ Existing API routes remain unchanged in their respective blueprints.
 
 from functools import wraps
 from datetime import datetime
-from flask import Blueprint, render_template, redirect, session, request, jsonify
+from datetime import timedelta
+from flask import Blueprint, render_template, redirect, session, request, jsonify, flash
 from sqlalchemy import desc, or_
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView, CampaignBanner
+from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView, CampaignBanner, CouponCode, CouponRedemption
 from app.routes.auth import get_current_user
 
 
@@ -1557,3 +1558,160 @@ def admin_campaign_delete(cid):
         db.session.delete(c)
         db.session.commit()
     return redirect('/app/admin/campaigns')
+
+
+# ---------------------------------------------------------------------------
+# Coupon / Promo Code System
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/app/redeem', methods=['GET', 'POST'])
+@login_required
+def redeem_coupon():
+    ctx = _base_context('redeem')
+    user = ctx['current_user']
+    if not user:
+        return redirect('/login')
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip().upper()
+        if not code:
+            flash('Please enter a coupon code.', 'error')
+            return redirect('/app/redeem')
+
+        coupon = CouponCode.query.filter_by(code=code).first()
+
+        if not coupon or not coupon.is_active:
+            flash('Invalid coupon code.', 'error')
+        elif coupon.max_uses and coupon.times_used >= coupon.max_uses:
+            flash('This coupon has reached its maximum uses.', 'error')
+        elif coupon.expires_at and datetime.utcnow() > coupon.expires_at:
+            flash('This coupon has expired.', 'error')
+        elif CouponRedemption.query.filter_by(coupon_id=coupon.id, user_id=user.id).first():
+            flash("You've already redeemed this coupon.", 'error')
+        else:
+            # Apply the coupon
+            if coupon.discount_type == 'free_months':
+                # Grant or extend subscription
+                sub = Subscription.query.filter_by(user_id=user.id).first()
+                if not sub:
+                    sub = Subscription(user_id=user.id)
+                    db.session.add(sub)
+
+                # Calculate new end date
+                base = datetime.utcnow()
+                if sub.status == 'active' and sub.next_billing_date and sub.next_billing_date > base:
+                    base = sub.next_billing_date  # Extend from current end
+
+                new_end = base + timedelta(days=30 * coupon.discount_value)
+                sub.status = 'active'
+                sub.plan = f'coupon_{coupon.discount_value}mo'
+                sub.coupon_code = coupon.code
+                sub.next_billing_date = new_end
+
+                # Log redemption
+                redemption = CouponRedemption(coupon_id=coupon.id, user_id=user.id)
+                coupon.times_used += 1
+                db.session.add(redemption)
+                db.session.commit()
+
+                flash(f"Coupon applied! You have Pro access until {new_end.strftime('%B %d, %Y')}.", 'success')
+                return redirect('/app/dashboard')
+            else:
+                # percent_off / fixed_off — not used for direct access, just log it
+                redemption = CouponRedemption(coupon_id=coupon.id, user_id=user.id)
+                coupon.times_used += 1
+                db.session.add(redemption)
+                db.session.commit()
+                flash(f"Coupon {code} applied!", 'success')
+                return redirect('/app/subscribe')
+
+        return redirect('/app/redeem')
+
+    # GET — show recent redemptions for this user
+    ctx['redemptions'] = CouponRedemption.query.filter_by(user_id=user.id).order_by(
+        CouponRedemption.redeemed_at.desc()
+    ).all()
+    return render_template('redeem.html', **ctx)
+
+
+# ---------------------------------------------------------------------------
+# Admin — Coupon Management
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/app/admin/coupons')
+@login_required
+def admin_coupons():
+    ctx = _base_context('coupons')
+    user = ctx['current_user']
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    ctx['coupons'] = CouponCode.query.order_by(CouponCode.created_at.desc()).all()
+    ctx['now'] = datetime.utcnow()
+    return render_template('admin_coupons.html', **ctx)
+
+
+@views_bp.route('/app/admin/coupons/add', methods=['POST'])
+@login_required
+def admin_coupon_add():
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+
+    code = request.form.get('code', '').strip().upper()
+    discount_type = request.form.get('discount_type', 'free_months')
+    discount_value = int(request.form.get('discount_value', 1) or 1)
+    max_uses = request.form.get('max_uses', '1').strip()
+    expires = request.form.get('expires_at', '').strip()
+
+    if not code:
+        flash('Coupon code is required.', 'error')
+        return redirect('/app/admin/coupons')
+
+    if CouponCode.query.filter_by(code=code).first():
+        flash(f'Coupon "{code}" already exists.', 'error')
+        return redirect('/app/admin/coupons')
+
+    coupon = CouponCode(
+        code=code,
+        discount_type=discount_type,
+        discount_value=discount_value,
+        max_uses=int(max_uses) if max_uses else None,
+        is_active=True,
+        created_by=user.discord_username,
+    )
+    if expires:
+        try:
+            coupon.expires_at = datetime.fromisoformat(expires)
+        except ValueError:
+            pass
+
+    db.session.add(coupon)
+    db.session.commit()
+    flash(f'Coupon {code} created!', 'success')
+    return redirect('/app/admin/coupons')
+
+
+@views_bp.route('/app/admin/coupons/<int:cid>/toggle', methods=['POST'])
+@login_required
+def admin_coupon_toggle(cid):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    c = CouponCode.query.get(cid)
+    if c:
+        c.is_active = not c.is_active
+        db.session.commit()
+    return redirect('/app/admin/coupons')
+
+
+@views_bp.route('/app/admin/coupons/<int:cid>/delete', methods=['POST'])
+@login_required
+def admin_coupon_delete(cid):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    c = CouponCode.query.get(cid)
+    if c:
+        db.session.delete(c)
+        db.session.commit()
+    return redirect('/app/admin/coupons')

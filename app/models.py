@@ -561,3 +561,64 @@ class EbaySearchHistory(db.Model):
     sold_count = db.Column(db.Integer)
     raw_results = db.Column(db.Text)
     searched_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# =============================================================================
+# COUPON / PROMO CODE SYSTEM
+# =============================================================================
+
+class CouponCode(db.Model):
+    """Promo/coupon codes for free access or discounts"""
+    __tablename__ = 'coupon_codes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    discount_type = db.Column(db.String(20), nullable=False)  # free_months, percent_off, fixed_off
+    discount_value = db.Column(db.Integer, nullable=False)     # 1 = 1 month, 50 = 50%, etc.
+    max_uses = db.Column(db.Integer, default=1)                # None = unlimited
+    times_used = db.Column(db.Integer, default=0)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_by = db.Column(db.String(100), nullable=True)      # admin username who created
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def is_valid(self):
+        """Check if coupon can still be redeemed"""
+        if not self.is_active:
+            return False
+        if self.max_uses and self.times_used >= self.max_uses:
+            return False
+        if self.expires_at and datetime.utcnow() > self.expires_at:
+            return False
+        return True
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'code': self.code,
+            'discount_type': self.discount_type,
+            'discount_value': self.discount_value,
+            'max_uses': self.max_uses,
+            'times_used': self.times_used,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'is_active': self.is_active,
+            'is_valid': self.is_valid(),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class CouponRedemption(db.Model):
+    """Tracks which users redeemed which coupons (prevents double-use)"""
+    __tablename__ = 'coupon_redemptions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    coupon_id = db.Column(db.Integer, db.ForeignKey('coupon_codes.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    redeemed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    coupon = db.relationship('CouponCode', backref='redemptions')
+    user = db.relationship('User', backref='coupon_redemptions')
+
+    __table_args__ = (
+        db.UniqueConstraint('coupon_id', 'user_id', name='uq_coupon_user'),
+    )

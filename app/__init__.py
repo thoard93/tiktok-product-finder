@@ -126,6 +126,20 @@ def _auto_migrate(app, db):
             db.session.rollback()
             print(f"[MIGRATE] campaign_banners creation failed: {e}")
 
+    # Fix coupon tables if missing
+    for tbl in ['coupon_codes', 'coupon_redemptions']:
+        try:
+            db.session.execute(db.text(f"SELECT id FROM {tbl} LIMIT 1"))
+            db.session.rollback()
+        except Exception:
+            db.session.rollback()
+            try:
+                db.create_all()
+                print(f"[MIGRATE] Created {tbl} table")
+            except Exception as e:
+                db.session.rollback()
+                print(f"[MIGRATE] {tbl} creation failed: {e}")
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -326,6 +340,8 @@ from app.models import (  # noqa: E402, F401
     EbaySearchHistory,
     ProductView,
     CampaignBanner,
+    CouponCode,
+    CouponRedemption,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)
