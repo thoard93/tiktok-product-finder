@@ -37,6 +37,7 @@ payments_bp = Blueprint('payments', __name__)
 PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID', '')
 PAYPAL_SECRET = os.environ.get('PAYPAL_SECRET', '')
 PAYPAL_PLAN_ID = os.environ.get('PAYPAL_PLAN_ID', '')
+PAYPAL_COUPON_PLAN_ID = os.environ.get('PAYPAL_COUPON_PLAN_ID', '')  # Plan with $9.99 trial month
 PAYPAL_WEBHOOK_ID = os.environ.get('PAYPAL_WEBHOOK_ID', '')
 PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')
 PRISM_BASE_URL = os.environ.get('PRISM_BASE_URL', 'https://thoardburgersauce.com')
@@ -163,9 +164,14 @@ def create_subscription():
     coupon_code = data.get('coupon_code', '').strip().upper()
     referral_code = data.get('referral_code', '').strip()
 
-    # Build subscription payload
+    # Use coupon plan if valid coupon + coupon plan exists
+    use_coupon_plan = (
+        coupon_code and coupon_code in COUPON_CODES and PAYPAL_COUPON_PLAN_ID
+    )
+    plan_id = PAYPAL_COUPON_PLAN_ID if use_coupon_plan else PAYPAL_PLAN_ID
+
     sub_payload = {
-        'plan_id': PAYPAL_PLAN_ID,
+        'plan_id': plan_id,
         'application_context': {
             'brand_name': 'Vantage',
             'locale': 'en-US',
@@ -177,8 +183,8 @@ def create_subscription():
         'custom_id': str(user.id),
     }
 
-    # Coupon is stored in the subscription record after creation
-    # (PayPal doesn't support inline billing cycle overrides on all plan types)
+    log.info('[PAYMENTS] Creating subscription: plan=%s, coupon=%s, user=%s',
+             plan_id, coupon_code or 'none', user.id)
 
     try:
         resp = requests.post(

@@ -435,13 +435,13 @@ def brands_list():
         if search:
             query = query.filter(Brand.name.ilike(f'%{search}%'))
         if sort == 'followers':
-            query = query.order_by(desc(Brand.follower_count))
+            query = query.order_by(desc(Brand.follower_count.nullslast()))
         elif sort == 'trending':
-            query = query.order_by(desc(Brand.trending_score))
+            query = query.order_by(desc(Brand.trending_score.nullslast()))
         elif sort == 'products':
-            query = query.order_by(desc(Brand.product_count))
+            query = query.order_by(desc(Brand.product_count.nullslast()))
         else:
-            query = query.order_by(desc(Brand.gmv_30d))
+            query = query.order_by(Brand.gmv_30d.desc().nullslast())
 
         pagination = query.paginate(page=page, per_page=30, error_out=False)
 
