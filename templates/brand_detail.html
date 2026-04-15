@@ -47,6 +47,13 @@
   <span class="text-sm text-secondary">{{ (live_products | length) if live_products else (db_products | length) }} found</span>
 </div>
 
+{# Sort bar #}
+<div class="flex gap-2 mb-4" style="flex-wrap:wrap">
+  {% for val, label in [('sales', '7d Sales'), ('commission', 'Commission'), ('price', 'Price'), ('videos', 'Videos'), ('new', 'Newest')] %}
+    <a href="/app/brands/{{ brand.id }}?sort={{ val }}" class="btn btn-sm {{ 'btn-primary' if brand_sort == val else 'btn-ghost' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
 {% macro render_product_card(p, is_live=false) %}
   {% set cat_lower = (p.category if not is_live else (p.get('category', '') or ''))|lower %}
   {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else 'cat-default'))) %}

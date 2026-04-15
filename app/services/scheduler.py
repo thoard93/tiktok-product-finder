@@ -37,9 +37,7 @@ def _sync_videos_for_product(product, db):
 
         stored = 0
         for v in videos:
-            duration = v.get('duration', 999)
-            if duration > 15:
-                continue  # HARD FILTER — skip anything over 15 seconds
+            duration = v.get('duration', 0)
 
             vid = ProductVideo(
                 product_id=product.product_id,

@@ -128,11 +128,10 @@
       <div class="chart-wrap"><canvas id="detailSalesChart"></canvas></div>
     </div>
 
-    {# Short videos (<=15s) #}
+    {# Top videos #}
     <div class="card mb-4">
       <div class="flex items-center gap-2 mb-4">
-        <div class="text-sm font-semibold text-muted">Top Short Videos</div>
-        <span class="badge badge-muted" style="font-size:10px">&le;15s</span>
+        <div class="text-sm font-semibold text-muted">Top Videos</div>
       </div>
       {% if videos and videos | length > 0 %}
         {% for v in videos[:5] %}
@@ -152,7 +151,7 @@
         </a>
         {% endfor %}
       {% else %}
-        <p class="text-sm text-faint text-center" style="padding:var(--space-4) 0">No short videos (&le;15s) found yet</p>
+        <p class="text-sm text-faint text-center" style="padding:var(--space-4) 0">No videos found yet</p>
       {% endif %}
     </div>
 

@@ -111,18 +111,17 @@ def dashboard():
         'saved_count': saved,
     }
 
-    # Trending products (top 6 by 7d sales)
+    # Trending products (top 6 by 7d sales, min 5 videos)
     ctx['trending_products'] = Product.query.filter(
-        _active_filter
+        _active_filter, Product.video_count >= 5
     ).order_by(desc(Product.sales_7d)).limit(6).all()
 
-    # Add trending_score attribute for template
     for p in ctx['trending_products']:
         p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
 
-    # Recent products (last updated)
+    # Recent products (last updated, min 5 videos)
     ctx['recent_products'] = Product.query.filter(
-        _active_filter
+        _active_filter, Product.video_count >= 5
     ).order_by(desc(Product.last_updated)).limit(5).all()
     for p in ctx['recent_products']:
         p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
@@ -165,7 +164,10 @@ def _products_list_inner(ctx):
     max_price = request.args.get('max_price', 0, type=float)
     max_videos = request.args.get('max_videos', 0, type=int)
 
-    query = Product.query.filter(_active_filter)
+    query = Product.query.filter(
+        _active_filter,
+        Product.video_count >= 5  # Filter out placeholder products with <5 videos
+    )
 
     if search:
         query = query.filter(Product.product_name.ilike(f'%{search}%'))
@@ -283,8 +285,6 @@ def product_detail(product_id):
     try:
         ctx['videos'] = ProductVideo.query.filter_by(
             product_id=product_id
-        ).filter(
-            ProductVideo.duration_seconds <= 15
         ).order_by(desc(ProductVideo.view_count)).limit(5).all()
     except Exception:
         ctx['videos'] = []
@@ -394,6 +394,7 @@ def brands_list():
 def brand_detail(brand_id):
     ctx = _base_context('brands')
     brand = Brand.query.get_or_404(brand_id)
+    brand_sort = request.args.get('sort', 'sales')
     ctx['brand'] = brand
 
     # Try fetching live products from EchoTik for this seller
@@ -423,21 +424,29 @@ def brand_detail(brand_id):
     # Fallback: products in our DB matching this seller ID or name
     db_products = []
     if not live_products:
-        # Try by seller_id first (exact match)
+        # Build query — try seller_id first, then name
+        db_q = None
         if brand.shop_id:
-            db_products = Product.query.filter(
-                Product.seller_id == brand.shop_id,
-                _active_filter
-            ).order_by(desc(Product.sales_7d)).limit(20).all()
-        # Then by seller name (fuzzy)
-        if not db_products and brand.name:
-            db_products = Product.query.filter(
-                Product.seller_name.ilike(f'%{brand.name}%'),
-                _active_filter
-            ).order_by(desc(Product.sales_7d)).limit(20).all()
+            db_q = Product.query.filter(Product.seller_id == brand.shop_id, _active_filter)
+        if db_q is None or db_q.count() == 0:
+            if brand.name:
+                db_q = Product.query.filter(Product.seller_name.ilike(f'%{brand.name}%'), _active_filter)
+
+        if db_q:
+            if brand_sort == 'commission':
+                db_q = db_q.order_by(desc(Product.commission_rate))
+            elif brand_sort == 'price':
+                db_q = db_q.order_by(desc(Product.price))
+            elif brand_sort == 'videos':
+                db_q = db_q.order_by(desc(Product.video_count))
+            elif brand_sort == 'new':
+                db_q = db_q.order_by(desc(Product.first_seen))
+            else:
+                db_q = db_q.order_by(desc(Product.sales_7d))
+            db_products = db_q.limit(30).all()
+
         for p in db_products:
             p.trending_score = min(99, int((p.sales_7d or 0) / 10 + (p.influencer_count or 0) * 3 + (p.commission_rate or 0) * 200))
-        # Update brand product count from DB
         if db_products and (not brand.product_count or brand.product_count == 0):
             brand.product_count = len(db_products)
             db.session.commit()
@@ -445,6 +454,7 @@ def brand_detail(brand_id):
     ctx['live_products'] = live_products
     ctx['db_products'] = db_products
     ctx['source'] = 'live' if live_products else 'db'
+    ctx['brand_sort'] = brand_sort
 
     return render_template('brand_detail.html', **ctx)
 
