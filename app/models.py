@@ -435,3 +435,20 @@ class TapProduct(db.Model):
     clicks = db.Column(db.Integer, default=0)
 
     product = db.relationship('Product', backref=db.backref('tap_data', uselist=False))
+
+
+class TapList(db.Model):
+    """TAP product lists — curated boosted commission groups"""
+    __tablename__ = 'tap_lists'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    partner = db.Column(db.String(100), default='Affiliate Automated')
+    category = db.Column(db.String(100))
+    share_link = db.Column(db.Text, nullable=False)
+    tiktok_list_id = db.Column(db.String(100))
+    product_count = db.Column(db.Integer, default=0)
+    description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

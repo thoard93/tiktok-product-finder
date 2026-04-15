@@ -72,6 +72,19 @@ def _auto_migrate(app, db):
             db.session.rollback()
             print(f"[MIGRATE] tap_products creation failed: {e}")
 
+    # Fix tap_lists table if missing
+    try:
+        db.session.execute(db.text("SELECT id FROM tap_lists LIMIT 1"))
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        try:
+            db.create_all()
+            print("[MIGRATE] Created tap_lists table")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[MIGRATE] tap_lists creation failed: {e}")
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -246,6 +259,7 @@ from app.models import (  # noqa: E402, F401
     ProductVideo,
     Brand,
     TapProduct,
+    TapList,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)

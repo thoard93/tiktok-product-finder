@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}TAP Lists — Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">TAP Product Lists</h1>
+  <p class="page-subtitle">Manage boosted commission product groups from Affiliate Automated</p>
+</div>
+
+{# ===== ADD FORM ===== #}
+<div class="card mb-6" id="addForm" style="max-width:700px">
+  <h3 style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-4)">+ Add TAP List</h3>
+  <form method="POST" action="/app/admin/tap-lists/add">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div class="input-group">
+        <label class="input-label">List Name</label>
+        <input type="text" name="name" class="input" placeholder="e.g. COSRX Official" required>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Partner</label>
+        <input type="text" name="partner" class="input" value="Affiliate Automated">
+      </div>
+    </div>
+    <div class="input-group mb-4">
+      <label class="input-label">Share Link (TikTok affiliate URL)</label>
+      <input type="url" name="share_link" class="input" placeholder="https://affiliate-us.tiktok.com/..." required>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-4);margin-bottom:var(--space-4)">
+      <div class="input-group">
+        <label class="input-label">Category</label>
+        <select name="category" class="select">
+          <option value="">Select...</option>
+          <option>Beauty</option>
+          <option>Clothing</option>
+          <option>Health</option>
+          <option>Electronics</option>
+          <option>Home & Living</option>
+          <option>Food & Beverage</option>
+          <option>Sports</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Product Count</label>
+        <input type="number" name="product_count" class="input" placeholder="0" min="0">
+      </div>
+      <div></div>
+    </div>
+    <div class="input-group mb-4">
+      <label class="input-label">Description (optional)</label>
+      <textarea name="description" class="input" style="height:60px;resize:vertical" placeholder="Notes about this list..."></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Add TAP List
+    </button>
+  </form>
+</div>
+
+{# ===== EXISTING LISTS ===== #}
+<div class="section-header">
+  <h2 class="section-title">Active Lists</h2>
+  <span class="text-sm text-secondary">{{ lists | length }} total</span>
+</div>
+
+{% if lists and lists | length > 0 %}
+<div class="product-table-wrap" style="max-width:900px">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Partner</th>
+        <th>Category</th>
+        <th>Products</th>
+        <th>List ID</th>
+        <th>Active</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in lists %}
+      <tr>
+        <td style="font-weight:600">{{ t.name }}</td>
+        <td class="text-muted">{{ t.partner or '--' }}</td>
+        <td>{% if t.category %}<span class="badge badge-muted">{{ t.category }}</span>{% else %}--{% endif %}</td>
+        <td>{{ t.product_count or 0 }}</td>
+        <td>
+          {% if t.tiktok_list_id %}
+            <span style="font-size:12px;font-family:monospace;color:var(--text-muted)">{{ t.tiktok_list_id }}</span>
+          {% else %}
+            <span class="badge badge-red" style="font-size:10px">Not extracted</span>
+          {% endif %}
+        </td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="toggleList({{ t.id }}, this)">
+            {% if t.is_active %}
+              <span style="color:var(--success)">Active</span>
+            {% else %}
+              <span style="color:var(--text-faint)">Inactive</span>
+            {% endif %}
+          </button>
+        </td>
+        <td>
+          <form method="POST" action="/app/admin/tap-lists/{{ t.id }}/delete" style="display:inline">
+            <button type="submit" class="btn btn-ghost btn-icon btn-sm" style="color:var(--danger)" title="Delete">
+              <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="padding:var(--space-8);text-align:center;max-width:700px">
+  <p class="text-sm text-muted">No TAP lists yet. Add one above.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function toggleList(id, btn) {
+  var res = await fetch("/app/admin/tap-lists/" + id + "/toggle", {method:"POST"});
+  var data = await res.json();
+  btn.innerHTML = data.active
+    ? '<span style="color:var(--success)">Active</span>'
+    : '<span style="color:var(--text-faint)">Inactive</span>';
+}
+</script>
+{% endblock %}

@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, redirect, session, request, jsonify
 from sqlalchemy import desc, or_
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct
+from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList
 from app.routes.auth import get_current_user
 
 
@@ -569,6 +569,126 @@ def brand_detail(brand_id):
     ctx['brand_sort'] = brand_sort
 
     return render_template('brand_detail.html', **ctx)
+
+
+# ---------------------------------------------------------------------------
+# TAP Lists (boosted commission groups)
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/app/tap-lists')
+@login_required
+def tap_lists_page():
+    ctx = _base_context('boosted')
+    category = request.args.get('category', '')
+    try:
+        query = TapList.query.filter_by(is_active=True)
+        if category:
+            query = query.filter(TapList.category == category)
+        ctx['lists'] = query.order_by(desc(TapList.created_at)).all()
+        cats = db.session.query(TapList.category).filter(
+            TapList.is_active == True, TapList.category.isnot(None), TapList.category != ''
+        ).distinct().all()
+        ctx['categories'] = [c[0] for c in cats if c[0]]
+    except Exception:
+        ctx['lists'] = []
+        ctx['categories'] = []
+    ctx['current_category'] = category
+    return render_template('tap_lists.html', **ctx)
+
+
+@views_bp.route('/app/admin/tap-lists')
+@login_required
+def admin_tap_lists():
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    ctx = _base_context('admin')
+    try:
+        ctx['lists'] = TapList.query.order_by(desc(TapList.created_at)).all()
+    except Exception:
+        ctx['lists'] = []
+    return render_template('admin_tap_lists.html', **ctx)
+
+
+@views_bp.route('/app/admin/tap-lists/add', methods=['POST'])
+@login_required
+def admin_tap_lists_add():
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    data = request.form
+    share_link = data.get('share_link', '').strip()
+    if not share_link:
+        return redirect('/app/admin/tap-lists')
+
+    # Extract list_id from TikTok redirect
+    tiktok_list_id = None
+    try:
+        import requests as req, re
+        resp = req.get(share_link, allow_redirects=False, timeout=10,
+                       headers={"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"})
+        location = resp.headers.get("Location", "")
+        match = re.search(r'list_id=(\d+)', location)
+        if match:
+            tiktok_list_id = match.group(1)
+    except Exception:
+        pass
+
+    tap = TapList(
+        name=data.get('name', 'Untitled')[:200],
+        partner=data.get('partner', 'Affiliate Automated')[:100],
+        category=data.get('category', '')[:100],
+        share_link=share_link,
+        tiktok_list_id=tiktok_list_id,
+        product_count=int(data.get('product_count', 0) or 0),
+        description=data.get('description', ''),
+    )
+    db.session.add(tap)
+    db.session.commit()
+    return redirect('/app/admin/tap-lists')
+
+
+@views_bp.route('/app/admin/tap-lists/<int:list_id>/toggle', methods=['POST'])
+@api_auth
+def admin_tap_lists_toggle(list_id):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    tap = TapList.query.get(list_id)
+    if tap:
+        tap.is_active = not tap.is_active
+        db.session.commit()
+        return jsonify({'active': tap.is_active})
+    return jsonify({'error': 'Not found'}), 404
+
+
+@views_bp.route('/app/admin/tap-lists/<int:list_id>/delete', methods=['POST'])
+@login_required
+def admin_tap_lists_delete(list_id):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/dashboard')
+    tap = TapList.query.get(list_id)
+    if tap:
+        db.session.delete(tap)
+        db.session.commit()
+    return redirect('/app/admin/tap-lists')
+
+
+@views_bp.route('/api/tap-lists')
+@api_auth
+def api_tap_lists():
+    """JSON API for active TAP lists (Discord bot, etc)."""
+    try:
+        lists = TapList.query.filter_by(is_active=True).order_by(desc(TapList.created_at)).all()
+        return jsonify([{
+            'id': t.id, 'name': t.name, 'partner': t.partner,
+            'category': t.category, 'share_link': t.share_link,
+            'product_count': t.product_count, 'description': t.description,
+            'created_at': t.created_at.isoformat() if t.created_at else None,
+        } for t in lists])
+    except Exception:
+        return jsonify([])
 
 
 @views_bp.route('/app/admin')

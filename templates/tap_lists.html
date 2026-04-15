@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Boosted Commission Lists{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">&#x26a1; Boosted Commission Lists</h1>
+  <p class="page-subtitle">Exclusive TAP links from Affiliate Automated — earn higher commissions on these products.</p>
+</div>
+
+{# Category filter pills #}
+<div class="flex gap-2 mb-6" style="flex-wrap:wrap">
+  <a href="/app/tap-lists" class="btn btn-sm {{ 'btn-primary' if not current_category else 'btn-ghost' }}">All</a>
+  {% for cat in categories %}
+    <a href="/app/tap-lists?category={{ cat }}" class="btn btn-sm {{ 'btn-primary' if current_category == cat else 'btn-ghost' }}">{{ cat }}</a>
+  {% endfor %}
+</div>
+
+{% if lists and lists | length > 0 %}
+<div class="product-grid">
+  {% for t in lists %}
+  <div class="card card-hover" style="padding:0;overflow:hidden">
+    <div style="padding:20px 20px 0">
+      <div class="flex items-center justify-between mb-2">
+        {% if t.category %}<span class="badge badge-muted">{{ t.category }}</span>{% endif %}
+        <span style="font-size:11px;color:var(--text-faint)">{{ t.partner }}</span>
+      </div>
+      <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:6px">{{ t.name }}</h3>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+        {{ t.product_count or 0 }} products
+        {% if t.updated_at %} &middot; Updated {{ t.updated_at.strftime('%b %d') }}{% endif %}
+      </div>
+      {% if t.description %}
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.5;margin-bottom:12px">{{ t.description }}</p>
+      {% endif %}
+      <div class="tap-badge mb-4">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Boosted commissions available
+      </div>
+    </div>
+    <div style="padding:0 20px 20px;display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1;font-size:13px" onclick="copyTapListLink(this, '{{ t.share_link }}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copy Link
+      </button>
+      <a href="{{ t.share_link }}" target="_blank" rel="noopener" class="btn btn-primary" style="flex:1;font-size:13px">
+        Open in TikTok &rarr;
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon"><i data-lucide="zap" style="width:64px;height:64px;color:var(--teal)"></i></div>
+  <h3 class="empty-title">No boosted lists available yet</h3>
+  <p class="empty-desc">TAP product lists will be added here as they become available from our affiliate partners.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyTapListLink(btn, url) {
+  navigator.clipboard.writeText(url).then(function() {
+    var orig = btn.innerHTML;
+    btn.textContent = "\u2713 Copied!";
+    setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    if (typeof showFlash === "function") showFlash("Link copied to clipboard", "success");
+  });
+}
+</script>
+{% endblock %}
