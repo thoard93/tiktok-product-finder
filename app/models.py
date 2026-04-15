@@ -155,6 +155,9 @@ class Product(db.Model):
     price_trend = db.Column(db.String(20))  # 'rising', 'falling', 'stable'
     last_echotik_sync = db.Column(db.DateTime)
 
+    # Lookup popularity (used to prioritize refresh tiers)
+    lookup_count = db.Column(db.Integer, default=0)
+
     # Trend data cache (lazy-loaded on detail page view)
     trend_data_json = db.Column(db.Text, nullable=True)
     trend_last_synced = db.Column(db.DateTime, nullable=True)

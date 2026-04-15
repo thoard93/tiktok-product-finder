@@ -377,8 +377,76 @@ def save_product_to_db(product_data):
             'cached_image_url': p.cached_image_url
         }
 
+CACHE_TTL_SECONDS = 86400  # 24 hours — fresh data threshold
+
+
+def _product_to_dict(p, source='cache'):
+    """Convert a Product ORM object to a safe dict (avoids DetachedInstanceError)."""
+    return {
+        'product_id': p.product_id,
+        'product_name': p.product_name,
+        'seller_name': p.seller_name,
+        'sales': p.sales,
+        'sales_7d': p.sales_7d,
+        'sales_30d': p.sales_30d,
+        'influencer_count': p.influencer_count,
+        'video_count': p.video_count,
+        'video_count_alltime': p.video_count_alltime,
+        'commission_rate': p.commission_rate,
+        'shop_ads_commission': p.shop_ads_commission,
+        'price': p.price,
+        'original_price': p.original_price,
+        'image_url': p.cached_image_url or p.image_url,
+        'cached_image_url': p.cached_image_url,
+        'has_free_shipping': p.has_free_shipping,
+        'live_count': p.live_count,
+        'gmv': p.gmv,
+        'ad_spend': p.ad_spend,
+        'product_url': p.product_url,
+        'lookup_count': getattr(p, 'lookup_count', 0) or 0,
+        '_source': source,
+    }
+
+
+def _update_product_from_detail(p, detail):
+    """Apply EchoTik detail data onto a Product ORM object."""
+    p.product_name = detail.get('product_name') or p.product_name
+    p.seller_name = detail.get('seller_name') or p.seller_name
+    p.image_url = detail.get('image_url') or p.image_url
+    p.price = detail.get('price', 0)
+    p.original_price = detail.get('original_price') or p.original_price or 0
+    p.sales = detail.get('sales', 0)
+    p.sales_7d = detail.get('sales_7d', 0)
+    p.sales_30d = detail.get('sales_30d', 0)
+    p.gmv = detail.get('gmv', 0)
+    p.video_count = detail.get('video_count_alltime') or detail.get('video_count', 0)
+    p.video_count_alltime = detail.get('video_count_alltime', 0)
+    p.video_7d = detail.get('video_count_7d', 0)
+    p.video_30d = detail.get('video_30d', 0)
+    p.influencer_count = detail.get('influencer_count', 0)
+    p.commission_rate = detail.get('commission_rate', 0)
+    p.shop_ads_commission = detail.get('shop_ads_commission', 0)
+    p.last_updated = datetime.now(timezone.utc)
+    p.last_echotik_sync = datetime.now(timezone.utc)
+
+
+def _increment_lookup_count(p):
+    """Safely bump lookup_count (column may not exist on old DBs)."""
+    try:
+        p.lookup_count = (p.lookup_count or 0) + 1
+    except Exception:
+        pass
+
+
 def get_product_data(product_id):
-    """Get product — check database first, then fetch from EchoTik API."""
+    """Cache-first product lookup with automatic staleness refresh.
+
+    Returns (product_dict, source) where source is one of:
+      'cache'     — fresh data from DB (< 24h old)
+      'refreshed' — stale DB row updated via EchoTik API
+      'new'       — product not in DB, fetched from API and saved
+      'not_found' — no data anywhere
+    """
 
     raw_pid = str(product_id).replace('shop_', '')
     shop_pid = f"shop_{raw_pid}"
@@ -386,80 +454,66 @@ def get_product_data(product_id):
     with app.app_context():
         db_product = db.session.get(Product, shop_pid) or db.session.get(Product, raw_pid)
 
-        if db_product and (db_product.sales_7d or 0) > 0:
-            print(f"[Bot] Product {product_id} found in database (cached)")
-            return {
-                'product_id': db_product.product_id,
-                'product_name': db_product.product_name,
-                'sales': db_product.sales,
-                'sales_7d': db_product.sales_7d,
-                'sales_30d': db_product.sales_30d,
-                'influencer_count': db_product.influencer_count,
-                'video_count': db_product.video_count,
-                'commission_rate': db_product.commission_rate,
-                'shop_ads_commission': db_product.shop_ads_commission,
-                'price': db_product.price,
-                'image_url': db_product.cached_image_url or db_product.image_url,
-                'has_free_shipping': db_product.has_free_shipping,
-                'live_count': db_product.live_count,
-            }
+        if db_product:
+            _increment_lookup_count(db_product)
 
-    # Not in DB or stale — fetch from EchoTik
-    print(f"[Bot] Fetching {product_id} from EchoTik API...")
+            # Determine freshness using last_echotik_sync (preferred) or last_updated
+            sync_time = db_product.last_echotik_sync or db_product.last_updated
+            age_seconds = (datetime.now(timezone.utc).replace(tzinfo=None) - (sync_time or datetime.min)).total_seconds()
+
+            if (db_product.sales_7d or 0) > 0 and age_seconds < CACHE_TTL_SECONDS:
+                # Fresh cache hit
+                print(f"[Bot] Product {product_id} CACHE HIT (age {int(age_seconds)}s)")
+                db.session.commit()
+                return _product_to_dict(db_product, source='cache'), 'cache'
+
+            # Stale or empty — try to refresh from API
+            print(f"[Bot] Product {product_id} STALE (age {int(age_seconds)}s) — refreshing...")
+            try:
+                from app.services.echotik import fetch_product_detail
+                detail = fetch_product_detail(raw_pid)
+                if detail:
+                    _update_product_from_detail(db_product, detail)
+                    db_product.scan_type = db_product.scan_type or 'bot_lookup_echotik'
+                    db.session.commit()
+                    print(f"[Bot] Product {product_id} REFRESHED from API")
+                    return _product_to_dict(db_product, source='refreshed'), 'refreshed'
+                else:
+                    # API returned nothing — serve stale data if we have sales
+                    if (db_product.sales_7d or 0) > 0:
+                        db.session.commit()
+                        return _product_to_dict(db_product, source='cache'), 'cache'
+            except Exception as e:
+                print(f"[Bot] Refresh failed for {product_id}: {e}")
+                # Serve stale data on API failure
+                if (db_product.sales_7d or 0) > 0:
+                    db.session.commit()
+                    return _product_to_dict(db_product, source='cache'), 'cache'
+
+            db.session.commit()
+
+    # Not in DB at all — fetch from EchoTik and save as new product
+    print(f"[Bot] Product {product_id} NOT IN DB — fetching from EchoTik API...")
     try:
-        from app.services.echotik import fetch_product_detail, EchoTikError
+        from app.services.echotik import fetch_product_detail
         with app.app_context():
             detail = fetch_product_detail(raw_pid)
             if not detail:
-                return None
+                return None, 'not_found'
 
-            # Upsert to DB
-            p = db.session.get(Product, shop_pid)
-            if not p:
-                p = Product(product_id=shop_pid)
-                p.first_seen = datetime.now(timezone.utc)
-                db.session.add(p)
-
-            p.product_name = detail.get('product_name') or p.product_name
-            p.seller_name = detail.get('seller_name') or p.seller_name
-            p.image_url = detail.get('image_url') or p.image_url
-            p.price = detail.get('price', 0)
-            p.sales = detail.get('sales', 0)
-            p.sales_7d = detail.get('sales_7d', 0)
-            p.sales_30d = detail.get('sales_30d', 0)
-            p.gmv = detail.get('gmv', 0)
-            p.video_count = detail.get('video_count_alltime') or detail.get('video_count', 0)
-            p.video_count_alltime = detail.get('video_count_alltime', 0)
-            p.video_7d = detail.get('video_count_7d', 0)
-            p.video_30d = detail.get('video_30d', 0)
-            p.influencer_count = detail.get('influencer_count', 0)
-            p.commission_rate = detail.get('commission_rate', 0)
-            p.shop_ads_commission = detail.get('shop_ads_commission', 0)
+            p = Product(product_id=shop_pid)
+            p.first_seen = datetime.now(timezone.utc)
             p.scan_type = 'bot_lookup_echotik'
-            p.last_updated = datetime.now(timezone.utc)
-            p.is_enriched = True
+            p.lookup_count = 1
+            _update_product_from_detail(p, detail)
+            db.session.add(p)
             db.session.commit()
 
-            return {
-                'product_id': p.product_id,
-                'product_name': p.product_name,
-                'sales': p.sales,
-                'sales_7d': p.sales_7d,
-                'sales_30d': p.sales_30d,
-                'influencer_count': p.influencer_count,
-                'video_count': p.video_count,
-                'commission_rate': p.commission_rate,
-                'shop_ads_commission': p.shop_ads_commission,
-                'price': p.price,
-                'image_url': p.cached_image_url or p.image_url,
-                'gmv': p.gmv,
-                'ad_spend': p.ad_spend,
-                'live_count': p.live_count,
-                'from_echotik': True,
-            }
+            print(f"[Bot] Product {product_id} SAVED as new (source: EchoTik)")
+            return _product_to_dict(p, source='new'), 'new'
     except Exception as e:
         print(f"[Bot] EchoTik fetch error for {product_id}: {e}")
-        return None
+        return None, 'not_found'
 
 
 def create_product_embed(p, title_prefix=""):
@@ -901,16 +955,18 @@ async def on_message(message):
                 await message.reply("❌ Could not find a valid TikTok product ID. This might be a regular video link without a tagged product.", mention_author=False)
                 return
 
-            # Fetch product (database first, then EchoTik API)
-            product = get_product_data(product_id)
+            # Fetch product (cache-first, then EchoTik API)
+            product, source = get_product_data(product_id)
 
             if not product:
                 await message.add_reaction('❌')
                 await message.reply(f"❌ Product not found via EchoTik API (ID: {product_id})", mention_author=False)
                 return
 
-            # Create and send embed
+            # Create and send embed with source indicator
             embed = create_product_embed(product)
+            source_label = "Live data" if source in ('new', 'refreshed') else "Cached data"
+            embed.set_footer(text=f"📦 Vantage • {source_label} | ID: {product_id}")
             await message.reply(embed=embed, mention_author=False)
 
             # Update reaction
@@ -1287,7 +1343,7 @@ async def lookup_command(ctx, *, query: str = None):
         await status_msg.edit(content="❌ Could not extract product ID from your input.")
         return
 
-    product = get_product_data(product_id)
+    product, source = get_product_data(product_id)
 
     if not product:
         await ctx.message.add_reaction('❌')
@@ -1296,7 +1352,9 @@ async def lookup_command(ctx, *, query: str = None):
 
     await status_msg.delete()
     embed = create_product_embed(product)
-    embed.set_footer(text=f"{'👑 Admin' if is_admin else 'PRISM'} | ID: {product_id}")
+    source_label = "Live data" if source in ('new', 'refreshed') else "Cached data"
+    admin_prefix = "👑 Admin • " if is_admin else ""
+    embed.set_footer(text=f"📦 {admin_prefix}Vantage • {source_label} | ID: {product_id}")
 
     await ctx.reply(embed=embed, mention_author=False)
     await ctx.message.remove_reaction('🔍', bot.user)

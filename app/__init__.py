@@ -20,6 +20,7 @@ def _auto_migrate(app, db):
     column_migrations = [
         ("products", "trend_data_json", "TEXT"),
         ("products", "trend_last_synced", "TIMESTAMP"),
+        ("products", "lookup_count", "INTEGER DEFAULT 0"),
     ]
     for table, column, col_type in column_migrations:
         try:
