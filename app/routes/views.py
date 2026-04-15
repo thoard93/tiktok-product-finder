@@ -277,13 +277,16 @@ def dashboard():
         _active_filter,
         Product.commission_rate > 0
     ).scalar() or 0
-    saved = Product.query.filter_by(is_favorite=True).count()
+    try:
+        brand_count = Brand.query.count()
+    except Exception:
+        brand_count = 0
 
     ctx['stats'] = {
         'tracked_count': total,
         'trending_today': trending,
         'avg_commission': avg_comm * 100,
-        'saved_count': saved,
+        'brand_count': brand_count,
     }
 
     # Trending products (top 6 by 7d sales, min 5 videos, has sales)
@@ -439,6 +442,20 @@ def _products_list_inner(ctx):
     ctx['tap_filter'] = request.args.get('tap_only', '') == '1'
 
     return render_template('products.html', **ctx)
+
+
+@views_bp.route('/app/favorites')
+@login_required
+def favorites_page():
+    ctx = _base_context('favorites')
+    products = Product.query.filter_by(is_favorite=True).filter(
+        _active_filter
+    ).order_by(desc(Product.sales_7d)).all()
+    for p in products:
+        p.trending_score = _calc_score(p)
+        p.lifecycle = _calc_lifecycle(p)
+    ctx['products'] = products
+    return render_template('favorites.html', **ctx)
 
 
 @views_bp.route('/app/products/<product_id>')

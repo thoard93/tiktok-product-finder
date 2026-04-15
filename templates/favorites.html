@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}My Favorites{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">My Favorites</h1>
+  <p class="page-subtitle">Products you've saved for quick access</p>
+</div>
+
+{% if products and products | length > 0 %}
+<div class="product-table-wrap">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th style="width:36px">#</th>
+        <th style="min-width:240px">Product</th>
+        <th>Commission</th>
+        <th>Price</th>
+        <th>7d Sales</th>
+        <th>Creators</th>
+        <th>Videos</th>
+        <th>Score</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      {% set score_color = '#0d9488' if p.trending_score >= 60 else ('#d97706' if p.trending_score >= 35 else '#dc2626') %}
+      <tr>
+        <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
+        <td>
+          <div class="product-row-name">
+            {% if p.cached_image_url or p.image_url %}
+              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy" onerror="this.style.display='none'">
+            {% endif %}
+            <div style="min-width:0">
+              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>
+              {% if p.category %}<span style="font-size:11px;color:var(--text-faint)">{{ p.category }}</span>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
+        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
+        <td>{{ "{:,}".format(p.influencer_count or 0) }}</td>
+        <td>{{ "{:,}".format(p.video_count or 0) }}</td>
+        <td>
+          <div class="score-ring-wrap" style="width:30px;height:30px">
+            <svg viewBox="0 0 36 36" width="30" height="30">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke-width="3" stroke-linecap="round"
+                      stroke-dasharray="{{ p.trending_score }}, 100" stroke="{{ score_color }}"
+                      transform="rotate(-90 18 18)"/>
+            </svg>
+            <span class="score-number" style="font-size:9px">{{ p.trending_score }}</span>
+          </div>
+        </td>
+        <td style="display:flex;gap:4px;align-items:center">
+          <button class="fav-btn-inline active" onclick="toggleFavorite('{{ p.product_id }}',this)" title="Remove from favorites">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
+          <a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+  </div>
+  <h3 class="empty-title">No favorites yet</h3>
+  <p class="empty-desc">Click the heart icon on any product to save it here for quick access.</p>
+  <a href="/app/products" class="btn btn-primary">Browse Products</a>
+</div>
+{% endif %}
+{% endblock %}

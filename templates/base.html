@@ -42,6 +42,10 @@
           {% if is_pro %}<span class="nav-badge" style="background:var(--teal-dim);color:var(--teal);font-size:9px">NEW</span>{% endif %}
         </a>
 
+        <a href="/app/favorites" class="sidebar-link {% if active_page == 'favorites' %}active{% endif %}">
+          <i data-lucide="heart"></i> Favorites
+        </a>
+
         <span class="sidebar-section">Manage</span>
         <a href="/app/settings" class="sidebar-link {% if active_page == 'settings' %}active{% endif %}">
           <i data-lucide="settings"></i> Settings

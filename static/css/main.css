@@ -863,3 +863,8 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
 .fav-btn:hover{background:rgba(0,0,0,0.6);color:#fff;transform:scale(1.1)}
 .fav-btn.active{color:var(--accent);background:rgba(232,56,77,0.2)}
 .fav-btn .lucide{width:16px;height:16px}
+
+/* Inline favorite button for table rows */
+.fav-btn-inline{width:28px;height:28px;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;background:transparent;color:var(--text-faint);transition:all var(--dur-fast)}
+.fav-btn-inline:hover{color:var(--accent);background:var(--accent-glow)}
+.fav-btn-inline.active{color:var(--accent)}
