@@ -765,45 +765,93 @@ def admin_panel():
 @views_bp.route('/api/admin/sync-categories', methods=['POST'])
 @api_auth
 def api_sync_categories():
-    """Enrich categories for products missing them via product detail API."""
+    """Auto-categorize products by name keywords. No API calls needed."""
     user = get_current_user()
     if not user or not user.is_admin:
         return jsonify({'error': 'Admin required'}), 403
 
-    import logging, time as _time
-    log = logging.getLogger(__name__)
-
-    try:
-        from app.services.echotik import fetch_product_detail
-    except ImportError:
-        return jsonify({'error': 'echotik module not available'}), 500
+    # Keyword → category mapping (checked in order, first match wins)
+    RULES = [
+        # Beauty & Personal Care
+        ('Beauty & Personal Care', ['serum', 'moistur', 'cream', 'skincare', 'skin care', 'makeup',
+            'cosmetic', 'lipstick', 'mascara', 'foundation', 'concealer', 'blush', 'eyeshadow',
+            'eyeliner', 'cleanser', 'toner', 'sunscreen', 'spf', 'acne', 'collagen', 'retinol',
+            'vitamin c serum', 'hyaluronic', 'face mask', 'facial', 'beauty', 'lash', 'brow',
+            'nail polish', 'perfume', 'fragrance', 'deodorant', 'shampoo', 'conditioner',
+            'hair oil', 'hair mask', 'hair care', 'body wash', 'lotion', 'soap', 'toothpaste',
+            'whitening strip', 'teeth', 'pimple', 'blackhead', 'pore', 'wrinkle', 'anti-aging',
+            'eye patch', 'lip gloss', 'lip balm', 'bronzer', 'primer', 'setting spray',
+            'micellar', 'exfoliat', 'scrub', 'peel', 'turmeric', 'niacinamide', 'cosrx',
+            'medicube', 'dr.melaxin', 'melaxin', 'anua', 'snp', 'tonymoly']),
+        # Health & Wellness
+        ('Health & Wellness', ['vitamin', 'supplement', 'protein', 'probiotic', 'magnesium',
+            'omega', 'collagen supplement', 'ashwagandha', 'turmeric capsule', 'cbd',
+            'melatonin', 'iron supplement', 'calcium', 'zinc', 'biotin', 'fiber', 'detox',
+            'weight loss', 'diet', 'keto', 'creatine', 'pre workout', 'bcaa', 'electrolyte',
+            'health', 'wellness', 'goli', 'neocell', 'toplux', 'capsule', 'tablet',
+            'gummy', 'gummies', 'nutrition']),
+        # Fashion & Apparel
+        ('Fashion & Apparel', ['dress', 'shirt', 'blouse', 'jeans', 'pants', 'skirt',
+            'jacket', 'coat', 'sweater', 'hoodie', 'legging', 'bra ', 'underwear', 'lingerie',
+            'bikini', 'swimsuit', 'sock', 'belt', 'scarf', 'hat', 'cap', 'sunglasses',
+            'watch', 'jewelry', 'necklace', 'bracelet', 'earring', 'ring ', 'tshirt',
+            't-shirt', 'polo', 'cardigan', 'romper', 'jumpsuit', 'bodysuit', 'corset',
+            'shapewear', 'activewear', 'athletic', 'yoga pants', 'sports bra',
+            'women', 'clothing', 'apparel', 'fashion', 'outfit', 'wear',
+            'oeak', 'jelly bra', 'wirefree']),
+        # Home & Kitchen
+        ('Home & Kitchen', ['kitchen', 'cookware', 'blender', 'mixer', 'utensil', 'knife',
+            'cutting board', 'pan ', 'pot ', 'spatula', 'container', 'storage', 'organizer',
+            'shelf', 'rack', 'hanger', 'pillow', 'blanket', 'bedding', 'mattress', 'towel',
+            'curtain', 'rug', 'carpet', 'lamp', 'light', 'candle', 'vase', 'decoration',
+            'wall art', 'mirror', 'clock', 'furniture', 'table', 'chair', 'desk',
+            'home', 'house', 'bathroom', 'shower', 'peeler', 'slicer', 'grinder']),
+        # Electronics & Accessories
+        ('Electronics', ['phone case', 'charger', 'cable', 'headphone', 'earphone', 'earbud',
+            'speaker', 'bluetooth', 'wireless', 'usb', 'power bank', 'adapter', 'led strip',
+            'led light', 'ring light', 'camera', 'tripod', 'microphone', 'keyboard', 'mouse',
+            'monitor', 'laptop', 'tablet', 'smart watch', 'smartwatch', 'gaming',
+            'controller', 'vr', 'drone', 'electronic', 'tech', 'digital', 'headlamp']),
+        # Food & Beverage
+        ('Food & Beverage', ['coffee', 'tea ', 'snack', 'candy', 'chocolate', 'protein bar',
+            'energy drink', 'juice', 'sauce', 'spice', 'seasoning', 'honey', 'syrup',
+            'sugar', 'zero sugar', 'food', 'beverage', 'drink', 'matcha', 'gum']),
+        # Sports & Outdoor
+        ('Sports & Outdoor', ['gym', 'fitness', 'workout', 'exercise', 'resistance band',
+            'dumbbell', 'yoga mat', 'sports', 'outdoor', 'camping', 'hiking', 'bicycle',
+            'golf', 'basketball', 'soccer', 'football', 'tennis', 'running', 'athletic shoe',
+            'massager', 'massage gun', 'foam roller', 'neck massager']),
+        # Pet Supplies
+        ('Pet Supplies', ['dog', 'cat', 'pet', 'puppy', 'kitten', 'fish tank', 'aquarium',
+            'bird', 'hamster', 'leash', 'collar', 'pet food', 'pet toy']),
+        # Baby & Kids
+        ('Baby & Kids', ['baby', 'toddler', 'infant', 'diaper', 'pacifier', 'stroller',
+            'crib', 'nursery', 'kids', 'children', 'toy', 'puzzle', 'plush', 'stuffed',
+            'squishy', 'blind box', 'action figure', 'lego', 'building block']),
+        # Automotive
+        ('Automotive', ['car ', 'vehicle', 'automotive', 'auto ', 'tire', 'windshield',
+            'dash cam', 'car seat', 'steering', 'headlight', 'headlamp restoration']),
+    ]
 
     products = Product.query.filter(
         _active_filter,
         or_(Product.category.is_(None), Product.category == ''),
-        Product.sales_7d > 0,
-    ).limit(50).all()
+    ).all()
 
     enriched = 0
     for p in products:
-        try:
-            raw_id = p.product_id.replace('shop_', '')
-            detail = fetch_product_detail(raw_id)
-            if detail and detail.get('category'):
-                p.category = str(detail['category'])[:100]
+        name = (p.product_name or '').lower()
+        for cat_name, keywords in RULES:
+            if any(kw in name for kw in keywords):
+                p.category = cat_name
                 enriched += 1
-            if detail and detail.get('subcategory') and not p.subcategory:
-                p.subcategory = str(detail['subcategory'])[:100]
-            _time.sleep(0.3)
-        except Exception as e:
-            log.warning("Category enrich failed for %s: %s", p.product_id, e)
+                break
 
     db.session.commit()
 
     remaining = Product.query.filter(
         _active_filter,
         or_(Product.category.is_(None), Product.category == ''),
-        Product.sales_7d > 0,
     ).count()
 
     return jsonify({'success': True, 'enriched': enriched, 'remaining': remaining})
