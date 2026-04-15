@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>{% block title %}Vantage{% endblock %} | TikTok Shop Intelligence</title>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Vantage">
+  <meta name="theme-color" content="#f9f0f1">
   <link rel="stylesheet" href="/static/css/main.css">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   {% block head %}{% endblock %}
@@ -119,22 +124,30 @@
       </div>
     </main>
 
-    {# ===== MOBILE TABS ===== #}
-    <nav class="mobile-tabs">
-      <div class="mobile-tabs-inner">
-        <a href="/app/dashboard" class="mobile-tab {% if active_page == 'dashboard' %}active{% endif %}">
-          <i data-lucide="layout-dashboard"></i> Home
-        </a>
-        <a href="/app/products" class="mobile-tab {% if active_page == 'products' %}active{% endif %}">
-          <i data-lucide="package-search"></i> Products
-        </a>
-        <a href="/app/analytics" class="mobile-tab {% if active_page == 'analytics' %}active{% endif %}">
-          <i data-lucide="bar-chart-2"></i> Analytics
-        </a>
-        <a href="/app/settings" class="mobile-tab {% if active_page == 'settings' %}active{% endif %}">
-          <i data-lucide="settings"></i> Settings
-        </a>
-      </div>
+    {# ===== MOBILE TAB BAR ===== #}
+    <nav class="mob-bar" role="navigation">
+      <a href="/app/dashboard" class="mob-tab {% if active_page == 'dashboard' %}mob-tab--active{% endif %}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Home</span>
+      </a>
+      <a href="/app/products" class="mob-tab {% if active_page == 'products' %}mob-tab--active{% endif %}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        <span>Products</span>
+      </a>
+      <a href="/app/tap-lists" class="mob-tab mob-tab--center {% if active_page == 'boosted' %}mob-tab--active{% endif %}">
+        <div class="mob-tab-zap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <span>Boosted</span>
+      </a>
+      <a href="/app/analytics" class="mob-tab {% if active_page == 'analytics' %}mob-tab--active{% endif %}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Analytics</span>
+      </a>
+      <a href="/app/settings" class="mob-tab {% if active_page == 'settings' %}mob-tab--active{% endif %}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+        <span>Profile</span>
+      </a>
     </nav>
   </div>
 

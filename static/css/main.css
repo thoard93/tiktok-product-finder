@@ -498,13 +498,50 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
 .settings-tab:hover{color:var(--text-primary);background:var(--bg-hover)}
 .settings-tab.active{color:var(--accent);background:var(--accent-glow)}
 
-/* 19. MOBILE BOTTOM TABS =================================================== */
-.mobile-tabs{display:none;position:fixed;bottom:0;left:0;right:0;height:64px;background:var(--bg-surface);border-top:1px solid var(--border);z-index:100;padding:0 var(--space-2)}
-.mobile-tabs-inner{display:flex;align-items:center;justify-content:space-around;height:100%}
-.mobile-tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:var(--space-1) var(--space-2);color:var(--text-muted);font-size:10px;font-weight:600;text-decoration:none;transition:color var(--dur-fast)}
-.mobile-tab .lucide{width:22px;height:22px}
-.mobile-tab:hover{color:var(--text-muted)}
-.mobile-tab.active{color:var(--accent)}
+/* 19. MOBILE TAB BAR ======================================================= */
+.mob-bar{display:none}
+
+@media(max-width:768px){
+.mob-bar{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:1000;background:var(--bg-surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);height:calc(64px + env(safe-area-inset-bottom));align-items:flex-start}
+.mob-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 6px;text-decoration:none;color:var(--text-faint);min-height:56px;-webkit-tap-highlight-color:transparent;transition:color 150ms}
+.mob-tab span{font-size:10px;font-weight:500;line-height:1;margin-top:3px}
+.mob-tab:active{opacity:.7}
+.mob-tab--active{color:var(--accent)}
+.mob-tab--center{margin-top:-14px}
+.mob-tab-zap{background:var(--accent);border-radius:14px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(232,56,77,.4);color:#fff;margin-bottom:2px}
+.mob-tab-zap svg{stroke:#fff}
+.mob-tab--center span{color:var(--accent);font-weight:600}
+
+/* Hide sidebar, adjust layout */
+.sidebar{display:none !important}
+.main-area{margin-left:0 !important;padding-bottom:calc(80px + env(safe-area-inset-bottom)) !important}
+.upgrade-fab{bottom:calc(80px + env(safe-area-inset-bottom) + 12px) !important}
+.chat-fab{bottom:calc(80px + env(safe-area-inset-bottom) + 12px) !important}
+.chat-drawer{bottom:calc(140px + env(safe-area-inset-bottom)) !important}
+
+/* Compact topbar */
+.topbar{height:48px;padding:0 var(--space-4)}
+.topbar-search{max-width:none}
+
+/* Single column products */
+.product-grid{column-count:1 !important}
+.product-table-wrap{font-size:12px}
+
+/* Stat grid */
+.stat-grid{grid-template-columns:1fr 1fr !important;gap:var(--space-3) !important}
+
+/* Filter card mobile */
+.filter-card{padding:12px}
+.filter-row{flex-direction:column;gap:6px}
+.filter-input{width:100% !important;min-width:0 !important}
+.filter-actions{flex-wrap:wrap}
+
+/* Detail layout single col */
+.detail-layout{grid-template-columns:1fr !important}
+
+/* Chart grid single col */
+.chart-grid{grid-template-columns:1fr !important}
+}
 
 /* 20. ANIMATIONS =========================================================== */
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -529,20 +566,12 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
 }
 
 @media(max-width:768px){
-  .sidebar{display:none}
-  .mobile-tabs{display:block}
-  .main-area{margin-left:0;padding-bottom:80px}
   .page-content{padding:var(--space-4)}
-  .stat-grid{grid-template-columns:1fr 1fr;gap:var(--space-3)}
-  .product-grid{column-count:1}
   .hero{padding:100px var(--space-5) var(--space-10)}
   .hero-title{font-size:var(--text-3xl)}
   .hero-sub{font-size:var(--text-base)}
-  .filter-bar{flex-wrap:wrap;padding:var(--space-3) var(--space-4);margin:0 calc(-1*var(--space-4));margin-bottom:var(--space-4)}
-  .filter-bar .input,.filter-bar .select{min-width:100%}
   .public-nav{padding:0 var(--space-4)}
   .public-nav-right{gap:var(--space-3)}
-  .topbar{padding:0 var(--space-4)}
   .social-proof{flex-direction:column;gap:var(--space-4)}
 }
 

@@ -192,6 +192,23 @@ function openOnTikTok(shopUrl, productId) {
   }
 }
 
+/* --- Mobile Share / Copy -------------------------------------------------- */
+function shareTapLink(link, name) {
+  if (navigator.share) {
+    navigator.share({
+      title: name || "TikTok Shop Product",
+      text: "Check out this product with boosted commission!",
+      url: link
+    }).catch(function() {
+      navigator.clipboard.writeText(link);
+      showFlash("Link copied!", "success");
+    });
+  } else {
+    navigator.clipboard.writeText(link);
+    showFlash("Link copied to clipboard!", "success");
+  }
+}
+
 /* --- AI Chat Widget ------------------------------------------------------- */
 function toggleChat() {
   var drawer = document.getElementById("chatDrawer");
