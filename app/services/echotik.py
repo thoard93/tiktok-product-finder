@@ -378,36 +378,81 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
     raw_id = str(product_id).replace('shop_', '')
     size = min(max(page_size, 1), 10)
 
-    url = f"{ECHOTIK_V3_BASE}/product/video"
-    params = {'product_id': raw_id, 'page_num': 1, 'page_size': size}
-    status, body = _try_raw(url, params)
-    if status is None:
-        print(f"[EchoTik] product_videos NETWORK err for {raw_id}", flush=True)
+    # `/product/video` 404s; the working path mirrors influencer/video/list.
+    candidate_urls = [
+        f"{ECHOTIK_V3_BASE}/product/video/list",
+        f"{ECHOTIK_V3_BASE}/product/videos",
+    ]
+    raw_list = []
+    for url in candidate_urls:
+        params = {'product_id': raw_id, 'page_num': 1, 'page_size': size}
+        status, body = _try_raw(url, params)
+        tag = url.split('/echotik/')[-1]
+        if status is None:
+            print(f"[EchoTik] product_videos NETWORK err for {raw_id}", flush=True)
+            continue
+        code = (body or {}).get('code')
+        msg = (body or {}).get('message', '')
+        data = (body or {}).get('data')
+        if isinstance(data, dict):
+            data = data.get('list') or data.get('records') or []
+        n = len(data) if isinstance(data, list) else 0
+        print(f"[EchoTik] product_videos {tag} pid={raw_id} status={status} "
+              f"code={code} msg={msg!r} items={n}", flush=True)
+        if code == 0 and isinstance(data, list) and data:
+            raw_list = data
+            break
+
+    if not raw_list:
         return []
-    code = (body or {}).get('code')
-    msg = (body or {}).get('message', '')
-    data = (body or {}).get('data')
-    if isinstance(data, dict):
-        data = data.get('list') or data.get('records') or []
-    n = len(data) if isinstance(data, list) else 0
-    print(f"[EchoTik] product_videos pid={raw_id} status={status} "
-          f"code={code} msg={msg!r} items={n}", flush=True)
-    if code != 0 or not isinstance(data, list):
-        return []
-    raw_list = data
+
+    # Log first-item keys so we can refine the mapping if needed
+    if raw_list:
+        import json as _json
+        first = raw_list[0] if isinstance(raw_list[0], dict) else {}
+        print(f"[EchoTik] FIRST PRODUCT VIDEO keys={list(first.keys())[:60]}", flush=True)
+        try:
+            print(f"[EchoTik] FIRST PRODUCT VIDEO sample={_json.dumps(first)[:700]}", flush=True)
+        except Exception:
+            pass
 
     videos = []
     for v in (raw_list or []):
+        handle = v.get('unique_id') or v.get('author_unique_id') or v.get('authorUniqueId', '')
+        vid_id = str(v.get('video_id') or v.get('videoId') or v.get('id', ''))
+        # Per EchoTik docs: product/video/list returns `play_addr` (may
+        # expire). Prefer a canonical share URL when we have a handle,
+        # fall back to play_addr which at least works on first load.
+        share = v.get('share_url') or v.get('video_url') or ''
+        if not share and vid_id and handle:
+            share = f"https://www.tiktok.com/@{handle}/video/{vid_id}"
+        if not share:
+            share = v.get('play_addr') or v.get('play_url') or ''
         vid = {
-            'video_id': str(v.get('video_id') or v.get('videoId') or v.get('id', '')),
-            'video_url': v.get('video_url') or v.get('play_url') or v.get('share_url', ''),
-            'cover_url': _extract_image_url(v.get('cover') or v.get('cover_url') or v.get('dynamic_cover')),
-            'creator_name': v.get('author_name') or v.get('nickname') or v.get('authorName', ''),
-            'creator_handle': v.get('author_unique_id') or v.get('unique_id') or v.get('authorUniqueId', ''),
-            'creator_avatar': _extract_image_url(v.get('author_avatar') or v.get('avatar')),
-            'view_count': _safe_int(v.get('play_count') or v.get('vv') or v.get('view_count')),
-            'like_count': _safe_int(v.get('digg_count') or v.get('like_count') or v.get('likeCount')),
-            'duration': _safe_int(v.get('duration') or v.get('video_duration') or v.get('duration_seconds')),
+            'video_id': vid_id,
+            'video_url': share,
+            'cover_url': _extract_image_url(
+                v.get('reflow_cover') or v.get('cover') or v.get('cover_url')
+                or v.get('dynamic_cover') or v.get('origin_cover')
+            ),
+            'creator_name': (v.get('nick_name') or v.get('nickname')
+                             or v.get('author_name') or v.get('authorName', '')),
+            'creator_handle': handle,
+            'creator_avatar': _extract_image_url(
+                v.get('author_avatar') or v.get('avatar')
+            ),
+            'view_count': _safe_int(
+                v.get('total_views_cnt') or v.get('play_count')
+                or v.get('vv') or v.get('view_count') or 0
+            ),
+            'like_count': _safe_int(
+                v.get('total_digg_cnt') or v.get('digg_count')
+                or v.get('like_count') or v.get('likeCount') or 0
+            ),
+            'duration': _safe_int(
+                v.get('duration') or v.get('video_duration')
+                or v.get('duration_seconds') or 0
+            ),
         }
         # Normalize duration: if >1000, assume milliseconds
         if vid['duration'] > 1000:
@@ -848,25 +893,18 @@ def fetch_creator_videos(unique_id: str, user_id: str = '',
     for v in raw_list:
         if not isinstance(v, dict):
             continue
-        # Cover / thumbnail — try every known shape
+        # Cover / thumbnail — EchoTik's influencer video response uses `reflow_cover`
         cover = _extract_image_url(
-            v.get('cover_url') or v.get('coverUrl') or v.get('cover')
+            v.get('reflow_cover') or v.get('reflowCover')
+            or v.get('cover_url') or v.get('coverUrl') or v.get('cover')
             or v.get('video_cover') or v.get('videoCover')
             or v.get('dynamic_cover') or v.get('origin_cover')
             or v.get('thumbnail') or v.get('thumb_url')
-            or v.get('image_url') or v.get('imageUrl')
         )
-        # Product attachment — covers many shapes
-        product_cnt = _safe_int(
-            v.get('product_cnt') or v.get('productCnt')
-            or v.get('product_count') or v.get('productCount') or 0
-        )
+        # Shop attachment: sales_flag=1 or any video-sale count
         has_product = bool(
-            product_cnt > 0
-            or v.get('product_id') or v.get('productId')
-            or v.get('products') or v.get('product_list')
-            or v.get('anchor_product') or v.get('shop_item')
-            or v.get('shop_flag') == 1 or v.get('shopFlag') == 1
+            v.get('sales_flag') == 1 or v.get('salesFlag') == 1
+            or _safe_int(v.get('total_video_sale_cnt') or v.get('total_video_sale_30d_cnt') or 0) > 0
         )
 
         # Timestamp → ISO string
@@ -883,27 +921,31 @@ def fetch_creator_videos(unique_id: str, user_id: str = '',
             except (ValueError, OSError):
                 ts = None
 
+        # EchoTik doesn't return a share_url — build the canonical TikTok one
+        vid = str(v.get('video_id') or v.get('videoId') or v.get('id') or '')
+        v_handle = v.get('unique_id') or v.get('uniqueId') or uid
+        share = ''
+        if vid and v_handle:
+            share = f"https://www.tiktok.com/@{v_handle}/video/{vid}"
+
         videos.append({
-            'video_id': str(v.get('video_id') or v.get('videoId') or v.get('id') or ''),
+            'video_id': vid,
             'cover_url': cover,
-            'title': (v.get('title') or v.get('desc') or v.get('description')
-                      or v.get('video_desc') or v.get('videoDesc') or ''),
+            'title': (v.get('video_desc') or v.get('videoDesc')
+                      or v.get('title') or v.get('desc') or v.get('description') or ''),
             'view_count': _safe_int(
-                v.get('play_cnt') or v.get('playCnt')
-                or v.get('view_count') or v.get('viewCount')
-                or v.get('view_cnt') or v.get('vv')
-                or v.get('play_count') or v.get('playCount') or 0
+                v.get('total_views_cnt') or v.get('totalViewsCnt')
+                or v.get('play_cnt') or v.get('playCnt')
+                or v.get('view_count') or v.get('view_cnt') or v.get('vv') or 0
             ),
             'like_count': _safe_int(
-                v.get('digg_cnt') or v.get('diggCnt')
-                or v.get('like_cnt') or v.get('likeCnt')
-                or v.get('like_count') or v.get('likeCount')
-                or v.get('digg_count') or v.get('diggCount') or 0
+                v.get('total_digg_cnt') or v.get('totalDiggCnt')
+                or v.get('digg_cnt') or v.get('diggCnt')
+                or v.get('like_cnt') or v.get('like_count') or 0
             ),
             'created_at': ts,
             'has_product': has_product,
-            'video_url': (v.get('share_url') or v.get('shareUrl')
-                          or v.get('video_url') or v.get('videoUrl') or ''),
+            'video_url': share,
         })
 
     return videos
@@ -969,10 +1011,23 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
     for p in raw_list:
         if not isinstance(p, dict):
             continue
-        img = _extract_image_url(
-            p.get('product_image') or p.get('image') or p.get('cover')
-            or p.get('cover_url') or p.get('image_url')
-        )
+        # EchoTik returns cover_url as a JSON-encoded array of
+        # {url, index} objects. Pick the image with the lowest index.
+        raw_cover = p.get('cover_url') or p.get('product_image') or p.get('image')
+        img = None
+        if isinstance(raw_cover, str) and raw_cover.strip().startswith('['):
+            try:
+                import json as _json
+                parsed = _json.loads(raw_cover)
+                if isinstance(parsed, list) and parsed:
+                    best = min(parsed, key=lambda x: x.get('index', 99) if isinstance(x, dict) else 99)
+                    if isinstance(best, dict):
+                        img = best.get('url')
+            except (ValueError, TypeError):
+                pass
+        if not img:
+            img = _extract_image_url(raw_cover)
+
         commission = _safe_float(
             p.get('product_commission_rate') or p.get('commission_rate')
             or p.get('commission') or 0
@@ -985,18 +1040,27 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
             'product_name': (p.get('product_name') or p.get('title')
                              or p.get('productTitle') or p.get('name') or ''),
             'image_url': img,
-            'commission_rate': commission,
+            'commission_rate': commission,  # not returned on this endpoint; stays 0
             'sales': _safe_int(
-                p.get('total_sale_cnt') or p.get('sales')
-                or p.get('sale_cnt') or 0
+                p.get('total_video_sale_cnt')  # sales this creator drove
+                or p.get('total_sale_cnt')
+                or p.get('sales') or p.get('sale_cnt') or 0
             ),
             'gmv': _safe_float(
-                p.get('total_sale_gmv_amt') or p.get('gmv')
-                or p.get('sale_gmv_amt') or 0
+                p.get('total_video_sale_gmv_amt')  # GMV this creator drove
+                or p.get('total_sale_gmv_amt')
+                or p.get('gmv') or p.get('sale_gmv_amt') or 0
             ),
-            'price': _safe_float(
-                p.get('spu_avg_price') or p.get('price') or 0
+            'video_count': _safe_int(
+                p.get('total_video_cnt') or p.get('video_count')
+                or p.get('video_cnt') or 0
             ),
+            'live_count': _safe_int(
+                p.get('total_live_cnt') or p.get('live_count') or 0
+            ),
+            'total_sales': _safe_int(p.get('total_sale_cnt') or 0),
+            'total_gmv': _safe_float(p.get('total_sale_gmv_amt') or 0),
+            'price': _safe_float(p.get('spu_avg_price') or p.get('price') or 0),
         })
 
     return products

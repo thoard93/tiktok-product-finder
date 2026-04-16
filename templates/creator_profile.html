@@ -192,9 +192,9 @@
               <th scope="col" style="width:56px">Image</th>
               <th scope="col" style="min-width:220px">Product</th>
               <th scope="col">Price</th>
-              <th scope="col">Commission</th>
-              <th scope="col">Est. Sales</th>
-              <th scope="col">GMV</th>
+              <th scope="col" title="Sales driven by this creator's videos">Video Sales</th>
+              <th scope="col" title="GMV driven by this creator's videos">Video GMV</th>
+              <th scope="col" title="Product-wide total GMV">Total GMV</th>
               <th scope="col">Videos</th>
               <th scope="col" style="width:90px"></th>
             </tr>
@@ -479,15 +479,17 @@ async function loadSales() {
         ? '<a href="/app/products/shop_' + encodeURIComponent(p.product_id) + '" style="color:var(--text-primary);font-weight:600;text-decoration:none">' + name + '</a>'
         : name;
       const priceCell = p.price ? '$' + Number(p.price).toFixed(2) : '—';
-      const commissionPct = ((p.commission_rate || 0) * 100).toFixed(1);
-      const videoCount = p.video_count || p.video_cnt || 0;
+      const videoCount = p.video_count || 0;
+      const videoSales = p.sales || 0;
+      const videoGmv = p.gmv || 0;
+      const totalGmv = p.total_gmv || videoGmv;
       return '<tr>'
         + '<td class="creator-product-thumb-cell">' + img + '</td>'
         + '<td>' + link + '</td>'
         + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurCls + '">' + priceCell + '</span></td>'
-        + '<td><span class="' + blurCls + '">' + commissionPct + '%</span></td>'
-        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurCls + '">' + Number(p.sales || 0).toLocaleString() + '</span></td>'
-        + '<td style="font-variant-numeric:tabular-nums;font-weight:600"><span class="' + blurCls + '">$' + Number(p.gmv || 0).toLocaleString(undefined,{maximumFractionDigits:0}) + '</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurCls + '">' + Number(videoSales).toLocaleString() + '</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums;font-weight:600"><span class="' + blurCls + '">$' + Number(videoGmv).toLocaleString(undefined,{maximumFractionDigits:0}) + '</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurCls + '">$' + Number(totalGmv).toLocaleString(undefined,{maximumFractionDigits:0}) + '</span></td>'
         + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurCls + '">' + Number(videoCount).toLocaleString() + '</span></td>'
         + '<td>' + (p.product_id
             ? '<a href="/app/products/shop_' + encodeURIComponent(p.product_id) + '" class="btn btn-ghost btn-sm" style="font-size:12px">View</a>'

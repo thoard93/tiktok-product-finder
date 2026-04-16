@@ -2605,20 +2605,27 @@ def api_image_proxy():
         resp.headers['Cache-Control'] = 'public, max-age=86400'
         return resp
 
-    # Cache miss — fetch
+    # Cache miss — fetch. The EchoTik Asian CDN has been flaky from US
+    # Render instances; log everything so we can see why on failure.
     try:
         import requests as _requests
-        r = _requests.get(url, timeout=10, headers={
-            'User-Agent': 'Mozilla/5.0 (compatible; Vantage/1.0)',
-            'Referer': '',
+        r = _requests.get(url, timeout=15, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                          'AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
         })
-        if r.status_code != 200:
-            abort(502)
-        ctype = r.headers.get('Content-Type', 'image/jpeg').split(';')[0]
-        if not ctype.startswith('image/'):
-            abort(502)
+        ctype = r.headers.get('Content-Type', 'image/jpeg').split(';')[0].strip()
         body = r.content
-    except Exception:
+        body_len = len(body) if body else 0
+        if r.status_code != 200 or not ctype.startswith('image/') or body_len < 200:
+            print(f"[ImageProxy] FAIL url={url[:140]} status={r.status_code} "
+                  f"ctype={ctype!r} bytes={body_len} "
+                  f"body_head={body[:120]!r}", flush=True)
+            abort(502)
+    except Exception as e:
+        print(f"[ImageProxy] NETWORK_ERR url={url[:140]} err={e}", flush=True)
         abort(504)
 
     # Cap cache at ~200 entries to avoid memory bloat
