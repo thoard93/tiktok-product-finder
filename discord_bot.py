@@ -1097,7 +1097,7 @@ You are responding in a private Discord channel for a TikTok Shop affiliate mark
 YOUR CAPABILITIES:
 - Analyze TikTok Shop product data (sales, ad spend, video counts, pricing, commission rates, GMV)
 - Find "Gems" — products with high ad spend but few affiliate videos (opportunity for creators)
-- Find "Caked Picks" — products with $50K-$200K GMV and ≤50 influencers
+- Find high-potential products — strong sales, low saturation, good commissions
 - Identify trending products, scaling brands, and best affiliate opportunities
 - Provide market insights and recommendations
 
@@ -1269,15 +1269,15 @@ def _build_discord_product_context(user_message):
             ).order_by(desc(Product.first_seen)).limit(8).all()
             context["newest"] = [_psummary(p) for p in newest]
         
-        # Caked picks (if relevant)
-        if any(w in msg_lower for w in ['caked', 'cake', 'pick', 'niche']):
-            caked = Product.query.filter(
+        # Niche opportunities (if relevant)
+        if any(w in msg_lower for w in ['pick', 'niche', 'opportunity', 'untapped', 'hidden']):
+            niche = Product.query.filter(
                 Product.gmv_30d >= 50000, Product.gmv_30d <= 200000,
                 Product.influencer_count <= 50,
                 video_count_field >= MIN_VIDEOS,
                 Product.product_status == 'active',
             ).order_by(desc(Product.gmv_30d)).limit(8).all()
-            context["caked_picks"] = [_psummary(p) for p in caked]
+            context["niche_opportunities"] = [_psummary(p) for p in niche]
 
         # Budget (if relevant)
         if any(w in msg_lower for w in ['cheap', 'budget', 'affordable', 'low price', 'under']):
