@@ -1,294 +1,559 @@
 {% extends "base.html" %}
-{% block title %}{{ creator.nick_name | default('Creator') | truncate(40) }}{% endblock %}
-{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>{% endblock %}
+{% block title %}{{ (creator.nick_name if creator else 'Creator') | default('Creator') | truncate(40) }}{% endblock %}
 
 {% block content %}
 <a href="javascript:void(0)" class="detail-back" onclick="window.history.length>1?window.history.back():window.location='/app/creators'"><i data-lucide="arrow-left"></i> Back</a>
 
-{# region flag helper #}
-{% set region_flags = {'US':'🇺🇸','GB':'🇬🇧','CA':'🇨🇦','AU':'🇦🇺','DE':'🇩🇪','FR':'🇫🇷','IT':'🇮🇹','ES':'🇪🇸','JP':'🇯🇵','KR':'🇰🇷','MX':'🇲🇽','BR':'🇧🇷','ID':'🇮🇩','MY':'🇲🇾','PH':'🇵🇭','TH':'🇹🇭','VN':'🇻🇳'} %}
-{% set region = creator.region or 'US' %}
+{# ===== ERROR STATE ===== #}
+{% if not creator %}
+  <div class="card" style="max-width:520px;margin:var(--space-8) auto;padding:var(--space-8);text-align:center">
+    <div style="width:64px;height:64px;border-radius:var(--radius-full);background:var(--accent-glow);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-4)">
+      <i data-lucide="user-x" style="width:28px;height:28px;color:var(--accent)"></i>
+    </div>
+    <h2 style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-2)">Creator not found or data unavailable</h2>
+    <p class="text-sm text-muted" style="margin-bottom:var(--space-5)">This handle may not exist on TikTok Shop, or EchoTik doesn't have data for it yet.</p>
+    <a href="/app/creators" class="btn btn-primary">Back to Creators</a>
+  </div>
+{% else %}
+
+{# ===== Region flag map ===== #}
+{% set region_flags = {'US':'🇺🇸','GB':'🇬🇧','UK':'🇬🇧','CA':'🇨🇦','AU':'🇦🇺','DE':'🇩🇪','FR':'🇫🇷','IT':'🇮🇹','ES':'🇪🇸','JP':'🇯🇵','KR':'🇰🇷','MX':'🇲🇽','BR':'🇧🇷','ID':'🇮🇩','MY':'🇲🇾','PH':'🇵🇭','TH':'🇹🇭','VN':'🇻🇳','SG':'🇸🇬','IN':'🇮🇳','AR':'🇦🇷','CL':'🇨🇱','CO':'🇨🇴'} %}
+{% set region = (creator.region or 'US') | upper %}
 
 {# ===== HEADER ===== #}
-<div class="card mb-6">
-  <div class="flex gap-5 items-start" style="flex-wrap:wrap">
-    {# Avatar #}
-    <div style="flex-shrink:0">
-      {% if creator.avatar %}
-        <img src="{{ creator.avatar }}" alt="{{ creator.nick_name }}" style="width:80px;height:80px;border-radius:var(--radius-full);object-fit:cover;border:2px solid var(--border)"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="brand-header-avatar-fallback" style="width:80px;height:80px;font-size:32px;display:none">{{ (creator.nick_name or '?')[0] | upper }}</div>
+<div class="card creator-header" style="margin-bottom:var(--space-6)">
+  <div class="creator-header__row">
+    <div class="creator-header__avatar-wrap">
+      {% if creator.avatar_url %}
+        <img src="{{ creator.avatar_url }}" alt="{{ creator.nick_name }}"
+             class="creator-avatar"
+             onerror="this.onerror=null;this.src='/static/img/avatar-placeholder.png'">
       {% else %}
-        <div class="brand-header-avatar-fallback" style="width:80px;height:80px;font-size:32px">{{ (creator.nick_name or '?')[0] | upper }}</div>
+        <div class="creator-avatar creator-avatar--fallback">{{ (creator.nick_name or '?')[0] | upper }}</div>
       {% endif %}
     </div>
 
-    {# Info #}
-    <div style="flex:1;min-width:240px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-        <h1 style="font-size:var(--text-2xl);font-weight:800">{{ creator.nick_name or creator.unique_id }}</h1>
-        {% if creator.verification_type == 1 %}<span style="display:inline-flex;align-items:center;gap:4px;background:var(--teal-dim);color:var(--teal);font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--radius-full)"><i data-lucide="check-circle" style="width:12px;height:12px"></i> Verified</span>{% endif %}
+    <div class="creator-header__info">
+      <div class="creator-header__name-row">
+        <h1 class="creator-header__name">{{ creator.nick_name or creator.unique_id }}</h1>
+        {% if creator.verification_type == 1 or creator.is_verified %}
+          <span class="creator-verified-badge" title="Verified creator">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 2.8 3.6-.8.8 3.6L21.6 10 19 12l2.6 2L18.8 17l-3.6-.8L12 20l-2.4-2.8-3.6.8-.8-3.6L2.4 12l2.6-2L2.4 7.8l2.8-2.8L9.6 2.8 12 2z"/><path d="M10 13.2l-2-2 1.4-1.4.6.6 3.6-3.6 1.4 1.4L10 13.2z" fill="var(--prism-bg, #0a0a14)"/></svg>
+          </span>
+        {% endif %}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-3);flex-wrap:wrap">
-        <span style="color:var(--text-muted);font-size:14px">@{{ creator.unique_id }}</span>
-        <button onclick="navigator.clipboard.writeText('{{ creator.unique_id }}');this.textContent='✓'" aria-label="Copy handle" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px" title="Copy"><i data-lucide="copy" style="width:12px;height:12px"></i></button>
-        <span style="color:var(--text-muted);font-size:14px">&middot; {{ region_flags.get(region, '🌍') }} {{ region }}</span>
-        {% if creator.category %}<span class="badge badge-muted">{{ creator.category }}</span>{% endif %}
-      </div>
-      {% if creator.signature %}<p style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.6;margin-bottom:var(--space-3);max-width:600px">{{ creator.signature }}</p>{% endif %}
-      {% if creator.mcn_agency or creator.mcn_name %}<div style="font-size:12px;color:var(--text-faint);margin-bottom:var(--space-3)">MCN Agency: <strong style="color:var(--text-secondary)">{{ creator.mcn_agency or creator.mcn_name }}</strong></div>{% endif %}
 
-      <div class="flex gap-2" style="flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" id="saveCreatorBtn" onclick="toggleSaveCreator()">
-          <i data-lucide="{{ 'star' if is_saved else 'star' }}" style="width:14px;height:14px;{% if is_saved %}fill:currentColor{% endif %}"></i>
-          <span id="saveCreatorLabel">{{ 'Saved' if is_saved else 'Save Creator' }}</span>
+      <div class="creator-header__handle-row">
+        <span class="creator-handle">@{{ creator.unique_id }}</span>
+        <button class="creator-handle-copy" type="button"
+                onclick="navigator.clipboard.writeText('{{ creator.unique_id }}');this.querySelector('i').setAttribute('data-lucide','check');if(window.lucide)lucide.createIcons()"
+                aria-label="Copy handle" title="Copy handle">
+          <i data-lucide="copy"></i>
         </button>
-        <a href="https://www.tiktok.com/@{{ creator.unique_id }}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.2 8.2 0 004.79 1.53V6.79a4.85 4.85 0 01-1.02-.1z"/></svg>
-          View on TikTok
-        </a>
+        <span class="creator-region">{{ region_flags.get(region, '🌍') }} {{ region }}</span>
+        {% if creator.category %}<span class="badge badge-muted">{{ creator.category }}</span>{% endif %}
+        {% if creator.mcn_agency or creator.mcn_name %}
+          <span class="text-xs text-faint">· MCN: <strong style="color:var(--text-secondary)">{{ creator.mcn_agency or creator.mcn_name }}</strong></span>
+        {% endif %}
       </div>
+
+      {% if creator.signature %}
+      <p class="creator-bio" id="creatorBio"
+         data-full="{{ creator.signature | e }}"
+         data-long="{{ 'true' if (creator.signature | length) > 100 else 'false' }}">
+        {% if (creator.signature | length) > 100 %}{{ creator.signature[:100] }}…{% else %}{{ creator.signature }}{% endif %}
+      </p>
+      {% if (creator.signature | length) > 100 %}
+      <button class="creator-bio-toggle" type="button" onclick="toggleBio(this)">Show more</button>
+      {% endif %}
+      {% endif %}
+    </div>
+
+    <div class="creator-header__actions">
+      <button class="btn btn-primary btn-sm" id="saveCreatorBtn" onclick="toggleSaveCreator()">
+        <svg id="saveCreatorIcon" width="14" height="14" viewBox="0 0 24 24" fill="{{ 'currentColor' if is_saved else 'none' }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span id="saveCreatorLabel">{{ 'Saved' if is_saved else 'Save Creator' }}</span>
+      </button>
+      <a href="https://www.tiktok.com/@{{ creator.unique_id }}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.2 8.2 0 004.79 1.53V6.79a4.85 4.85 0 01-1.02-.1z"/></svg>
+        View on TikTok
+      </a>
     </div>
   </div>
 </div>
 
-{# ===== STATS ROW (6 cards) ===== #}
-{% set ec = creator.ec_score or 0 %}
-{% set ec_color = '#0d9488' if ec >= 60 else ('#d97706' if ec >= 35 else '#dc2626') %}
+{# ===== STATS ROW (4 cards) ===== #}
 {% set followers = creator.total_followers_cnt or 0 %}
-{% set likes = creator.total_likes_cnt or 0 %}
-{% set videos = creator.total_post_video_cnt or 0 %}
-{% set avg_views = creator.avg_views_cnt or creator.total_video_view_30d_cnt or 0 %}
-{% set engagement = (creator.interaction_rate or 0) %}
-{% set total_products = creator.total_product_cnt or creator.total_product_30d_cnt or 0 %}
+{% set likes = creator.total_likes_cnt or creator.total_digg_cnt or 0 %}
+{% set videos = creator.total_post_video_cnt or creator.total_video_cnt or 0 %}
+{% set avg_views = creator.avg_video_view_cnt or creator.avg_views_cnt or creator.total_video_view_30d_cnt or 0 %}
+{% set engagement = creator.interaction_rate or creator.engagement_rate or 0 %}
 
-<div class="stat-grid" style="margin-bottom:var(--space-6)">
-  <div class="stat-card">
-    <div class="stat-label">EC Score</div>
-    {% if is_pro %}
-      <div style="display:flex;align-items:center;gap:var(--space-3)">
-        <div class="score-ring-wrap" style="width:44px;height:44px">
-          <svg viewBox="0 0 36 36" width="44" height="44">
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke-width="3" stroke-linecap="round"
-                    stroke-dasharray="{{ ec }}, 100" stroke="{{ ec_color }}"
-                    transform="rotate(-90 18 18)"/>
-          </svg>
-          <span class="score-number" style="font-size:12px">{{ ec }}</span>
-        </div>
-        <div class="stat-value" style="font-size:var(--text-2xl)">{{ ec }}</div>
-      </div>
-    {% else %}
-      <div class="stat-value"><span class="blurred-data">74</span></div>
-    {% endif %}
-  </div>
+<div class="stat-grid creator-stats" style="margin-bottom:var(--space-6)">
   <div class="stat-card">
     <div class="stat-label">Followers</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ followers | format_number }}{% else %}<span class="blurred-data">1.2M</span>{% endif %}</div>
+    <div class="stat-value" style="font-variant-numeric:tabular-nums">{{ followers | format_number }}</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Total Likes</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ likes | format_number }}{% else %}<span class="blurred-data">24.5M</span>{% endif %}</div>
+    <div class="stat-value" style="font-variant-numeric:tabular-nums">{{ likes | format_number }}</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Videos</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ videos | format_number }}{% else %}<span class="blurred-data">482</span>{% endif %}</div>
-    {% if avg_views %}<div class="stat-hint">avg {% if is_pro %}{{ avg_views | format_number }}{% else %}<span class="blurred-data">12K</span>{% endif %} views</div>{% endif %}
+    <div class="stat-label">Total Videos</div>
+    <div class="stat-value" style="font-variant-numeric:tabular-nums">{{ videos | format_number }}</div>
+    {% if avg_views %}<div class="stat-hint">avg {{ avg_views | format_number }} views per video</div>{% endif %}
   </div>
   <div class="stat-card">
     <div class="stat-label">Engagement Rate</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ "%.2f" | format(engagement * 100 if engagement < 1 else engagement) }}%{% else %}<span class="blurred-data">6.4%</span>{% endif %}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Total Products</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ total_products | format_number }}{% else %}<span class="blurred-data">128</span>{% endif %}</div>
+    <div class="stat-value" style="font-variant-numeric:tabular-nums">
+      {% set eng_pct = (engagement * 100) if engagement and engagement < 1 else engagement %}
+      {{ "%.2f" | format(eng_pct or 0) }}%
+    </div>
   </div>
 </div>
 
-{# ===== GROWTH SECTION ===== #}
-<div class="section-header">
-  <h2 class="section-title">Follower Growth</h2>
+{# ===== TABS ===== #}
+<div class="creator-tabs-bar">
+  <button class="creator-tab creator-tab--active" data-tab="videos" onclick="switchCreatorTab('videos')">
+    <i data-lucide="video"></i> Videos
+  </button>
+  <button class="creator-tab" data-tab="sales" onclick="switchCreatorTab('sales')">
+    <i data-lucide="shopping-bag"></i> Sales Analysis
+  </button>
+  <button class="creator-tab" data-tab="growth" onclick="switchCreatorTab('growth')">
+    <i data-lucide="trending-up"></i> Growth
+  </button>
 </div>
-{% set growth_data = [
-  ('1d', creator.total_followers_1d_cnt or 0),
-  ('7d', creator.total_followers_7d_cnt or 0),
-  ('30d', creator.total_followers_30d_cnt or 0),
-  ('90d', creator.total_followers_90d_cnt or 0),
-] %}
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--space-3);margin-bottom:var(--space-6)">
-  {% for label, val in growth_data %}
-  {% set color = ('#059669' if val > 0 else ('#dc2626' if val < 0 else 'var(--text-muted)')) %}
-  {% set arrow = ('▲' if val > 0 else ('▼' if val < 0 else '—')) %}
-  <div class="card" style="padding:var(--space-4)">
-    <div class="stat-label">+{{ label }}</div>
-    <div style="font-size:var(--text-xl);font-weight:700;font-variant-numeric:tabular-nums;color:{{ color }}">{% if is_pro %}{{ arrow }} {{ val | format_number if val > 0 else (('-' + ((-val) | format_number)) if val < 0 else '—') }}{% else %}<span class="blurred-data">▲ 4.2K</span>{% endif %}</div>
+
+{# ---------- TAB 1: Videos ---------- #}
+<div class="creator-tab-panel creator-tab-panel--active" id="creatorTab-videos">
+  <div class="creator-sort-row">
+    <span class="text-sm text-muted">Sort by:</span>
+    <div class="creator-sort-btns" role="tablist">
+      <button class="creator-sort-btn creator-sort-btn--active" data-sort="views" onclick="sortVideos('views',this)">Most Views</button>
+      <button class="creator-sort-btn" data-sort="recent" onclick="sortVideos('recent',this)">Most Recent</button>
+      <button class="creator-sort-btn" data-sort="likes" onclick="sortVideos('likes',this)">Most Liked</button>
+    </div>
+  </div>
+
+  <div class="creator-video-grid" id="creatorVideoGrid">
+    {# Loading skeletons #}
+    {% for _ in range(6) %}
+    <div class="creator-video-card creator-video-card--skeleton">
+      <div class="skeleton-thumb"></div>
+      <div class="skeleton-line" style="width:80%"></div>
+      <div class="skeleton-line" style="width:55%"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="creator-empty" id="creatorVideoEmpty" style="display:none">
+    <i data-lucide="video-off"></i>
+    <p>No videos available for this creator.</p>
+  </div>
+</div>
+
+{# ---------- TAB 2: Sales Analysis ---------- #}
+<div class="creator-tab-panel" id="creatorTab-sales" style="display:none">
+  {% set has_sales = (creator.total_sale_cnt or 0) > 0 or (creator.total_sale_gmv_30d_amt or 0) > 0 %}
+  {% if not has_sales %}
+    <div class="creator-empty">
+      <i data-lucide="shopping-bag"></i>
+      <p>This creator has no TikTok Shop sales data available.</p>
+    </div>
+  {% else %}
+    <div class="stat-grid" style="margin-bottom:var(--space-5)">
+      <div class="stat-card">
+        <div class="stat-label">GMV (30d)</div>
+        <div class="stat-value" style="font-variant-numeric:tabular-nums">
+          {% if is_pro %}${{ "{:,.0f}".format(creator.total_sale_gmv_30d_amt or 0) }}{% else %}<span class="blurred-data">$82,400</span>{% endif %}
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Sales Count (30d)</div>
+        <div class="stat-value" style="font-variant-numeric:tabular-nums">
+          {% if is_pro %}{{ "{:,}".format(creator.total_video_sale_30d_cnt or creator.total_sale_30d_cnt or 0) }}{% else %}<span class="blurred-data">3,240</span>{% endif %}
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Products Promoted (30d)</div>
+        <div class="stat-value" style="font-variant-numeric:tabular-nums">
+          {% if is_pro %}{{ "{:,}".format(creator.total_product_30d_cnt or 0) }}{% else %}<span class="blurred-data">24</span>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--border);font-weight:700">Promoted Products</div>
+      <div class="creator-products-wrap">
+        <table class="product-table creator-products-table" id="creatorSalesTable">
+          <thead>
+            <tr>
+              <th scope="col" style="width:60px"></th>
+              <th scope="col" style="min-width:220px">Product</th>
+              <th scope="col">Commission</th>
+              <th scope="col">Est. Sales</th>
+              <th scope="col">GMV</th>
+            </tr>
+          </thead>
+          <tbody id="creatorSalesBody">
+            <tr><td colspan="5" style="padding:var(--space-6);text-align:center;color:var(--text-muted)">Loading products…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+{# ---------- TAB 3: Growth ---------- #}
+<div class="creator-tab-panel" id="creatorTab-growth" style="display:none">
+  {% set growth_data = [
+    ('+1 Day', creator.total_followers_1d_cnt or 0),
+    ('+7 Days', creator.total_followers_7d_cnt or 0),
+    ('+30 Days', creator.total_followers_30d_cnt or 0),
+    ('+90 Days', creator.total_followers_90d_cnt or 0),
+  ] %}
+  <div class="creator-growth-grid">
+    {% for label, val in growth_data %}
+      {% set color = '#10b981' if val > 0 else ('#ef4444' if val < 0 else 'var(--text-muted)') %}
+      {% set arrow = '▲' if val > 0 else ('▼' if val < 0 else '—') %}
+      <div class="card creator-growth-card">
+        <div class="stat-label">{{ label }}</div>
+        <div class="creator-growth-value" style="color:{{ color }}">
+          {% if is_pro %}
+            <span class="creator-growth-arrow">{{ arrow }}</span>
+            {% if val > 0 %}{{ val | format_number }}{% elif val < 0 %}-{{ (val | abs) | format_number }}{% else %}—{% endif %}
+          {% else %}
+            <span class="blurred-data">▲ 4.2K</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if creator.video_publish_week or creator.video_publish_hour or creator.video_duration_level %}
+  <div class="card creator-behavior-card">
+    <div class="creator-behavior-row">
+      <div class="creator-behavior-label">Posting frequency</div>
+      <div class="creator-behavior-value" id="postingFrequency">—</div>
+    </div>
+    <div class="creator-behavior-row">
+      <div class="creator-behavior-label">Peak posting hours</div>
+      <div class="creator-behavior-value" id="peakHours">—</div>
+    </div>
+    <div class="creator-behavior-row">
+      <div class="creator-behavior-label">Video length preference</div>
+      <div class="creator-behavior-pills" id="durationPills">—</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{# ===== SIMILAR CREATORS ===== #}
+<div class="section-header" style="margin-top:var(--space-8)">
+  <h2 class="section-title">Similar Creators</h2>
+</div>
+<div class="creator-similar-grid" id="creatorSimilarGrid">
+  {# Loading skeletons — hidden via JS when empty #}
+  {% for _ in range(3) %}
+  <div class="card creator-similar-card creator-similar-card--skeleton">
+    <div class="skeleton-circle"></div>
+    <div style="flex:1">
+      <div class="skeleton-line" style="width:70%"></div>
+      <div class="skeleton-line" style="width:50%"></div>
+    </div>
   </div>
   {% endfor %}
 </div>
 
-{# ===== SHOP PERFORMANCE (only if has sales) ===== #}
-{% if (creator.total_sale_cnt or 0) > 0 or (creator.total_sale_gmv_amt or 0) > 0 %}
-<div class="section-header">
-  <h2 class="section-title">Shop Performance</h2>
-</div>
-<div class="stat-grid" style="margin-bottom:var(--space-6)">
-  <div class="stat-card">
-    <div class="stat-label">Total GMV</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}${{ creator.total_sale_gmv_amt | format_number }}{% else %}<span class="blurred-data">$82.4K</span>{% endif %}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">GMV (30d)</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}${{ creator.total_sale_gmv_30d_amt | default(0) | format_number }}{% else %}<span class="blurred-data">$12.8K</span>{% endif %}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Sales Count</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ creator.total_sale_cnt | default(0) | format_number }}{% else %}<span class="blurred-data">3,240</span>{% endif %}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Products (30d)</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ creator.total_product_30d_cnt | default(0) | format_number }}{% else %}<span class="blurred-data">24</span>{% endif %}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Product Videos (30d)</div>
-    <div class="stat-value" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ creator.total_video_product_30d_cnt | default(0) | format_number }}{% else %}<span class="blurred-data">18</span>{% endif %}</div>
-  </div>
-</div>
 {% endif %}
-
-{# ===== POSTING BEHAVIOR ===== #}
-{% if creator.video_publish_week or creator.video_publish_hour or creator.video_duration_level %}
-<div class="section-header">
-  <h2 class="section-title">Posting Behavior</h2>
-</div>
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4);margin-bottom:var(--space-6)">
-
-  {% if creator.video_publish_week %}
-  <div class="card" style="padding:var(--space-4)">
-    <div class="stat-label" style="margin-bottom:var(--space-3)">Videos per day</div>
-    <div class="chart-wrap" style="height:140px"><canvas id="weekChart"></canvas></div>
-  </div>
-  {% endif %}
-
-  {% if creator.video_publish_hour %}
-  <div class="card" style="padding:var(--space-4)">
-    <div class="stat-label" style="margin-bottom:var(--space-3)">Peak posting hours</div>
-    <div id="peakHours" style="font-size:var(--text-lg);font-weight:700;color:var(--accent)">&mdash;</div>
-  </div>
-  {% endif %}
-
-  {% if creator.video_duration_level %}
-  <div class="card" style="padding:var(--space-4)">
-    <div class="stat-label" style="margin-bottom:var(--space-3)">Video length</div>
-    <div id="durationPills" style="display:flex;flex-wrap:wrap;gap:var(--space-2)"></div>
-  </div>
-  {% endif %}
-</div>
-{% endif %}
-
 {% endblock %}
 
 {% block scripts %}
+{% if creator %}
 <script>
 const CREATOR_DATA = {
   unique_id: {{ creator.unique_id | tojson }},
-  user_id: {{ (creator.user_id or creator.userId or '') | tojson }},
   nick_name: {{ (creator.nick_name or '') | tojson }},
-  avatar: {{ (creator.avatar or '') | tojson }},
+  avatar_url: {{ (creator.avatar_url or '') | tojson }},
   total_followers_cnt: {{ creator.total_followers_cnt or 0 }},
   ec_score: {{ creator.ec_score or 0 }},
   region: {{ (creator.region or 'US') | tojson }},
+  category: {{ (creator.category or '') | tojson }},
 };
+const IS_PRO = {{ 'true' if is_pro else 'false' }};
 let isSaved = {{ 'true' if is_saved else 'false' }};
+let allVideos = [];
 
+// ----- Tabs -----
+function switchCreatorTab(tab) {
+  document.querySelectorAll('.creator-tab').forEach(function(b){
+    b.classList.toggle('creator-tab--active', b.dataset.tab === tab);
+  });
+  document.querySelectorAll('.creator-tab-panel').forEach(function(p){
+    p.style.display = (p.id === 'creatorTab-' + tab) ? '' : 'none';
+  });
+  if (tab === 'sales' && !window._salesLoaded) { loadSales(); window._salesLoaded = true; }
+}
+
+// ----- Save / Unsave -----
 async function toggleSaveCreator() {
   const btn = document.getElementById('saveCreatorBtn');
+  const icon = document.getElementById('saveCreatorIcon');
   btn.disabled = true;
   try {
-    const res = await fetch('/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id) + '/favorite', {
+    const res = await fetch('/api/favorites/creator', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(CREATOR_DATA)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        unique_id: CREATOR_DATA.unique_id,
+        nick_name: CREATOR_DATA.nick_name,
+        avatar_url: CREATOR_DATA.avatar_url,
+        total_followers_cnt: CREATOR_DATA.total_followers_cnt,
+        ec_score: CREATOR_DATA.ec_score,
+        region: CREATOR_DATA.region,
+      })
     });
     const data = await res.json();
-    if (data.saved !== undefined) {
+    if (typeof data.saved === 'boolean') {
       isSaved = data.saved;
       document.getElementById('saveCreatorLabel').textContent = isSaved ? 'Saved' : 'Save Creator';
-      btn.querySelector('i').style.fill = isSaved ? 'currentColor' : '';
+      icon.setAttribute('fill', isSaved ? 'currentColor' : 'none');
     }
   } catch(e) {}
   btn.disabled = false;
 }
 
-{% if creator.video_publish_week %}
-(function() {
-  const raw = {{ creator.video_publish_week | tojson }};
-  // Normalize to array of 7 days Mon-Sun
-  let vals = [];
-  if (Array.isArray(raw)) {
-    vals = raw.map(x => typeof x === 'object' ? (x.value || x.count || 0) : Number(x) || 0);
-  } else if (typeof raw === 'object' && raw !== null) {
-    const order = ['mon','tue','wed','thu','fri','sat','sun','monday','tuesday','wednesday','thursday','friday','saturday','sunday','1','2','3','4','5','6','7'];
-    for (let k of Object.keys(raw)) vals.push(Number(raw[k]) || 0);
+// ----- Bio expand -----
+function toggleBio(btn) {
+  const el = document.getElementById('creatorBio');
+  if (!el) return;
+  const full = el.dataset.full || '';
+  if (btn.textContent === 'Show more') {
+    el.textContent = full;
+    btn.textContent = 'Show less';
+  } else {
+    el.textContent = full.length > 100 ? (full.slice(0, 100) + '…') : full;
+    btn.textContent = 'Show more';
   }
-  while (vals.length < 7) vals.push(0);
-  vals = vals.slice(0, 7);
-  const ctx = document.getElementById('weekChart');
-  if (!ctx) return;
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-      datasets: [{ data: vals, backgroundColor: 'rgba(232,56,77,0.7)', borderRadius: 4 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { enabled: true } },
-      scales: { y: { beginAtZero: true, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }
+}
+
+// ----- Formatting -----
+function formatCount(n) {
+  n = Number(n) || 0;
+  if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(n);
+}
+function relativeTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 86400 * 30) return Math.floor(diff / 86400) + 'd ago';
+  if (diff < 86400 * 365) return Math.floor(diff / (86400 * 30)) + 'mo ago';
+  return Math.floor(diff / (86400 * 365)) + 'y ago';
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+// ----- Videos -----
+async function loadVideos() {
+  try {
+    const res = await fetch('/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id) + '/videos');
+    if (!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    allVideos = data.videos || [];
+    renderVideos('views');
+  } catch(e) {
+    allVideos = [];
+    renderVideos('views');
+  }
+}
+function sortVideos(by, btn) {
+  document.querySelectorAll('.creator-sort-btn').forEach(b => b.classList.toggle('creator-sort-btn--active', b === btn));
+  renderVideos(by);
+}
+function renderVideos(sortBy) {
+  const grid = document.getElementById('creatorVideoGrid');
+  const empty = document.getElementById('creatorVideoEmpty');
+  if (!allVideos.length) {
+    grid.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const sorted = [...allVideos].sort((a, b) => {
+    if (sortBy === 'recent') return (new Date(b.created_at || 0)) - (new Date(a.created_at || 0));
+    if (sortBy === 'likes') return (b.like_count || 0) - (a.like_count || 0);
+    return (b.view_count || 0) - (a.view_count || 0);
+  }).slice(0, 12);
+
+  grid.innerHTML = sorted.map(v => {
+    const cover = v.cover_url
+      ? '<img src="' + escapeHtml(v.cover_url) + '" alt="" class="creator-video-thumb" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+        + '<div class="creator-video-thumb-fallback" style="display:none"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>'
+      : '<div class="creator-video-thumb-fallback"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>';
+    const productBadge = v.has_product
+      ? '<span class="creator-video-shop">🛍 Shop</span>' : '';
+    const href = v.video_url
+      ? '<a href="' + escapeHtml(v.video_url) + '" target="_blank" rel="noopener noreferrer" class="creator-video-card">'
+      : '<div class="creator-video-card">';
+    const closer = v.video_url ? '</a>' : '</div>';
+    return href
+      + '<div class="creator-video-thumb-wrap">' + cover + productBadge + '</div>'
+      + '<div class="creator-video-meta">'
+      + '<div class="creator-video-title">' + escapeHtml(v.title || 'Untitled video') + '</div>'
+      + '<div class="creator-video-stats">'
+      + '<span><i data-lucide="eye"></i> ' + formatCount(v.view_count) + '</span>'
+      + '<span><i data-lucide="heart"></i> ' + formatCount(v.like_count) + '</span>'
+      + (v.created_at ? '<span>' + escapeHtml(relativeTime(v.created_at)) + '</span>' : '')
+      + '</div></div>'
+      + closer;
+  }).join('');
+
+  if (window.lucide) lucide.createIcons();
+}
+
+// ----- Sales table -----
+async function loadSales() {
+  const body = document.getElementById('creatorSalesBody');
+  if (!body) return;
+  try {
+    const res = await fetch('/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id) + '/sales');
+    const data = await res.json();
+    const prods = data.products || [];
+    if (!prods.length) {
+      body.innerHTML = '<tr><td colspan="5" style="padding:var(--space-6);text-align:center;color:var(--text-muted)">No product promotions found.</td></tr>';
+      return;
     }
-  });
+    const blurClass = IS_PRO ? '' : ' blurred-data';
+    body.innerHTML = prods.map(p => {
+      const img = p.image_url
+        ? '<img src="' + escapeHtml(p.image_url) + '" class="creator-product-thumb" alt="" onerror="this.style.display=\'none\'">'
+        : '<div class="creator-product-thumb creator-product-thumb--fallback"></div>';
+      const name = escapeHtml(p.product_name || 'Untitled');
+      const link = p.product_id
+        ? '<a href="/app/products/shop_' + encodeURIComponent(p.product_id) + '" style="color:var(--text-primary);font-weight:600;text-decoration:none">' + name + '</a>'
+        : name;
+      return '<tr>'
+        + '<td>' + img + '</td>'
+        + '<td>' + link + '</td>'
+        + '<td><span class="' + blurClass.trim() + '">' + ((p.commission_rate || 0) * 100).toFixed(1) + '%</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurClass.trim() + '">' + Number(p.sales || 0).toLocaleString() + '</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurClass.trim() + '">$' + Number(p.gmv || 0).toLocaleString(undefined,{maximumFractionDigits:0}) + '</span></td>'
+        + '</tr>';
+    }).join('');
+  } catch(e) {
+    body.innerHTML = '<tr><td colspan="5" style="padding:var(--space-6);text-align:center;color:var(--text-muted)">Couldn\'t load products.</td></tr>';
+  }
+}
+
+// ----- Posting behavior parsing -----
+{% if creator.video_publish_week %}
+(function(){
+  const raw = {{ creator.video_publish_week | tojson }};
+  let vals = [];
+  if (Array.isArray(raw)) vals = raw.map(x => typeof x === 'object' ? (x.value || x.count || 0) : Number(x) || 0);
+  else if (raw && typeof raw === 'object') vals = Object.values(raw).map(v => Number(v) || 0);
+  const total = vals.reduce((s,v) => s+v, 0);
+  const avg = total > 0 ? (total / Math.max(vals.length,1)).toFixed(1) : 0;
+  const el = document.getElementById('postingFrequency');
+  if (el) el.textContent = total > 0 ? ('Posts ' + avg + ' times per week on average') : '—';
 })();
 {% endif %}
 
 {% if creator.video_publish_hour %}
-(function() {
+(function(){
   const raw = {{ creator.video_publish_hour | tojson }};
   let hours = [];
   if (Array.isArray(raw)) {
     hours = raw.map((v, i) => ({ h: i, v: typeof v === 'object' ? (v.value || v.count || 0) : Number(v) || 0 }));
-  } else if (typeof raw === 'object' && raw !== null) {
-    hours = Object.entries(raw).map(([k, v]) => ({ h: parseInt(k) || 0, v: Number(v) || 0 }));
+  } else if (raw && typeof raw === 'object') {
+    hours = Object.entries(raw).map(([k,v]) => ({ h: parseInt(k) || 0, v: Number(v) || 0 }));
   }
-  hours.sort((a, b) => b.v - a.v);
+  hours.sort((a,b) => b.v - a.v);
   const top3 = hours.slice(0, 3).map(x => {
     const h = x.h;
     return h === 0 ? '12AM' : (h < 12 ? h + 'AM' : (h === 12 ? '12PM' : (h - 12) + 'PM'));
   });
   const el = document.getElementById('peakHours');
-  if (el) el.textContent = top3.length ? top3.join(' · ') : '—';
+  if (el) el.textContent = top3.length ? ('Most active: ' + top3.join(', ')) : '—';
 })();
 {% endif %}
 
 {% if creator.video_duration_level %}
-(function() {
+(function(){
   const raw = {{ creator.video_duration_level | tojson }};
   const pills = document.getElementById('durationPills');
   if (!pills) return;
-  const entries = [];
+  let entries = [];
   if (Array.isArray(raw)) {
-    raw.forEach(x => {
-      if (typeof x === 'object') entries.push({ label: x.level || x.name || '', val: Number(x.value || x.count || 0) });
-    });
-  } else if (typeof raw === 'object' && raw !== null) {
-    Object.entries(raw).forEach(([k, v]) => entries.push({ label: k, val: Number(v) || 0 }));
+    raw.forEach(x => { if (typeof x === 'object') entries.push({ label: x.level || x.name || '', val: Number(x.value || x.count || 0) }); });
+  } else if (raw && typeof raw === 'object') {
+    Object.entries(raw).forEach(([k,v]) => entries.push({ label: k, val: Number(v) || 0 }));
   }
-  const total = entries.reduce((sum, e) => sum + e.val, 0);
-  if (total === 0) { pills.textContent = '—'; return; }
+  if (!entries.length) { pills.textContent = '—'; return; }
+  const max = Math.max(...entries.map(e => e.val));
   pills.innerHTML = entries.map(e => {
-    const pct = Math.round((e.val / total) * 100);
-    if (pct === 0) return '';
-    return '<span style="padding:4px 10px;border-radius:var(--radius-full);background:var(--bg-elevated);border:1px solid var(--border);font-size:12px;font-weight:600"><span style="color:var(--accent)">' + pct + '%</span> ' + e.label + '</span>';
+    const active = e.val === max && e.val > 0;
+    return '<span class="creator-duration-pill' + (active ? ' creator-duration-pill--active' : '') + '">'
+      + escapeHtml(e.label) + '</span>';
   }).join('');
 })();
 {% endif %}
+
+// ----- Similar creators -----
+async function loadSimilar() {
+  const grid = document.getElementById('creatorSimilarGrid');
+  if (!grid) return;
+  try {
+    const qs = new URLSearchParams({ region: CREATOR_DATA.region || 'US', category: CREATOR_DATA.category || '' });
+    const res = await fetch('/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id) + '/similar?' + qs.toString());
+    const data = await res.json();
+    const creators = data.creators || [];
+    if (!creators.length) {
+      const section = grid.previousElementSibling;
+      if (section && section.classList.contains('section-header')) section.style.display = 'none';
+      grid.style.display = 'none';
+      return;
+    }
+    const flags = {US:'🇺🇸',GB:'🇬🇧',UK:'🇬🇧',CA:'🇨🇦',AU:'🇦🇺',DE:'🇩🇪',FR:'🇫🇷',JP:'🇯🇵',KR:'🇰🇷',MX:'🇲🇽',BR:'🇧🇷',ID:'🇮🇩',MY:'🇲🇾',PH:'🇵🇭',TH:'🇹🇭',VN:'🇻🇳',SG:'🇸🇬'};
+    grid.innerHTML = creators.map(c => {
+      const region = (c.region || 'US').toUpperCase();
+      const flag = flags[region] || '🌍';
+      const letter = escapeHtml((c.nick_name || c.unique_id || '?')[0].toUpperCase());
+      const avatar = c.avatar_url
+        ? '<img src="' + escapeHtml(c.avatar_url) + '" alt="" class="creator-similar-avatar" onerror="this.onerror=null;this.src=\'/static/img/avatar-placeholder.png\'">'
+        : '<div class="creator-similar-avatar creator-similar-avatar--fallback">' + letter + '</div>';
+      const eng = c.interaction_rate;
+      const engPct = eng && eng < 1 ? (eng * 100) : eng;
+      return '<div class="card creator-similar-card">'
+        + avatar
+        + '<div class="creator-similar-body">'
+        + '<div class="creator-similar-name">' + escapeHtml(c.nick_name || c.unique_id) + '</div>'
+        + '<div class="creator-similar-handle">@' + escapeHtml(c.unique_id) + '</div>'
+        + '<div class="creator-similar-stats">'
+        + '<span>' + flag + ' ' + region + '</span>'
+        + '<span>' + formatCount(c.total_followers_cnt) + ' followers</span>'
+        + (engPct ? '<span>' + engPct.toFixed(2) + '% eng.</span>' : '')
+        + '</div></div>'
+        + '<a href="/app/creators/' + encodeURIComponent(c.unique_id) + '" class="btn btn-ghost btn-sm">View Profile</a>'
+        + '</div>';
+    }).join('');
+  } catch(e) {
+    grid.style.display = 'none';
+  }
+}
+
+// Kick things off
+loadVideos();
+loadSimilar();
 </script>
+{% endif %}
 {% endblock %}

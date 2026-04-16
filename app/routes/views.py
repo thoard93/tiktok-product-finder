@@ -2440,8 +2440,10 @@ def creator_profile(unique_id):
         detail = {}
 
     if not detail:
-        from flask import abort
-        abort(404)
+        # Render the template with creator=None so the error state shows
+        ctx['creator'] = None
+        ctx['is_saved'] = False
+        return render_template('creator_profile.html', **ctx), 404
 
     # Parse JSON-encoded behavior fields
     def _parse_json_field(raw):
@@ -2454,11 +2456,17 @@ def creator_profile(unique_id):
         except (ValueError, TypeError):
             return None
 
-    detail['video_publish_week'] = _parse_json_field(detail.get('influencer_video_publish_week'))
-    detail['video_publish_hour'] = _parse_json_field(detail.get('influencer_video_publish_hour'))
-    detail['video_duration_level'] = _parse_json_field(detail.get('influencer_video_duration_level'))
+    detail['video_publish_week'] = _parse_json_field(
+        detail.get('influencer_video_publish_week') or detail.get('video_publish_week')
+    )
+    detail['video_publish_hour'] = _parse_json_field(
+        detail.get('influencer_video_publish_hour') or detail.get('video_publish_hour')
+    )
+    detail['video_duration_level'] = _parse_json_field(
+        detail.get('influencer_video_duration_level') or detail.get('video_duration_level')
+    )
 
-    # Check if current user has saved this creator
+    # Check if current user has saved this creator (scoped to user.id)
     is_saved = False
     try:
         if user:
@@ -2473,17 +2481,64 @@ def creator_profile(unique_id):
     return render_template('creator_profile.html', **ctx)
 
 
-@views_bp.route('/api/creators/<unique_id>/favorite', methods=['POST'])
+@views_bp.route('/api/creators/<unique_id>/videos')
 @api_auth
-def api_toggle_creator_favorite(unique_id):
-    """Toggle save/unsave a creator for the current user."""
+def api_creator_videos(unique_id):
+    """Return recent videos for a creator (client sorts)."""
+    try:
+        from app.services.echotik import fetch_creator_videos
+        vids = fetch_creator_videos(unique_id, limit=12)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[Creators] videos {unique_id} error: {e}")
+        vids = []
+    return jsonify({'videos': vids})
+
+
+@views_bp.route('/api/creators/<unique_id>/sales')
+@api_auth
+def api_creator_sales(unique_id):
+    """Return promoted products for a creator."""
+    try:
+        from app.services.echotik import fetch_creator_shop_products
+        products = fetch_creator_shop_products(unique_id, limit=20)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[Creators] sales {unique_id} error: {e}")
+        products = []
+    return jsonify({'products': products})
+
+
+@views_bp.route('/api/creators/<unique_id>/similar')
+@api_auth
+def api_creator_similar(unique_id):
+    """Return similar creators (same region, ideally same category)."""
+    region = request.args.get('region', 'US')
+    category = request.args.get('category', '')
+    try:
+        from app.services.echotik import fetch_similar_creators
+        results = fetch_similar_creators(unique_id, region=region,
+                                         category=category, limit=6)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[Creators] similar {unique_id} error: {e}")
+        results = []
+    return jsonify({'creators': results})
+
+
+def _toggle_creator_favorite(unique_id: str, data: dict):
+    """Shared save/unsave logic used by both favorite endpoints."""
     user = get_current_user()
     if not user:
         return jsonify({'error': 'Not authenticated'}), 401
 
-    data = request.get_json(silent=True) or {}
+    uid = (unique_id or '').strip()
+    if not uid:
+        return jsonify({'error': 'Missing unique_id'}), 400
 
-    existing = FavoritedCreator.query.filter_by(user_id=user.id, unique_id=unique_id).first()
+    existing = FavoritedCreator.query.filter_by(
+        user_id=user.id, unique_id=uid
+    ).first()
     if existing:
         db.session.delete(existing)
         db.session.commit()
@@ -2491,10 +2546,10 @@ def api_toggle_creator_favorite(unique_id):
 
     fav = FavoritedCreator(
         user_id=user.id,
-        unique_id=unique_id,
-        user_id_tiktok=str(data.get('user_id') or ''),
+        unique_id=uid,
+        user_id_tiktok=str(data.get('user_id') or data.get('user_id_tiktok') or ''),
         nick_name=(data.get('nick_name') or '')[:200],
-        avatar=(data.get('avatar') or '')[:500],
+        avatar=(data.get('avatar_url') or data.get('avatar') or '')[:500],
         total_followers_cnt=int(data.get('total_followers_cnt') or 0),
         ec_score=int(data.get('ec_score') or 0),
         region=(data.get('region') or 'US')[:50],
@@ -2506,3 +2561,22 @@ def api_toggle_creator_favorite(unique_id):
         db.session.rollback()
         return jsonify({'error': 'Failed to save'}), 500
     return jsonify({'saved': True})
+
+
+@views_bp.route('/api/creators/<unique_id>/favorite', methods=['POST'])
+@api_auth
+def api_toggle_creator_favorite(unique_id):
+    """Legacy path — kept so existing clients still work."""
+    return _toggle_creator_favorite(unique_id, request.get_json(silent=True) or {})
+
+
+@views_bp.route('/api/favorites/creator', methods=['POST'])
+@api_auth
+def api_favorites_creator():
+    """
+    Unified favorite endpoint. Body:
+      { unique_id, nick_name, avatar_url, total_followers_cnt, region }
+    Toggles save/unsave for the CURRENT user only (user_id scoped).
+    """
+    data = request.get_json(silent=True) or {}
+    return _toggle_creator_favorite(data.get('unique_id', ''), data)

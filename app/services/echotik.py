@@ -561,6 +561,48 @@ def search_sellers(keyword: str, page: int = 1) -> list[dict]:
 # Public API — Creator/Influencer search and detail
 # ---------------------------------------------------------------------------
 
+def _extract_creator_avatar(c: dict) -> Optional[str]:
+    """
+    Pull the best avatar URL out of an EchoTik creator payload.
+
+    Tries the TikTok-style nested objects first (avatar_168x168.url_list[0],
+    etc.) — those are only present on the realtime endpoint — then falls
+    back to the flat fields used by the batch and list endpoints.
+    """
+    # Nested TikTok-style avatar objects (realtime payload)
+    for key in ('avatar_168x168', 'avatar_300x300', 'avatar_thumb',
+                'avatar_medium', 'avatar_larger'):
+        obj = c.get(key)
+        if isinstance(obj, dict):
+            url_list = obj.get('url_list') or []
+            if isinstance(url_list, list) and url_list:
+                for u in url_list:
+                    if isinstance(u, str) and u.startswith('http'):
+                        return u[:500]
+            direct = obj.get('url') or obj.get('uri')
+            if isinstance(direct, str) and direct.startswith('http'):
+                return direct[:500]
+
+    # Flat fallbacks (batch / list payloads)
+    return _extract_image_url(
+        c.get('avatar') or c.get('avatar_url') or c.get('avatarLarger')
+        or c.get('head_img') or c.get('headImg') or c.get('avatarThumb')
+    )
+
+
+def _extract_creator_avatar_large(c: dict) -> Optional[str]:
+    """Prefer the 300x300 avatar for og:image / hero display."""
+    obj = c.get('avatar_300x300')
+    if isinstance(obj, dict):
+        url_list = obj.get('url_list') or []
+        if isinstance(url_list, list) and url_list:
+            for u in url_list:
+                if isinstance(u, str) and u.startswith('http'):
+                    return u[:500]
+    # Fall through to regular avatar
+    return _extract_creator_avatar(c)
+
+
 def search_influencers(query: str, page: int = 1, limit: int = 20) -> list[dict]:
     """Search TikTok creators by name/handle via EchoTik influencer list endpoint."""
     q = (query or '').strip()
@@ -589,15 +631,13 @@ def search_influencers(query: str, page: int = 1, limit: int = 20) -> list[dict]
 
     results = []
     for c in raw_list:
-        avatar = _extract_image_url(
-            c.get('avatar') or c.get('avatar_url') or c.get('avatar_larger')
-            or c.get('head_img') or c.get('headImg')
-        )
+        avatar = _extract_creator_avatar(c)
         results.append({
             'user_id': str(c.get('user_id') or c.get('userId') or c.get('id', '')),
             'unique_id': str(c.get('unique_id') or c.get('uniqueId') or c.get('handle', '')),
             'nick_name': c.get('nick_name') or c.get('nickname') or c.get('nickName') or c.get('name', ''),
             'avatar': avatar,
+            'avatar_url': avatar,
             'total_followers_cnt': _safe_int(
                 c.get('total_followers_cnt') or c.get('follower_count') or c.get('followerCount') or 0
             ),
@@ -611,6 +651,242 @@ def search_influencers(query: str, page: int = 1, limit: int = 20) -> list[dict]
 
     log.info("[EchoTik] Influencer search '%s' returned %d results", q, len(results))
     return results
+
+
+def fetch_similar_creators(unique_id: str, region: str = 'US',
+                           category: str = '', limit: int = 6) -> list[dict]:
+    """
+    Pull a handful of creators matching the given region (and ideally
+    category) from the influencer list endpoint. Current creator is
+    filtered out.
+
+    If ``category`` is empty or returns no results, we fall back to a
+    region-only query. Returns ``[]`` when nothing is found.
+    """
+    uid = (unique_id or '').strip().lower()
+    reg = (region or 'US').upper()
+
+    def _run(params):
+        try:
+            resp = _request('GET', f"{ECHOTIK_V3_BASE}/influencer/list", params=params)
+            raw = resp.get('data') or []
+            if isinstance(raw, dict):
+                raw = raw.get('list') or raw.get('records') or []
+            return raw or []
+        except EchoTikError as exc:
+            log.debug("[EchoTik] similar creators lookup failed: %s", exc)
+            return []
+
+    # Try category + region first
+    raw_list = []
+    if category:
+        raw_list = _run({
+            'region': reg,
+            'category': category,
+            'category_name': category,
+            'page_num': 1,
+            'page_size': min(limit + 4, 20),
+        })
+
+    # Fall back to region only
+    if not raw_list:
+        raw_list = _run({
+            'region': reg,
+            'page_num': 1,
+            'page_size': min(limit + 4, 20),
+        })
+
+    results = []
+    for c in raw_list:
+        cid = str(c.get('unique_id') or c.get('uniqueId') or c.get('handle', '')).strip()
+        if not cid or cid.lower() == uid:
+            continue
+        avatar = _extract_creator_avatar(c)
+        interaction = _safe_float(
+            c.get('interaction_rate') or c.get('interactionRate')
+            or c.get('engagement_rate') or 0
+        )
+        results.append({
+            'unique_id': cid,
+            'nick_name': (c.get('nick_name') or c.get('nickname')
+                          or c.get('nickName') or c.get('name') or cid),
+            'avatar_url': avatar,
+            'total_followers_cnt': _safe_int(
+                c.get('total_followers_cnt') or c.get('follower_count')
+                or c.get('followerCount') or 0
+            ),
+            'interaction_rate': interaction,
+            'region': c.get('region') or c.get('country') or reg,
+            'category': c.get('category_name') or c.get('category') or category,
+        })
+        if len(results) >= limit:
+            break
+
+    return results
+
+
+def fetch_creator_videos(unique_id: str, limit: int = 12) -> list[dict]:
+    """
+    Fetch a creator's recent videos.
+
+    Tries a few endpoint variants since EchoTik has renamed this one a
+    couple of times. Returns a list of dicts with a consistent schema.
+    """
+    uid = (unique_id or '').strip()
+    if not uid:
+        return []
+
+    attempts = [
+        (f"{ECHOTIK_V3_BASE}/influencer/video/list",
+         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
+        (f"{ECHOTIK_V3_BASE}/influencer/video",
+         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
+        (f"{ECHOTIK_V3_BASE}/influencer/videos",
+         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
+        (f"{ECHOTIK_V3_BASE}/influencer/video/list",
+         {'unique_ids': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
+    ]
+
+    raw_list = []
+    for url, params in attempts:
+        try:
+            resp = _request('GET', url, params=params)
+            raw = resp.get('data') or []
+            if isinstance(raw, dict):
+                raw = raw.get('list') or raw.get('records') or raw.get('videos') or []
+            if raw:
+                raw_list = raw
+                break
+        except EchoTikError as exc:
+            log.debug("[EchoTik] creator videos %s failed: %s", url, exc)
+            continue
+
+    if not raw_list:
+        log.info("[EchoTik] No videos found for creator %s", uid)
+        return []
+
+    videos = []
+    for v in raw_list:
+        if not isinstance(v, dict):
+            continue
+        # Cover / thumbnail — try every known shape
+        cover = _extract_image_url(
+            v.get('cover_url') or v.get('coverUrl') or v.get('cover')
+            or v.get('dynamic_cover') or v.get('origin_cover')
+            or v.get('thumbnail') or v.get('thumb_url')
+        )
+        # Product attachment: treat anything truthy as "has a product"
+        has_product = bool(
+            v.get('product_id') or v.get('productId')
+            or v.get('products') or v.get('product_list')
+            or v.get('anchor_product') or v.get('shop_item')
+        )
+
+        # Timestamp → ISO string the template can format
+        ts = (v.get('create_time') or v.get('createTime')
+              or v.get('publish_time') or v.get('publishTime')
+              or v.get('create_timestamp'))
+        if isinstance(ts, (int, float)):
+            # Normalize ms → s if needed
+            if ts > 10_000_000_000:
+                ts = ts / 1000
+            try:
+                ts = datetime.utcfromtimestamp(ts).isoformat()
+            except (ValueError, OSError):
+                ts = None
+
+        videos.append({
+            'video_id': str(v.get('video_id') or v.get('videoId') or v.get('id') or ''),
+            'cover_url': cover,
+            'title': (v.get('title') or v.get('desc') or v.get('description')
+                      or v.get('video_desc') or ''),
+            'view_count': _safe_int(
+                v.get('view_count') or v.get('viewCount') or v.get('vv')
+                or v.get('play_count') or v.get('playCount') or 0
+            ),
+            'like_count': _safe_int(
+                v.get('like_count') or v.get('likeCount') or v.get('digg_count')
+                or v.get('diggCount') or 0
+            ),
+            'created_at': ts,
+            'has_product': has_product,
+            'video_url': (v.get('share_url') or v.get('shareUrl')
+                          or v.get('video_url') or ''),
+        })
+
+    return videos
+
+
+def fetch_creator_shop_products(unique_id: str, limit: int = 20) -> list[dict]:
+    """
+    Fetch the list of products a creator has promoted.
+
+    Tries `/influencer/product/list` and a couple of param variants.
+    """
+    uid = (unique_id or '').strip()
+    if not uid:
+        return []
+
+    attempts = [
+        (f"{ECHOTIK_V3_BASE}/influencer/product/list",
+         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
+        (f"{ECHOTIK_V3_BASE}/influencer/product",
+         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
+        (f"{ECHOTIK_V3_BASE}/influencer/products",
+         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
+    ]
+
+    raw_list = []
+    for url, params in attempts:
+        try:
+            resp = _request('GET', url, params=params)
+            raw = resp.get('data') or []
+            if isinstance(raw, dict):
+                raw = raw.get('list') or raw.get('records') or []
+            if raw:
+                raw_list = raw
+                break
+        except EchoTikError:
+            continue
+
+    if not raw_list:
+        return []
+
+    products = []
+    for p in raw_list:
+        if not isinstance(p, dict):
+            continue
+        img = _extract_image_url(
+            p.get('product_image') or p.get('image') or p.get('cover')
+            or p.get('cover_url') or p.get('image_url')
+        )
+        commission = _safe_float(
+            p.get('product_commission_rate') or p.get('commission_rate')
+            or p.get('commission') or 0
+        )
+        if commission > 1:
+            commission /= 100.0
+
+        products.append({
+            'product_id': str(p.get('product_id') or p.get('productId') or p.get('id') or ''),
+            'product_name': (p.get('product_name') or p.get('title')
+                             or p.get('productTitle') or p.get('name') or ''),
+            'image_url': img,
+            'commission_rate': commission,
+            'sales': _safe_int(
+                p.get('total_sale_cnt') or p.get('sales')
+                or p.get('sale_cnt') or 0
+            ),
+            'gmv': _safe_float(
+                p.get('total_sale_gmv_amt') or p.get('gmv')
+                or p.get('sale_gmv_amt') or 0
+            ),
+            'price': _safe_float(
+                p.get('spu_avg_price') or p.get('price') or 0
+            ),
+        })
+
+    return products
 
 
 def get_influencer_detail(unique_id: str) -> dict:
@@ -649,7 +925,11 @@ def get_influencer_detail(unique_id: str) -> dict:
                 log.warning("[EchoTik] Realtime returned 500 for %s (attempt %d)", uid, attempt + 1)
                 continue
             if isinstance(raw, dict):
-                realtime_data = raw
+                # Realtime wraps the creator in a "user" object; flatten it.
+                user_obj = raw.get('user') if isinstance(raw.get('user'), dict) else {}
+                # Start with top-level fields, then overlay user fields so
+                # the nested avatar_168x168/avatar_300x300 end up at the root.
+                realtime_data = {**raw, **user_obj}
                 break
             if isinstance(raw, list) and raw:
                 realtime_data = raw[0] if isinstance(raw[0], dict) else {}
@@ -670,11 +950,18 @@ def get_influencer_detail(unique_id: str) -> dict:
 
     # Normalize commonly accessed fields
     merged['unique_id'] = str(merged.get('unique_id') or merged.get('uniqueId') or uid)
-    merged['nick_name'] = merged.get('nick_name') or merged.get('nickname') or merged.get('nickName') or ''
-    merged['avatar'] = _extract_image_url(
-        merged.get('avatar') or merged.get('avatar_url') or merged.get('avatar_larger') or merged.get('head_img')
-    )
-    merged['signature'] = merged.get('signature') or merged.get('bio') or ''
+    merged['nick_name'] = (merged.get('nick_name') or merged.get('nickname')
+                           or merged.get('nickName') or '')
+
+    # Avatar — prefer the 168x168 realtime URL, fall back to batch avatar
+    avatar_small = _extract_creator_avatar(merged) or _extract_creator_avatar(batch_data or {})
+    avatar_large = _extract_creator_avatar_large(merged) or avatar_small
+    merged['avatar'] = avatar_small
+    merged['avatar_url'] = avatar_small
+    merged['avatar_url_large'] = avatar_large
+
+    merged['signature'] = (merged.get('signature') or merged.get('bio')
+                           or merged.get('desc') or '')
 
     return merged
 
