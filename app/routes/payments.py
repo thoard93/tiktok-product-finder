@@ -219,6 +219,10 @@ def create_subscription():
     coupon_code = (data.get('coupon_code') or '').strip().upper()
     referral_code = (data.get('referral_code') or '').strip()
 
+    # Single-use coupon check — reject if user already used this code
+    if coupon_code and _user_has_used_coupon(user.id, coupon_code):
+        return jsonify({'error': 'You have already used this coupon code'}), 400
+
     # Use coupon plan if valid coupon + coupon plan exists
     use_coupon_plan = (
         coupon_code and coupon_code in COUPON_CODES and PAYPAL_COUPON_PLAN_ID
@@ -439,15 +443,32 @@ def cancel_subscription():
     return jsonify({'success': True, 'message': 'Subscription cancelled'})
 
 
+def _user_has_used_coupon(user_id, code):
+    """Check if this user has ever redeemed this coupon code (any subscription, any status)."""
+    if not user_id or not code:
+        return False
+    # Any past or current Subscription with this coupon_code = already used
+    return db.session.query(Subscription.id).filter_by(
+        user_id=user_id, coupon_code=code
+    ).first() is not None
+
+
 @payments_bp.route('/api/subscribe/coupon', methods=['POST'])
+@payments_bp.route('/api/validate-coupon', methods=['POST'])
 @login_required
 def validate_coupon():
-    """Validate a coupon code and return discount info."""
+    """Validate a coupon code and return discount info. Enforces single-use per user."""
+    user = get_current_user()
     data = request.get_json(silent=True) or {}
-    code = data.get('coupon_code', '').strip().upper()
+    # Accept both 'code' and 'coupon_code' keys (frontend inconsistency)
+    code = (data.get('coupon_code') or data.get('code') or '').strip().upper()
 
     if not code:
         return jsonify({'valid': False, 'error': 'No coupon code provided'}), 400
+
+    # Single-use check: has this user ever used this coupon?
+    if user and _user_has_used_coupon(user.id, code):
+        return jsonify({'valid': False, 'error': 'You have already used this coupon'}), 400
 
     # Check built-in codes first
     if code in COUPON_CODES:
