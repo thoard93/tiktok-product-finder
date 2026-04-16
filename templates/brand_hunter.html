@@ -21,18 +21,15 @@
 
   {# Step 1: Browse brands from EchoTik ranking #}
   <div class="mb-4">
-    <label class="label">Step 1 &mdash; Load Top Brands</label>
-    <p class="text-xs text-muted mb-3">Load the top-ranked TikTok Shop brands by 30-day sales. Pick how many to load, then check the ones you want to deep scan.</p>
+    <label class="label">Step 1 &mdash; Pick Brands by Rank</label>
+    <p class="text-xs text-muted mb-3">Enter which brand positions you want from the TikTok Shop rankings (sorted by 30-day sales). For example, #1-5 for the top 5 brands, or #11-15 for brands ranked 11th through 15th.</p>
     <div class="flex gap-2 items-center mb-3" style="flex-wrap:wrap">
-      <span class="text-sm text-muted">Load top</span>
-      <select class="input" id="browseCount" style="width:auto;min-width:100px" aria-label="Number of brands to load">
-        <option value="10">10 brands</option>
-        <option value="20">20 brands</option>
-        <option value="50" selected>50 brands</option>
-        <option value="100">100 brands</option>
-      </select>
+      <span class="text-sm font-semibold">Brands ranked</span>
+      <input type="number" class="input" id="rankFrom" value="1" min="1" max="500" style="width:70px" aria-label="From rank">
+      <span class="text-sm text-muted">to</span>
+      <input type="number" class="input" id="rankTo" value="10" min="1" max="500" style="width:70px" aria-label="To rank">
       <button class="btn btn-primary btn-sm" id="browseBtn" onclick="browseBrands()">
-        <i data-lucide="search" style="width:14px;height:14px"></i> Load Rankings
+        <i data-lucide="search" style="width:14px;height:14px"></i> Load Brands
       </button>
       <span class="text-xs text-muted" id="browseStatus"></span>
     </div>
@@ -191,29 +188,34 @@
 <script>
 var loadedBrands = [], activeJobId = null;
 
-/* Browse top brands from EchoTik ranking */
+/* Browse brands by rank range */
 async function browseBrands() {
-  var count = parseInt(document.getElementById('browseCount').value) || 50;
-  var totalPages = Math.ceil(count / 10);
+  var rankFrom = parseInt(document.getElementById('rankFrom').value) || 1;
+  var rankTo = parseInt(document.getElementById('rankTo').value) || 10;
+  if (rankTo < rankFrom) { var tmp = rankFrom; rankFrom = rankTo; rankTo = tmp; }
   var btn = document.getElementById('browseBtn');
   var status = document.getElementById('browseStatus');
   btn.disabled = true; btn.style.opacity = '0.6';
   status.textContent = 'Loading...';
   loadedBrands = [];
 
+  /* EchoTik returns 10 per page, so rank 1-10 = page 1, 11-20 = page 2, etc. */
+  var startPage = Math.ceil(rankFrom / 10);
+  var endPage = Math.ceil(rankTo / 10);
+
   try {
-    for (var p = 1; p <= totalPages; p++) {
-      status.textContent = 'Loading brands ' + ((p-1)*10+1) + '-' + Math.min(p*10, count) + '...';
+    for (var p = startPage; p <= endPage; p++) {
+      status.textContent = 'Loading page ' + p + '...';
       var res = await fetch('/app/brand-hunter/browse?page=' + p);
       var data = await res.json();
       if (data.brands && data.brands.length) {
         loadedBrands = loadedBrands.concat(data.brands);
       }
-      if (loadedBrands.length >= count) break;
     }
-    loadedBrands = loadedBrands.slice(0, count);
+    /* Filter to only the requested rank range */
+    loadedBrands = loadedBrands.filter(function(b) { return b.rank >= rankFrom && b.rank <= rankTo; });
     renderBrandList();
-    status.textContent = loadedBrands.length + ' brands loaded (ranked by 30d sales)';
+    status.textContent = loadedBrands.length + ' brands loaded (#' + rankFrom + '-' + rankTo + ')';
     document.getElementById('brandBrowseList').style.display = 'block';
     document.getElementById('pageRangeSection').style.display = 'block';
   } catch(e) { status.textContent = 'Error loading brands'; }
