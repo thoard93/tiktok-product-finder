@@ -718,7 +718,7 @@ class BrandScanJob(db.Model):
     __tablename__ = 'brand_scan_jobs'
 
     id = db.Column(db.Integer, primary_key=True)
-    brand_id_str = db.Column(db.String(100))      # EchoTik shop_id
+    brand_id_str = db.Column(db.Text)              # EchoTik shop_id (may be comma-joined for batch scans)
     brand_name = db.Column(db.String(300))         # Display name
     brand_logo_url = db.Column(db.String(500))     # Logo for progress bar display
     page_start = db.Column(db.Integer, default=1)

@@ -176,6 +176,14 @@ def _auto_migrate(app, db):
             db.session.rollback()
             print(f"[MIGRATE] brand_scan_jobs fix failed: {e}")
 
+    # Widen brand_id_str column to TEXT (batch scans comma-join multiple shop IDs)
+    try:
+        db.session.execute(db.text("ALTER TABLE brand_scan_jobs ALTER COLUMN brand_id_str TYPE TEXT"))
+        db.session.commit()
+        print("[MIGRATE] Widened brand_scan_jobs.brand_id_str to TEXT")
+    except Exception:
+        db.session.rollback()
+
 
 def create_app():
     """Create and configure the Flask application."""
