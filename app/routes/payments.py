@@ -47,6 +47,48 @@ PAYPAL_API_BASE = (
     else 'https://api-m.sandbox.paypal.com'
 )
 
+# Discord bot token + guild/role config for role management from webhooks
+DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
+DISCORD_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '')
+VANTAGE_PRO_ROLE_ID = os.environ.get('VANTAGE_PRO_ROLE_ID', '')  # Set after creating the role
+
+
+def _discord_assign_role(discord_id: str):
+    """Assign Vantage Pro role via Discord REST API (from Flask, not the bot)."""
+    if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ID or not VANTAGE_PRO_ROLE_ID:
+        log.warning('[Discord] Role assign skipped — missing DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, or VANTAGE_PRO_ROLE_ID env vars')
+        return
+    try:
+        resp = requests.put(
+            f'https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_id}/roles/{VANTAGE_PRO_ROLE_ID}',
+            headers={'Authorization': f'Bot {DISCORD_BOT_TOKEN}', 'Content-Type': 'application/json'},
+            timeout=10,
+        )
+        if resp.status_code in (200, 204):
+            log.info(f'[Discord] Assigned Vantage Pro role to {discord_id}')
+        else:
+            log.warning(f'[Discord] Role assign failed: {resp.status_code} {resp.text[:200]}')
+    except Exception as e:
+        log.error(f'[Discord] Role assign error: {e}')
+
+
+def _discord_remove_role(discord_id: str):
+    """Remove Vantage Pro role via Discord REST API."""
+    if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ID or not VANTAGE_PRO_ROLE_ID:
+        return
+    try:
+        resp = requests.delete(
+            f'https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_id}/roles/{VANTAGE_PRO_ROLE_ID}',
+            headers={'Authorization': f'Bot {DISCORD_BOT_TOKEN}', 'Content-Type': 'application/json'},
+            timeout=10,
+        )
+        if resp.status_code in (200, 204):
+            log.info(f'[Discord] Removed Vantage Pro role from {discord_id}')
+        else:
+            log.warning(f'[Discord] Role remove failed: {resp.status_code} {resp.text[:200]}')
+    except Exception as e:
+        log.error(f'[Discord] Role remove error: {e}')
+
 # Coupon codes: code -> {discount_percent, description, referral_source}
 COUPON_CODES = {
     'LAUNCH50': {'discount_percent': 50, 'description': '50% off first month — Launch special', 'referral_source': 'launch'},
@@ -325,6 +367,20 @@ def subscription_webhook():
         log.exception('[PAYMENTS] Webhook DB commit failed')
         db.session.rollback()
 
+    # ── Discord role management ──
+    # Assign/remove "Vantage Pro" role based on subscription status
+    try:
+        user = User.query.get(sub.user_id)
+        if user and user.discord_id:
+            if sub.status == 'active':
+                _discord_assign_role(user.discord_id)
+                log.info(f'[PAYMENTS] Queued Vantage Pro role assign for {user.discord_username}')
+            elif sub.status in ('cancelled', 'past_due') and not user.is_admin:
+                _discord_remove_role(user.discord_id)
+                log.info(f'[PAYMENTS] Queued Vantage Pro role removal for {user.discord_username}')
+    except Exception as e:
+        log.warning(f'[PAYMENTS] Discord role update failed: {e}')
+
     return jsonify({'status': 'processed', 'event_type': event_type}), 200
 
 
@@ -357,6 +413,13 @@ def cancel_subscription():
     sub.status = 'cancelled'
     sub.cancelled_at = datetime.utcnow()
     db.session.commit()
+
+    # Remove Discord role (unless admin)
+    if user.discord_id and not user.is_admin:
+        try:
+            _discord_remove_role(user.discord_id)
+        except Exception:
+            pass
 
     log_activity(user.id, 'subscription_cancelled', {'paypal_id': sub.paypal_subscription_id})
 

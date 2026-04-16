@@ -31,92 +31,158 @@ from app import app, db, Product, User, ApiKey, Subscription
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
 XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 
-# Legacy single-server channel IDs (kept as fallback)
-HOT_PRODUCTS_CHANNEL_ID = int(os.environ.get('HOT_PRODUCTS_CHANNEL_ID', 0))
-BRAND_HUNTER_CHANNEL_ID = int(os.environ.get('BRAND_HUNTER_CHANNEL_ID', 0))
-PRODUCT_LOOKUP_CHANNEL_ID = int(os.environ.get('PRODUCT_LOOKUP_CHANNEL_ID', 1461053839800139959))
-BLACKLIST_CHANNEL_ID = int(os.environ.get('BLACKLIST_CHANNEL_ID', 1440369747467174019))
+# ---------------------------------------------------------------------------
+# Channel IDs — hardcoded for Vantage
+# ---------------------------------------------------------------------------
+
+# Product lookup channels (bot responds to TikTok links)
+PRODUCT_LOOKUP_CHANNELS = {
+    1493270881848266812,
+    1494334448869838940,
+    1494031499165564948,
+}
+
+# Hot products daily post channels
+HOT_PRODUCTS_CHANNELS = {
+    1445924670942609538,
+    1494028537580228668,
+}
+
+# All subscriber-gated channels (lookup + hot products)
+SUBSCRIBER_GATED_CHANNELS = PRODUCT_LOOKUP_CHANNELS | HOT_PRODUCTS_CHANNELS
+
+# AI Chat (legacy — keep working)
 AI_CHAT_CHANNEL_ID = int(os.environ.get('AI_CHAT_CHANNEL_ID', 1473031651599847631))
 AI_CHAT_CATEGORY_ID = int(os.environ.get('AI_CHAT_CATEGORY_ID', 1444029219951874129))
+BLACKLIST_CHANNEL_ID = int(os.environ.get('BLACKLIST_CHANNEL_ID', 1440369747467174019))
 
-# ---------------------------------------------------------------------------
-# Multi-server guild config
-# ---------------------------------------------------------------------------
-# Env var format (JSON):
-#   GUILD_CONFIGS_JSON={"GUILD_ID":{"product_lookup_channel":123,"blacklist_channel":456,"ai_chat_channel":789,"ai_chat_category":111}}
-#
-# Falls back to legacy single-server env vars if GUILD_CONFIGS_JSON is empty.
-# ---------------------------------------------------------------------------
-
-GUILD_CONFIGS = {}
-_guild_configs_raw = os.environ.get('GUILD_CONFIGS_JSON', '').strip()
-if _guild_configs_raw:
-    try:
-        GUILD_CONFIGS = json.loads(_guild_configs_raw)
-        log.info(f"[Config] Loaded GUILD_CONFIGS for {len(GUILD_CONFIGS)} server(s): {list(GUILD_CONFIGS.keys())}")
-    except Exception as _e:
-        log.error(f"[Config] Failed to parse GUILD_CONFIGS_JSON: {_e}")
-
-# Fallback: build config from legacy env vars for the primary guild
-if not GUILD_CONFIGS:
-    _primary_guild = os.environ.get('DISCORD_GUILD_ID', '')
-    if _primary_guild:
-        GUILD_CONFIGS[_primary_guild] = {
-            'product_lookup_channel': PRODUCT_LOOKUP_CHANNEL_ID,
-            'blacklist_channel': BLACKLIST_CHANNEL_ID,
-            'ai_chat_channel': AI_CHAT_CHANNEL_ID,
-            'ai_chat_category': AI_CHAT_CATEGORY_ID,
-        }
-        log.info(f"[Config] Using legacy single-server config for guild {_primary_guild}")
-
-
-def get_guild_config(guild_id):
-    """Get the channel config for a guild, or empty dict if not configured."""
-    return GUILD_CONFIGS.get(str(guild_id), {})
+# Vantage Pro role name (must match the role created in Discord server settings)
+VANTAGE_PRO_ROLE_NAME = os.environ.get('VANTAGE_PRO_ROLE_NAME', 'Vantage Pro')
 
 
 def is_product_lookup_channel(channel):
-    """Check if a channel is a product-lookup channel in ANY configured guild."""
-    if not hasattr(channel, 'guild') or not channel.guild:
-        return False
-    cfg = get_guild_config(channel.guild.id)
-    lookup_id = cfg.get('product_lookup_channel')
-    if lookup_id and channel.id == int(lookup_id):
-        return True
-    # Legacy fallback: match the old single env var
-    if channel.id == PRODUCT_LOOKUP_CHANNEL_ID:
-        return True
-    return False
+    """Check if a channel is a product-lookup channel."""
+    return hasattr(channel, 'id') and channel.id in PRODUCT_LOOKUP_CHANNELS
+
+
+def is_subscriber_gated(channel):
+    """Check if a channel requires Vantage Pro subscription."""
+    return hasattr(channel, 'id') and channel.id in SUBSCRIBER_GATED_CHANNELS
 
 
 def is_ai_chat_channel(channel):
-    """Check if a channel is the AI chat channel in ANY configured guild."""
-    if not hasattr(channel, 'guild') or not channel.guild:
-        return False
-    cfg = get_guild_config(channel.guild.id)
-    ai_id = cfg.get('ai_chat_channel')
-    if ai_id and channel.id == int(ai_id):
-        return True
-    # Legacy fallback
-    if channel.id == AI_CHAT_CHANNEL_ID:
-        return True
-    return False
+    """Check if a channel is the AI chat channel."""
+    return hasattr(channel, 'id') and channel.id == AI_CHAT_CHANNEL_ID
 
 
 def is_ai_chat_category(channel):
-    """Check if a channel is in an AI chat category in ANY configured guild."""
+    """Check if a channel is in the AI chat category."""
     cat_id = getattr(channel, 'category_id', None)
-    if not cat_id:
+    return cat_id == AI_CHAT_CATEGORY_ID if cat_id else False
+
+
+# ---------------------------------------------------------------------------
+# Discord Role Management — Vantage Pro
+# ---------------------------------------------------------------------------
+
+async def get_vantage_pro_role(guild):
+    """Find the 'Vantage Pro' role in a guild. Returns Role or None."""
+    for role in guild.roles:
+        if role.name == VANTAGE_PRO_ROLE_NAME:
+            return role
+    return None
+
+
+async def assign_vantage_pro_role(discord_id: str):
+    """Assign Vantage Pro role to a user across all guilds the bot is in."""
+    discord_id_int = int(discord_id)
+    assigned = False
+    for guild in bot.guilds:
+        role = await get_vantage_pro_role(guild)
+        if not role:
+            continue
+        try:
+            member = guild.get_member(discord_id_int) or await guild.fetch_member(discord_id_int)
+            if member and role not in member.roles:
+                await member.add_roles(role, reason='Vantage Pro subscription activated')
+                log.info(f"[Role] Assigned Vantage Pro to {member} in {guild.name}")
+                assigned = True
+        except discord.NotFound:
+            pass  # User not in this guild
+        except Exception as e:
+            log.error(f"[Role] Failed to assign role to {discord_id} in {guild.name}: {e}")
+    return assigned
+
+
+async def remove_vantage_pro_role(discord_id: str):
+    """Remove Vantage Pro role from a user (skips admins)."""
+    discord_id_int = int(discord_id)
+
+    # Check if user is admin — admins keep role permanently
+    with app.app_context():
+        user = User.query.filter_by(discord_id=str(discord_id)).first()
+        if user and user.is_admin:
+            log.info(f"[Role] Skipping role removal for admin {discord_id}")
+            return False
+        if discord_id_int in DISCORD_ADMIN_IDS:
+            log.info(f"[Role] Skipping role removal for env admin {discord_id}")
+            return False
+
+    removed = False
+    for guild in bot.guilds:
+        role = await get_vantage_pro_role(guild)
+        if not role:
+            continue
+        try:
+            member = guild.get_member(discord_id_int) or await guild.fetch_member(discord_id_int)
+            if member and role in member.roles:
+                await member.remove_roles(role, reason='Vantage subscription cancelled/expired')
+                log.info(f"[Role] Removed Vantage Pro from {member} in {guild.name}")
+                removed = True
+        except discord.NotFound:
+            pass
+        except Exception as e:
+            log.error(f"[Role] Failed to remove role from {discord_id} in {guild.name}: {e}")
+    return removed
+
+
+def has_vantage_pro_role(member):
+    """Check if a guild member has the Vantage Pro role."""
+    if not member or not hasattr(member, 'roles'):
         return False
-    if not hasattr(channel, 'guild') or not channel.guild:
-        return False
-    cfg = get_guild_config(channel.guild.id)
-    cfg_cat = cfg.get('ai_chat_category')
-    if cfg_cat and cat_id == int(cfg_cat):
+    return any(r.name == VANTAGE_PRO_ROLE_NAME for r in member.roles)
+
+
+async def check_subscriber_gate(message):
+    """Check if user is allowed to use a subscriber-gated channel.
+    Returns True if allowed, False if blocked (and sends gate message).
+    Admins and users with Vantage Pro role pass through.
+    """
+    if not is_subscriber_gated(message.channel):
+        return True  # Not a gated channel
+
+    member = message.author
+    # Admin bypass
+    if member.guild_permissions.administrator:
         return True
-    # Legacy fallback
-    if cat_id == AI_CHAT_CATEGORY_ID:
+    if int(member.id) in DISCORD_ADMIN_IDS:
         return True
+
+    # Role check
+    if has_vantage_pro_role(member):
+        return True
+
+    # DB check as fallback (role might not be assigned yet)
+    has_sub, _user = check_user_subscription(str(member.id))
+    if has_sub:
+        return True
+
+    # Not subscribed — send gate message
+    await message.reply(
+        "**This channel is for Vantage subscribers only.**\n"
+        "Get access at **thoardburgersauce.com**",
+        mention_author=False,
+    )
     return False
 
 # Track active private AI channels: {user_id: channel_id}
@@ -648,23 +714,22 @@ def create_product_embed(p, title_prefix=""):
 async def on_ready():
     print(f'🤖 Bot logged in as {bot.user}')
     print(f'   Guilds: {[g.name for g in bot.guilds]}')
-    print(f'   Configured servers: {len(GUILD_CONFIGS)}')
-    for gid, cfg in GUILD_CONFIGS.items():
-        guild = bot.get_guild(int(gid)) if gid.isdigit() else None
-        gname = guild.name if guild else gid
-        print(f'   [{gname}] lookup={cfg.get("product_lookup_channel")}, blacklist={cfg.get("blacklist_channel")}')
-    print(f'   Hot Products Channel: {HOT_PRODUCTS_CHANNEL_ID}')
-    print(f'   Brand Hunter Channel: {BRAND_HUNTER_CHANNEL_ID}')
-    
+    print(f'   Lookup channels: {PRODUCT_LOOKUP_CHANNELS}')
+    print(f'   Hot products channels: {HOT_PRODUCTS_CHANNELS}')
+    print(f'   Subscriber-gated channels: {SUBSCRIBER_GATED_CHANNELS}')
+
+    # Check Vantage Pro role exists in each guild
+    for guild in bot.guilds:
+        role = await get_vantage_pro_role(guild)
+        if role:
+            print(f'   ✅ [{guild.name}] Vantage Pro role found: {role.id}')
+        else:
+            print(f'   ⚠️ [{guild.name}] Vantage Pro role NOT FOUND — create a role named "{VANTAGE_PRO_ROLE_NAME}"')
+
     # Start the daily hot products task
     if not daily_hot_products.is_running():
         daily_hot_products.start()
         print("   ✅ Daily hot products task started")
-    
-    # Start the daily brand hunter task
-    if BRAND_HUNTER_CHANNEL_ID and not daily_brand_hunter.is_running():
-        daily_brand_hunter.start()
-        print("   ✅ Daily brand hunter task started")
     
     # Auto-join inspo-chat forum threads so we can receive messages
     joined = 0
@@ -689,17 +754,14 @@ async def on_ready():
                 log.error(f"Could not fetch thread {thread_id}: {e}")
     log.info(f"Joined {joined}/{len(INSPO_THREAD_IDS)} inspo-chat threads")
 
-@tasks.loop(time=time(hour=17, minute=0))  # 12:00 PM EST = 17:00 UTC
 async def _post_hot_products_to_channel(channel, products):
     """Post hot products to a single channel."""
-    # Send header
     await channel.send(
         f"# 🔥 Vantage Daily Top {len(products)} — {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
         f"**Ranked by Opportunity Score** — sales velocity, commission, creator saturation\n"
         f"**Full data →** thoardburgersauce.com/app/products\n"
         f"──────────────────────────────"
     )
-    # Send each product
     for i, p in enumerate(products, 1):
         try:
             embed = create_product_embed(p, title_prefix=f"#{i} ")
@@ -711,8 +773,9 @@ async def _post_hot_products_to_channel(channel, products):
             print(f"❌ Error sending product #{i}: {e}")
 
 
+@tasks.loop(time=time(hour=17, minute=0))  # 12:00 PM EST = 17:00 UTC
 async def daily_hot_products():
-    """Post daily hot products to all configured hot-product channels."""
+    """Post daily hot products to all configured channels."""
     print(f"🔥 Daily hot products at {datetime.now(timezone.utc).isoformat()}")
 
     products = get_hot_products()
@@ -720,22 +783,12 @@ async def daily_hot_products():
         print("[Hot Products] No products found matching criteria today")
         return
 
-    # Collect all hot-product channels across all guilds
+    # Collect channels from hardcoded IDs
     channels = []
-
-    # Legacy single-channel
-    if HOT_PRODUCTS_CHANNEL_ID:
-        ch = bot.get_channel(HOT_PRODUCTS_CHANNEL_ID)
+    for ch_id in HOT_PRODUCTS_CHANNELS:
+        ch = bot.get_channel(ch_id)
         if ch:
             channels.append(ch)
-
-    # Multi-server channels from GUILD_CONFIGS
-    for gid, cfg in GUILD_CONFIGS.items():
-        hot_id = cfg.get('hot_products_channel')
-        if hot_id:
-            ch = bot.get_channel(int(hot_id))
-            if ch and ch not in channels:
-                channels.append(ch)
 
     if not channels:
         print("[Hot Products] No hot-product channels configured")
@@ -752,105 +805,10 @@ async def daily_hot_products():
     print(f"   Finished hot products loop.")
 
 
-def get_top_brand_opportunities(limit=10):
-    """Get top opportunity products from top revenue brands (50-300 all-time videos)."""
-    with app.app_context():
-        from sqlalchemy import func
-        
-        # Get top brands by revenue
-        top_brands = db.session.query(
-            Product.seller_name,
-            func.sum(Product.gmv).label('total_revenue')
-        ).filter(
-            Product.seller_name != None,
-            Product.seller_name != '',
-            Product.seller_name != 'Unknown',
-            ~Product.seller_name.ilike('unknown%'),
-            ~Product.seller_name.ilike('classified%')
-        ).group_by(Product.seller_name).order_by(func.sum(Product.gmv).desc()).limit(50).all()
-        
-        brand_names = [b[0] for b in top_brands]
-        print(f"[Brand Hunter Daily] Top {len(brand_names)} brands: {brand_names[:5]}...")
-        
-        # Get opportunity products from these brands (40-500 all-time videos for broader selection)
-        # Use video_count_alltime for saturation metric
-        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
-        
-        products = Product.query.filter(
-            Product.seller_name.in_(brand_names),
-            video_count_field >= 50,
-            video_count_field <= 300  # Max 300 all-time videos
-        ).order_by(
-            video_count_field.asc(),  # Priority: Lower videos = better opportunity
-            Product.sales_7d.desc().nullslast()
-        ).limit(limit).all()
-        
-        print(f"[Brand Hunter Daily] Found {len(products)} opportunity products from top {len(brand_names)} brands")
-        
-        # Convert to dicts - use video_count_alltime
-        product_dicts = []
-        for p in products:
-            video_count = p.video_count_alltime or p.video_count or 0
-            product_dicts.append({
-                'product_id': p.product_id,
-                'product_name': p.product_name,
-                'seller_name': p.seller_name,
-                'sales': p.sales,  # Total sales
-                'sales_7d': p.sales_7d,
-                'video_count': video_count,  # All-time video count
-                'influencer_count': p.influencer_count,
-                'ad_spend': p.ad_spend,
-                'commission_rate': p.commission_rate,
-                'shop_ads_commission': p.shop_ads_commission,
-                'price': p.price,
-                'image_url': p.cached_image_url or p.image_url,
-            })
-        
-        return product_dicts
+# (get_top_brand_opportunities removed — brand scanning is now on-demand via the website)
 
 
-@tasks.loop(time=time(hour=17, minute=5))  # 12:05 PM EST = 17:05 UTC (5 min after hot products)
-async def daily_brand_hunter():
-    """Post daily brand hunter opportunities at noon EST"""
-    if not BRAND_HUNTER_CHANNEL_ID:
-        print("No brand hunter channel configured")
-        return
-    
-    channel = bot.get_channel(BRAND_HUNTER_CHANNEL_ID)
-    if not channel:
-        print(f"Could not find brand hunter channel {BRAND_HUNTER_CHANNEL_ID}")
-        return
-    
-    print(f"🎯 Posting daily brand hunter at {datetime.now(timezone.utc).isoformat()}")
-    
-    try:
-        products = get_top_brand_opportunities(limit=10)
-        
-        if not products:
-            await channel.send("📭 No brand opportunity products found today (40-300 all-time videos from top brands). Check back tomorrow!")
-            return
-        
-        # Send header message
-        await channel.send(f"# 🎯 Daily Brand Opportunities - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                           f"**Criteria:** Top 50 Revenue Brands, 40-300 all-time videos (sorted by lowest)\n"
-                           f"**Today's Picks:** {len(products)} products from proven brands\n"
-                           f"──────────────────────────────")
-        
-        # Send each product as an embed
-        for i, p in enumerate(products, 1):
-            try:
-                embed = create_product_embed(p, title_prefix=f"#{i} ")
-                await channel.send(embed=embed)
-                await asyncio.sleep(1)  # Rate limiting
-            except Exception as e:
-                print(f"❌ Error sending brand product #{i}: {e}")
-        
-        print(f"   Finished brand hunter loop.")
-    except Exception as e:
-        print(f"❌ Error in daily_brand_hunter: {e}")
-        import traceback
-        traceback.print_exc()
-        await channel.send(f"❌ Error fetching brand opportunities: {str(e)[:200]}")
+# (Daily brand hunter task removed — brand scanning is now on-demand via the website)
 
 
 @bot.event
@@ -919,6 +877,13 @@ async def on_message(message):
     if hasattr(message.channel, 'parent_id') and message.channel.parent_id == INSPO_CHAT_CHANNEL_ID:
         log.info(f"📨 Message in thread {message.channel.id} ({getattr(message.channel, 'name', '?')}): {message.content[:50]}")
     
+    # ── Subscriber gate for gated channels ──
+    if is_subscriber_gated(message.channel):
+        allowed = await check_subscriber_gate(message)
+        if not allowed:
+            await bot.process_commands(message)
+            return
+
     # Check if message is in any configured product lookup channel
     if is_product_lookup_channel(message.channel):
         # Look for TikTok product links
@@ -927,25 +892,14 @@ async def on_message(message):
             r'shop\.tiktok\.com',
             r'vm\.tiktok\.com',
             r'vt\.tiktok\.com',
-            r'tiktok\.com/t/[\w-]+',  # tiktok.com/t/XXXXXXX share links (may contain hyphens)
-            r'/t/[\w-]{6,}',           # bare /t/ path
+            r'tiktok\.com/t/[\w-]+',
+            r'/t/[\w-]{6,}',
         ]
 
         content = message.content
         has_tiktok_link = any(re.search(pattern, content, re.IGNORECASE) for pattern in tiktok_patterns)
 
         if has_tiktok_link or re.search(r'\d{15,25}', content):
-            # Subscription gate — non-subscribers get a signup prompt
-            has_sub, _user = check_user_subscription(str(message.author.id))
-            if not has_sub:
-                await message.reply(
-                    f"🔒 **Vantage Subscription Required**\n"
-                    f"Product lookups require an active subscription.\n"
-                    f"[Subscribe here]({PRISM_BASE_URL}/app/subscribe) for $19.99/month to unlock full access!",
-                    mention_author=False,
-                )
-                return
-
             # React to show we're processing
             await message.add_reaction('🔍')
 
@@ -1323,24 +1277,19 @@ async def lookup_command(ctx, *, query: str = None):
         await ctx.reply("Usage: `!lookup <product_id or TikTok URL>`", mention_author=False)
         return
 
-    # =========================================================================
-    # SUBSCRIPTION CHECK
-    # =========================================================================
+    # Subscription / role check
     has_sub, _user = check_user_subscription(str(ctx.author.id))
-    is_admin = _user.is_admin if _user else False
+    is_admin = _user.is_admin if _user else (int(ctx.author.id) in DISCORD_ADMIN_IDS)
+    member = ctx.author if hasattr(ctx.author, 'roles') else None
+    has_role = has_vantage_pro_role(member) if member else False
 
-    if not has_sub:
+    if not has_sub and not has_role and not is_admin:
         await ctx.reply(
-            f"🔒 **Vantage Subscription Required**\n"
-            f"Product lookups require an active subscription.\n"
-            f"[Subscribe here]({PRISM_BASE_URL}/app/subscribe) for $19.99/month to unlock full access!",
+            "**This command is for Vantage subscribers only.**\n"
+            "Get access at **thoardburgersauce.com**",
             mention_author=False,
         )
         return
-
-    # =========================================================================
-    # EXECUTE SCAN
-    # =========================================================================
 
     await ctx.message.add_reaction('🔍')
     status_msg = await ctx.reply(
@@ -1607,42 +1556,41 @@ async def force_hot_products(ctx):
     await daily_hot_products()
 
 
-@bot.command(name='brandhunter')
+@bot.command(name='syncroles')
 @commands.has_permissions(administrator=True)
-async def force_brand_hunter(ctx):
-    """Admin command to force post brand hunter products to current channel"""
-    await ctx.reply("🎯 Fetching brand hunter opportunities...", mention_author=False)
-    
-    try:
-        products = get_top_brand_opportunities(limit=10)
-        print(f"[!brandhunter] Retrieved {len(products) if products else 0} products")
-        
-        if not products:
-            await ctx.send("📭 No brand opportunity products found (40-300 all-time videos from top brands).")
-            return
-        
-        # Send header message
-        await ctx.send(f"# 🎯 Brand Opportunities\n"
-                       f"**Criteria:** Top 50 Revenue Brands, 40-300 all-time videos\n"
-                       f"**Found:** {len(products)} products from proven brands\n"
-                       f"──────────────────────────────")
-        
-        # Send each product as an embed
-        for i, p in enumerate(products, 1):
-            try:
-                embed = create_product_embed(p, title_prefix=f"#{i} ")
-                await ctx.send(embed=embed)
-                await asyncio.sleep(1)  # Rate limiting
-            except Exception as e:
-                print(f"❌ Error sending brand product #{i}: {e}")
-                await ctx.send(f"⚠️ Error displaying product #{i}")
-        
-        await ctx.send("✅ Brand hunter complete!")
-    except Exception as e:
-        print(f"❌ Error in force_brand_hunter: {e}")
-        import traceback
-        traceback.print_exc()
-        await ctx.send(f"❌ Error: {str(e)[:500]}")
+async def sync_roles_command(ctx):
+    """Admin: Sync Vantage Pro role for all active subscribers + admins."""
+    await ctx.reply("🔄 Syncing Vantage Pro roles...", mention_author=False)
+
+    synced = 0
+    errors = 0
+
+    with app.app_context():
+        # Get all active subscribers
+        active_subs = Subscription.query.filter_by(status='active').all()
+        user_ids = {s.user_id for s in active_subs}
+
+        # Also include all admin users
+        admin_users = User.query.filter_by(is_admin=True).all()
+        for u in admin_users:
+            user_ids.add(u.id)
+
+        # Get discord_ids for all these users
+        users = User.query.filter(User.id.in_(user_ids), User.discord_id.isnot(None)).all()
+
+    status_msg = await ctx.send(f"Found {len(users)} users to sync...")
+
+    for user in users:
+        try:
+            result = await assign_vantage_pro_role(user.discord_id)
+            if result:
+                synced += 1
+        except Exception as e:
+            errors += 1
+            log.error(f"[SyncRoles] Error for {user.discord_username}: {e}")
+        await asyncio.sleep(0.5)  # Rate limit
+
+    await status_msg.edit(content=f"✅ Role sync complete: **{synced}** assigned, **{errors}** errors, **{len(users)}** total users checked.")
 
 # =============================================================================
 # BRAND HUNTER COMMANDS
