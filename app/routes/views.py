@@ -1164,6 +1164,61 @@ def api_sync_images():
     return jsonify({'success': True, 'signed': signed, 'missing': still_missing, 'total': Product.query.count()})
 
 
+@views_bp.route('/api/admin/sync-sellers', methods=['POST'])
+@api_auth
+def api_sync_sellers():
+    """Enrich seller/shop names for products that have 'Unknown' seller via product detail API."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    import time as _time
+    from app.services.echotik import fetch_product_detail
+
+    products = Product.query.filter(
+        _active_filter,
+        or_(
+            Product.seller_name.is_(None),
+            Product.seller_name == '',
+            Product.seller_name == 'Unknown',
+            Product.seller_name == 'Unknown Seller',
+        ),
+    ).order_by(Product.sales_7d.desc().nullslast()).limit(50).all()
+
+    if not products:
+        return jsonify({'success': True, 'enriched': 0, 'remaining': 0})
+
+    enriched = 0
+    for p in products:
+        raw_id = p.product_id.replace('shop_', '')
+        try:
+            detail = fetch_product_detail(raw_id)
+            if detail:
+                sname = (detail.get('seller_name') or '').strip()
+                if sname and sname.lower() not in ('unknown', 'none', 'null', ''):
+                    p.seller_name = sname
+                    enriched += 1
+                sid = detail.get('seller_id')
+                if sid and not p.seller_id:
+                    p.seller_id = sid
+            _time.sleep(0.3)
+        except Exception:
+            continue
+
+    db.session.commit()
+
+    remaining = Product.query.filter(
+        _active_filter,
+        or_(
+            Product.seller_name.is_(None),
+            Product.seller_name == '',
+            Product.seller_name == 'Unknown',
+        ),
+    ).count()
+
+    return jsonify({'success': True, 'enriched': enriched, 'remaining': remaining})
+
+
 @views_bp.route('/api/admin/sync-brands', methods=['POST'])
 @api_auth
 def api_sync_brands():

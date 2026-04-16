@@ -99,8 +99,12 @@
                 {% if p.lifecycle == 'rising' %}<span style="font-size:10px;background:var(--success-dim);color:var(--success);padding:1px 5px;border-radius:4px;font-weight:600">&#x2197;</span>{% endif %}
                 {% if p.original_price and p.original_price > p.price and p.price > 0 %}{% set disc = ((1 - p.price / p.original_price) * 100) | round | int %}{% if disc >= 20 %}<span style="font-size:10px;background:#e8384d;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">-{{ disc }}%</span>{% endif %}{% endif %}
               </div>
-              <div style="font-size:11px;color:var(--text-faint);display:flex;gap:6px">
-                {% if p.seller_name and p.seller_name != 'Unknown' %}<span>{{ p.seller_name | truncate(20) }}</span><span>&middot;</span>{% endif %}
+              <div style="font-size:11px;color:var(--text-faint);display:flex;gap:6px;align-items:center">
+                {% if p.seller_name and p.seller_name not in ['Unknown', 'Unknown Seller', '', 'None'] %}
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.5;flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                  <span title="Shop: {{ p.seller_name }}">{{ p.seller_name | truncate(25) }}</span>
+                  {% if p.category %}<span>&middot;</span>{% endif %}
+                {% endif %}
                 {% if p.category %}<span>{{ p.category }}</span>{% endif %}
               </div>
             </div>
@@ -203,6 +207,12 @@
     </div>
     <div class="product-card-body">
       <div class="product-card-name" {% if p.product_name | length > 40 %}data-tooltip="{{ p.product_name }}"{% endif %}>{{ p.product_name }}</div>
+      {% if p.seller_name and p.seller_name not in ['Unknown', 'Unknown Seller', '', 'None'] %}
+        <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px;display:flex;align-items:center;gap:4px">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          {{ p.seller_name | truncate(30) }}
+        </div>
+      {% endif %}
       <div class="flex items-center gap-3 mb-2">
         <div>
           <div class="product-card-commission" style="font-size:22px;font-weight:800;color:var(--accent);line-height:1">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</div>
