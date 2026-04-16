@@ -1819,22 +1819,49 @@ def admin_coupon_delete(cid):
 @login_required
 def brand_hunter():
     ctx = _base_context('brands')
+    sort = request.args.get('sort', 'sales')
+    search = request.args.get('q', '').strip()
+
     try:
-        ctx['brands'] = ScannedBrand.query.order_by(
-            ScannedBrand.sales_30d.desc().nullslast()
-        ).all()
+        query = ScannedBrand.query
+        if search:
+            query = query.filter(ScannedBrand.brand_name.ilike(f'%{search}%'))
+        if sort == 'revenue':
+            query = query.order_by(ScannedBrand.revenue_30d.desc().nullslast())
+        elif sort == 'products':
+            query = query.order_by(ScannedBrand.total_products.desc().nullslast())
+        elif sort == 'commission':
+            query = query.order_by(ScannedBrand.avg_commission.desc().nullslast())
+        else:  # sales (default)
+            query = query.order_by(ScannedBrand.sales_30d.desc().nullslast())
+        ctx['brands'] = query.all()
     except Exception:
         db.session.rollback()
         ctx['brands'] = []
 
+    ctx['brand_sort'] = sort
+    ctx['brand_search'] = search
+
+    # Stats for the header
     try:
-        active_job = BrandScanJob.query.filter(
-            BrandScanJob.status.in_(['queued', 'running'])
-        ).order_by(BrandScanJob.created_at.desc()).first()
-        ctx['active_job'] = active_job
+        ctx['total_brands'] = ScannedBrand.query.count()
+        ctx['total_brand_products'] = db.session.query(db.func.sum(ScannedBrand.total_products)).scalar() or 0
+        ctx['total_brand_revenue'] = db.session.query(db.func.sum(ScannedBrand.revenue_30d)).scalar() or 0
+    except Exception:
+        ctx['total_brands'] = 0
+        ctx['total_brand_products'] = 0
+        ctx['total_brand_revenue'] = 0
+
+    # Active scan job (admin only)
+    ctx['active_job'] = None
+    try:
+        if ctx['current_user'] and ctx['current_user'].is_admin:
+            active_job = BrandScanJob.query.filter(
+                BrandScanJob.status.in_(['queued', 'running'])
+            ).order_by(BrandScanJob.created_at.desc()).first()
+            ctx['active_job'] = active_job
     except Exception:
         db.session.rollback()
-        ctx['active_job'] = None
 
     return render_template('brand_hunter.html', **ctx)
 
@@ -2062,6 +2089,39 @@ def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
     brand.scan_status = 'complete'
     brand.last_scanned = datetime.utcnow()
     db.session.commit()
+
+    # Sync to main Product table so "View" is instant (no API call on click)
+    try:
+        from app.services.echotik import sync_to_db as echotik_sync
+        # Collect raw product dicts for sync_to_db
+        raw_for_sync = []
+        for bp in all_products:
+            raw_for_sync.append({
+                'product_id': bp.product_id,
+                'product_name': bp.title,
+                'image_url': bp.image_url,
+                'price': bp.price,
+                'commission_rate': bp.commission_rate,
+                'sales': bp.total_sales,
+                'sales_7d': bp.sales_30d,  # Best approximation
+                'sales_30d': bp.sales_30d,
+                'video_count_alltime': bp.total_videos,
+                'video_count': bp.total_videos,
+                'influencer_count': bp.influencer_count,
+                'category': bp.category,
+                'seller_name': brand_name,
+                'seller_id': str(shop_id),
+            })
+        # Sync in batches of 50
+        for i in range(0, len(raw_for_sync), 50):
+            batch = raw_for_sync[i:i+50]
+            try:
+                echotik_sync(batch)
+            except Exception:
+                pass
+        log.info(f"[BrandScan] Synced {len(raw_for_sync)} products to main Product table for {brand_name}")
+    except Exception as e:
+        log.warning(f"[BrandScan] Product table sync failed: {e}")
 
     # Sign product images via EchoTik batch signing
     try:
