@@ -143,8 +143,8 @@ def _paypal_headers():
 def _verify_webhook(req):
     """Verify PayPal webhook signature. Returns True if valid."""
     if not PAYPAL_WEBHOOK_ID:
-        log.warning('[PAYMENTS] PAYPAL_WEBHOOK_ID not set — skipping verification')
-        return True  # Allow in dev
+        log.error('[PAYMENTS] PAYPAL_WEBHOOK_ID not set — rejecting webhook for security')
+        return False
 
     try:
         headers = req.headers
