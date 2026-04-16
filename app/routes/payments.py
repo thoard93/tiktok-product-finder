@@ -1,12 +1,12 @@
 """
 PRISM — Payments Blueprint
-PayPal recurring subscription checkout ($19.99/month), coupon codes,
+PayPal recurring subscription checkout ($29.99/month), coupon codes,
 webhook handling, and subscription status.
 
 Environment variables:
     PAYPAL_CLIENT_ID       — PayPal REST API client ID
     PAYPAL_SECRET          — PayPal REST API secret
-    PAYPAL_PLAN_ID         — PayPal billing plan ID for the $19.99/month plan
+    PAYPAL_PLAN_ID         — PayPal billing plan ID for the $29.99/month plan
     PAYPAL_WEBHOOK_ID      — PayPal webhook ID for signature verification
     PAYPAL_MODE            — 'sandbox' or 'live' (default: sandbox)
     PRISM_BASE_URL         — Base URL for return/cancel redirects (e.g. https://vantagehq.shop)
@@ -478,7 +478,7 @@ def validate_coupon():
             'coupon_code': code,
             'discount_percent': coupon['discount_percent'],
             'description': coupon['description'],
-            'discounted_price': round(19.99 * (1 - coupon['discount_percent'] / 100), 2),
+            'discounted_price': round(29.99 * (1 - coupon['discount_percent'] / 100), 2),
         })
 
     # Check DB for dynamic coupons
@@ -491,7 +491,7 @@ def validate_coupon():
                 'coupon_code': code,
                 'discount_percent': coupon_data.get('discount_percent', 0),
                 'description': coupon_data.get('description', 'Discount'),
-                'discounted_price': round(19.99 * (1 - coupon_data.get('discount_percent', 0) / 100), 2),
+                'discounted_price': round(29.99 * (1 - coupon_data.get('discount_percent', 0) / 100), 2),
             })
         except (json.JSONDecodeError, TypeError):
             pass
