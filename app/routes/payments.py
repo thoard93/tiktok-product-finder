@@ -9,7 +9,7 @@ Environment variables:
     PAYPAL_PLAN_ID         — PayPal billing plan ID for the $19.99/month plan
     PAYPAL_WEBHOOK_ID      — PayPal webhook ID for signature verification
     PAYPAL_MODE            — 'sandbox' or 'live' (default: sandbox)
-    PRISM_BASE_URL         — Base URL for return/cancel redirects (e.g. https://thoardburgersauce.com)
+    PRISM_BASE_URL         — Base URL for return/cancel redirects (e.g. https://vantagehq.shop)
 """
 
 import os
@@ -40,7 +40,7 @@ PAYPAL_PLAN_ID = os.environ.get('PAYPAL_PLAN_ID', '')
 PAYPAL_COUPON_PLAN_ID = os.environ.get('PAYPAL_COUPON_PLAN_ID', '')  # Plan with $9.99 trial month
 PAYPAL_WEBHOOK_ID = os.environ.get('PAYPAL_WEBHOOK_ID', '')
 PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')
-PRISM_BASE_URL = os.environ.get('PRISM_BASE_URL', 'https://thoardburgersauce.com')
+PRISM_BASE_URL = os.environ.get('PRISM_BASE_URL', 'https://vantagehq.shop')
 
 PAYPAL_API_BASE = (
     'https://api-m.paypal.com' if PAYPAL_MODE == 'live'

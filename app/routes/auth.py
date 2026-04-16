@@ -36,7 +36,7 @@ auth_bp = Blueprint('auth', __name__)
 # Discord OAuth Settings (set these in Render environment variables)
 DISCORD_CLIENT_ID = os.environ.get('DISCORD_CLIENT_ID', '')
 DISCORD_CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
-DISCORD_REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://thoardburgersauce.com/auth/discord/callback')
+DISCORD_REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://vantagehq.shop/auth/discord/callback')
 DISCORD_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '')  # Your Discord server ID
 DISCORD_GUILD_ID_AA = os.environ.get('DISCORD_GUILD_ID_AA', '')  # Affiliate Automated server
 DISCORD_GUILD_ID_3 = os.environ.get('DISCORD_GUILD_ID_3', '')  # Third server

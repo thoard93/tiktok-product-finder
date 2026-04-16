@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Vantage Website Audit Script
-Crawls thoardburgersauce.com, checks every page for issues,
+Crawls vantagehq.shop, checks every page for issues,
 and generates a styled audit_report.html.
 """
 
@@ -13,7 +13,7 @@ from datetime import datetime
 from urllib.parse import urljoin, urlparse
 from playwright.sync_api import sync_playwright
 
-BASE_URL = "https://thoardburgersauce.com"
+BASE_URL = "https://vantagehq.shop"
 PASSKEY = "Batman7193!"
 
 # Pages to audit (public + authenticated)
@@ -248,7 +248,7 @@ def check_broken_links(page, pages_audited):
         """)
         for link in (links or []):
             parsed = urlparse(link)
-            if parsed.netloc and "thoardburgersauce.com" in parsed.netloc:
+            if parsed.netloc and "vantagehq.shop" in parsed.netloc:
                 all_links.add(link)
 
     broken = []

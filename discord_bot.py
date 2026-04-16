@@ -180,7 +180,7 @@ async def check_subscriber_gate(message):
     # Not subscribed — send gate message
     await message.reply(
         "**This channel is for Vantage subscribers only.**\n"
-        "Get access at **thoardburgersauce.com**",
+        "Get access at **vantagehq.shop**",
         mention_author=False,
     )
     return False
@@ -343,7 +343,7 @@ def get_product_from_db(product_id):
 
 from app import enrich_product_data
 
-PRISM_BASE_URL = os.environ.get('PRISM_BASE_URL', 'https://thoardburgersauce.com')
+PRISM_BASE_URL = os.environ.get('PRISM_BASE_URL', 'https://vantagehq.shop')
 
 # Discord IDs that bypass the subscription check entirely (server owners / admins)
 # Set DISCORD_ADMIN_IDS env var as comma-separated IDs, e.g. "274339622119669760,123456789"
@@ -759,7 +759,7 @@ async def _post_hot_products_to_channel(channel, products):
     await channel.send(
         f"# 🔥 Vantage Daily Top {len(products)} — {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
         f"**Ranked by Opportunity Score** — sales velocity, commission, creator saturation\n"
-        f"**Full data →** thoardburgersauce.com/app/products\n"
+        f"**Full data →** vantagehq.shop/app/products\n"
         f"──────────────────────────────"
     )
     for i, p in enumerate(products, 1):
@@ -1286,7 +1286,7 @@ async def lookup_command(ctx, *, query: str = None):
     if not has_sub and not has_role and not is_admin:
         await ctx.reply(
             "**This command is for Vantage subscribers only.**\n"
-            "Get access at **thoardburgersauce.com**",
+            "Get access at **vantagehq.shop**",
             mention_author=False,
         )
         return
