@@ -3,7 +3,7 @@
 {% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>{% endblock %}
 
 {% block content %}
-<a href="/app/products" class="detail-back"><i data-lucide="arrow-left"></i> Back to Products</a>
+<a href="javascript:void(0)" class="detail-back" onclick="window.history.length>1?window.history.back():window.location='/app/products'"><i data-lucide="arrow-left"></i> Back</a>
 
 <div class="detail-layout">
   {# ===== LEFT: Product Info ===== #}
@@ -241,7 +241,10 @@
     /* Build estimated 30-day curve from sales_7d and sales_30d */
     var s7 = {{ product.sales_7d or 0 }};
     var s30 = {{ product.sales_30d or 0 }};
-    var dailyRecent = s7 / 7;
+    /* If s7 and s30 are suspiciously equal (brand import artifact), use s30 as daily base */
+    if (s30 > 0 && s7 === s30) { s7 = Math.round(s30 / 4.3); }
+    if (s30 === 0 && s7 > 0) { s30 = s7 * 4; }
+    var dailyRecent = Math.max(s7 / 7, 0.1);
     var dailyOlder = s30 > s7 ? (s30 - s7) / 23 : dailyRecent * 0.7;
     for (var i = 0; i < 30; i++) {
       var d = new Date(); d.setDate(d.getDate() - 29 + i);

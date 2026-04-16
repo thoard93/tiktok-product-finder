@@ -83,8 +83,9 @@
         <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
         <td>
           <div class="product-row-name">
-            {% if p.image_url %}
-              <img src="{{ p.image_url }}" class="product-row-thumb" alt="{{ p.title }}" loading="lazy"
+            {% set img = p._cached_img or p.image_url %}
+            {% if img %}
+              <img src="{{ img }}" class="product-row-thumb" alt="{{ p.title }}" loading="lazy"
                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
               <div class="product-row-thumb-fallback {{ cat_class }}" style="display:none">{{ (p.title or '?')[0] | upper }}</div>
             {% else %}

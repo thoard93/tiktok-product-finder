@@ -2222,6 +2222,24 @@ def brand_hunter_detail(brand_id):
 
     products = query.limit(100).all()
 
+    # Look up cached images from main Product table
+    if products:
+        pids = [bp.product_id for bp in products]
+        shop_pids = [f'shop_{pid}' for pid in pids]
+        all_pids = pids + shop_pids
+        cached = Product.query.filter(
+            Product.product_id.in_(all_pids),
+            Product.cached_image_url.isnot(None),
+        ).all()
+        img_map = {}
+        for p in cached:
+            raw = p.product_id.replace('shop_', '')
+            img_map[raw] = p.cached_image_url
+            img_map[p.product_id] = p.cached_image_url
+        # Attach cached image to each BrandProduct for template use
+        for bp in products:
+            bp._cached_img = img_map.get(bp.product_id) or img_map.get(bp.product_id.replace('shop_', ''))
+
     ctx['brand'] = brand
     ctx['products'] = products
     ctx['brand_sort'] = sort
