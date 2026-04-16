@@ -690,45 +690,65 @@ async def on_ready():
     log.info(f"Joined {joined}/{len(INSPO_THREAD_IDS)} inspo-chat threads")
 
 @tasks.loop(time=time(hour=17, minute=0))  # 12:00 PM EST = 17:00 UTC
-async def daily_hot_products():
-    """Post daily hot products at noon EST"""
-    if not HOT_PRODUCTS_CHANNEL_ID:
-        print("No hot products channel configured")
-        return
-    
-    channel = bot.get_channel(HOT_PRODUCTS_CHANNEL_ID)
-    if not channel:
-        print(f"Could not find channel {HOT_PRODUCTS_CHANNEL_ID}")
-        return
-    
-    print(f"🎁 Posting daily free shipping deals at {datetime.now(timezone.utc).isoformat()}")
-    
-    products = get_hot_products()
-    
-    if not products:
-        await channel.send("📭 No products matching criteria today (40-120 videos, 100+ 7D sales, $100+ ad spend, commission > 0). Try syncing more products from Copilot!")
-        return
-    
-    # Send header message
-    await channel.send(f"# 🔥 Daily Hot Picks - {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
-                       f"**Criteria:** 40-120 all-time videos, $100+ ad spend, 100+ 7D sales\n"
-                       f"**Today's Picks:** {len(products)} products\n"
-                       f"──────────────────────────────")
-    
-    # Send each product as an embed
+async def _post_hot_products_to_channel(channel, products):
+    """Post hot products to a single channel."""
+    # Send header
+    await channel.send(
+        f"# 🔥 Vantage Daily Top {len(products)} — {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
+        f"**Ranked by Opportunity Score** — sales velocity, commission, creator saturation\n"
+        f"**Full data →** thoardburgersauce.com/app/products\n"
+        f"──────────────────────────────"
+    )
+    # Send each product
     for i, p in enumerate(products, 1):
         try:
             embed = create_product_embed(p, title_prefix=f"#{i} ")
+            score = p.get('opportunity_score', 0)
+            embed.set_footer(text=f"📦 Vantage • Score: {score} | ID: {p.get('product_id', '')}")
             await channel.send(embed=embed)
-            await asyncio.sleep(1)  # Rate limiting
+            await asyncio.sleep(1)
         except Exception as e:
-            print(f"❌ Error sending product #{i} ({getattr(p, 'product_id', 'unknown')}): {e}")
-            # Try sending a basic error message to the channel so we know it failed here
-            try:
-                await channel.send(f"⚠️ Failed to display product #{i}. Check logs.")
-            except:
-                pass
-    
+            print(f"❌ Error sending product #{i}: {e}")
+
+
+async def daily_hot_products():
+    """Post daily hot products to all configured hot-product channels."""
+    print(f"🔥 Daily hot products at {datetime.now(timezone.utc).isoformat()}")
+
+    products = get_hot_products()
+    if not products:
+        print("[Hot Products] No products found matching criteria today")
+        return
+
+    # Collect all hot-product channels across all guilds
+    channels = []
+
+    # Legacy single-channel
+    if HOT_PRODUCTS_CHANNEL_ID:
+        ch = bot.get_channel(HOT_PRODUCTS_CHANNEL_ID)
+        if ch:
+            channels.append(ch)
+
+    # Multi-server channels from GUILD_CONFIGS
+    for gid, cfg in GUILD_CONFIGS.items():
+        hot_id = cfg.get('hot_products_channel')
+        if hot_id:
+            ch = bot.get_channel(int(hot_id))
+            if ch and ch not in channels:
+                channels.append(ch)
+
+    if not channels:
+        print("[Hot Products] No hot-product channels configured")
+        return
+
+    print(f"[Hot Products] Posting {len(products)} products to {len(channels)} channel(s)")
+    for channel in channels:
+        try:
+            await _post_hot_products_to_channel(channel, products)
+            print(f"   ✅ Posted to #{channel.name} ({channel.guild.name})")
+        except Exception as e:
+            print(f"   ❌ Failed to post to {channel.id}: {e}")
+
     print(f"   Finished hot products loop.")
 
 
@@ -1460,65 +1480,102 @@ async def blacklist_list(ctx):
         if text:
             await ctx.send(text)
 
+def _calc_opportunity_score(p):
+    """Same Opportunity Score as the website (0-99). Inlined for bot use."""
+    import math
+    s7 = p.sales_7d or 0
+    s30 = p.sales_30d or 0
+    comm = p.commission_rate or 0
+    creators = p.influencer_count or 0
+    price = p.price or 0
+
+    # Demand (0-25)
+    demand = min(25, round(math.log10(max(s7, 1) + 1) * 8))
+    # Momentum (0-20)
+    if s30 > 0 and s7 > 0:
+        ratio = s7 / (s30 / 4.3)
+        momentum = min(20, round(ratio * 10))
+    else:
+        momentum = 5
+    # Commission (0-20)
+    c = comm * 100 if comm < 1 else comm
+    commission_score = min(20, round(c * 0.65))
+    # Saturation gap (0-20)
+    if s7 > 0 and creators > 0:
+        sat = s7 / creators
+        saturation = min(20, round(math.log10(max(sat, 1) + 1) * 8))
+    else:
+        saturation = 10
+    # Price fit (0-14)
+    if 10 <= price <= 60:
+        price_fit = 14
+    elif 5 <= price < 10 or 60 < price <= 100:
+        price_fit = 8
+    else:
+        price_fit = 3
+
+    return min(99, demand + momentum + commission_score + saturation + price_fit)
+
+
 def get_hot_products():
-    """Get Top Products - Sorted by Ad Spend (high first), then Video Count
-    
-    V2 Update: Filters adjusted for accurate video counts from /api/trending/products.
-    Old counts were ~20-40, new accurate counts are 100-17,000+.
+    """Get top 10 daily products using Opportunity Score.
+
+    Uses last_shown_hot to prevent repeats for DAYS_BEFORE_REPEAT days.
+    Wider filters than before — relies on score to surface quality.
     """
     from datetime import timedelta
-    
+
     with app.app_context():
-        # Calculate cutoff date for repeat prevention
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
-        
-        # Query: Products in opportunity zone (40-120 videos), matching v6.0 filters
-        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+
+        # Wider filters: just needs sales + commission, score does the rest
         products = Product.query.filter(
-            video_count_field >= 40,  # Min 40 all-time videos
-            video_count_field <= 120,  # Max 120 all-time videos (opportunity zone)
-            Product.sales_7d >= 100,  # 100+ 7D sales
-            Product.ad_spend >= 100,  # $100+ ad spend
-            Product.commission_rate > 0,  # Must have commission
+            Product.sales_7d >= 20,           # At least some sales
+            Product.commission_rate > 0,      # Must have commission
+            db.or_(Product.product_status == 'active', Product.product_status.is_(None)),
             db.or_(
                 Product.last_shown_hot == None,
                 Product.last_shown_hot < cutoff_date
             )
         ).order_by(
-            db.func.coalesce(Product.ad_spend, 0).desc(),  # Priority 1: High Ad Spend
-            db.func.coalesce(Product.sales_7d, 0).desc(),  # Priority 2: High 7D Sales
-            video_count_field.asc()  # Priority 3: Lower videos = better opportunity
-        ).limit(MAX_DAILY_POSTS * 3).all()  # Fetch extra to allow deduplication
-        
-        print(f"[Hot Products] Found {len(products)} candidates matching filters (before dedup)")
-        
-        # Deduplicate by product_name (same product can have multiple IDs)
-        seen_names = set()
-        unique_products = []
+            Product.sales_7d.desc().nullslast()
+        ).limit(200).all()
+
+        print(f"[Hot Products] {len(products)} candidates after base filters")
+
+        # Score and sort
+        scored = []
         for p in products:
-            # Normalize name for comparison (lowercase, strip whitespace)
-            name_key = (p.product_name or '').lower().strip()[:50]  # First 50 chars
+            p._score = _calc_opportunity_score(p)
+            scored.append(p)
+        scored.sort(key=lambda p: p._score, reverse=True)
+
+        # Deduplicate by name
+        seen_names = set()
+        unique = []
+        for p in scored:
+            name_key = (p.product_name or '').lower().strip()[:50]
             if name_key and name_key not in seen_names:
                 seen_names.add(name_key)
-                unique_products.append(p)
-                if len(unique_products) >= MAX_DAILY_POSTS:
+                unique.append(p)
+                if len(unique) >= MAX_DAILY_POSTS:
                     break
-        
-        # Convert to dicts BEFORE commit to avoid DetachedInstanceError
+
+        # Convert to dicts
         product_dicts = []
-        for p in unique_products:
-            video_count = p.video_count_alltime or p.video_count or 0  # All-time video count
-            p_dict = {
+        for p in unique:
+            video_count = p.video_count_alltime or p.video_count or 0
+            product_dicts.append({
                 'product_id': p.product_id,
                 'product_name': p.product_name,
                 'seller_name': p.seller_name,
-                'sales': p.sales,  # Total sales
+                'sales': p.sales,
                 'sales_7d': p.sales_7d,
                 'sales_30d': p.sales_30d,
                 'influencer_count': p.influencer_count,
-                'video_count': video_count,  # All-time video count!
+                'video_count': video_count,
                 'commission_rate': p.commission_rate,
-                'shop_ads_commission': p.shop_ads_commission,  # GMV Max Ads commission
+                'shop_ads_commission': p.shop_ads_commission,
                 'price': p.price,
                 'ad_spend': p.ad_spend,
                 'image_url': p.cached_image_url or p.image_url,
@@ -1526,19 +1583,17 @@ def get_hot_products():
                 'has_free_shipping': p.has_free_shipping,
                 'product_url': p.product_url,
                 'live_count': p.live_count,
-                'stock': p.live_count
-            }
-            product_dicts.append(p_dict)
-            
-            # Mark products as shown today
+                'stock': p.live_count,
+                'opportunity_score': p._score,
+            })
             p.last_shown_hot = datetime.now(timezone.utc)
-        
+
         try:
             db.session.commit()
         except Exception as e:
             print(f"Error updating last_shown_hot: {e}")
             db.session.rollback()
-            
+
         return product_dicts
 
 @bot.command(name='hotproducts')

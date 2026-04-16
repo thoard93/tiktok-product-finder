@@ -1844,20 +1844,29 @@ def brand_hunter_search():
 @login_required
 def brand_hunter_browse():
     """Fetch top brands from EchoTik ranking for selection. Returns JSON."""
+    import logging
+    log = logging.getLogger(__name__)
     page = request.args.get('page', 1, type=int)
     try:
         from app.services.echotik import fetch_top_shops
         sellers = fetch_top_shops(country="US", page_size=10, page=page)
+        log.info(f"[BrandHunter] browse page={page}: got {len(sellers)} sellers")
         # Add ranking number based on page position
         results = []
         for i, s in enumerate(sellers):
             s['rank'] = (page - 1) * 10 + i + 1
             # Check if already scanned
-            existing = ScannedBrand.query.filter_by(brand_id=str(s.get('shop_id', ''))).first()
-            s['already_scanned'] = bool(existing)
+            try:
+                existing = ScannedBrand.query.filter_by(brand_id=str(s.get('shop_id', ''))).first()
+                s['already_scanned'] = bool(existing)
+            except Exception:
+                s['already_scanned'] = False
             results.append(s)
         return jsonify({'brands': results, 'page': page})
     except Exception as e:
+        log.error(f"[BrandHunter] browse error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e), 'brands': []}), 500
 
 
