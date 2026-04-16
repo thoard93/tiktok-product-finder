@@ -39,9 +39,10 @@ DISCORD_CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
 DISCORD_REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://thoardburgersauce.com/auth/discord/callback')
 DISCORD_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '')  # Your Discord server ID
 DISCORD_GUILD_ID_AA = os.environ.get('DISCORD_GUILD_ID_AA', '')  # Affiliate Automated server
+DISCORD_GUILD_ID_3 = os.environ.get('DISCORD_GUILD_ID_3', '')  # Third server
 
 # All allowed guild IDs (filter out empty strings)
-ALLOWED_GUILD_IDS = [gid for gid in [DISCORD_GUILD_ID, DISCORD_GUILD_ID_AA] if gid]
+ALLOWED_GUILD_IDS = [gid for gid in [DISCORD_GUILD_ID, DISCORD_GUILD_ID_AA, DISCORD_GUILD_ID_3] if gid]
 
 # Developer passkey (set in Render environment variables)
 DEV_PASSKEY = os.environ.get('DEV_PASSKEY', 'change-this-passkey-123')
