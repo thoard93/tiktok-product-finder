@@ -23,6 +23,7 @@ def _auto_migrate(app, db):
         ("products", "lookup_count", "INTEGER DEFAULT 0"),
         ("products", "cached_score", "INTEGER"),
         ("products", "score_cached_at", "TIMESTAMP"),
+        ("brand_products", "sales_7d", "INTEGER DEFAULT 0"),
         # Brand Hunter v2 — new columns on brand_scan_jobs
         ("brand_scan_jobs", "brand_id_str", "VARCHAR(100)"),
         ("brand_scan_jobs", "brand_name", "VARCHAR(300)"),

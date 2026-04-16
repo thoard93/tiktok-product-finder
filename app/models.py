@@ -694,6 +694,7 @@ class BrandProduct(db.Model):
     image_url = db.Column(db.String(500))
     price = db.Column(db.Float, default=0)
     commission_rate = db.Column(db.Float, default=0)
+    sales_7d = db.Column(db.Integer, default=0)
     sales_30d = db.Column(db.Integer, default=0)
     revenue_30d = db.Column(db.Float, default=0)
     total_videos = db.Column(db.Integer, default=0)

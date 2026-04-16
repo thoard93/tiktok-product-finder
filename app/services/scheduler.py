@@ -318,6 +318,7 @@ def _refresh_brand_products(app):
                 raw_pid = bp.product_id.replace('shop_', '')
                 fresh = fresh_map.get(raw_pid) or fresh_map.get(bp.product_id)
                 if fresh:
+                    bp.sales_7d = fresh.get('sales_7d', 0) or bp.sales_7d or 0
                     bp.sales_30d = fresh.get('sales_30d', 0) or fresh.get('sales', 0) or bp.sales_30d
                     bp.revenue_30d = fresh.get('gmv_30d', 0) or fresh.get('gmv', 0) or bp.revenue_30d
                     bp.total_videos = fresh.get('video_count_alltime', 0) or fresh.get('video_count', 0) or bp.total_videos

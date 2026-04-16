@@ -2083,6 +2083,7 @@ def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
                 image_url=p.get('image_url', ''),
                 price=p.get('price', 0) or 0,
                 commission_rate=p.get('commission_rate', 0) or 0,
+                sales_7d=p.get('sales_7d', 0) or 0,
                 sales_30d=p.get('sales_30d', 0) or p.get('sales', 0) or 0,
                 revenue_30d=p.get('gmv_30d', 0) or p.get('gmv', 0) or 0,
                 total_videos=p.get('video_count_alltime', 0) or p.get('video_count', 0) or 0,
@@ -2132,7 +2133,7 @@ def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
                 'price': bp.price,
                 'commission_rate': bp.commission_rate,
                 'sales': bp.total_sales,
-                'sales_7d': bp.sales_30d,
+                'sales_7d': bp.sales_7d or (bp.sales_30d // 4 if bp.sales_30d else 0),
                 'sales_30d': bp.sales_30d,
                 'video_count_alltime': bp.total_videos,
                 'video_count': bp.total_videos,
@@ -2240,6 +2241,8 @@ def brand_hunter_detail(brand_id):
 
     if sort == 'sales':
         query = query.order_by(BrandProduct.sales_30d.desc().nullslast())
+    elif sort == 'sales_7d':
+        query = query.order_by(BrandProduct.sales_7d.desc().nullslast())
     elif sort == 'revenue':
         query = query.order_by(BrandProduct.revenue_30d.desc().nullslast())
     elif sort == 'commission':

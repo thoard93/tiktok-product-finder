@@ -43,7 +43,7 @@
 {# ===== FILTER / SORT BAR ===== #}
 <div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:8px">
   <div class="flex gap-2 items-center" style="flex-wrap:wrap">
-    {% for val, label in [('videos', 'Total Videos'), ('videos_low', 'Fewest Videos'), ('sales', '30d Sales'), ('revenue', 'Revenue'), ('commission', 'Commission'), ('price', 'Price')] %}
+    {% for val, label in [('videos', 'Total Videos'), ('videos_low', 'Fewest Videos'), ('sales_7d', '7d Sales'), ('sales', '30d Sales'), ('revenue', 'Revenue'), ('commission', 'Commission'), ('price', 'Price')] %}
       <a href="?sort={{ val }}{% if gems_only %}&gems_only=1{% endif %}" class="btn btn-sm {{ 'btn-primary' if brand_sort == val else 'btn-ghost' }}">{{ label }}</a>
     {% endfor %}
   </div>
@@ -67,6 +67,7 @@
         <th scope="col"><a href="?sort=revenue{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'revenue' %}th-sort--active{% endif %}">Revenue &#x25BE;</a></th>
         <th scope="col"><a href="?sort=commission{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'commission' %}th-sort--active{% endif %}">Commission &#x25BE;</a></th>
         <th scope="col"><a href="?sort=price{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'price' %}th-sort--active{% endif %}">Price &#x25BE;</a></th>
+        <th scope="col"><a href="?sort=sales_7d{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'sales_7d' %}th-sort--active{% endif %}">7d Sales &#x25BE;</a></th>
         <th scope="col"><a href="?sort=sales{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'sales' %}th-sort--active{% endif %}">30d Sales &#x25BE;</a></th>
         <th scope="col"><a href="?sort=videos{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'videos' %}th-sort--active{% endif %}">Total Videos &#x25BE;</a></th>
         <th scope="col">Creators</th>
@@ -101,6 +102,7 @@
         <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{% if p.revenue_30d %}${{ p.revenue_30d | format_number }}{% else %}—{% endif %}{% else %}<span class="blurred-data">$42.5K</span>{% endif %}</td>
         <td class="commission-cell" style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%{% else %}<span class="blurred-data">15%</span>{% endif %}</td>
         <td style="font-variant-numeric:tabular-nums">{% if is_pro %}${{ "%.2f" | format(p.price or 0) }}{% else %}<span class="blurred-data">$24.99</span>{% endif %}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(p.sales_7d or 0) }}{% else %}<span class="blurred-data">2,140</span>{% endif %}</td>
         <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(p.sales_30d or 0) }}{% else %}<span class="blurred-data">8,240</span>{% endif %}</td>
         <td style="font-weight:700;font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(p.total_videos or 0) }}{% else %}<span class="blurred-data">1,205</span>{% endif %}</td>
         <td style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ p.influencer_count or 0 }}{% else %}<span class="blurred-data">342</span>{% endif %}</td>
