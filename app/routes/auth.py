@@ -358,7 +358,8 @@ def discord_callback():
                 'code': code,
                 'redirect_uri': DISCORD_REDIRECT_URI
             },
-            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            timeout=10,
         )
 
         if token_response.status_code != 200:
@@ -370,7 +371,8 @@ def discord_callback():
         # Get user info
         user_response = requests.get(
             'https://discord.com/api/users/@me',
-            headers={'Authorization': f'Bearer {access_token}'}
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=10,
         )
 
         if user_response.status_code != 200:
@@ -385,7 +387,8 @@ def discord_callback():
         if ALLOWED_GUILD_IDS:
             guilds_response = requests.get(
                 'https://discord.com/api/users/@me/guilds',
-                headers={'Authorization': f'Bearer {access_token}'}
+                headers={'Authorization': f'Bearer {access_token}'},
+                timeout=10,
             )
 
             if guilds_response.status_code == 200:
@@ -434,6 +437,10 @@ def discord_callback():
 @auth_bp.route('/auth/passkey', methods=['POST'])
 def passkey_login():
     """Login with developer passkey"""
+    # Security: reject if DEV_PASSKEY not set or still at insecure default
+    if not DEV_PASSKEY or DEV_PASSKEY == 'change-this-passkey-123':
+        return jsonify({'error': 'Developer passkey not configured on this server'}), 403
+
     data = request.get_json() or {}
     passkey = data.get('passkey', '')
 

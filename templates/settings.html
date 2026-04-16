@@ -38,7 +38,7 @@
         <form onsubmit="saveProfile(event)">
           <div class="input-group mb-4">
             <label class="input-label">Display name</label>
-            <input type="text" class="input" id="displayName" value="{{ current_user.discord_username if current_user else '' }}">
+            <input type="text" class="input" id="displayName" value="{{ current_user.discord_username if current_user else '' }}" aria-label="Display name">
           </div>
           <div class="input-group mb-6">
             <label class="input-label">Discord ID</label>
