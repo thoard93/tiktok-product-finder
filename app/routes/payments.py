@@ -216,8 +216,8 @@ def create_subscription():
         return jsonify({'error': 'Already subscribed', 'subscription': existing.to_dict()}), 400
 
     data = request.get_json(silent=True) or {}
-    coupon_code = data.get('coupon_code', '').strip().upper()
-    referral_code = data.get('referral_code', '').strip()
+    coupon_code = (data.get('coupon_code') or '').strip().upper()
+    referral_code = (data.get('referral_code') or '').strip()
 
     # Use coupon plan if valid coupon + coupon plan exists
     use_coupon_plan = (
