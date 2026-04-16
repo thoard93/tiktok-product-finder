@@ -78,9 +78,11 @@
         <a href="/app/admin/coupons" class="sidebar-link {% if active_page == 'coupons' %}active{% endif %}">
           <i data-lucide="ticket"></i> Coupons
         </a>
+        {# Price Blade hidden — uncomment to re-enable
         <a href="/ebay" class="sidebar-link {% if '/ebay' in request.path %}active{% endif %}" style="{% if '/ebay' in request.path %}border-left-color:#fdab43;color:#fdab43{% endif %}">
           <i data-lucide="tag"></i> Price Blade
         </a>
+        #}
         {% endif %}
       </nav>
 
