@@ -923,3 +923,56 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
   .campaign-banner{max-height:38px}
   .campaign-banner__countdown{font-size:10px;padding:2px 6px}
 }
+
+/* 41. SKIP LINK ============================================================ */
+.skip-link{position:absolute;top:-100px;left:16px;background:var(--accent);color:#fff;padding:8px 16px;border-radius:var(--radius);font-weight:700;font-size:14px;z-index:9999;transition:top .2s}
+.skip-link:focus{top:16px}
+
+/* 42. FOCUS VISIBLE STYLES ================================================= */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+button:focus-visible,a:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--teal);outline-offset:0}
+
+/* 43. HOW IT WORKS GRID (landing) ========================================== */
+.how-it-works-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;text-align:left}
+@media(max-width:768px){.how-it-works-grid{grid-template-columns:1fr;gap:24px}}
+
+/* 44. TESTIMONIALS ========================================================= */
+.testimonials-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.testimonial-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:24px;text-align:left}
+.testimonial-quote{font-size:14px;color:var(--text-secondary);line-height:1.7;margin-bottom:16px;font-style:italic}
+.testimonial-author{display:flex;align-items:center;gap:12px}
+.testimonial-avatar{width:36px;height:36px;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0}
+.testimonial-author strong{display:block;font-size:13px;color:var(--text-primary)}
+.testimonial-author span{font-size:11px;color:var(--text-faint)}
+@media(max-width:768px){.testimonials-grid{grid-template-columns:1fr;gap:16px}}
+
+/* 45. FAQ ACCORDION ======================================================== */
+.faq-list{display:flex;flex-direction:column;gap:0}
+.faq-item{border-bottom:1px solid rgba(255,255,255,0.08);padding:0}
+.faq-question{font-size:15px;font-weight:600;color:var(--text-primary);padding:16px 0;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.faq-question::after{content:'+';font-size:20px;font-weight:400;color:var(--text-faint);transition:transform .2s}
+.faq-item[open] .faq-question::after{content:'-'}
+.faq-answer{font-size:14px;color:var(--text-muted);line-height:1.7;padding:0 0 16px}
+.faq-question::-webkit-details-marker{display:none}
+
+/* 46. MOBILE FILTER IMPROVEMENTS =========================================== */
+@media(max-width:768px){
+  .filter-card{padding:var(--space-3)}
+  .filter-row{flex-direction:column;gap:var(--space-2)}
+  .filter-row .filter-input{width:100%!important;min-width:0!important}
+  .filter-actions{flex-wrap:wrap;gap:var(--space-2)}
+}
+
+/* 47. MOBILE BOTTOM NAV CONTENT PADDING ==================================== */
+@media(max-width:768px){
+  .page-content{padding-bottom:100px}
+}
+
+/* 48. LANDING TRENDING TABLE MOBILE ======================================== */
+@media(max-width:640px){
+  [style*="grid-template-columns:40px 1fr 80px 80px 80px"]{
+    grid-template-columns:28px 1fr 60px 60px!important;
+    font-size:11px!important;
+  }
+}

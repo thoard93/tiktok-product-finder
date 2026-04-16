@@ -111,6 +111,20 @@
 {% block scripts %}
 <script src="/static/js/dashboard.js"></script>
 <script>
+function applyCoupon() {
+  var code = document.getElementById("couponInput").value.trim().toUpperCase();
+  var result = document.getElementById("couponResult");
+  if (!code) { result.textContent = "Enter a coupon code"; result.style.color = "var(--accent)"; return; }
+  result.textContent = "Applying..."; result.style.color = "var(--text-muted)";
+  fetch("/api/validate-coupon", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code:code})})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.valid) { result.textContent = "✓ " + (data.message || "Code applied!"); result.style.color = "var(--teal)"; }
+      else { result.textContent = data.error || "Invalid code"; result.style.color = "var(--accent)"; }
+    })
+    .catch(function(){ result.textContent = "Code will be applied at checkout"; result.style.color = "var(--teal)"; });
+}
+
 async function startSubscription() {
   var btn = document.getElementById("subscribeBtn");
   setLoading(btn, true);

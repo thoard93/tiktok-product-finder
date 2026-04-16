@@ -58,7 +58,7 @@
             <div class="product-card-img-fallback"><i data-lucide="package"></i></div>
           {% endif %}
           {% if p.category %}<span class="badge badge-muted badge-overlay-tl">{{ p.category }}</span>{% endif %}
-          <span class="badge badge-overlay-tr {{ 'badge-green' if p.trending_score >= 80 else ('badge-gold' if p.trending_score >= 50 else 'badge-red') }}">{{ p.trending_score }}</span>
+          <span class="badge badge-overlay-tr {{ 'badge-green' if p.trending_score >= 60 else ('badge-gold' if p.trending_score >= 35 else 'badge-red') }}">{{ p.trending_score }}</span>
         </div>
         <div class="product-card-body">
           <div class="product-card-name">{{ p.product_name }}</div>
@@ -97,14 +97,14 @@
   <table class="product-table">
     <thead>
       <tr>
-        <th style="min-width:240px">Product</th>
-        <th>Commission</th>
-        <th>Price</th>
-        <th>7d Sales</th>
-        <th>Creators</th>
-        <th>Videos</th>
-        <th>Score</th>
-        <th></th>
+        <th scope="col" style="min-width:240px">Product</th>
+        <th scope="col">Commission</th>
+        <th scope="col">Price</th>
+        <th scope="col">7d Sales</th>
+        <th scope="col">Creators</th>
+        <th scope="col">Videos</th>
+        <th scope="col">Score</th>
+        <th scope="col"></th>
       </tr>
     </thead>
     <tbody>
@@ -114,7 +114,7 @@
         <td>
           <div class="product-row-name">
             {% if p.cached_image_url or p.image_url %}
-              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy" onerror="this.style.display='none'">
+              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="{{ p.product_name }}" loading="lazy" onerror="this.style.display='none'">
             {% endif %}
             <div style="min-width:0">
               <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>

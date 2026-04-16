@@ -10,6 +10,7 @@ function showFlash(message, type) {
   if (!c) return;
   var el = document.createElement("div");
   el.className = "flash-msg " + type;
+  el.setAttribute("role", "alert");
   el.innerHTML = "<span>" + esc(message) + "</span>" +
     '<button class="flash-close" onclick="dismissFlash(this.parentElement)">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>';
@@ -49,6 +50,15 @@ document.addEventListener("DOMContentLoaded", function () {
   if (cancel) cancel.addEventListener("click", function () { o.classList.remove("active"); _confirmCb = null; });
   if (confirm) confirm.addEventListener("click", function () { o.classList.remove("active"); if (typeof _confirmCb === "function") { _confirmCb(); _confirmCb = null; } });
   if (o) o.addEventListener("click", function (e) { if (e.target === o) { o.classList.remove("active"); _confirmCb = null; } });
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var modal = document.getElementById('modalOverlay');
+        if (modal && modal.classList.contains('active')) {
+            modal.classList.remove('active');
+        }
+    }
 });
 
 /* --- Active Nav Detection ------------------------------------------------- */

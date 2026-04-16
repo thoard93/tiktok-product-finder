@@ -24,7 +24,7 @@
         <div class="flex items-center gap-4 mb-6">
           <div class="avatar avatar-lg">
             {% if current_user and current_user.discord_avatar %}
-              <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
+              <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="{{ current_user.discord_username }} avatar">
             {% else %}
               {{ (current_user.discord_username or 'U')[0] | upper }}
             {% endif %}
@@ -112,7 +112,7 @@
           <div class="flex items-center gap-4 mb-4">
             <div class="avatar avatar-lg">
               {% if current_user.discord_avatar %}
-                <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
+                <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="{{ current_user.discord_username }} avatar">
               {% else %}
                 {{ current_user.discord_username[0] | upper }}
               {% endif %}

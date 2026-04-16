@@ -1,5 +1,8 @@
 {% extends "base_public.html" %}
 {% block title %}Vantage — TikTok Shop Product Research Platform{% endblock %}
+{% block meta_desc %}Vantage gives TikTok Shop affiliates real-time product data, commission rates, and trending scores to find winning products. Start free today.{% endblock %}
+{% block og_title %}Vantage — Find Winning TikTok Shop Products{% endblock %}
+{% block og_desc %}Real-time sales data, commission tracking, and AI-powered trending scores for TikTok Shop affiliate marketers. Plans from $19.99/mo.{% endblock %}
 
 {% block content %}
 {# ===== HERO ===== #}
@@ -11,7 +14,7 @@
     <h1 class="hero-title">Research products.<br>Find opportunities.<br><span style="color:var(--accent)">Earn commissions.</span></h1>
     <p class="hero-sub">Vantage gives TikTok Shop affiliates the data they need to find high-commission products with proven demand — before the market catches on.</p>
     <div class="hero-ctas">
-      <a href="/register" class="btn btn-primary btn-lg" style="font-size:15px;padding:14px 32px">Start for free &rarr;</a>
+      <a href="/register" class="btn btn-primary btn-lg" style="font-size:15px;padding:14px 32px">Get access in 60 seconds &rarr;</a>
       <a href="#pricing" class="btn btn-ghost btn-lg">View pricing</a>
     </div>
     <div style="margin-top:var(--space-6);display:flex;gap:var(--space-6);flex-wrap:wrap">
@@ -65,7 +68,7 @@
   <div style="max-width:900px;margin:0 auto;padding:0 24px;text-align:center">
     <span class="features-eyebrow">How it works</span>
     <h2 class="features-title" style="margin-bottom:48px">Three steps to your first commission</h2>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px;text-align:left">
+    <div class="how-it-works-grid">
       <div>
         <div style="width:40px;height:40px;border-radius:var(--radius);background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;margin-bottom:16px">1</div>
         <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Browse trending products</h3>
@@ -162,6 +165,37 @@
   </div>
 </section>
 
+{# ===== TESTIMONIALS ===== #}
+<section class="landing-section--alt" style="padding:clamp(48px,6vw,80px) 0">
+  <div style="max-width:900px;margin:0 auto;padding:0 24px;text-align:center">
+    <span class="features-eyebrow">Trusted by creators</span>
+    <h2 class="features-title" style="margin-bottom:40px">What affiliates are saying</h2>
+    <div class="testimonials-grid">
+      <div class="testimonial-card">
+        <p class="testimonial-quote">"Found 3 products doing $500/day in commissions my first week. The opportunity score is a game-changer."</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar" style="background:linear-gradient(135deg,#f953c6,#b91d73)">M</div>
+          <div><strong>Marcus T.</strong><span>TikTok Shop Seller</span></div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <p class="testimonial-quote">"I was using FastMoss but switched to Vantage. The data is just as good at a fraction of the price."</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar" style="background:linear-gradient(135deg,#4776e6,#1cb5e0)">S</div>
+          <div><strong>Sarah K.</strong><span>Content Creator</span></div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <p class="testimonial-quote">"The Brand Hunter feature helped me find an untapped niche. Made back the subscription cost in 2 days."</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar" style="background:linear-gradient(135deg,#56ab2f,#a8e063)">J</div>
+          <div><strong>James R.</strong><span>Affiliate Marketer</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 {# ===== PRICING ===== #}
 <section class="pricing-section" id="pricing">
   <div class="pricing-container">
@@ -224,6 +258,46 @@
           <div><strong>Instant access</strong><p>Subscribe and start researching products in under 60 seconds.</p></div>
         </div>
       </div>
+    </div>
+  </div>
+</section>
+
+{# ===== FAQ ===== #}
+<section class="landing-section--alt" style="padding:clamp(48px,6vw,80px) 0">
+  <div style="max-width:700px;margin:0 auto;padding:0 24px">
+    <div style="text-align:center;margin-bottom:40px">
+      <span class="features-eyebrow">FAQ</span>
+      <h2 class="features-title">Common questions</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary class="faq-question">How fresh is the product data?</summary>
+        <p class="faq-answer">Product data is synced daily from TikTok Shop via the EchoTik API. Sales, commission rates, and video counts are updated every 24 hours.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-question">What's included in the $19.99/month plan?</summary>
+        <p class="faq-answer">Everything — unlimited product research, Brand Hunter, analytics dashboard, AI assistant, TAP boosted commission links, Discord bot access, and daily data updates. No feature tiers.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-question">Can I cancel anytime?</summary>
+        <p class="faq-answer">Yes. Cancel from your Settings page with one click. Your access continues until the end of your billing period. No contracts or cancellation fees.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-question">What is the Opportunity Score?</summary>
+        <p class="faq-answer">A 0-99 composite score measuring affiliate potential. It factors in sales demand, momentum, commission rate, creator saturation gap, and price sweet spot to surface the best opportunities.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-question">What are TAP Boosted Links?</summary>
+        <p class="faq-answer">TAP (The Affiliate Program) links offer higher commission rates on select products through partner programs. You earn more per sale compared to standard TikTok Shop commissions.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-question">How is Vantage different from Kalodata or FastMoss?</summary>
+        <p class="faq-answer">Vantage is built specifically for affiliate sellers at an accessible $19.99/month price point. We offer the same core data (sales, commissions, creators) plus unique features like AI product assistant, TAP boosted links, and an integrated Discord bot.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-question">Do I need a TikTok Shop seller account?</summary>
+        <p class="faq-answer">No. Vantage is for affiliate marketers and content creators. You don't need a seller account — just sign up via Discord and start browsing products to promote.</p>
+      </details>
     </div>
   </div>
 </section>

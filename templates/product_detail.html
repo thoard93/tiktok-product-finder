@@ -185,7 +185,7 @@
         {% for v in videos[:5] %}
         <a href="{{ v.video_url }}" target="_blank" rel="noopener noreferrer" class="video-card" style="text-decoration:none">
           <div class="video-thumb">
-            {% if v.cover_url %}<img src="{{ v.cover_url }}" alt="" loading="lazy">{% endif %}
+            {% if v.cover_url %}<img src="{{ v.cover_url }}" alt="Video by {{ v.creator_name or 'creator' }}" loading="lazy">{% endif %}
             {% if v.duration_seconds %}<span class="badge badge-muted" style="position:absolute;bottom:4px;right:4px;font-size:10px">{{ v.duration_seconds }}s</span>{% endif %}
           </div>
           <div style="overflow:hidden">
@@ -210,7 +210,7 @@
       {% for sp in similar_products[:4] %}
       <a href="/app/products/{{ sp.product_id }}" class="video-card" style="text-decoration:none">
         <div class="video-thumb">
-          {% if sp.image_url or sp.cached_image_url %}<img src="{{ sp.cached_image_url or sp.image_url }}" alt="">{% endif %}
+          {% if sp.image_url or sp.cached_image_url %}<img src="{{ sp.cached_image_url or sp.image_url }}" alt="{{ sp.product_name }}">{% endif %}
         </div>
         <div>
           <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary)">{{ sp.product_name | truncate(35) }}</div>

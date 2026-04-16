@@ -64,13 +64,13 @@
       {% for p in products %}
       {% set cat_lower = (p.category or '')|lower %}
       {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-health' if 'health' in cat_lower else 'cat-default')))) %}
-      {% set score_color = '#0d9488' if p.trending_score >= 80 else ('#d97706' if p.trending_score >= 50 else '#dc2626') %}
+      {% set score_color = '#0d9488' if p.trending_score >= 60 else ('#d97706' if p.trending_score >= 35 else '#dc2626') %}
       <tr>
         <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
         <td>
           <div class="product-row-name">
             {% if p.cached_image_url or p.image_url %}
-              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="" loading="lazy"
+              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="{{ p.product_name }}" loading="lazy"
                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
               <div class="product-row-thumb-fallback {{ cat_class }}" style="display:none">{{ (p.product_name or '?')[0] | upper }}</div>
             {% else %}
