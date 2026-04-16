@@ -827,9 +827,14 @@ def fetch_creator_videos(unique_id: str, user_id: str = '',
               f"after {len(attempts)} attempts", flush=True)
         return []
 
-    # Debug: first-item keys so we can see the actual field names
+    # Debug: dump the first video so we can see the real field names
+    import json as _json
     first = raw_list[0] if isinstance(raw_list[0], dict) else {}
-    log.info("[EchoTik] creator video keys=%s", list(first.keys())[:40])
+    print(f"[EchoTik] FIRST VIDEO keys={list(first.keys())[:60]}", flush=True)
+    try:
+        print(f"[EchoTik] FIRST VIDEO sample={_json.dumps(first)[:800]}", flush=True)
+    except Exception:
+        pass
 
     videos = []
     for v in raw_list:
@@ -944,8 +949,13 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
               f"after {len(attempts)} attempts", flush=True)
         return []
 
+    import json as _json
     first = raw_list[0] if isinstance(raw_list[0], dict) else {}
-    print(f"[EchoTik] creator product keys={list(first.keys())[:40]}", flush=True)
+    print(f"[EchoTik] FIRST PRODUCT keys={list(first.keys())[:60]}", flush=True)
+    try:
+        print(f"[EchoTik] FIRST PRODUCT sample={_json.dumps(first)[:800]}", flush=True)
+    except Exception:
+        pass
 
     products = []
     for p in raw_list:

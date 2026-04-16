@@ -2511,6 +2511,82 @@ def api_creator_sales(unique_id):
     return jsonify({'products': products, 'count': len(products)})
 
 
+# ---------------------------------------------------------------------------
+# Image proxy — masks EchoTik's Asia-Pacific CDN behind our own host so
+# slow/flaky requests from US users don't leave avatars blank forever.
+# ---------------------------------------------------------------------------
+
+_IMAGE_PROXY_ALLOWED_HOSTS = (
+    'echosell-images.tos-ap-southeast-1.volces.com',
+    'echosell-images.tos-ap-southeast-1.bytedance.net',
+    'tiktokcdn.com', 'tiktokcdn-us.com',
+    'p16-sign-va.tiktokcdn.com', 'p16-sign-sg.tiktokcdn.com',
+    'p77-sign-va.tiktokcdn.com', 'p19-sign-va.tiktokcdn.com',
+    'p16-common-sign-va.tiktokcdn-us.com',
+    'byteimg.com', 'p16-shop.tiktokcdn-us.com',
+)
+
+_IMAGE_PROXY_CACHE = {}  # url -> (bytes, content_type, expires_at)
+_IMAGE_PROXY_CACHE_TTL = 3600  # 1 hour
+
+
+@views_bp.route('/api/image-proxy')
+@login_required
+def api_image_proxy():
+    """
+    Fetch a remote image via our backend and stream it back.
+    Only allow-listed hosts are permitted. Results cached in-memory.
+    """
+    from urllib.parse import urlparse
+    from flask import Response, abort
+
+    url = request.args.get('url', '').strip()
+    if not url or not url.startswith(('http://', 'https://')):
+        abort(400)
+    try:
+        host = urlparse(url).netloc.lower()
+    except Exception:
+        abort(400)
+    if not any(allowed in host for allowed in _IMAGE_PROXY_ALLOWED_HOSTS):
+        abort(403)
+
+    # Cache hit
+    now = datetime.utcnow().timestamp()
+    cached = _IMAGE_PROXY_CACHE.get(url)
+    if cached and cached[2] > now:
+        resp = Response(cached[0], content_type=cached[1])
+        resp.headers['Cache-Control'] = 'public, max-age=86400'
+        return resp
+
+    # Cache miss — fetch
+    try:
+        import requests as _requests
+        r = _requests.get(url, timeout=10, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; Vantage/1.0)',
+            'Referer': '',
+        })
+        if r.status_code != 200:
+            abort(502)
+        ctype = r.headers.get('Content-Type', 'image/jpeg').split(';')[0]
+        if not ctype.startswith('image/'):
+            abort(502)
+        body = r.content
+    except Exception:
+        abort(504)
+
+    # Cap cache at ~200 entries to avoid memory bloat
+    if len(_IMAGE_PROXY_CACHE) > 200:
+        # Drop 50 oldest
+        keys = sorted(_IMAGE_PROXY_CACHE.items(), key=lambda kv: kv[1][2])[:50]
+        for k, _ in keys:
+            _IMAGE_PROXY_CACHE.pop(k, None)
+
+    _IMAGE_PROXY_CACHE[url] = (body, ctype, now + _IMAGE_PROXY_CACHE_TTL)
+    resp = Response(body, content_type=ctype)
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp
+
+
 @views_bp.route('/api/creators/<unique_id>/similar')
 @api_auth
 def api_creator_similar(unique_id):

@@ -189,15 +189,18 @@
         <table class="product-table creator-products-table" id="creatorSalesTable">
           <thead>
             <tr>
-              <th scope="col" style="width:60px"></th>
+              <th scope="col" style="width:56px">Image</th>
               <th scope="col" style="min-width:220px">Product</th>
+              <th scope="col">Price</th>
               <th scope="col">Commission</th>
               <th scope="col">Est. Sales</th>
               <th scope="col">GMV</th>
+              <th scope="col">Videos</th>
+              <th scope="col" style="width:90px"></th>
             </tr>
           </thead>
           <tbody id="creatorSalesBody">
-            <tr><td colspan="5" style="padding:var(--space-6);text-align:center;color:var(--text-muted)">Loading products…</td></tr>
+            <tr><td colspan="8" style="padding:var(--space-6);text-align:center;color:var(--text-muted)">Loading products…</td></tr>
           </tbody>
         </table>
       </div>
@@ -458,24 +461,37 @@ async function loadSales() {
     console.log('[Creator] /sales response:', data);
     const prods = data.products || [];
     if (!prods.length) {
-      body.innerHTML = '<tr><td colspan="5" style="padding:var(--space-6);text-align:center;color:var(--text-muted)">No product promotions found.</td></tr>';
+      body.innerHTML = '<tr><td colspan="8" style="padding:var(--space-6);text-align:center;color:var(--text-muted)">No product promotions found.</td></tr>';
       return;
     }
-    const blurClass = IS_PRO ? '' : ' blurred-data';
+    const blurCls = IS_PRO ? '' : 'blurred-data';
     body.innerHTML = prods.map(p => {
-      const img = p.image_url
-        ? '<img src="' + escapeHtml(p.image_url) + '" class="creator-product-thumb" alt="" onerror="this.style.display=\'none\'">'
+      // Route product images through the proxy too — most come from
+      // the same Asian CDN.
+      const rawImg = p.image_url || '';
+      const imgSrc = rawImg ? ('/api/image-proxy?url=' + encodeURIComponent(rawImg)) : '';
+      const img = imgSrc
+        ? '<img src="' + imgSrc + '" class="creator-product-thumb" alt="" loading="lazy" referrerpolicy="no-referrer" '
+          + 'onerror="this.onerror=null;this.style.display=\'none\';this.parentNode.classList.add(\'creator-product-thumb-cell--empty\')">'
         : '<div class="creator-product-thumb creator-product-thumb--fallback"></div>';
       const name = escapeHtml(p.product_name || 'Untitled');
       const link = p.product_id
         ? '<a href="/app/products/shop_' + encodeURIComponent(p.product_id) + '" style="color:var(--text-primary);font-weight:600;text-decoration:none">' + name + '</a>'
         : name;
+      const priceCell = p.price ? '$' + Number(p.price).toFixed(2) : '—';
+      const commissionPct = ((p.commission_rate || 0) * 100).toFixed(1);
+      const videoCount = p.video_count || p.video_cnt || 0;
       return '<tr>'
-        + '<td>' + img + '</td>'
+        + '<td class="creator-product-thumb-cell">' + img + '</td>'
         + '<td>' + link + '</td>'
-        + '<td><span class="' + blurClass.trim() + '">' + ((p.commission_rate || 0) * 100).toFixed(1) + '%</span></td>'
-        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurClass.trim() + '">' + Number(p.sales || 0).toLocaleString() + '</span></td>'
-        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurClass.trim() + '">$' + Number(p.gmv || 0).toLocaleString(undefined,{maximumFractionDigits:0}) + '</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurCls + '">' + priceCell + '</span></td>'
+        + '<td><span class="' + blurCls + '">' + commissionPct + '%</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurCls + '">' + Number(p.sales || 0).toLocaleString() + '</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums;font-weight:600"><span class="' + blurCls + '">$' + Number(p.gmv || 0).toLocaleString(undefined,{maximumFractionDigits:0}) + '</span></td>'
+        + '<td style="font-variant-numeric:tabular-nums"><span class="' + blurCls + '">' + Number(videoCount).toLocaleString() + '</span></td>'
+        + '<td>' + (p.product_id
+            ? '<a href="/app/products/shop_' + encodeURIComponent(p.product_id) + '" class="btn btn-ghost btn-sm" style="font-size:12px">View</a>'
+            : '') + '</td>'
         + '</tr>';
     }).join('');
   } catch(e) {
@@ -560,12 +576,12 @@ async function loadSimilar() {
       const letter = escapeHtml((c.nick_name || c.unique_id || '?')[0].toUpperCase());
       // NOTE: TikTok CDN URLs (p16-sign-va.tiktokcdn.com) expire after a few
       // hours. They render fine on first load; a proxy is a future fix.
-      const avatarUrl = c.avatar_url || c.avatar || '';
-      // NOTE: EchoTik's tos-ap-southeast-1.volces.com CDN is in Asia and
-      // frequently times out from US. Swap to the placeholder if the
-      // image hasn't loaded within 5s.
-      const avatar = avatarUrl
-        ? '<img src="' + escapeHtml(avatarUrl) + '" '
+      const rawAvatar = c.avatar_url || c.avatar || '';
+      // Route EchoTik's Asian CDN through our own image proxy — US
+      // browsers time out directly but Render can cache + rewarm.
+      const proxied = rawAvatar ? '/api/image-proxy?url=' + encodeURIComponent(rawAvatar) : '';
+      const avatar = proxied
+        ? '<img src="' + proxied + '" '
           + 'alt="' + escapeHtml(c.nick_name || c.unique_id) + '" '
           + 'loading="lazy" referrerpolicy="no-referrer" '
           + 'class="creator-similar-avatar similar-creator-avatar" '
