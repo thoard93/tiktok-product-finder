@@ -2605,24 +2605,45 @@ def api_image_proxy():
         resp.headers['Cache-Control'] = 'public, max-age=86400'
         return resp
 
-    # Cache miss — fetch. The EchoTik Asian CDN has been flaky from US
-    # Render instances; log everything so we can see why on failure.
+    # Cache miss — fetch. Volcengine's TOS buckets return 403 AccessDenied
+    # unless the request includes the Referer the bucket is configured to
+    # allow. EchoTik's bucket allows echotik.live referers.
+    referers_to_try = [
+        'https://echotik.live/',
+        'https://open.echotik.live/',
+        'https://www.echotik.live/',
+    ]
+    last_failure = None
+    body = b''
+    ctype = ''
+    status_code = 0
+
     try:
         import requests as _requests
-        r = _requests.get(url, timeout=15, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                          'AppleWebKit/537.36 (KHTML, like Gecko) '
-                          'Chrome/124.0.0.0 Safari/537.36',
-            'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-        })
-        ctype = r.headers.get('Content-Type', 'image/jpeg').split(';')[0].strip()
-        body = r.content
-        body_len = len(body) if body else 0
-        if r.status_code != 200 or not ctype.startswith('image/') or body_len < 200:
-            print(f"[ImageProxy] FAIL url={url[:140]} status={r.status_code} "
-                  f"ctype={ctype!r} bytes={body_len} "
-                  f"body_head={body[:120]!r}", flush=True)
+        for ref in referers_to_try:
+            r = _requests.get(url, timeout=15, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                              'AppleWebKit/537.36 (KHTML, like Gecko) '
+                              'Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': ref,
+                'Origin': ref.rstrip('/'),
+            })
+            status_code = r.status_code
+            ctype = r.headers.get('Content-Type', '').split(';')[0].strip()
+            body = r.content or b''
+            if status_code == 200 and ctype.startswith('image/') and len(body) >= 200:
+                break  # success
+            last_failure = (status_code, ctype, len(body), body[:120])
+
+        if not (status_code == 200 and ctype.startswith('image/') and len(body) >= 200):
+            print(f"[ImageProxy] FAIL url={url[:140]} "
+                  f"tried_referers={len(referers_to_try)} "
+                  f"last_status={last_failure[0] if last_failure else '?'} "
+                  f"last_ctype={last_failure[1] if last_failure else '?'!r} "
+                  f"last_bytes={last_failure[2] if last_failure else '?'} "
+                  f"last_head={last_failure[3] if last_failure else ''!r}", flush=True)
             abort(502)
     except Exception as e:
         print(f"[ImageProxy] NETWORK_ERR url={url[:140]} err={e}", flush=True)

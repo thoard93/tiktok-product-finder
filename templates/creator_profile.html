@@ -5,6 +5,18 @@
 <a href="javascript:void(0)" class="detail-back" onclick="window.history.length>1?window.history.back():window.location='/app/creators'"><i data-lucide="arrow-left"></i> Back</a>
 
 {# ===== ERROR STATE ===== #}
+{# ===== Video Modal (shared) ===== #}
+<div class="video-modal" id="videoModal" aria-hidden="true" role="dialog">
+  <div class="video-modal__backdrop" onclick="closeVideoModal()"></div>
+  <div class="video-modal__content" role="document">
+    <button class="video-modal__close" onclick="closeVideoModal()" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="video-modal__frame" id="videoModalFrame"></div>
+    <a class="video-modal__external" id="videoModalExternal" href="#" target="_blank" rel="noopener noreferrer">Open on TikTok ↗</a>
+  </div>
+</div>
+
 {% if not creator %}
   <div class="card" style="max-width:520px;margin:var(--space-8) auto;padding:var(--space-8);text-align:center">
     <div style="width:64px;height:64px;border-radius:var(--radius-full);background:var(--accent-glow);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-4)">
@@ -382,6 +394,32 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 
+// ----- Video modal (TikTok embed) -----
+function openVideoModal(videoId, externalUrl) {
+  if (!videoId) return;
+  const modal = document.getElementById('videoModal');
+  const frame = document.getElementById('videoModalFrame');
+  const ext = document.getElementById('videoModalExternal');
+  frame.innerHTML = '<iframe src="https://www.tiktok.com/embed/v2/' + encodeURIComponent(videoId)
+    + '?autoplay=1&loop=1&controls=1" allow="autoplay; encrypted-media; fullscreen" '
+    + 'allowfullscreen loading="lazy"></iframe>';
+  if (ext) ext.href = externalUrl || ('https://www.tiktok.com/video/' + videoId);
+  modal.classList.add('video-modal--open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+function closeVideoModal() {
+  const modal = document.getElementById('videoModal');
+  const frame = document.getElementById('videoModalFrame');
+  frame.innerHTML = '';   // stop playback
+  modal.classList.remove('video-modal--open');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeVideoModal();
+});
+
 // ----- Videos -----
 async function loadVideos() {
   try {
@@ -428,11 +466,12 @@ function renderVideos(sortBy) {
       : '<div class="creator-video-thumb-fallback"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>';
     const productBadge = v.has_product
       ? '<span class="creator-video-shop">🛍 Shop</span>' : '';
-    const href = v.video_url
-      ? '<a href="' + escapeHtml(v.video_url) + '" target="_blank" rel="noopener noreferrer" class="creator-video-card">'
-      : '<div class="creator-video-card">';
-    const closer = v.video_url ? '</a>' : '</div>';
-    return href
+    const vidId = v.video_id || '';
+    const ttUrl = v.video_url || (vidId ? 'https://www.tiktok.com/video/' + vidId : '');
+    const clickable = vidId
+      ? 'role="button" tabindex="0" onclick="openVideoModal(\'' + vidId + '\', ' + JSON.stringify(ttUrl) + ')"'
+      : '';
+    return '<div class="creator-video-card" ' + clickable + '>'
       + '<div class="creator-video-thumb-wrap">' + cover + productBadge + '</div>'
       + '<div class="creator-video-meta">'
       + '<div class="creator-video-title">' + escapeHtml(v.title || 'Untitled video') + '</div>'
@@ -441,7 +480,7 @@ function renderVideos(sortBy) {
       + '<span><i data-lucide="heart"></i> ' + formatCount(v.like_count) + '</span>'
       + (v.created_at ? '<span>' + escapeHtml(relativeTime(v.created_at)) + '</span>' : '')
       + '</div></div>'
-      + closer;
+      + '</div>';
   }).join('');
 
   if (window.lucide) lucide.createIcons();
@@ -579,15 +618,18 @@ async function loadSimilar() {
       // NOTE: TikTok CDN URLs (p16-sign-va.tiktokcdn.com) expire after a few
       // hours. They render fine on first load; a proxy is a future fix.
       const rawAvatar = c.avatar_url || c.avatar || '';
-      // Route EchoTik's Asian CDN through our own image proxy — US
-      // browsers time out directly but Render can cache + rewarm.
+      // Route EchoTik's Asian CDN through our own image proxy.
       const proxied = rawAvatar ? '/api/image-proxy?url=' + encodeURIComponent(rawAvatar) : '';
+      // If the proxy 502s, swap the <img> for a letter-initial circle.
+      const onerr = 'if(this.dataset.swapped)return;this.dataset.swapped=1;'
+                  + 'this.outerHTML=\'<div class="creator-similar-avatar creator-similar-avatar--fallback">'
+                  + letter + '</div>\';';
       const avatar = proxied
         ? '<img src="' + proxied + '" '
           + 'alt="' + escapeHtml(c.nick_name || c.unique_id) + '" '
           + 'loading="lazy" referrerpolicy="no-referrer" '
           + 'class="creator-similar-avatar similar-creator-avatar" '
-          + 'onerror="this.onerror=null;this.src=\'/static/img/avatar-placeholder.png\'" '
+          + 'onerror="' + onerr + '" '
           + 'onload="this.dataset.loaded=\'1\'">'
         : '<div class="creator-similar-avatar creator-similar-avatar--fallback">' + letter + '</div>';
       const eng = c.interaction_rate;
