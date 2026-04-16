@@ -1528,10 +1528,13 @@ def get_hot_products():
     with app.app_context():
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=DAYS_BEFORE_REPEAT)
 
-        # Wider filters: just needs sales + commission, score does the rest
+        # Original filters: opportunity zone videos + sales + commission (no ad spend)
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
         products = Product.query.filter(
-            Product.sales_7d >= 20,           # At least some sales
-            Product.commission_rate > 0,      # Must have commission
+            video_count_field >= 40,           # Min 40 all-time videos
+            video_count_field <= 120,          # Max 120 (opportunity zone)
+            Product.sales_7d >= 100,           # 100+ 7D sales
+            Product.commission_rate > 0,       # Must have commission
             db.or_(Product.product_status == 'active', Product.product_status.is_(None)),
             db.or_(
                 Product.last_shown_hot == None,
