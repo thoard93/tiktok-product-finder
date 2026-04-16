@@ -19,19 +19,40 @@
     </div>
   </div>
 
-  {# Step 1: Browse brands from EchoTik ranking #}
-  <div class="mb-4">
-    <label class="label">Step 1 &mdash; Load &amp; Pick Brands</label>
-    <p class="text-xs text-muted mb-3">Load brands from TikTok Shop, sorted by revenue. Pick how many to fetch, then select the ones you want to deep scan.</p>
-    <div class="flex gap-2 items-center mb-3" style="flex-wrap:wrap">
-      <span class="text-sm font-semibold">Load top</span>
+  {# Step 1: Search or browse brands #}
+  <div class="mb-5">
+    <label class="label">Step 1 &mdash; Find Brands to Scan</label>
+    <p class="text-xs text-muted mb-3">Search for a specific brand by name, or browse the TikTok Shop seller list.</p>
+
+    {# Search by name (primary method) #}
+    <div class="brand-search-wrap mb-4">
+      <div style="display:flex;gap:var(--space-2);align-items:center">
+        <div style="position:relative;flex:1">
+          <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-faint);pointer-events:none"></i>
+          <input type="text" class="input" id="brandSearch" placeholder="Search by brand name (e.g. Nike, QVC, Shark, Dr.Melaxin...)" autocomplete="off" aria-label="Search brands" style="padding-left:32px">
+        </div>
+      </div>
+      <div class="brand-search-dropdown" id="brandDropdown"></div>
+    </div>
+
+    {# OR divider #}
+    <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:11px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.08em">or browse rankings</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    {# Browse from ranking list (secondary method) #}
+    <div class="flex gap-2 items-center" style="flex-wrap:wrap">
+      <span class="text-sm text-muted">Load</span>
       <select class="input" id="fetchCount" style="width:auto" aria-label="How many brands to load">
         <option value="20">20 brands</option>
         <option value="50" selected>50 brands</option>
         <option value="100">100 brands</option>
       </select>
-      <button class="btn btn-primary btn-sm" id="browseBtn" onclick="browseBrands()">
-        <i data-lucide="search" style="width:14px;height:14px"></i> Load Brands
+      <span class="text-sm text-muted">from seller list</span>
+      <button class="btn btn-ghost btn-sm" id="browseBtn" onclick="browseBrands()">
+        <i data-lucide="list" style="width:14px;height:14px"></i> Browse
       </button>
       <span class="text-xs text-muted" id="browseStatus"></span>
     </div>
@@ -188,7 +209,55 @@
 
 {% block scripts %}
 <script>
-var loadedBrands = [], activeJobId = null;
+var loadedBrands = [], activeJobId = null, searchedBrands = [];
+
+/* ═══════ BRAND SEARCH TYPEAHEAD ═══════ */
+var searchTimeout;
+document.getElementById('brandSearch').addEventListener('input', function() {
+  var q = this.value.trim();
+  clearTimeout(searchTimeout);
+  if (q.length < 2) { document.getElementById('brandDropdown').classList.remove('visible'); return; }
+  searchTimeout = setTimeout(function() {
+    fetch('/app/brand-hunter/search?q=' + encodeURIComponent(q))
+      .then(function(r) { return r.json(); })
+      .then(function(brands) {
+        var dd = document.getElementById('brandDropdown');
+        if (!brands || !brands.length) { dd.innerHTML = '<div class="brand-search-item" style="color:var(--text-muted)">No brands found for "' + q + '"</div>'; dd.classList.add('visible'); return; }
+        dd.innerHTML = brands.map(function(b) {
+          var letter = (b.name || '?')[0].toUpperCase();
+          return '<div class="brand-search-item" onclick="addSearchedBrand(\'' + (b.shop_id||'') + '\',\'' + (b.name||'').replace(/'/g,"\\'") + '\',\'' + (b.category||'') + '\',' + (b.gmv_30d||0) + ')">'
+            + '<div class="brand-search-item__avatar">' + letter + '</div>'
+            + '<div class="brand-search-item__info"><div class="brand-search-item__name">' + (b.name||'?') + '</div>'
+            + '<div class="brand-search-item__cat">' + (b.category || 'Brand') + (b.gmv_30d ? ' · $' + Number(b.gmv_30d).toLocaleString() + ' GMV' : '') + '</div></div></div>';
+        }).join('');
+        dd.classList.add('visible');
+      }).catch(function() { document.getElementById('brandDropdown').classList.remove('visible'); });
+  }, 300);
+});
+document.addEventListener('click', function(e) { if (!e.target.closest('.brand-search-wrap')) document.getElementById('brandDropdown').classList.remove('visible'); });
+
+function addSearchedBrand(shopId, name, category, gmv) {
+  /* Add to loadedBrands so it appears in the table */
+  if (loadedBrands.some(function(b) { return b.shop_id === shopId; })) {
+    document.getElementById('brandDropdown').classList.remove('visible');
+    document.getElementById('brandSearch').value = '';
+    return; /* already in list */
+  }
+  var brand = { shop_id: shopId, name: name, category: category, gmv_30d: gmv, sales_30d: 0, product_count: 0, rank: loadedBrands.length + 1, already_scanned: false };
+  loadedBrands.push(brand);
+  renderBrandList();
+  /* Auto-check the newly added brand */
+  var checks = document.querySelectorAll('.brand-check');
+  if (checks.length) { checks[checks.length - 1].checked = true; }
+  updateCount();
+  document.getElementById('brandBrowseList').style.display = 'block';
+  document.getElementById('pageRangeSection').style.display = 'block';
+  document.getElementById('brandDropdown').classList.remove('visible');
+  document.getElementById('brandSearch').value = '';
+  document.getElementById('browseStatus').textContent = loadedBrands.length + ' brands in list';
+}
+
+/* ═══════ BROWSE BRANDS (secondary) ═══════ */
 
 /* Browse brands — fetch pool, sort by GMV, assign rank */
 async function browseBrands() {
@@ -266,9 +335,13 @@ function getPageRange() {
 /* Launch scan */
 async function launchScan() {
   var checked = document.querySelectorAll('.brand-check:checked');
-  if (!checked.length) { alert('Select at least one brand to scan'); return; }
+  if (!checked.length) { alert('Select at least one brand from the list above'); return; }
   var brands = [];
-  checked.forEach(function(c) { var b = loadedBrands[parseInt(c.dataset.idx)]; if (b) brands.push({shop_id: b.shop_id, name: b.name}); });
+  checked.forEach(function(c) {
+    var idx = parseInt(c.dataset.idx);
+    var b = loadedBrands[idx];
+    if (b) brands.push({shop_id: b.shop_id, name: b.name});
+  });
   var range = getPageRange();
   var btn = document.getElementById('launchBtn');
   btn.disabled = true; btn.style.opacity = '0.6';
