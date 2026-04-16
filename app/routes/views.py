@@ -10,7 +10,7 @@ from datetime import timedelta
 from flask import Blueprint, render_template, redirect, session, request, jsonify, flash
 from sqlalchemy import desc, or_
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView, CampaignBanner, CouponCode, CouponRedemption, ScannedBrand, BrandProduct, BrandScanJob
+from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView, CampaignBanner, CouponCode, CouponRedemption, ScannedBrand, BrandProduct, BrandScanJob, FavoritedCreator
 from app.routes.auth import get_current_user
 
 
@@ -570,6 +570,7 @@ def _products_list_inner(ctx):
 @login_required
 def favorites_page():
     ctx = _base_context('favorites')
+    user = ctx['current_user']
     products = Product.query.filter_by(is_favorite=True).filter(
         _active_filter
     ).order_by(desc(Product.sales_7d)).all()
@@ -577,6 +578,18 @@ def favorites_page():
         p.trending_score = _calc_score(p)
         p.lifecycle = _calc_lifecycle(p)
     ctx['products'] = products
+
+    # Saved creators
+    saved_creators = []
+    try:
+        if user:
+            saved_creators = FavoritedCreator.query.filter_by(user_id=user.id).order_by(
+                FavoritedCreator.created_at.desc()
+            ).all()
+    except Exception:
+        pass
+    ctx['saved_creators'] = saved_creators
+
     return render_template('favorites.html', **ctx)
 
 
@@ -2369,3 +2382,127 @@ def brand_hunter_delete(brand_id):
         db.session.delete(brand)
         db.session.commit()
     return redirect('/app/brand-hunter')
+
+
+# ---------------------------------------------------------------------------
+# Creator / Influencer search and profile
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/app/creators')
+@login_required
+def creators_index():
+    """Creators page — shows saved creators + search prompt."""
+    ctx = _base_context('creators')
+    user = ctx['current_user']
+    saved = []
+    try:
+        if user:
+            saved = FavoritedCreator.query.filter_by(user_id=user.id).order_by(
+                FavoritedCreator.created_at.desc()
+            ).all()
+    except Exception:
+        pass
+    ctx['saved_creators'] = saved
+    return render_template('creators.html', **ctx)
+
+
+@views_bp.route('/api/creators/search')
+@login_required
+def api_creators_search():
+    """Typeahead creator search via EchoTik influencer list."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    try:
+        from app.services.echotik import search_influencers
+        results = search_influencers(q, page=1, limit=10)
+        return jsonify(results)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[Creators] search '{q}' error: {e}")
+        return jsonify([])
+
+
+@views_bp.route('/app/creators/<unique_id>')
+@login_required
+def creator_profile(unique_id):
+    """Creator profile page — merges EchoTik batch + realtime detail."""
+    import json as _json
+    ctx = _base_context('creators')
+    user = ctx['current_user']
+
+    try:
+        from app.services.echotik import get_influencer_detail
+        detail = get_influencer_detail(unique_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[Creators] detail {unique_id} error: {e}")
+        detail = {}
+
+    if not detail:
+        from flask import abort
+        abort(404)
+
+    # Parse JSON-encoded behavior fields
+    def _parse_json_field(raw):
+        if not raw:
+            return None
+        if isinstance(raw, (list, dict)):
+            return raw
+        try:
+            return _json.loads(raw)
+        except (ValueError, TypeError):
+            return None
+
+    detail['video_publish_week'] = _parse_json_field(detail.get('influencer_video_publish_week'))
+    detail['video_publish_hour'] = _parse_json_field(detail.get('influencer_video_publish_hour'))
+    detail['video_duration_level'] = _parse_json_field(detail.get('influencer_video_duration_level'))
+
+    # Check if current user has saved this creator
+    is_saved = False
+    try:
+        if user:
+            is_saved = FavoritedCreator.query.filter_by(
+                user_id=user.id, unique_id=unique_id
+            ).first() is not None
+    except Exception:
+        pass
+
+    ctx['creator'] = detail
+    ctx['is_saved'] = is_saved
+    return render_template('creator_profile.html', **ctx)
+
+
+@views_bp.route('/api/creators/<unique_id>/favorite', methods=['POST'])
+@api_auth
+def api_toggle_creator_favorite(unique_id):
+    """Toggle save/unsave a creator for the current user."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    data = request.get_json(silent=True) or {}
+
+    existing = FavoritedCreator.query.filter_by(user_id=user.id, unique_id=unique_id).first()
+    if existing:
+        db.session.delete(existing)
+        db.session.commit()
+        return jsonify({'saved': False})
+
+    fav = FavoritedCreator(
+        user_id=user.id,
+        unique_id=unique_id,
+        user_id_tiktok=str(data.get('user_id') or ''),
+        nick_name=(data.get('nick_name') or '')[:200],
+        avatar=(data.get('avatar') or '')[:500],
+        total_followers_cnt=int(data.get('total_followers_cnt') or 0),
+        ec_score=int(data.get('ec_score') or 0),
+        region=(data.get('region') or 'US')[:50],
+    )
+    db.session.add(fav)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to save'}), 500
+    return jsonify({'saved': True})

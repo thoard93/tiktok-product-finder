@@ -4,9 +4,21 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">My Favorites</h1>
-  <p class="page-subtitle">Products you've saved for quick access</p>
+  <p class="page-subtitle">Products and creators you've saved for quick access</p>
 </div>
 
+{# ===== TABS ===== #}
+<div style="display:flex;gap:var(--space-2);border-bottom:1px solid var(--border);margin-bottom:var(--space-5)">
+  <button class="fav-tab fav-tab--active" data-tab="products" onclick="switchFavTab('products')" style="background:none;border:none;padding:10px 16px;font-size:13px;font-weight:700;color:var(--accent);border-bottom:2px solid var(--accent);cursor:pointer;margin-bottom:-1px">
+    Products <span style="color:var(--text-faint);font-weight:500;font-size:12px">({{ products | length if products else 0 }})</span>
+  </button>
+  <button class="fav-tab" data-tab="creators" onclick="switchFavTab('creators')" style="background:none;border:none;padding:10px 16px;font-size:13px;font-weight:700;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-1px">
+    Creators <span style="color:var(--text-faint);font-weight:500;font-size:12px">({{ saved_creators | length if saved_creators else 0 }})</span>
+  </button>
+</div>
+
+{# ===== PRODUCTS TAB ===== #}
+<div id="favTab-products">
 {% if products and products | length > 0 %}
 <div class="product-table-wrap">
   <table class="product-table">
@@ -73,9 +85,84 @@
   <div class="empty-icon">
     <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
   </div>
-  <h3 class="empty-title">No favorites yet</h3>
-  <p class="empty-desc">Click the heart icon on any product to save it here for quick access.</p>
+  <h3 class="empty-title">No favorited products yet</h3>
+  <p class="empty-desc">Click the heart icon on any product to save it here.</p>
   <a href="/app/products" class="btn btn-primary">Browse Products</a>
 </div>
 {% endif %}
+</div>
+
+{# ===== CREATORS TAB ===== #}
+<div id="favTab-creators" style="display:none">
+{% if saved_creators and saved_creators | length > 0 %}
+<div class="product-table-wrap">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th scope="col" style="width:36px">#</th>
+        <th scope="col" style="min-width:220px">Creator</th>
+        <th scope="col">Region</th>
+        <th scope="col">Followers</th>
+        <th scope="col">EC Score</th>
+        <th scope="col">Saved</th>
+        <th scope="col" style="width:100px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in saved_creators %}
+      <tr>
+        <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            {% if c.avatar %}
+              <img src="{{ c.avatar }}" alt="{{ c.nick_name }}" style="width:36px;height:36px;border-radius:var(--radius-full);object-fit:cover" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+              <div class="brand-letter-avatar" style="display:none">{{ (c.nick_name or '?')[0] | upper }}</div>
+            {% else %}
+              <div class="brand-letter-avatar">{{ (c.nick_name or '?')[0] | upper }}</div>
+            {% endif %}
+            <div style="min-width:0">
+              <a href="/app/creators/{{ c.unique_id }}" style="color:var(--text-primary);font-weight:700;font-size:14px;text-decoration:none">{{ c.nick_name or c.unique_id }}</a>
+              <div style="font-size:11px;color:var(--text-faint)">@{{ c.unique_id }}</div>
+            </div>
+          </div>
+        </td>
+        <td style="font-size:12px;color:var(--text-muted)">{{ c.region or '—' }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ c.total_followers_cnt | format_number }}{% else %}<span class="blurred-data">1.2M</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ c.ec_score or 0 }}{% else %}<span class="blurred-data">74</span>{% endif %}</td>
+        <td style="font-size:12px;color:var(--text-faint);font-variant-numeric:tabular-nums">{{ c.created_at.strftime('%b %d') if c.created_at else '—' }}</td>
+        <td><a href="/app/creators/{{ c.unique_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon"><i data-lucide="users" style="width:64px;height:64px"></i></div>
+  <h3 class="empty-title">No saved creators yet</h3>
+  <p class="empty-desc">Search for a creator and click "Save Creator" to track them here.</p>
+  <a href="/app/creators" class="btn btn-primary">Find Creators</a>
+</div>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchFavTab(tab) {
+  document.querySelectorAll('.fav-tab').forEach(function(b) {
+    var active = b.dataset.tab === tab;
+    b.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
+    b.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+  });
+  document.getElementById('favTab-products').style.display = tab === 'products' ? '' : 'none';
+  document.getElementById('favTab-creators').style.display = tab === 'creators' ? '' : 'none';
+  try { history.replaceState(null, '', '?tab=' + tab); } catch(e) {}
+}
+/* Auto-switch to creators tab if ?tab=creators */
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('tab') === 'creators') switchFavTab('creators');
+})();
+</script>
 {% endblock %}

@@ -44,6 +44,9 @@
         <a href="/app/brand-hunter" class="sidebar-link {% if active_page == 'brands' %}active{% endif %}">
           <i data-lucide="store"></i> Brand Hunter
         </a>
+        <a href="/app/creators" class="sidebar-link {% if active_page == 'creators' %}active{% endif %}">
+          <i data-lucide="users"></i> Creators
+        </a>
         <a href="/app/tap-lists" class="sidebar-link {% if active_page == 'boosted' %}active{% endif %}">
           <i data-lucide="zap"></i> Boosted Lists
           {% if is_pro %}<span class="nav-badge" style="background:var(--teal-dim);color:var(--teal);font-size:9px">NEW</span>{% endif %}
@@ -112,9 +115,17 @@
     {# ===== MAIN ===== #}
     <main class="main-area">
       <header class="topbar">
-        <div class="topbar-search">
+        <div class="topbar-search" style="position:relative">
           <i data-lucide="search"></i>
-          <input type="text" class="input" placeholder="Search products, categories, creators..." id="globalSearch" aria-label="Search products, categories, creators">
+          <input type="text" class="input" placeholder="Search..." id="globalSearch" autocomplete="off" aria-label="Global search">
+          <div id="globalSearchTabs" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);z-index:100;overflow:hidden;margin-top:4px">
+            <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0">
+              <button class="global-search-tab global-search-tab--active" data-tab="products" onclick="setGlobalSearchTab('products')" style="flex:1;background:none;border:none;padding:10px;font-size:12px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);cursor:pointer">Products</button>
+              <button class="global-search-tab" data-tab="brands" onclick="setGlobalSearchTab('brands')" style="flex:1;background:none;border:none;padding:10px;font-size:12px;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer">Brands</button>
+              <button class="global-search-tab" data-tab="creators" onclick="setGlobalSearchTab('creators')" style="flex:1;background:none;border:none;padding:10px;font-size:12px;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer">Creators</button>
+            </div>
+            <div id="globalSearchResults" style="max-height:340px;overflow-y:auto"></div>
+          </div>
         </div>
         <div class="topbar-right">
           <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
@@ -312,6 +323,113 @@
         requestAnimationFrame(tick);
       }
       tick();
+    });
+  })();
+  </script>
+
+  {# Global search autocomplete with tabs #}
+  <script>
+  (function() {
+    var currentTab = 'products';
+    var debounceTimer;
+    var searchInput = document.getElementById('globalSearch');
+    var tabsPanel = document.getElementById('globalSearchTabs');
+    var resultsEl = document.getElementById('globalSearchResults');
+    if (!searchInput || !tabsPanel) return;
+
+    window.setGlobalSearchTab = function(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.global-search-tab').forEach(function(b) {
+        var active = b.dataset.tab === tab;
+        b.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
+        b.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+      });
+      if (searchInput.value.trim().length >= 2) runSearch();
+    };
+
+    function renderLoading() {
+      resultsEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px"><span style="display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite"></span> Searching...</div>';
+    }
+
+    function renderEmpty(type) {
+      resultsEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">No ' + type + ' found</div>';
+    }
+
+    function renderCreators(list) {
+      if (!list || !list.length) { renderEmpty('creators'); return; }
+      resultsEl.innerHTML = list.map(function(c) {
+        var letter = (c.nick_name || c.unique_id || '?')[0].toUpperCase();
+        var avatar = c.avatar
+          ? '<img src="' + c.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent=\'' + letter + '\'">'
+          : letter;
+        var followers = c.total_followers_cnt ? Number(c.total_followers_cnt).toLocaleString() : '—';
+        var ec = c.ec_score ? '<span style="background:var(--teal-dim);color:var(--teal);font-size:10px;font-weight:700;padding:2px 6px;border-radius:var(--radius-full);margin-left:6px">' + c.ec_score + '</span>' : '';
+        return '<a href="/app/creators/' + encodeURIComponent(c.unique_id) + '" class="brand-search-item" style="text-decoration:none;color:inherit">'
+          + '<div class="brand-search-item__avatar">' + avatar + '</div>'
+          + '<div class="brand-search-item__info">'
+          + '<div class="brand-search-item__name">' + (c.nick_name || c.unique_id) + ec + '</div>'
+          + '<div class="brand-search-item__cat">@' + c.unique_id + ' · ' + followers + ' followers</div>'
+          + '</div></a>';
+      }).join('');
+    }
+
+    function renderBrands(list) {
+      if (!list || !list.length) { renderEmpty('brands'); return; }
+      resultsEl.innerHTML = list.map(function(b) {
+        var letter = (b.name || '?')[0].toUpperCase();
+        var gmv = b.gmv_30d ? '$' + Number(b.gmv_30d).toLocaleString() + ' GMV' : '';
+        return '<a href="/app/brand-hunter" class="brand-search-item" style="text-decoration:none;color:inherit">'
+          + '<div class="brand-search-item__avatar">' + letter + '</div>'
+          + '<div class="brand-search-item__info">'
+          + '<div class="brand-search-item__name">' + (b.name || '') + '</div>'
+          + '<div class="brand-search-item__cat">' + (b.category || 'Brand') + (gmv ? ' · ' + gmv : '') + '</div>'
+          + '</div></a>';
+      }).join('');
+    }
+
+    function renderProducts(q) {
+      /* Products don't have a JSON autocomplete endpoint — link to filtered products page */
+      resultsEl.innerHTML = '<a href="/app/products?search=' + encodeURIComponent(q) + '" class="brand-search-item" style="text-decoration:none;color:inherit">'
+        + '<div class="brand-search-item__avatar" style="background:var(--accent-glow);color:var(--accent)"><i data-lucide="search" style="width:16px;height:16px"></i></div>'
+        + '<div class="brand-search-item__info">'
+        + '<div class="brand-search-item__name">Search products for "' + q + '"</div>'
+        + '<div class="brand-search-item__cat">Opens the products page with this filter</div>'
+        + '</div></a>';
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function runSearch() {
+      var q = searchInput.value.trim();
+      if (q.length < 2) { tabsPanel.style.display = 'none'; return; }
+      tabsPanel.style.display = 'block';
+      renderLoading();
+      if (currentTab === 'creators') {
+        fetch('/api/creators/search?q=' + encodeURIComponent(q))
+          .then(function(r) { return r.json(); })
+          .then(renderCreators)
+          .catch(function() { renderEmpty('creators'); });
+      } else if (currentTab === 'brands') {
+        fetch('/app/brand-hunter/search?q=' + encodeURIComponent(q))
+          .then(function(r) { return r.json(); })
+          .then(renderBrands)
+          .catch(function() { renderEmpty('brands'); });
+      } else {
+        renderProducts(q);
+      }
+    }
+
+    searchInput.addEventListener('input', function() {
+      clearTimeout(debounceTimer);
+      if (this.value.trim().length < 2) { tabsPanel.style.display = 'none'; return; }
+      debounceTimer = setTimeout(runSearch, 300);
+    });
+
+    searchInput.addEventListener('focus', function() {
+      if (this.value.trim().length >= 2) tabsPanel.style.display = 'block';
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.topbar-search')) tabsPanel.style.display = 'none';
     });
   })();
   </script>

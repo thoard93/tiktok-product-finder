@@ -558,6 +558,128 @@ def search_sellers(keyword: str, page: int = 1) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Public API — Creator/Influencer search and detail
+# ---------------------------------------------------------------------------
+
+def search_influencers(query: str, page: int = 1, limit: int = 20) -> list[dict]:
+    """Search TikTok creators by name/handle via EchoTik influencer list endpoint."""
+    q = (query or '').strip()
+    if not q:
+        return []
+
+    # Try the list endpoint with keyword filter — multiple param variants
+    attempts = [
+        {'keyword': q, 'page_num': page, 'page_size': min(limit, 20), 'region': 'US'},
+        {'nick_name': q, 'page_num': page, 'page_size': min(limit, 20), 'region': 'US'},
+        {'unique_id': q, 'page_num': page, 'page_size': min(limit, 20), 'region': 'US'},
+    ]
+
+    raw_list = []
+    for params in attempts:
+        try:
+            data = _request('GET', f"{ECHOTIK_V3_BASE}/influencer/list", params=params)
+            raw = data.get('data') or []
+            if isinstance(raw, dict):
+                raw = raw.get('list') or raw.get('records') or []
+            if raw:
+                raw_list = raw
+                break
+        except EchoTikError:
+            continue
+
+    results = []
+    for c in raw_list:
+        avatar = _extract_image_url(
+            c.get('avatar') or c.get('avatar_url') or c.get('avatar_larger')
+            or c.get('head_img') or c.get('headImg')
+        )
+        results.append({
+            'user_id': str(c.get('user_id') or c.get('userId') or c.get('id', '')),
+            'unique_id': str(c.get('unique_id') or c.get('uniqueId') or c.get('handle', '')),
+            'nick_name': c.get('nick_name') or c.get('nickname') or c.get('nickName') or c.get('name', ''),
+            'avatar': avatar,
+            'total_followers_cnt': _safe_int(
+                c.get('total_followers_cnt') or c.get('follower_count') or c.get('followerCount') or 0
+            ),
+            'ec_score': _safe_int(c.get('ec_score') or c.get('ecScore') or 0),
+            'region': c.get('region') or c.get('country') or 'US',
+            'category': c.get('category_name') or c.get('category') or '',
+            'interaction_rate': _safe_float(
+                c.get('interaction_rate') or c.get('interactionRate') or c.get('engagement_rate') or 0
+            ),
+        })
+
+    log.info("[EchoTik] Influencer search '%s' returned %d results", q, len(results))
+    return results
+
+
+def get_influencer_detail(unique_id: str) -> dict:
+    """Fetch full creator detail by merging batch + realtime endpoints.
+
+    Batch endpoint: historical aggregated data (growth, shop perf, posting behavior)
+    Realtime endpoint: live follower count, avatar, bio, verification
+    Falls back to batch-only if realtime fails twice.
+    """
+    uid = (unique_id or '').strip()
+    if not uid:
+        return {}
+
+    # --- Batch endpoint ---
+    batch_data = {}
+    try:
+        resp = _request('GET', f"{ECHOTIK_V3_BASE}/influencer/detail",
+                        params={'unique_ids': uid})
+        raw = resp.get('data') or []
+        if isinstance(raw, list) and raw:
+            batch_data = raw[0] if isinstance(raw[0], dict) else {}
+        elif isinstance(raw, dict):
+            batch_data = raw.get(uid) or raw.get('info') or raw
+    except EchoTikError as exc:
+        log.warning("[EchoTik] Influencer batch detail failed for %s: %s", uid, exc)
+
+    # --- Realtime endpoint with 1 retry ---
+    realtime_data = {}
+    for attempt in range(2):
+        try:
+            resp = _request('GET', f"{ECHOTIK_REALTIME_BASE}/influencer/detail",
+                            params={'unique_id': uid})
+            code = resp.get('code')
+            raw = resp.get('data')
+            if code == 500:
+                log.warning("[EchoTik] Realtime returned 500 for %s (attempt %d)", uid, attempt + 1)
+                continue
+            if isinstance(raw, dict):
+                realtime_data = raw
+                break
+            if isinstance(raw, list) and raw:
+                realtime_data = raw[0] if isinstance(raw[0], dict) else {}
+                break
+        except EchoTikError as exc:
+            log.warning("[EchoTik] Realtime detail error for %s (attempt %d): %s", uid, attempt + 1, exc)
+            continue
+
+    # Merge — realtime takes precedence for live fields (followers, avatar)
+    merged = dict(batch_data) if batch_data else {}
+    if realtime_data:
+        for key, val in realtime_data.items():
+            if val is not None and val != '':
+                merged[key] = val
+
+    if not merged:
+        return {}
+
+    # Normalize commonly accessed fields
+    merged['unique_id'] = str(merged.get('unique_id') or merged.get('uniqueId') or uid)
+    merged['nick_name'] = merged.get('nick_name') or merged.get('nickname') or merged.get('nickName') or ''
+    merged['avatar'] = _extract_image_url(
+        merged.get('avatar') or merged.get('avatar_url') or merged.get('avatar_larger') or merged.get('head_img')
+    )
+    merged['signature'] = merged.get('signature') or merged.get('bio') or ''
+
+    return merged
+
+
+# ---------------------------------------------------------------------------
 # Public API — fetch_brand_products
 # ---------------------------------------------------------------------------
 

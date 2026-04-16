@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Creators{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Creators</h1>
+  <p class="page-subtitle">Discover and track TikTok Shop affiliate creators</p>
+</div>
+
+{# ===== SEARCH CARD ===== #}
+<div class="card mb-6">
+  <div class="flex items-center gap-3 mb-3">
+    <div style="width:40px;height:40px;border-radius:var(--radius);background:var(--accent-glow);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i data-lucide="users" style="width:20px;height:20px;color:var(--accent)"></i>
+    </div>
+    <div>
+      <h2 style="font-size:var(--text-lg);font-weight:700">Find a Creator</h2>
+      <p class="text-sm text-muted">Search TikTok creators by name or handle</p>
+    </div>
+  </div>
+  <div class="brand-search-wrap">
+    <div style="position:relative">
+      <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-faint);pointer-events:none"></i>
+      <input type="text" class="input" id="creatorPageSearch" placeholder="Search creators (e.g. @shopwithsarah, mrbeast)..." autocomplete="off" aria-label="Search creators" style="padding-left:32px">
+    </div>
+    <div class="brand-search-dropdown" id="creatorPageDropdown"></div>
+  </div>
+</div>
+
+{# ===== SAVED CREATORS ===== #}
+<div class="section-header">
+  <h2 class="section-title">Saved Creators</h2>
+  <span class="text-sm text-muted">{{ saved_creators | length }} saved</span>
+</div>
+
+{% if saved_creators and saved_creators | length > 0 %}
+<div class="product-table-wrap">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th scope="col" style="width:36px">#</th>
+        <th scope="col" style="min-width:220px">Creator</th>
+        <th scope="col">Region</th>
+        <th scope="col">Followers</th>
+        <th scope="col">EC Score</th>
+        <th scope="col">Saved</th>
+        <th scope="col" style="width:100px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in saved_creators %}
+      <tr>
+        <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            {% if c.avatar %}
+              <img src="{{ c.avatar }}" alt="{{ c.nick_name }}" style="width:36px;height:36px;border-radius:var(--radius-full);object-fit:cover" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+              <div class="brand-letter-avatar" style="display:none">{{ (c.nick_name or '?')[0] | upper }}</div>
+            {% else %}
+              <div class="brand-letter-avatar">{{ (c.nick_name or '?')[0] | upper }}</div>
+            {% endif %}
+            <div style="min-width:0">
+              <a href="/app/creators/{{ c.unique_id }}" style="color:var(--text-primary);font-weight:700;font-size:14px;text-decoration:none">{{ c.nick_name or c.unique_id }}</a>
+              <div style="font-size:11px;color:var(--text-faint)">@{{ c.unique_id }}</div>
+            </div>
+          </div>
+        </td>
+        <td style="font-size:12px;color:var(--text-muted)">{{ c.region or '—' }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ c.total_followers_cnt | format_number }}{% else %}<span class="blurred-data">1.2M</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ c.ec_score or 0 }}{% else %}<span class="blurred-data">74</span>{% endif %}</td>
+        <td style="font-size:12px;color:var(--text-faint);font-variant-numeric:tabular-nums">{{ c.created_at.strftime('%b %d') if c.created_at else '—' }}</td>
+        <td><a href="/app/creators/{{ c.unique_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="padding:var(--space-10) var(--space-8);text-align:center;max-width:520px;margin:var(--space-6) auto">
+  <div style="width:64px;height:64px;border-radius:var(--radius-full);background:var(--accent-glow);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-4)">
+    <i data-lucide="users" style="width:28px;height:28px;color:var(--accent)"></i>
+  </div>
+  <h3 style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-2)">No saved creators yet</h3>
+  <p style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.7">Search for a creator above and click "Save Creator" on their profile to track them here.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+let creatorPageSearchTimeout;
+document.getElementById('creatorPageSearch').addEventListener('input', function() {
+  var q = this.value.trim();
+  clearTimeout(creatorPageSearchTimeout);
+  const dd = document.getElementById('creatorPageDropdown');
+  if (q.length < 2) { dd.classList.remove('visible'); return; }
+  creatorPageSearchTimeout = setTimeout(function() {
+    fetch('/api/creators/search?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(creators => {
+        if (!creators || !creators.length) {
+          dd.innerHTML = '<div class="brand-search-item" style="color:var(--text-muted)">No creators found</div>';
+          dd.classList.add('visible');
+          return;
+        }
+        dd.innerHTML = creators.map(c => {
+          const letter = (c.nick_name || c.unique_id || '?')[0].toUpperCase();
+          const avatar = c.avatar
+            ? '<img src="' + c.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent=\'' + letter + '\'">'
+            : letter;
+          const followers = c.total_followers_cnt ? Number(c.total_followers_cnt).toLocaleString() : '—';
+          return '<a href="/app/creators/' + encodeURIComponent(c.unique_id) + '" class="brand-search-item" style="text-decoration:none;color:inherit">'
+            + '<div class="brand-search-item__avatar">' + avatar + '</div>'
+            + '<div class="brand-search-item__info">'
+            + '<div class="brand-search-item__name">' + (c.nick_name || c.unique_id) + '</div>'
+            + '<div class="brand-search-item__cat">@' + c.unique_id + ' · ' + followers + ' followers</div>'
+            + '</div></a>';
+        }).join('');
+        dd.classList.add('visible');
+      })
+      .catch(() => { dd.classList.remove('visible'); });
+  }, 300);
+});
+document.addEventListener('click', function(e) { if (!e.target.closest('.brand-search-wrap')) document.getElementById('creatorPageDropdown').classList.remove('visible'); });
+</script>
+{% endblock %}

@@ -184,6 +184,19 @@ def _auto_migrate(app, db):
     except Exception:
         db.session.rollback()
 
+    # Fix favorited_creators table if missing
+    try:
+        db.session.execute(db.text("SELECT id FROM favorited_creators LIMIT 1"))
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        try:
+            db.create_all()
+            print("[MIGRATE] Created favorited_creators table")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[MIGRATE] favorited_creators creation failed: {e}")
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -389,6 +402,7 @@ from app.models import (  # noqa: E402, F401
     ScannedBrand,
     BrandProduct,
     BrandScanJob,
+    FavoritedCreator,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)

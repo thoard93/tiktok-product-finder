@@ -713,6 +713,26 @@ class BrandProduct(db.Model):
     )
 
 
+class FavoritedCreator(db.Model):
+    """User's saved TikTok creators/influencers"""
+    __tablename__ = 'favorited_creators'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    unique_id = db.Column(db.String(100), nullable=False, index=True)
+    user_id_tiktok = db.Column(db.String(100))
+    nick_name = db.Column(db.String(200))
+    avatar = db.Column(db.String(500))
+    total_followers_cnt = db.Column(db.BigInteger, default=0)
+    ec_score = db.Column(db.Integer, default=0)
+    region = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'unique_id', name='uq_user_creator'),
+    )
+
+
 class BrandScanJob(db.Model):
     """Tracks brand hunter scan progress — scans product pages within a single brand"""
     __tablename__ = 'brand_scan_jobs'
