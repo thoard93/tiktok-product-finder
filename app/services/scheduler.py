@@ -153,6 +153,12 @@ def daily_sync(app):
         except Exception:
             log.exception("[SCHEDULER] Brand product refresh failed")
 
+        # Step 5: Enrich missing seller names (100 products per run)
+        try:
+            _enrich_seller_names(app)
+        except Exception:
+            log.exception("[SCHEDULER] Seller enrichment failed")
+
         log.info("[SCHEDULER] === Daily sync complete ===")
 
 
@@ -298,6 +304,50 @@ def _refresh_brand_products(app):
             continue
 
     log.info("[SCHEDULER] Brand products refreshed: %d products updated across %d brands", total_updated, len(brands))
+
+
+def _enrich_seller_names(app):
+    """Fetch seller names for products with 'Unknown' seller via product detail API."""
+    from app import db
+    from app.models import Product
+    from app.services.echotik import fetch_product_detail
+    from sqlalchemy import or_
+
+    products = Product.query.filter(
+        or_(Product.product_status == 'active', Product.product_status.is_(None)),
+        or_(
+            Product.seller_name.is_(None),
+            Product.seller_name == '',
+            Product.seller_name == 'Unknown',
+            Product.seller_name == 'Unknown Seller',
+        ),
+    ).order_by(Product.sales_7d.desc().nullslast()).limit(100).all()
+
+    if not products:
+        log.info("[SCHEDULER] Seller enrichment: no products with missing sellers")
+        return
+
+    log.info("[SCHEDULER] Enriching seller names for %d products", len(products))
+    enriched = 0
+
+    for p in products:
+        raw_id = p.product_id.replace('shop_', '')
+        try:
+            detail = fetch_product_detail(raw_id)
+            if detail:
+                sname = (detail.get('seller_name') or '').strip()
+                if sname and sname.lower() not in ('unknown', 'none', 'null', ''):
+                    p.seller_name = sname
+                    enriched += 1
+                sid = detail.get('seller_id')
+                if sid and not p.seller_id:
+                    p.seller_id = sid
+            time.sleep(0.3)
+        except Exception:
+            continue
+
+    db.session.commit()
+    log.info("[SCHEDULER] Seller enrichment: %d/%d products enriched", enriched, len(products))
 
 
 # ---------------------------------------------------------------------------

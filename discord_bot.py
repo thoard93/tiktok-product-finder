@@ -527,8 +527,10 @@ def get_product_data(product_id):
             sync_time = db_product.last_echotik_sync or db_product.last_updated
             age_seconds = (datetime.now(timezone.utc).replace(tzinfo=None) - (sync_time or datetime.min)).total_seconds()
 
-            if (db_product.sales_7d or 0) > 0 and age_seconds < CACHE_TTL_SECONDS:
-                # Fresh cache hit
+            seller_ok = db_product.seller_name and db_product.seller_name not in ('Unknown', 'Unknown Seller', '')
+
+            if (db_product.sales_7d or 0) > 0 and age_seconds < CACHE_TTL_SECONDS and seller_ok:
+                # Fresh cache hit with complete data
                 print(f"[Bot] Product {product_id} CACHE HIT (age {int(age_seconds)}s)")
                 db.session.commit()
                 return _product_to_dict(db_product, source='cache'), 'cache'
