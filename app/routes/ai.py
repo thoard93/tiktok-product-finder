@@ -174,11 +174,20 @@ def _build_product_context(user_message):
 
     context = {}
 
+    # Minimum video count filter to exclude placeholder/broken products
+    # (matches the filter used on the website — products with <5 videos are junk)
+    MIN_VIDEOS = 5
+    video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+
     # Always include: summary stats
-    total = Product.query.filter(Product.product_status == 'active').count()
+    total = Product.query.filter(
+        Product.product_status == 'active',
+        video_count_field >= MIN_VIDEOS,
+    ).count()
     gems = Product.query.filter(
         Product.sales_7d > 50,
-        Product.video_count < 50,
+        video_count_field >= MIN_VIDEOS,
+        video_count_field < 50,
         Product.product_status == 'active',
     ).count()
 
@@ -190,14 +199,16 @@ def _build_product_context(user_message):
     # Segment 1: Top products by GMV (always useful)
     top_gmv = Product.query.filter(
         Product.gmv > 0,
+        video_count_field >= MIN_VIDEOS,
         Product.product_status == 'active',
     ).order_by(desc(Product.gmv)).limit(15).all()
     context["top_by_gmv"] = [_product_summary(p) for p in top_gmv]
 
-    # Segment 2: Gems — strong sales, low video/creator saturation
+    # Segment 2: Gems — strong sales, low video/creator saturation (but not zero/near-zero)
     gem_products = Product.query.filter(
         Product.sales_7d > 50,
-        Product.video_count < 50,
+        video_count_field >= MIN_VIDEOS,  # Must have real data, not placeholder
+        video_count_field < 50,            # But not oversaturated
         Product.product_status == 'active',
     ).order_by(desc(Product.sales_7d)).limit(15).all()
     context["gems_high_sales_low_videos"] = [_product_summary(p) for p in gem_products]
@@ -205,6 +216,7 @@ def _build_product_context(user_message):
     # Segment 3: Top sellers by 7D sales volume
     top_sales = Product.query.filter(
         Product.sales_7d > 0,
+        video_count_field >= MIN_VIDEOS,
         Product.product_status == 'active',
     ).order_by(desc(Product.sales_7d)).limit(10).all()
     context["top_by_sales_volume"] = [_product_summary(p) for p in top_sales]
@@ -214,6 +226,7 @@ def _build_product_context(user_message):
         high_comm = Product.query.filter(
             Product.commission_rate > 0.10,
             Product.sales_7d > 10,
+            video_count_field >= MIN_VIDEOS,
             Product.product_status == 'active',
         ).order_by(desc(Product.commission_rate)).limit(10).all()
         context["best_commission_rates"] = [_product_summary(p) for p in high_comm]
@@ -222,6 +235,7 @@ def _build_product_context(user_message):
     if any(w in msg_lower for w in ['new', 'recent', 'latest', 'discover', 'fresh', 'trending']):
         newest = Product.query.filter(
             Product.product_status == 'active',
+            video_count_field >= MIN_VIDEOS,
         ).order_by(desc(Product.first_seen)).limit(10).all()
         context["recently_discovered"] = [_product_summary(p) for p in newest]
 
@@ -230,6 +244,7 @@ def _build_product_context(user_message):
         niche = Product.query.filter(
             Product.gmv > 10000,
             Product.influencer_count <= 30,
+            video_count_field >= MIN_VIDEOS,
             Product.product_status == 'active',
         ).order_by(desc(Product.gmv)).limit(10).all()
         context["niche_opportunities"] = [_product_summary(p) for p in niche]
@@ -239,6 +254,7 @@ def _build_product_context(user_message):
         cheap = Product.query.filter(
             Product.price > 0,
             Product.sales_7d > 5,
+            video_count_field >= MIN_VIDEOS,
             Product.product_status == 'active',
         ).order_by(Product.price.asc()).limit(10).all()
         context["budget_friendly"] = [_product_summary(p) for p in cheap]

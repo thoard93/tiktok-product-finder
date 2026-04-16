@@ -1215,42 +1215,57 @@ def _build_discord_product_context(user_message):
     
     with app.app_context():
         context = {}
-        
+
+        # Filter out placeholder/broken products (must have real video data)
+        MIN_VIDEOS = 5
+        video_count_field = db.func.coalesce(Product.video_count_alltime, Product.video_count)
+
         # Summary stats
-        total = Product.query.filter(Product.product_status == 'active').count()
+        total = Product.query.filter(
+            Product.product_status == 'active',
+            video_count_field >= MIN_VIDEOS,
+        ).count()
         context["database_summary"] = {"total_active_products": total}
-        
+
         # Top by ad spend (always)
         top_ad = Product.query.filter(
-            Product.ad_spend > 0, Product.product_status == 'active'
+            Product.ad_spend > 0,
+            video_count_field >= MIN_VIDEOS,
+            Product.product_status == 'active',
         ).order_by(desc(Product.ad_spend)).limit(12).all()
         context["top_by_ad_spend"] = [_psummary(p) for p in top_ad]
-        
-        # Gems
+
+        # Gems — strong sales + low saturation (but must have real data)
         gems = Product.query.filter(
-            Product.ad_spend > 2000, Product.video_count < 50,
-            Product.product_status == 'active'
-        ).order_by(desc(Product.ad_spend)).limit(12).all()
+            Product.sales_7d > 50,
+            video_count_field >= MIN_VIDEOS,
+            video_count_field < 50,
+            Product.product_status == 'active',
+        ).order_by(desc(Product.sales_7d)).limit(12).all()
         context["gems"] = [_psummary(p) for p in gems]
-        
+
         # Top sales
         top_sales = Product.query.filter(
-            Product.sales_7d > 0, Product.product_status == 'active'
+            Product.sales_7d > 0,
+            video_count_field >= MIN_VIDEOS,
+            Product.product_status == 'active',
         ).order_by(desc(Product.sales_7d)).limit(8).all()
         context["top_sellers"] = [_psummary(p) for p in top_sales]
-        
+
         # Commission (if relevant)
         if any(w in msg_lower for w in ['commission', 'affiliate', 'earn', 'profit', 'margin']):
             high_comm = Product.query.filter(
                 Product.commission_rate > 0.10, Product.sales_7d > 10,
-                Product.product_status == 'active'
+                video_count_field >= MIN_VIDEOS,
+                Product.product_status == 'active',
             ).order_by(desc(Product.commission_rate)).limit(8).all()
             context["best_commissions"] = [_psummary(p) for p in high_comm]
-        
+
         # New products (if relevant)
         if any(w in msg_lower for w in ['new', 'recent', 'latest', 'trending', 'fresh']):
             newest = Product.query.filter(
-                Product.product_status == 'active'
+                Product.product_status == 'active',
+                video_count_field >= MIN_VIDEOS,
             ).order_by(desc(Product.first_seen)).limit(8).all()
             context["newest"] = [_psummary(p) for p in newest]
         
@@ -1258,15 +1273,18 @@ def _build_discord_product_context(user_message):
         if any(w in msg_lower for w in ['caked', 'cake', 'pick', 'niche']):
             caked = Product.query.filter(
                 Product.gmv_30d >= 50000, Product.gmv_30d <= 200000,
-                Product.influencer_count <= 50, Product.product_status == 'active'
+                Product.influencer_count <= 50,
+                video_count_field >= MIN_VIDEOS,
+                Product.product_status == 'active',
             ).order_by(desc(Product.gmv_30d)).limit(8).all()
             context["caked_picks"] = [_psummary(p) for p in caked]
-        
+
         # Budget (if relevant)
         if any(w in msg_lower for w in ['cheap', 'budget', 'affordable', 'low price', 'under']):
             cheap = Product.query.filter(
                 Product.price > 0, Product.sales_7d > 5,
-                Product.product_status == 'active'
+                video_count_field >= MIN_VIDEOS,
+                Product.product_status == 'active',
             ).order_by(Product.price.asc()).limit(8).all()
             context["budget_friendly"] = [_psummary(p) for p in cheap]
     
