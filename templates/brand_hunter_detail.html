@@ -7,13 +7,7 @@
 {# ===== BRAND HEADER ===== #}
 <div class="card mb-6">
   <div class="flex gap-4 items-center" style="flex-wrap:wrap">
-    {% if brand.brand_logo_url %}
-      <img src="{{ brand.brand_logo_url }}" alt="{{ brand.brand_name }}" style="width:64px;height:64px;border-radius:var(--radius-full);object-fit:cover;background:var(--bg-elevated);border:2px solid var(--border)"
-           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-      <div class="brand-header-avatar-fallback" style="display:none">{{ (brand.brand_name or '?')[0] | upper }}</div>
-    {% else %}
-      <div class="brand-header-avatar-fallback">{{ (brand.brand_name or '?')[0] | upper }}</div>
-    {% endif %}
+    <div class="brand-header-avatar-fallback">{{ (brand.brand_name or '?')[0] | upper }}</div>
     <div style="flex:1">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <h1 style="font-size:var(--text-xl);font-weight:700">{{ brand.brand_name }}</h1>
@@ -26,10 +20,9 @@
         <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">${{ brand.revenue_30d | format_number }}</strong> revenue</span>
         <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.total_products or 0 }}</strong> products</span>
         <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ "%.0f" | format((brand.avg_commission or 0) * 100) }}%</strong> avg commission</span>
-        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.follower_count | format_number }}</strong> followers</span>
       </div>
       <div style="font-size:12px;color:var(--text-faint);margin-top:6px">
-        Scanned pages {{ brand.pages_scanned or 0 }} &middot; Last updated {{ brand.last_scanned.strftime('%b %d, %Y') if brand.last_scanned else 'N/A' }}
+        Scanned pages {{ brand.pages_scanned or '—' }} &middot; Last updated {{ brand.last_scanned.strftime('%b %d, %Y') if brand.last_scanned else 'N/A' }}
       </div>
     </div>
     <div class="flex gap-2" style="flex-wrap:wrap">
@@ -49,13 +42,13 @@
 
 {# ===== FILTER / SORT BAR ===== #}
 <div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:8px">
-  <div class="flex gap-2" style="flex-wrap:wrap">
-    {% for val, label in [('videos', 'Total Videos'), ('sales', '7d Sales'), ('commission', 'Commission'), ('price', 'Price'), ('score', 'Score')] %}
+  <div class="flex gap-2 items-center" style="flex-wrap:wrap">
+    {% for val, label in [('videos', 'Total Videos'), ('videos_low', 'Fewest Videos'), ('sales', '7d Sales'), ('commission', 'Commission'), ('price', 'Price')] %}
       <a href="?sort={{ val }}{% if gems_only %}&gems_only=1{% endif %}" class="btn btn-sm {{ 'btn-primary' if brand_sort == val else 'btn-ghost' }}">{{ label }}</a>
     {% endfor %}
   </div>
   <div class="flex gap-3 items-center">
-    <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;padding:5px 10px;border-radius:var(--radius);border:1px solid {{ '#6366f1' if gems_only else 'var(--border)' }};background:{{ 'rgba(99,102,241,.08)' if gems_only else 'transparent' }};color:{{ '#6366f1' if gems_only else 'var(--text-muted)' }}">
+    <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;padding:5px 10px;border-radius:var(--radius);border:1px solid {{ '#d97706' if gems_only else 'var(--border)' }};background:{{ 'rgba(217,119,6,.08)' if gems_only else 'transparent' }};color:{{ '#d97706' if gems_only else 'var(--text-muted)' }}">
       <input type="checkbox" {% if gems_only %}checked{% endif %} onchange="window.location.href='?sort={{ brand_sort }}'+(this.checked?'&gems_only=1':'')" style="display:none">
       &#x1f48e; Hidden Gems Only
     </label>
@@ -71,12 +64,12 @@
       <tr>
         <th scope="col" style="width:36px">#</th>
         <th scope="col" style="min-width:240px">Product Info</th>
-        <th scope="col">Commission</th>
-        <th scope="col">Price</th>
-        <th scope="col">7d Sales</th>
-        <th scope="col">Total Videos</th>
+        <th scope="col"><a href="?sort=commission{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'commission' %}th-sort--active{% endif %}">Commission &#x25BE;</a></th>
+        <th scope="col"><a href="?sort=price{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'price' %}th-sort--active{% endif %}">Price &#x25BE;</a></th>
+        <th scope="col"><a href="?sort=sales{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'sales' %}th-sort--active{% endif %}">7d Sales &#x25BE;</a></th>
+        <th scope="col"><a href="?sort=videos{% if gems_only %}&gems_only=1{% endif %}" class="th-sort {% if brand_sort == 'videos' %}th-sort--active{% endif %}">Total Videos &#x25BE;</a></th>
         <th scope="col">Creators</th>
-        <th scope="col">Page Found</th>
+        <th scope="col">Page</th>
         <th scope="col" style="width:60px"></th>
       </tr>
     </thead>
@@ -84,7 +77,8 @@
       {% for p in products %}
       {% set cat_lower = (p.category or '')|lower %}
       {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-food' if 'food' in cat_lower else 'cat-default'))))) %}
-      {% set score_color = '#0d9488' if p.vantage_score >= 60 else ('#d97706' if p.vantage_score >= 35 else '#dc2626') %}
+      {% set pid = p.product_id %}
+      {% set view_pid = pid if pid.startswith('shop_') else 'shop_' ~ pid %}
       <tr>
         <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
         <td>
@@ -97,7 +91,7 @@
               <div class="product-row-thumb-fallback {{ cat_class }}">{{ (p.title or '?')[0] | upper }}</div>
             {% endif %}
             <div style="min-width:0">
-              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.title }}</a>
+              <a href="/app/products/{{ view_pid }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.title }}</a>
               {% if p.category %}<span style="font-size:11px;color:var(--text-faint)">{{ p.category }}</span>{% endif %}
             </div>
           </div>
@@ -109,9 +103,9 @@
         <td style="font-variant-numeric:tabular-nums">{{ p.influencer_count or 0 }}</td>
         <td style="font-variant-numeric:tabular-nums">
           <span>{{ p.page_found or '—' }}</span>
-          {% if p.is_hidden_gem %}<span class="brand-gem-badge-inline" style="font-size:11px;margin-left:4px">&#x1f48e;</span>{% endif %}
+          {% if p.is_hidden_gem %}<span class="brand-gem-badge-inline" style="font-size:10px;margin-left:4px">&#x1f48e;</span>{% endif %}
         </td>
-        <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
+        <td><a href="/app/products/{{ view_pid }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -119,7 +113,6 @@
 </div>
 
 {% else %}
-{# ===== EMPTY STATE ===== #}
 <div class="card" style="padding:var(--space-10) var(--space-8);text-align:center">
   <div style="width:56px;height:56px;border-radius:var(--radius-full);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-4)">
     <i data-lucide="package-search" style="width:24px;height:24px;color:var(--text-muted)"></i>

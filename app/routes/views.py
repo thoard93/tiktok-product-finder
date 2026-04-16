@@ -2049,6 +2049,25 @@ def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
     brand.last_scanned = datetime.utcnow()
     db.session.commit()
 
+    # Sign product images via EchoTik batch signing
+    try:
+        from app.services.echotik import fetch_batch_images
+        unsigned = [bp for bp in all_products if bp.image_url and 'echosell' in (bp.image_url or '')]
+        for i in range(0, len(unsigned), 10):
+            batch = unsigned[i:i+10]
+            urls = [bp.image_url for bp in batch]
+            try:
+                signed = fetch_batch_images(urls)
+                for bp in batch:
+                    if bp.image_url in signed:
+                        bp.image_url = signed[bp.image_url][:500]
+                db.session.commit()
+            except Exception:
+                pass
+            _time.sleep(0.2)
+    except Exception:
+        pass
+
     return len(all_products)
 
 
@@ -2107,9 +2126,9 @@ def brand_hunter_detail(brand_id):
         query = query.order_by(BrandProduct.commission_rate.desc().nullslast())
     elif sort == 'price':
         query = query.order_by(BrandProduct.price.desc().nullslast())
-    elif sort == 'score':
-        query = query.order_by(BrandProduct.vantage_score.desc().nullslast())
-    else:  # videos (default)
+    elif sort == 'videos_low':
+        query = query.order_by(BrandProduct.total_videos.asc().nullslast())
+    else:  # videos desc (default)
         query = query.order_by(BrandProduct.total_videos.desc().nullslast())
 
     products = query.limit(100).all()
