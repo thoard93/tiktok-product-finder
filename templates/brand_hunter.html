@@ -9,46 +9,64 @@
 
 {# ===== SCAN LAUNCHER ===== #}
 <div class="card mb-6">
-  <div class="flex items-center gap-3 mb-4">
+  <div class="flex items-center gap-3 mb-5">
     <div style="width:40px;height:40px;border-radius:var(--radius);background:var(--accent-glow);display:flex;align-items:center;justify-content:center;flex-shrink:0">
       <i data-lucide="scan-search" style="width:20px;height:20px;color:var(--accent)"></i>
     </div>
     <div>
-      <h2 style="font-size:var(--text-lg);font-weight:700">Deep Scan a Brand</h2>
-      <p class="text-sm text-muted">Search for a brand, pick which product pages to scan, and uncover hidden gems</p>
+      <h2 style="font-size:var(--text-lg);font-weight:700">Deep Scan Brands</h2>
+      <p class="text-sm text-muted">Browse the top brand rankings, select which ones to scan, and pick the product page range</p>
     </div>
   </div>
 
-  {# Brand search #}
-  <div class="brand-search-wrap mb-4">
-    <label class="label">Search Brand</label>
-    <input type="text" class="input" id="brandSearch" placeholder="Search by brand name (e.g. Nike, QVC, Shark...)" autocomplete="off" aria-label="Search brands">
-    <div class="brand-search-dropdown" id="brandDropdown"></div>
+  {# Step 1: Browse brands from EchoTik ranking #}
+  <div class="mb-4">
+    <label class="label">Step 1 &mdash; Browse Top Brands</label>
+    <p class="text-xs text-muted mb-3">Load brands from TikTok Shop rankings. Check the ones you want to deep scan.</p>
+    <div class="flex gap-2 items-center mb-3" style="flex-wrap:wrap">
+      <span class="text-sm text-muted">Load ranking pages:</span>
+      <input type="number" class="input" id="browseFrom" value="1" min="1" max="100" style="width:70px" aria-label="From page">
+      <span class="text-sm text-muted">to</span>
+      <input type="number" class="input" id="browseTo" value="5" min="1" max="100" style="width:70px" aria-label="To page">
+      <button class="btn btn-primary btn-sm" id="browseBtn" onclick="browseBrands()">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Load Brands
+      </button>
+      <span class="text-xs text-muted" id="browseStatus"></span>
+    </div>
   </div>
 
-  {# Selected brand display #}
-  <div id="selectedBrand" style="display:none" class="mb-4">
-    <div class="card" style="padding:var(--space-3);background:var(--bg-elevated);border:1px solid var(--teal);border-left:3px solid var(--teal)">
-      <div class="flex items-center gap-3">
-        <div id="selectedAvatar" class="brand-search-item__avatar"></div>
-        <div>
-          <div id="selectedName" style="font-weight:700;font-size:14px;color:var(--text-primary)"></div>
-          <div id="selectedMeta" style="font-size:12px;color:var(--text-muted)"></div>
-        </div>
-        <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="clearBrand()" aria-label="Clear selection">
-          <i data-lucide="x" style="width:14px;height:14px"></i>
-        </button>
+  {# Brand list (populated via JS) #}
+  <div id="brandBrowseList" style="display:none" class="mb-4">
+    <div class="flex items-center justify-between mb-3">
+      <span class="label" style="margin:0">Select brands to scan</span>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="selectAll()" style="font-size:11px">Select All</button>
+        <button class="btn btn-ghost btn-sm" onclick="selectNone()" style="font-size:11px">Clear</button>
       </div>
     </div>
-    <input type="hidden" id="selectedBrandId" value="">
-    <input type="hidden" id="selectedBrandName" value="">
-    <input type="hidden" id="selectedBrandLogo" value="">
+    <div class="product-table-wrap" style="max-height:400px;overflow-y:auto">
+      <table class="product-table" id="brandBrowseTable">
+        <thead>
+          <tr>
+            <th scope="col" style="width:36px"><input type="checkbox" id="selectAllBox" onchange="toggleAll(this.checked)" aria-label="Select all brands"></th>
+            <th scope="col" style="width:40px">#</th>
+            <th scope="col">Brand</th>
+            <th scope="col">Category</th>
+            <th scope="col">30d GMV</th>
+            <th scope="col">Followers</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody id="brandBrowseBody"></tbody>
+      </table>
+    </div>
+    <div class="text-xs text-muted mt-2" id="selectedCount">0 brands selected</div>
   </div>
 
-  {# Page range selector #}
+  {# Step 2: Page range selector (visible after brands loaded) #}
   <div id="pageRangeSection" style="display:none">
-    <label class="label">Product Pages to Scan</label>
-    <p class="text-xs text-muted mb-3">Each page has ~10 products. Pages 100+ often contain hidden gems with low video counts.</p>
+    <label class="label">Step 2 &mdash; Product Page Range</label>
+    <p class="text-xs text-muted mb-3">Which pages of each brand's product catalog to scan. Pages 100+ often have hidden gems with low video counts.</p>
     <div class="scan-range-group">
       <div class="scan-range-opt"><input type="radio" name="pageRange" id="range-quick" value="1-50" checked><label for="range-quick">Quick (1-50)</label></div>
       <div class="scan-range-opt"><input type="radio" name="pageRange" id="range-standard" value="1-100"><label for="range-standard">Standard (1-100)</label></div>
@@ -62,7 +80,7 @@
       <span class="text-sm text-muted">to</span>
       <input type="number" class="input" id="customEnd" value="50" min="1" max="500" style="width:80px" aria-label="End page">
     </div>
-    <button class="btn btn-primary btn-lg" id="launchBtn" onclick="launchScan()" style="margin-top:var(--space-4);width:100%;max-width:320px">
+    <button class="btn btn-primary btn-lg" id="launchBtn" onclick="launchScan()" style="margin-top:var(--space-4)">
       <i data-lucide="rocket" style="width:18px;height:18px"></i> Launch Deep Scan
     </button>
   </div>
@@ -85,168 +103,183 @@
   </div>
 </div>
 
-{# ===== BRAND LIBRARY ===== #}
+{# ===== SCANNED BRANDS LIBRARY ===== #}
 <div class="section-header">
   <h2 class="section-title">Scanned Brands</h2>
   <span class="text-sm text-muted">Sorted by 30-day sales</span>
 </div>
 
 {% if brands and brands | length > 0 %}
-<div class="product-grid" id="brandGrid">
-  {% for b in brands %}
-  <div class="product-card">
-    <div class="product-card-img" style="aspect-ratio:16/10;background:var(--bg-elevated)">
-      {% if b.brand_logo_url %}
-        <img src="{{ b.brand_logo_url }}" alt="{{ b.brand_name }}" loading="lazy" style="object-fit:cover;width:100%;height:100%"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="brand-avatar-fallback" style="display:none">{{ (b.brand_name or '?')[0] | upper }}</div>
-      {% else %}
-        <div class="brand-avatar-fallback">{{ (b.brand_name or '?')[0] | upper }}</div>
-      {% endif %}
-      {% if b.brand_category %}<span class="badge badge-muted badge-overlay-tl">{{ b.brand_category }}</span>{% endif %}
-      {% if b.is_hidden_gem %}<span class="badge brand-gem-badge">&#x1f48e; Hidden Gem</span>{% endif %}
-    </div>
-    <div class="product-card-body">
-      <div class="product-card-name"><a href="/app/brand-hunter/{{ b.id }}" style="color:inherit;text-decoration:none">{{ b.brand_name }}</a></div>
-      <div class="product-card-stats">
-        <div class="product-card-stat"><i data-lucide="trending-up" style="width:12px;height:12px"></i><span style="font-variant-numeric:tabular-nums">{{ "{:,}".format(b.sales_30d or 0) }} <small>30d sales</small></span></div>
-        <div class="product-card-stat"><i data-lucide="package" style="width:12px;height:12px"></i><span style="font-variant-numeric:tabular-nums">{{ b.total_products or 0 }} <small>products</small></span></div>
-        <div class="product-card-stat"><i data-lucide="percent" style="width:12px;height:12px"></i><span style="font-variant-numeric:tabular-nums">{{ "%.0f" | format((b.avg_commission or 0) * 100) }}% <small>avg comm</small></span></div>
-      </div>
-      <div style="font-size:11px;color:var(--text-faint);margin-bottom:var(--space-3)">Pages {{ b.pages_scanned or '—' }} &middot; {{ b.last_scanned.strftime('%b %d, %I:%M%p') if b.last_scanned else 'Never' }}</div>
-      <div class="product-card-actions">
-        <a href="/app/brand-hunter/{{ b.id }}" class="btn btn-ghost" style="flex:1">View Products</a>
-        {% if current_user and current_user.is_admin %}
-        <form action="/app/brand-hunter/{{ b.id }}/delete" method="POST" style="margin:0" onsubmit="return confirm('Delete this brand and all its products?')">
-          <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--accent);padding:6px" aria-label="Delete brand"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
-        </form>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-  {% endfor %}
+<div class="product-table-wrap">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th scope="col" style="width:36px">#</th>
+        <th scope="col" style="min-width:200px">Brand</th>
+        <th scope="col">30d Sales</th>
+        <th scope="col">Revenue</th>
+        <th scope="col">Products</th>
+        <th scope="col">Avg Comm</th>
+        <th scope="col">Pages</th>
+        <th scope="col">Last Scanned</th>
+        <th scope="col" style="width:120px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in brands %}
+      <tr>
+        <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="brand-letter-avatar">{{ (b.brand_name or '?')[0] | upper }}</div>
+            <div style="min-width:0">
+              <a href="/app/brand-hunter/{{ b.id }}" style="color:var(--text-primary);font-weight:700;font-size:14px;text-decoration:none">{{ b.brand_name }}</a>
+              {% if b.brand_category %}<div style="font-size:11px;color:var(--text-faint)">{{ b.brand_category }}</div>{% endif %}
+            </div>
+            {% if b.is_hidden_gem %}<span class="brand-gem-badge-inline" style="font-size:10px">&#x1f48e; Gem</span>{% endif %}
+          </div>
+        </td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(b.sales_30d or 0) }}</td>
+        <td style="font-variant-numeric:tabular-nums">${{ b.revenue_30d | format_number }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ b.total_products or 0 }}</td>
+        <td style="font-variant-numeric:tabular-nums">{{ "%.0f" | format((b.avg_commission or 0) * 100) }}%</td>
+        <td style="font-size:12px;color:var(--text-faint)">{{ b.pages_scanned or '—' }}</td>
+        <td style="font-size:12px;color:var(--text-faint);font-variant-numeric:tabular-nums">{{ b.last_scanned.strftime('%b %d') if b.last_scanned else '—' }}</td>
+        <td>
+          <div class="flex gap-2">
+            <a href="/app/brand-hunter/{{ b.id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a>
+            {% if current_user and current_user.is_admin %}
+            <form action="/app/brand-hunter/{{ b.id }}/delete" method="POST" style="margin:0" onsubmit="return confirm('Delete?')">
+              <button type="submit" class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--accent)" aria-label="Delete"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% else %}
-<div class="card" style="padding:var(--space-12) var(--space-8);text-align:center;max-width:560px;margin:var(--space-6) auto">
-  <div style="width:72px;height:72px;border-radius:var(--radius-full);background:var(--accent-glow);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-5)">
-    <i data-lucide="scan-search" style="width:32px;height:32px;color:var(--accent)"></i>
+<div class="card" style="padding:var(--space-10) var(--space-8);text-align:center;max-width:520px;margin:var(--space-6) auto">
+  <div style="width:64px;height:64px;border-radius:var(--radius-full);background:var(--accent-glow);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-4)">
+    <i data-lucide="scan-search" style="width:28px;height:28px;color:var(--accent)"></i>
   </div>
   <h3 style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-2)">No brands scanned yet</h3>
-  <p style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.7">Launch your first deep scan to uncover hidden gems from top brands like Nike, QVC, and Shark. Search for a brand above to get started.</p>
+  <p style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.7">Load the top brand rankings above, select which brands to scan, and launch a deep product dive to uncover hidden gems.</p>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-var searchTimeout, selectedBrand = null, activeJobId = null;
+var loadedBrands = [], activeJobId = null;
 
-/* Brand search typeahead */
-document.getElementById('brandSearch').addEventListener('input', function() {
-  var q = this.value.trim();
-  clearTimeout(searchTimeout);
-  if (q.length < 2) { document.getElementById('brandDropdown').classList.remove('visible'); return; }
-  searchTimeout = setTimeout(function() {
-    fetch('/app/brand-hunter/search?q=' + encodeURIComponent(q))
-      .then(function(r) { return r.json(); })
-      .then(function(brands) { renderDropdown(brands); })
-      .catch(function() { document.getElementById('brandDropdown').classList.remove('visible'); });
-  }, 300);
-});
+/* Browse top brands from EchoTik ranking */
+async function browseBrands() {
+  var from = parseInt(document.getElementById('browseFrom').value) || 1;
+  var to = parseInt(document.getElementById('browseTo').value) || 5;
+  var btn = document.getElementById('browseBtn');
+  var status = document.getElementById('browseStatus');
+  btn.disabled = true; btn.style.opacity = '0.6';
+  status.textContent = 'Loading...';
+  loadedBrands = [];
 
-function renderDropdown(brands) {
-  var dd = document.getElementById('brandDropdown');
-  if (!brands || !brands.length) { dd.innerHTML = '<div class="brand-search-item" style="color:var(--text-muted)">No brands found</div>'; dd.classList.add('visible'); return; }
-  dd.innerHTML = brands.map(function(b) {
+  try {
+    for (var p = from; p <= to; p++) {
+      status.textContent = 'Loading page ' + p + ' of ' + to + '...';
+      var res = await fetch('/app/brand-hunter/browse?page=' + p);
+      var data = await res.json();
+      if (data.brands && data.brands.length) {
+        loadedBrands = loadedBrands.concat(data.brands);
+      }
+    }
+    renderBrandList();
+    status.textContent = loadedBrands.length + ' brands loaded';
+    document.getElementById('brandBrowseList').style.display = 'block';
+    document.getElementById('pageRangeSection').style.display = 'block';
+  } catch(e) { status.textContent = 'Error loading brands'; }
+  btn.disabled = false; btn.style.opacity = '';
+}
+
+function renderBrandList() {
+  var body = document.getElementById('brandBrowseBody');
+  body.innerHTML = loadedBrands.map(function(b, i) {
     var letter = (b.name || '?')[0].toUpperCase();
-    var avatar = b.avatar_url ? '<img src="' + b.avatar_url + '" alt="" onerror="this.style.display=\'none\'">' : letter;
-    return '<div class="brand-search-item" onclick="selectBrand(\'' + b.shop_id + '\',\'' + (b.name||'').replace(/'/g,"\\'") + '\',\'' + (b.avatar_url||'').replace(/'/g,"\\'") + '\',\'' + (b.category||'') + '\')">'
-      + '<div class="brand-search-item__avatar">' + avatar + '</div>'
-      + '<div class="brand-search-item__info"><div class="brand-search-item__name">' + b.name + '</div>'
-      + '<div class="brand-search-item__cat">' + (b.category || 'Brand') + '</div></div></div>';
+    var scanned = b.already_scanned ? '<span style="color:var(--teal);font-size:11px;font-weight:600">Scanned</span>' : '<span style="color:var(--text-faint);font-size:11px">New</span>';
+    var gmv = b.gmv_30d ? '$' + Number(b.gmv_30d).toLocaleString() : '—';
+    var followers = b.follower_count ? Number(b.follower_count).toLocaleString() : '—';
+    return '<tr>'
+      + '<td><input type="checkbox" class="brand-check" data-idx="' + i + '" onchange="updateCount()" aria-label="Select ' + (b.name||'') + '"></td>'
+      + '<td style="color:var(--text-faint);font-weight:600;font-size:12px;font-variant-numeric:tabular-nums">' + b.rank + '</td>'
+      + '<td><div style="display:flex;align-items:center;gap:8px"><div class="brand-letter-avatar" style="width:28px;height:28px;font-size:12px">' + letter + '</div><span style="font-weight:600;font-size:13px">' + (b.name||'Unknown') + '</span></div></td>'
+      + '<td style="font-size:12px;color:var(--text-muted)">' + (b.category || '—') + '</td>'
+      + '<td style="font-variant-numeric:tabular-nums;font-size:13px">' + gmv + '</td>'
+      + '<td style="font-variant-numeric:tabular-nums;font-size:13px">' + followers + '</td>'
+      + '<td>' + scanned + '</td>'
+      + '</tr>';
   }).join('');
-  dd.classList.add('visible');
 }
 
-function selectBrand(id, name, logo, category) {
-  selectedBrand = {id: id, name: name, logo: logo};
-  document.getElementById('selectedBrandId').value = id;
-  document.getElementById('selectedBrandName').value = name;
-  document.getElementById('selectedBrandLogo').value = logo;
-  document.getElementById('selectedName').textContent = name;
-  document.getElementById('selectedMeta').textContent = category || 'Brand';
-  var av = document.getElementById('selectedAvatar');
-  if (logo) { av.innerHTML = '<img src="' + logo + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.parentElement.textContent=\'' + name[0].toUpperCase() + '\'">'; }
-  else { av.textContent = name[0].toUpperCase(); }
-  document.getElementById('selectedBrand').style.display = 'block';
-  document.getElementById('pageRangeSection').style.display = 'block';
-  document.getElementById('brandDropdown').classList.remove('visible');
-  document.getElementById('brandSearch').value = '';
+function updateCount() {
+  var checked = document.querySelectorAll('.brand-check:checked').length;
+  document.getElementById('selectedCount').textContent = checked + ' brand' + (checked !== 1 ? 's' : '') + ' selected';
 }
+function selectAll() { document.querySelectorAll('.brand-check').forEach(function(c){ c.checked = true; }); updateCount(); }
+function selectNone() { document.querySelectorAll('.brand-check').forEach(function(c){ c.checked = false; }); updateCount(); }
+function toggleAll(v) { document.querySelectorAll('.brand-check').forEach(function(c){ c.checked = v; }); updateCount(); }
 
-function clearBrand() {
-  selectedBrand = null;
-  document.getElementById('selectedBrand').style.display = 'none';
-  document.getElementById('pageRangeSection').style.display = 'none';
-}
-
-/* Page range radio handling */
+/* Page range */
 document.querySelectorAll('input[name="pageRange"]').forEach(function(r) {
-  r.addEventListener('change', function() {
-    document.getElementById('customInputs').classList.toggle('visible', r.value === 'custom');
-  });
+  r.addEventListener('change', function() { document.getElementById('customInputs').classList.toggle('visible', r.value === 'custom'); });
 });
-
 function getPageRange() {
-  var selected = document.querySelector('input[name="pageRange"]:checked').value;
-  if (selected === 'custom') return { page_start: parseInt(document.getElementById('customStart').value) || 1, page_end: parseInt(document.getElementById('customEnd').value) || 50 };
-  var parts = selected.split('-');
-  return { page_start: parseInt(parts[0]), page_end: parseInt(parts[1]) };
+  var v = document.querySelector('input[name="pageRange"]:checked').value;
+  if (v === 'custom') return { page_start: parseInt(document.getElementById('customStart').value)||1, page_end: parseInt(document.getElementById('customEnd').value)||50 };
+  var p = v.split('-'); return { page_start: parseInt(p[0]), page_end: parseInt(p[1]) };
 }
 
 /* Launch scan */
 async function launchScan() {
-  if (!selectedBrand) return;
+  var checked = document.querySelectorAll('.brand-check:checked');
+  if (!checked.length) { alert('Select at least one brand to scan'); return; }
+  var brands = [];
+  checked.forEach(function(c) { var b = loadedBrands[parseInt(c.dataset.idx)]; if (b) brands.push({shop_id: b.shop_id, name: b.name}); });
   var range = getPageRange();
   var btn = document.getElementById('launchBtn');
   btn.disabled = true; btn.style.opacity = '0.6';
   try {
-    var res = await fetch('/app/brand-hunter/scan', { method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ brand_id: selectedBrand.id, brand_name: selectedBrand.name, brand_logo: selectedBrand.logo, page_start: range.page_start, page_end: range.page_end })
+    var res = await fetch('/app/brand-hunter/scan', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ brands: brands, page_start: range.page_start, page_end: range.page_end })
     });
     var data = await res.json();
     if (data.job_id) { activeJobId = data.job_id; startPolling(data.job_id, range.page_start, range.page_end); }
-    else { alert(data.error || 'Failed to start scan'); btn.disabled = false; btn.style.opacity = ''; }
+    else { alert(data.error || 'Failed'); btn.disabled = false; btn.style.opacity = ''; }
   } catch(e) { alert('Network error'); btn.disabled = false; btn.style.opacity = ''; }
 }
 
 /* Stop scan */
 async function stopScan() {
   if (!activeJobId) return;
-  try {
-    await fetch('/app/brand-hunter/scan/' + activeJobId + '/stop', { method: 'POST' });
-    document.getElementById('progressLabel').textContent = 'Scan stopped.';
-    setTimeout(function() { window.location.reload(); }, 1000);
-  } catch(e) {}
+  try { await fetch('/app/brand-hunter/scan/' + activeJobId + '/stop', {method:'POST'}); document.getElementById('progressLabel').textContent = 'Scan stopped.'; setTimeout(function(){ window.location.reload(); }, 1500); } catch(e) {}
 }
 
-/* Poll progress */
-function startPolling(jobId, pageStart, pageEnd) {
+/* Poll */
+function startPolling(jobId, ps, pe) {
   activeJobId = jobId;
-  var bar = document.getElementById('scanProgress');
-  bar.style.display = 'block';
-  var total = pageEnd - pageStart + 1;
-  var interval = setInterval(async function() {
+  document.getElementById('scanProgress').style.display = 'block';
+  var total = pe - ps + 1;
+  var iv = setInterval(async function() {
     try {
       var res = await fetch('/app/brand-hunter/scan/' + jobId + '/status');
       var d = await res.json();
-      var progress = Math.min(100, Math.round(((d.current_page - pageStart + 1) / total) * 100));
-      document.getElementById('progressFill').style.width = progress + '%';
-      document.getElementById('progressPct').textContent = progress + '%';
-      document.getElementById('progressLabel').textContent = 'Scanning ' + (d.brand_name || 'brand') + ' · Page ' + d.current_page + ' of ' + pageEnd;
+      var pct = Math.min(100, Math.round(((d.current_page - ps + 1) / total) * 100));
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressPct').textContent = pct + '%';
+      document.getElementById('progressLabel').textContent = 'Scanning ' + (d.brand_name||'') + ' · Page ' + d.current_page + '/' + pe;
       document.getElementById('progressDetail').textContent = d.products_found + ' products found';
-      if (d.status === 'complete') { clearInterval(interval); document.getElementById('progressLabel').textContent = 'Done! ' + d.products_found + ' products found.'; document.getElementById('progressFill').style.width = '100%'; document.getElementById('progressPct').textContent = '100%'; document.getElementById('stopScanBtn').style.display = 'none'; setTimeout(function() { window.location.reload(); }, 1500); }
-      if (d.status === 'error' || d.status === 'stopped') { clearInterval(interval); document.getElementById('progressLabel').textContent = d.status === 'stopped' ? 'Scan stopped. ' + d.products_found + ' products saved.' : 'Error: ' + (d.error_message || 'Unknown'); document.getElementById('stopScanBtn').style.display = 'none'; document.getElementById('launchBtn').disabled = false; document.getElementById('launchBtn').style.opacity = ''; setTimeout(function() { window.location.reload(); }, 2000); }
+      if (d.status === 'complete') { clearInterval(iv); document.getElementById('progressLabel').textContent = 'Done! ' + d.products_found + ' products found.'; document.getElementById('progressFill').style.width = '100%'; document.getElementById('stopScanBtn').style.display='none'; setTimeout(function(){ window.location.reload(); }, 1500); }
+      if (d.status === 'error' || d.status === 'stopped') { clearInterval(iv); document.getElementById('progressLabel').textContent = d.status === 'stopped' ? 'Stopped. ' + d.products_found + ' products saved.' : 'Error: ' + (d.error_message||''); document.getElementById('stopScanBtn').style.display='none'; setTimeout(function(){ window.location.reload(); }, 2000); }
     } catch(e) {}
   }, 2000);
 }
@@ -254,7 +287,5 @@ function startPolling(jobId, pageStart, pageEnd) {
 {% if active_job and active_job.status in ['queued', 'running'] %}
 startPolling({{ active_job.id }}, {{ active_job.page_start }}, {{ active_job.page_end }});
 {% endif %}
-
-document.addEventListener('click', function(e) { if (!e.target.closest('.brand-search-wrap')) document.getElementById('brandDropdown').classList.remove('visible'); });
 </script>
 {% endblock %}

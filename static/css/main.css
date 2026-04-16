@@ -996,6 +996,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   50%{background-position:100% 50%}
 }
 
+/* Brand letter avatar (compact, for tables and lists) */
+.brand-letter-avatar{width:36px;height:36px;border-radius:var(--radius-full);background:linear-gradient(135deg,var(--accent),#d97706);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;font-family:var(--font-display);flex-shrink:0}
+
 /* 50. BRAND HUNTER v2 — SCAN UI =========================================== */
 
 /* Page range radio buttons */

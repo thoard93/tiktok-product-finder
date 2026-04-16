@@ -1820,29 +1820,54 @@ def brand_hunter_search():
         return jsonify({'error': str(e)}), 500
 
 
+@views_bp.route('/app/brand-hunter/browse')
+@login_required
+def brand_hunter_browse():
+    """Fetch top brands from EchoTik ranking for selection. Returns JSON."""
+    page = request.args.get('page', 1, type=int)
+    try:
+        from app.services.echotik import fetch_top_shops
+        sellers = fetch_top_shops(country="US", page_size=10, page=page)
+        # Add ranking number based on page position
+        results = []
+        for i, s in enumerate(sellers):
+            s['rank'] = (page - 1) * 10 + i + 1
+            # Check if already scanned
+            existing = ScannedBrand.query.filter_by(brand_id=str(s.get('shop_id', ''))).first()
+            s['already_scanned'] = bool(existing)
+            results.append(s)
+        return jsonify({'brands': results, 'page': page})
+    except Exception as e:
+        return jsonify({'error': str(e), 'brands': []}), 500
+
+
 @views_bp.route('/app/brand-hunter/scan', methods=['POST'])
 @login_required
 def brand_hunter_scan():
-    """Launch a background scan of product pages within a specific brand."""
+    """Launch background scan of product pages for one or more brands."""
     user = get_current_user()
     if not user:
         return jsonify({'error': 'Auth required'}), 401
 
     data = request.get_json() or {}
-    brand_id_str = data.get('brand_id', '').strip()
-    brand_name = data.get('brand_name', '').strip()
-    brand_logo = data.get('brand_logo', '')
     page_start = int(data.get('page_start', 1))
     page_end = int(data.get('page_end', 50))
 
-    if not brand_id_str or not brand_name:
-        return jsonify({'error': 'Brand ID and name are required'}), 400
+    # Accept single brand or array of brands
+    brands_to_scan = data.get('brands', [])
+    if not brands_to_scan:
+        # Fallback: single brand format
+        bid = data.get('brand_id', '').strip()
+        bname = data.get('brand_name', '').strip()
+        if bid and bname:
+            brands_to_scan = [{'shop_id': bid, 'name': bname}]
+
+    if not brands_to_scan:
+        return jsonify({'error': 'Select at least one brand'}), 400
 
     # Sanity checks
-    if page_start < 1:
-        page_start = 1
-    if page_end > 500:
-        page_end = 500
+    page_start = max(1, page_start)
+    page_end = min(500, page_end)
     if page_end < page_start:
         page_end = page_start
 
@@ -1853,10 +1878,11 @@ def brand_hunter_scan():
     if existing:
         return jsonify({'error': 'A scan is already running', 'job_id': existing.id}), 409
 
+    # Store brand list as comma-separated in brand_name for progress display
+    brand_names = [b.get('name', '?') for b in brands_to_scan]
     job = BrandScanJob(
-        brand_id_str=brand_id_str,
-        brand_name=brand_name,
-        brand_logo_url=brand_logo,
+        brand_id_str=','.join(b.get('shop_id', '') for b in brands_to_scan),
+        brand_name=brand_names[0] if len(brand_names) == 1 else f"{len(brand_names)} brands",
         page_start=page_start,
         page_end=page_end,
         status='queued',
@@ -1864,11 +1890,10 @@ def brand_hunter_scan():
     db.session.add(job)
     db.session.commit()
 
-    # Launch background scan
     from app import executor
     from flask import current_app
     app = current_app._get_current_object()
-    executor.submit(_run_brand_scan, app, job.id)
+    executor.submit(_run_batch_brand_scan, app, job.id, brands_to_scan)
 
     return jsonify({'job_id': job.id})
 
@@ -1910,101 +1935,120 @@ def brand_hunter_scan_stop(job_id):
     return jsonify({'success': True})
 
 
-def _run_brand_scan(app, job_id):
-    """Background: scan product pages within a single brand via EchoTik."""
+def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
+    """Scan product pages for a single brand. Called within app context."""
     import time as _time
     from app.services.echotik import fetch_brand_products
 
+    brand = ScannedBrand.query.filter_by(brand_id=str(shop_id)).first()
+    if not brand:
+        brand = ScannedBrand(brand_id=str(shop_id))
+        db.session.add(brand)
+    brand.brand_name = brand_name
+    brand.scan_status = 'scanning'
+    brand.pages_scanned = f"{page_start}-{page_end}"
+    db.session.flush()
+    db.session.commit()
+
+    all_products = []
+    empty_streak = 0
+
+    for page in range(page_start, page_end + 1):
+        # Check if scan was stopped
+        db.session.refresh(job)
+        if job.status in ('stopped', 'error'):
+            break
+
+        job.current_page = page
+        job.brand_name = brand_name  # Update display name for current brand
+        db.session.commit()
+
+        try:
+            products = fetch_brand_products(str(shop_id), page=page, page_size=10)
+        except Exception:
+            products = []
+
+        if not products:
+            empty_streak += 1
+            if empty_streak >= 5:
+                break
+            _time.sleep(0.2)
+            continue
+        empty_streak = 0
+
+        for p in products:
+            bp = BrandProduct(
+                brand_id=brand.id,
+                product_id=p.get('product_id', ''),
+                title=(p.get('product_name', '') or '')[:500],
+                image_url=p.get('image_url', ''),
+                price=p.get('price', 0) or 0,
+                commission_rate=p.get('commission_rate', 0) or 0,
+                sales_30d=p.get('sales_30d', 0) or p.get('sales', 0) or 0,
+                revenue_30d=p.get('gmv_30d', 0) or p.get('gmv', 0) or 0,
+                total_videos=p.get('video_count_alltime', 0) or p.get('video_count', 0) or 0,
+                total_sales=p.get('sales', 0) or 0,
+                influencer_count=p.get('influencer_count', 0) or 0,
+                category=p.get('category', ''),
+                page_found=page,
+                is_hidden_gem=(page > 99),
+            )
+            all_products.append(bp)
+
+        job.products_found = (job.products_found or 0) + len(products)
+        db.session.commit()
+        _time.sleep(0.3)
+
+    # Clear old products, save new
+    BrandProduct.query.filter_by(brand_id=brand.id).delete()
+    for bp in all_products:
+        bp.brand_id = brand.id
+        db.session.add(bp)
+
+    # Update brand stats
+    brand.total_products = len(all_products)
+    brand.sales_30d = sum(bp.sales_30d or 0 for bp in all_products)
+    brand.revenue_30d = sum(bp.revenue_30d or 0 for bp in all_products)
+    brand.units_sold_30d = sum(bp.total_sales or 0 for bp in all_products)
+    if all_products:
+        comms = [bp.commission_rate for bp in all_products if bp.commission_rate and bp.commission_rate > 0]
+        brand.avg_commission = sum(comms) / len(comms) if comms else 0
+        top = max(all_products, key=lambda bp: bp.total_sales or 0)
+        brand.top_product_name = top.title
+    brand.is_hidden_gem = any(bp.is_hidden_gem for bp in all_products)
+    brand.scan_status = 'complete'
+    brand.last_scanned = datetime.utcnow()
+    db.session.commit()
+
+    return len(all_products)
+
+
+def _run_batch_brand_scan(app, job_id, brands_list):
+    """Background: scan product pages for one or more brands."""
     with app.app_context():
         job = BrandScanJob.query.get(job_id)
         if not job:
             return
         job.status = 'running'
         job.started_at = datetime.utcnow()
+        job.products_found = 0
         db.session.commit()
 
         try:
-            # Upsert ScannedBrand record
-            brand = ScannedBrand.query.filter_by(brand_id=job.brand_id_str).first()
-            if not brand:
-                brand = ScannedBrand(brand_id=job.brand_id_str)
-                db.session.add(brand)
-            brand.brand_name = job.brand_name
-            brand.brand_logo_url = job.brand_logo_url or brand.brand_logo_url
-            brand.scan_status = 'scanning'
-            brand.pages_scanned = f"{job.page_start}-{job.page_end}"
-            db.session.flush()
-            db.session.commit()
-
-            all_products = []
-            empty_streak = 0
-
-            for page in range(job.page_start, job.page_end + 1):
-                # Check if scan was stopped by user
+            for brand_info in brands_list:
                 db.session.refresh(job)
-                if job.status == 'stopped':
+                if job.status in ('stopped', 'error'):
                     break
 
-                job.current_page = page
-                db.session.commit()
-
-                try:
-                    products = fetch_brand_products(job.brand_id_str, page=page, page_size=10)
-                except Exception:
-                    products = []
-
-                if not products:
-                    empty_streak += 1
-                    if empty_streak >= 5:
-                        break  # 5 consecutive empty pages = brand has no more products
-                    _time.sleep(0.2)
+                shop_id = brand_info.get('shop_id', '')
+                name = brand_info.get('name', 'Unknown')
+                if not shop_id:
                     continue
-                empty_streak = 0
 
-                for p in products:
-                    bp = BrandProduct(
-                        brand_id=brand.id,
-                        product_id=p.get('product_id', ''),
-                        title=(p.get('product_name', '') or '')[:500],
-                        image_url=p.get('image_url', ''),
-                        price=p.get('price', 0) or 0,
-                        commission_rate=p.get('commission_rate', 0) or 0,
-                        sales_30d=p.get('sales_30d', 0) or p.get('sales', 0) or 0,
-                        revenue_30d=p.get('gmv_30d', 0) or p.get('gmv', 0) or 0,
-                        total_videos=p.get('video_count_alltime', 0) or p.get('video_count', 0) or 0,
-                        total_sales=p.get('sales', 0) or 0,
-                        influencer_count=p.get('influencer_count', 0) or 0,
-                        category=p.get('category', ''),
-                        page_found=page,
-                        is_hidden_gem=(page > 99),
-                    )
-                    all_products.append(bp)
+                _scan_single_brand(shop_id, name, job.page_start, job.page_end, job)
 
-                job.products_found = len(all_products)
-                db.session.commit()
-                _time.sleep(0.3)
-
-            # Clear old products for this brand, save new ones
-            BrandProduct.query.filter_by(brand_id=brand.id).delete()
-            for bp in all_products:
-                bp.brand_id = brand.id
-                db.session.add(bp)
-
-            # Update brand aggregated stats
-            brand.total_products = len(all_products)
-            brand.sales_30d = sum(bp.sales_30d or 0 for bp in all_products)
-            brand.revenue_30d = sum(bp.revenue_30d or 0 for bp in all_products)
-            brand.units_sold_30d = sum(bp.total_sales or 0 for bp in all_products)
-            if all_products:
-                comms = [bp.commission_rate for bp in all_products if bp.commission_rate and bp.commission_rate > 0]
-                brand.avg_commission = sum(comms) / len(comms) if comms else 0
-                top = max(all_products, key=lambda bp: bp.total_sales or 0)
-                brand.top_product_name = top.title
-            brand.is_hidden_gem = any(bp.is_hidden_gem for bp in all_products)
-            brand.scan_status = 'complete'
-            brand.last_scanned = datetime.utcnow()
-
-            job.status = 'complete'
+            if job.status == 'running':
+                job.status = 'complete'
             job.completed_at = datetime.utcnow()
             db.session.commit()
 
