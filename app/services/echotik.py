@@ -780,40 +780,27 @@ def _try_raw(url, params):
 def fetch_creator_videos(unique_id: str, user_id: str = '',
                          limit: int = 12) -> list[dict]:
     """
-    Fetch a creator's recent videos.
+    Fetch a creator's recent videos from EchoTik.
 
-    EchoTik's influencer video endpoint expects the numeric TikTok
-    ``user_id``, not the ``@handle``. We try ``user_id`` first then
-    fall back to ``unique_id`` across a bunch of path + param variants.
+    Endpoint:  GET /influencer/video/list
+    Required:  user_id (numeric) OR unique_id (handle)
+               page_num, page_size (max 10)
     """
     uid = (unique_id or '').strip()
     user_id = str(user_id or '').strip()
     if not uid and not user_id:
         return []
 
-    size = min(limit, 20)
-    # Paths we've seen EchoTik use / be likely to use for this data
-    paths = [
-        f"{ECHOTIK_V3_BASE}/influencer/video/list",
-        f"{ECHOTIK_V3_BASE}/influencer/video",
-        f"{ECHOTIK_V3_BASE}/influencer/videos",
-        f"{ECHOTIK_V3_BASE}/influencer/video_list",
-    ]
-    # Param variants — EchoTik switches between page/limit and page_num/page_size
-    param_sets = []
-    if user_id:
-        param_sets += [
-            {'user_id': user_id, 'page_num': 1, 'page_size': size},
-            {'user_id': user_id, 'page': 1, 'limit': size},
-            {'userId': user_id, 'page_num': 1, 'page_size': size},
-        ]
-    if uid:
-        param_sets += [
-            {'unique_id': uid, 'page_num': 1, 'page_size': size},
-            {'unique_id': uid, 'page': 1, 'limit': size},
-        ]
+    # EchoTik hard caps page_size at 10 on this endpoint
+    size = min(max(limit, 1), 10)
+    url = f"{ECHOTIK_V3_BASE}/influencer/video/list"
 
-    attempts = [(p, params) for p in paths for params in param_sets]
+    # user_id is the preferred lookup key; fall back to unique_id
+    attempts = []
+    if user_id:
+        attempts.append((url, {'user_id': user_id, 'page_num': 1, 'page_size': size}))
+    if uid:
+        attempts.append((url, {'unique_id': uid, 'page_num': 1, 'page_size': size}))
 
     raw_list = []
     for url, params in attempts:
@@ -910,40 +897,27 @@ def fetch_creator_videos(unique_id: str, user_id: str = '',
 
 
 def fetch_creator_shop_products(unique_id: str, user_id: str = '',
-                                limit: int = 20) -> list[dict]:
+                                limit: int = 10) -> list[dict]:
     """
     Fetch the list of products a creator has promoted.
 
-    Like the video endpoint this one prefers the numeric TikTok
-    ``user_id``. Tries several path + param combos and logs the raw
-    response status/code/message for each attempt.
+    Endpoint:  GET /influencer/product/list
+    Required:  user_id (numeric) OR unique_id (handle)
+               page_num, page_size (max 10)
     """
     uid = (unique_id or '').strip()
     user_id = str(user_id or '').strip()
     if not uid and not user_id:
         return []
 
-    size = min(limit, 20)
-    paths = [
-        f"{ECHOTIK_V3_BASE}/influencer/product/list",
-        f"{ECHOTIK_V3_BASE}/influencer/product",
-        f"{ECHOTIK_V3_BASE}/influencer/products",
-        f"{ECHOTIK_V3_BASE}/influencer/product_list",
-    ]
-    param_sets = []
-    if user_id:
-        param_sets += [
-            {'user_id': user_id, 'page_num': 1, 'page_size': size},
-            {'user_id': user_id, 'page': 1, 'limit': size},
-            {'userId': user_id, 'page_num': 1, 'page_size': size},
-        ]
-    if uid:
-        param_sets += [
-            {'unique_id': uid, 'page_num': 1, 'page_size': size},
-            {'unique_id': uid, 'page': 1, 'limit': size},
-        ]
+    size = min(max(limit, 1), 10)  # EchoTik hard caps at 10
+    url = f"{ECHOTIK_V3_BASE}/influencer/product/list"
 
-    attempts = [(p, params) for p in paths for params in param_sets]
+    attempts = []
+    if user_id:
+        attempts.append((url, {'user_id': user_id, 'page_num': 1, 'page_size': size}))
+    if uid:
+        attempts.append((url, {'unique_id': uid, 'page_num': 1, 'page_size': size}))
 
     raw_list = []
     for url, params in attempts:
