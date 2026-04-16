@@ -550,6 +550,20 @@ def product_detail(product_id):
         product = Product.query.get(f'shop_{product_id}')
     if not product and product_id.startswith('shop_'):
         product = Product.query.get(product_id.replace('shop_', ''))
+
+    # Auto-fetch from EchoTik if not in DB (e.g. Brand Hunter products)
+    if not product:
+        try:
+            from app.services.echotik import fetch_product_detail, sync_to_db
+            raw_id = product_id.replace('shop_', '')
+            detail = fetch_product_detail(raw_id)
+            if detail:
+                sync_to_db([detail])
+                shop_pid = f'shop_{raw_id}'
+                product = Product.query.get(shop_pid) or Product.query.get(raw_id)
+        except Exception:
+            pass
+
     if not product:
         from flask import abort
         abort(404)

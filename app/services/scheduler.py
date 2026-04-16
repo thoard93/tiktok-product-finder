@@ -147,6 +147,12 @@ def daily_sync(app):
         except Exception:
             log.exception("[SCHEDULER] Brand sync failed")
 
+        # Step 4: Refresh Brand Hunter product stats
+        try:
+            _refresh_brand_products(app)
+        except Exception:
+            log.exception("[SCHEDULER] Brand product refresh failed")
+
         log.info("[SCHEDULER] === Daily sync complete ===")
 
 
@@ -225,6 +231,73 @@ def _deep_refresh_with_videos(app):
         "[SCHEDULER] Deep refresh: %d products refreshed, %d videos synced",
         refreshed, videos_synced,
     )
+
+
+def _refresh_brand_products(app):
+    """Refresh stats for Brand Hunter products (BrandProduct table)."""
+    from app import db
+    from app.models import BrandProduct, ScannedBrand
+    from app.services.echotik import fetch_brand_products
+
+    brands = ScannedBrand.query.filter(
+        ScannedBrand.scan_status == 'complete',
+        ScannedBrand.total_products > 0,
+    ).all()
+
+    if not brands:
+        log.info("[SCHEDULER] No scanned brands to refresh")
+        return
+
+    log.info("[SCHEDULER] Refreshing %d scanned brands", len(brands))
+    total_updated = 0
+
+    for brand in brands:
+        try:
+            # Fetch first 2 pages (20 products) for a quick stats refresh
+            fresh_products = []
+            for page in range(1, 3):
+                products = fetch_brand_products(brand.brand_id, page=page, page_size=10)
+                if products:
+                    fresh_products.extend(products)
+                time.sleep(0.3)
+
+            if not fresh_products:
+                continue
+
+            # Build a lookup of fresh data by product_id
+            fresh_map = {}
+            for p in fresh_products:
+                pid = p.get('product_id', '')
+                if pid:
+                    fresh_map[pid] = p
+
+            # Update existing BrandProduct records that match
+            existing = BrandProduct.query.filter_by(brand_id=brand.id).limit(100).all()
+            for bp in existing:
+                raw_pid = bp.product_id.replace('shop_', '')
+                fresh = fresh_map.get(raw_pid) or fresh_map.get(bp.product_id)
+                if fresh:
+                    bp.sales_30d = fresh.get('sales_30d', 0) or fresh.get('sales', 0) or bp.sales_30d
+                    bp.revenue_30d = fresh.get('gmv_30d', 0) or fresh.get('gmv', 0) or bp.revenue_30d
+                    bp.total_videos = fresh.get('video_count_alltime', 0) or fresh.get('video_count', 0) or bp.total_videos
+                    bp.influencer_count = fresh.get('influencer_count', 0) or bp.influencer_count
+                    bp.price = fresh.get('price', 0) or bp.price
+                    bp.commission_rate = fresh.get('commission_rate', 0) or bp.commission_rate
+                    total_updated += 1
+
+            # Update brand aggregate stats
+            all_bp = BrandProduct.query.filter_by(brand_id=brand.id).all()
+            brand.sales_30d = sum(bp.sales_30d or 0 for bp in all_bp)
+            brand.revenue_30d = sum(bp.revenue_30d or 0 for bp in all_bp)
+            brand.last_scanned = datetime.utcnow()
+            db.session.commit()
+
+        except Exception as e:
+            log.warning("[SCHEDULER] Brand refresh error for %s: %s", brand.brand_name, e)
+            db.session.rollback()
+            continue
+
+    log.info("[SCHEDULER] Brand products refreshed: %d products updated across %d brands", total_updated, len(brands))
 
 
 # ---------------------------------------------------------------------------
