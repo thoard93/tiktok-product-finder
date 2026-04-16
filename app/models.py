@@ -709,14 +709,16 @@ class BrandProduct(db.Model):
 
 
 class BrandScanJob(db.Model):
-    """Tracks brand hunter scan progress"""
+    """Tracks brand hunter scan progress — scans product pages within a single brand"""
     __tablename__ = 'brand_scan_jobs'
 
     id = db.Column(db.Integer, primary_key=True)
+    brand_id_str = db.Column(db.String(100))      # EchoTik shop_id
+    brand_name = db.Column(db.String(300))         # Display name
+    brand_logo_url = db.Column(db.String(500))     # Logo for progress bar display
     page_start = db.Column(db.Integer, default=1)
     page_end = db.Column(db.Integer, default=50)
     current_page = db.Column(db.Integer, default=0)
-    brands_found = db.Column(db.Integer, default=0)
     products_found = db.Column(db.Integer, default=0)
     status = db.Column(db.String(20), default='queued')  # queued, running, complete, error
     error_message = db.Column(db.String(500))
