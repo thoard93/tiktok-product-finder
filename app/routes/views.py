@@ -2086,14 +2086,14 @@ def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
         top = max(all_products, key=lambda bp: bp.total_sales or 0)
         brand.top_product_name = top.title
     brand.is_hidden_gem = any(bp.is_hidden_gem for bp in all_products)
-    brand.scan_status = 'complete'
+    brand.scan_status = 'saving'
     brand.last_scanned = datetime.utcnow()
+    job.brand_name = f"{brand_name} (saving {len(all_products)} products...)"
     db.session.commit()
 
-    # Sync to main Product table so "View" is instant (no API call on click)
+    # Sync to main Product table so "View" is instant
     try:
         from app.services.echotik import sync_to_db as echotik_sync
-        # Collect raw product dicts for sync_to_db
         raw_for_sync = []
         for bp in all_products:
             raw_for_sync.append({
@@ -2103,7 +2103,7 @@ def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
                 'price': bp.price,
                 'commission_rate': bp.commission_rate,
                 'sales': bp.total_sales,
-                'sales_7d': bp.sales_30d,  # Best approximation
+                'sales_7d': bp.sales_30d,
                 'sales_30d': bp.sales_30d,
                 'video_count_alltime': bp.total_videos,
                 'video_count': bp.total_videos,
@@ -2112,35 +2112,50 @@ def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
                 'seller_name': brand_name,
                 'seller_id': str(shop_id),
             })
-        # Sync in batches of 50
         for i in range(0, len(raw_for_sync), 50):
-            batch = raw_for_sync[i:i+50]
             try:
-                echotik_sync(batch)
+                echotik_sync(raw_for_sync[i:i+50])
             except Exception:
                 pass
-        log.info(f"[BrandScan] Synced {len(raw_for_sync)} products to main Product table for {brand_name}")
     except Exception as e:
         log.warning(f"[BrandScan] Product table sync failed: {e}")
 
-    # Sign product images via EchoTik batch signing
+    # Sign images on the MAIN Product table entries (not BrandProduct)
     try:
         from app.services.echotik import fetch_batch_images
-        unsigned = [bp for bp in all_products if bp.image_url and 'echosell' in (bp.image_url or '')]
-        for i in range(0, len(unsigned), 10):
-            batch = unsigned[i:i+10]
-            urls = [bp.image_url for bp in batch]
+        from sqlalchemy import or_
+        pids = [bp.product_id for bp in all_products]
+        shop_pids = [f'shop_{pid}' for pid in pids]
+        all_pids = pids + shop_pids
+        unsigned_products = Product.query.filter(
+            Product.product_id.in_(all_pids),
+            Product.image_url.isnot(None),
+            Product.image_url != '',
+            or_(Product.cached_image_url.is_(None), Product.cached_image_url == '')
+        ).limit(200).all()
+
+        job.brand_name = f"{brand_name} (signing {len(unsigned_products)} images...)"
+        db.session.commit()
+
+        for i in range(0, len(unsigned_products), 10):
+            batch = unsigned_products[i:i+10]
+            urls = [p.image_url for p in batch if p.image_url and p.image_url.startswith('http')]
+            if not urls:
+                continue
             try:
                 signed = fetch_batch_images(urls)
-                for bp in batch:
-                    if bp.image_url in signed:
-                        bp.image_url = signed[bp.image_url][:500]
+                for p in batch:
+                    if p.image_url in signed:
+                        p.cached_image_url = signed[p.image_url][:500]
                 db.session.commit()
             except Exception:
                 pass
             _time.sleep(0.2)
     except Exception:
         pass
+
+    brand.scan_status = 'complete'
+    db.session.commit()
 
     return len(all_products)
 
