@@ -21,6 +21,10 @@ def _auto_migrate(app, db):
         ("products", "trend_data_json", "TEXT"),
         ("products", "trend_last_synced", "TIMESTAMP"),
         ("products", "lookup_count", "INTEGER DEFAULT 0"),
+        # Brand Hunter v2 — new columns on brand_scan_jobs
+        ("brand_scan_jobs", "brand_id_str", "VARCHAR(100)"),
+        ("brand_scan_jobs", "brand_name", "VARCHAR(300)"),
+        ("brand_scan_jobs", "brand_logo_url", "VARCHAR(500)"),
     ]
     for table, column, col_type in column_migrations:
         try:
@@ -141,7 +145,7 @@ def _auto_migrate(app, db):
                 print(f"[MIGRATE] {tbl} creation failed: {e}")
 
     # Fix Brand Hunter v2 tables if missing
-    for tbl in ['scanned_brands', 'brand_products', 'brand_scan_jobs']:
+    for tbl in ['scanned_brands', 'brand_products']:
         try:
             db.session.execute(db.text(f"SELECT id FROM {tbl} LIMIT 1"))
             db.session.rollback()
@@ -153,6 +157,21 @@ def _auto_migrate(app, db):
             except Exception as e:
                 db.session.rollback()
                 print(f"[MIGRATE] {tbl} creation failed: {e}")
+
+    # brand_scan_jobs — drop & recreate if schema is wrong (safe, just job tracking)
+    try:
+        db.session.execute(db.text("SELECT brand_id_str FROM brand_scan_jobs LIMIT 1"))
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        try:
+            db.session.execute(db.text("DROP TABLE IF EXISTS brand_scan_jobs"))
+            db.session.commit()
+            db.create_all()
+            print("[MIGRATE] Recreated brand_scan_jobs table with correct schema")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[MIGRATE] brand_scan_jobs fix failed: {e}")
 
 
 def create_app():

@@ -1794,14 +1794,23 @@ def admin_coupon_delete(cid):
 @login_required
 def brand_hunter():
     ctx = _base_context('brands')
-    ctx['brands'] = ScannedBrand.query.order_by(
-        ScannedBrand.sales_30d.desc().nullslast()
-    ).all()
-    # Check for active scan jobs
-    active_job = BrandScanJob.query.filter(
-        BrandScanJob.status.in_(['queued', 'running'])
-    ).order_by(BrandScanJob.created_at.desc()).first()
-    ctx['active_job'] = active_job
+    try:
+        ctx['brands'] = ScannedBrand.query.order_by(
+            ScannedBrand.sales_30d.desc().nullslast()
+        ).all()
+    except Exception:
+        db.session.rollback()
+        ctx['brands'] = []
+
+    try:
+        active_job = BrandScanJob.query.filter(
+            BrandScanJob.status.in_(['queued', 'running'])
+        ).order_by(BrandScanJob.created_at.desc()).first()
+        ctx['active_job'] = active_job
+    except Exception:
+        db.session.rollback()
+        ctx['active_job'] = None
+
     return render_template('brand_hunter.html', **ctx)
 
 
