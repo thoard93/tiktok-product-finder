@@ -2485,28 +2485,30 @@ def creator_profile(unique_id):
 @api_auth
 def api_creator_videos(unique_id):
     """Return recent videos for a creator (client sorts)."""
+    user_id = request.args.get('user_id', '').strip()
     try:
         from app.services.echotik import fetch_creator_videos
-        vids = fetch_creator_videos(unique_id, limit=12)
+        vids = fetch_creator_videos(unique_id, user_id=user_id, limit=12)
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"[Creators] videos {unique_id} error: {e}")
         vids = []
-    return jsonify({'videos': vids})
+    return jsonify({'videos': vids, 'count': len(vids)})
 
 
 @views_bp.route('/api/creators/<unique_id>/sales')
 @api_auth
 def api_creator_sales(unique_id):
     """Return promoted products for a creator."""
+    user_id = request.args.get('user_id', '').strip()
     try:
         from app.services.echotik import fetch_creator_shop_products
-        products = fetch_creator_shop_products(unique_id, limit=20)
+        products = fetch_creator_shop_products(unique_id, user_id=user_id, limit=20)
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"[Creators] sales {unique_id} error: {e}")
         products = []
-    return jsonify({'products': products})
+    return jsonify({'products': products, 'count': len(products)})
 
 
 @views_bp.route('/api/creators/<unique_id>/similar')

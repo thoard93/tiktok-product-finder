@@ -207,25 +207,41 @@
 {# ---------- TAB 3: Growth ---------- #}
 <div class="creator-tab-panel" id="creatorTab-growth" style="display:none">
   {% set growth_data = [
-    ('+1 Day', creator.total_followers_1d_cnt or 0),
-    ('+7 Days', creator.total_followers_7d_cnt or 0),
-    ('+30 Days', creator.total_followers_30d_cnt or 0),
-    ('+90 Days', creator.total_followers_90d_cnt or 0),
+    ('Last 24 Hours', creator.total_followers_1d_cnt or 0),
+    ('Last 7 Days', creator.total_followers_7d_cnt or 0),
+    ('Last 30 Days', creator.total_followers_30d_cnt or 0),
+    ('Last 90 Days', creator.total_followers_90d_cnt or 0),
   ] %}
   <div class="creator-growth-grid">
     {% for label, val in growth_data %}
-      {% set color = '#10b981' if val > 0 else ('#ef4444' if val < 0 else 'var(--text-muted)') %}
-      {% set arrow = '▲' if val > 0 else ('▼' if val < 0 else '—') %}
-      <div class="card creator-growth-card">
-        <div class="stat-label">{{ label }}</div>
-        <div class="creator-growth-value" style="color:{{ color }}">
+      {% if val > 0 %}
+        {% set tone = 'up' %}
+        {% set caption = 'followers gained' %}
+      {% elif val < 0 %}
+        {% set tone = 'down' %}
+        {% set caption = 'followers lost' %}
+      {% else %}
+        {% set tone = 'flat' %}
+        {% set caption = 'no change' %}
+      {% endif %}
+      <div class="card creator-growth-card creator-growth-card--{{ tone }}">
+        <div class="creator-growth-period">{{ label }}</div>
+        <div class="creator-growth-number-row">
           {% if is_pro %}
-            <span class="creator-growth-arrow">{{ arrow }}</span>
-            {% if val > 0 %}{{ val | format_number }}{% elif val < 0 %}-{{ (val | abs) | format_number }}{% else %}—{% endif %}
+            {% if val > 0 %}
+              <svg class="creator-growth-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+              <span class="creator-growth-number">+{{ val | format_number }}</span>
+            {% elif val < 0 %}
+              <svg class="creator-growth-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+              <span class="creator-growth-number">-{{ (val | abs) | format_number }}</span>
+            {% else %}
+              <span class="creator-growth-number">—</span>
+            {% endif %}
           {% else %}
-            <span class="blurred-data">▲ 4.2K</span>
+            <span class="creator-growth-number"><span class="blurred-data">+4.2K</span></span>
           {% endif %}
         </div>
+        <div class="creator-growth-caption">{{ caption }}</div>
       </div>
     {% endfor %}
   </div>
@@ -273,6 +289,7 @@
 <script>
 const CREATOR_DATA = {
   unique_id: {{ creator.unique_id | tojson }},
+  user_id: {{ (creator.user_id or creator.userId or '') | string | tojson }},
   nick_name: {{ (creator.nick_name or '') | tojson }},
   avatar_url: {{ (creator.avatar_url or '') | tojson }},
   total_followers_cnt: {{ creator.total_followers_cnt or 0 }},
@@ -364,12 +381,18 @@ function escapeHtml(s) {
 // ----- Videos -----
 async function loadVideos() {
   try {
-    const res = await fetch('/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id) + '/videos');
+    const qs = new URLSearchParams();
+    if (CREATOR_DATA.user_id) qs.set('user_id', CREATOR_DATA.user_id);
+    const url = '/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id)
+              + '/videos' + (qs.toString() ? '?' + qs.toString() : '');
+    const res = await fetch(url);
     if (!res.ok) throw new Error('bad response');
     const data = await res.json();
+    console.log('[Creator] /videos response:', data);
     allVideos = data.videos || [];
     renderVideos('views');
   } catch(e) {
+    console.warn('[Creator] videos fetch failed', e);
     allVideos = [];
     renderVideos('views');
   }
@@ -425,8 +448,13 @@ async function loadSales() {
   const body = document.getElementById('creatorSalesBody');
   if (!body) return;
   try {
-    const res = await fetch('/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id) + '/sales');
+    const qs = new URLSearchParams();
+    if (CREATOR_DATA.user_id) qs.set('user_id', CREATOR_DATA.user_id);
+    const url = '/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id)
+              + '/sales' + (qs.toString() ? '?' + qs.toString() : '');
+    const res = await fetch(url);
     const data = await res.json();
+    console.log('[Creator] /sales response:', data);
     const prods = data.products || [];
     if (!prods.length) {
       body.innerHTML = '<tr><td colspan="5" style="padding:var(--space-6);text-align:center;color:var(--text-muted)">No product promotions found.</td></tr>';
@@ -516,6 +544,7 @@ async function loadSimilar() {
     const qs = new URLSearchParams({ region: CREATOR_DATA.region || 'US', category: CREATOR_DATA.category || '' });
     const res = await fetch('/api/creators/' + encodeURIComponent(CREATOR_DATA.unique_id) + '/similar?' + qs.toString());
     const data = await res.json();
+    console.log('[Creator] /similar response:', data);
     const creators = data.creators || [];
     if (!creators.length) {
       const section = grid.previousElementSibling;
@@ -528,8 +557,14 @@ async function loadSimilar() {
       const region = (c.region || 'US').toUpperCase();
       const flag = flags[region] || '🌍';
       const letter = escapeHtml((c.nick_name || c.unique_id || '?')[0].toUpperCase());
-      const avatar = c.avatar_url
-        ? '<img src="' + escapeHtml(c.avatar_url) + '" alt="" class="creator-similar-avatar" onerror="this.onerror=null;this.src=\'/static/img/avatar-placeholder.png\'">'
+      // NOTE: TikTok CDN URLs (p16-sign-va.tiktokcdn.com) expire after a few
+      // hours. They render fine on first load; a proxy is a future fix.
+      const avatarUrl = c.avatar_url || c.avatar || '';
+      const avatar = avatarUrl
+        ? '<img src="' + escapeHtml(avatarUrl) + '" '
+          + 'alt="' + escapeHtml(c.nick_name || c.unique_id) + '" '
+          + 'loading="lazy" class="creator-similar-avatar similar-creator-avatar" '
+          + 'onerror="this.onerror=null;this.src=\'/static/img/avatar-placeholder.png\'">'
         : '<div class="creator-similar-avatar creator-similar-avatar--fallback">' + letter + '</div>';
       const eng = c.interaction_rate;
       const engPct = eng && eng < 1 ? (eng * 100) : eng;
@@ -547,6 +582,7 @@ async function loadSimilar() {
         + '</div>';
     }).join('');
   } catch(e) {
+    console.warn('[Creator] similar fetch failed', e);
     grid.style.display = 'none';
   }
 }

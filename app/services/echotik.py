@@ -568,6 +568,11 @@ def _extract_creator_avatar(c: dict) -> Optional[str]:
     Tries the TikTok-style nested objects first (avatar_168x168.url_list[0],
     etc.) — those are only present on the realtime endpoint — then falls
     back to the flat fields used by the batch and list endpoints.
+
+    NOTE: URLs from the batch endpoint are TikTok CDN URLs
+    (p16-sign-va.tiktokcdn.com) and carry signed query params that expire
+    after a few hours. That's fine for first load; proxying is a future
+    enhancement.
     """
     # Nested TikTok-style avatar objects (realtime payload)
     for key in ('avatar_168x168', 'avatar_300x300', 'avatar_thumb',
@@ -583,10 +588,14 @@ def _extract_creator_avatar(c: dict) -> Optional[str]:
             if isinstance(direct, str) and direct.startswith('http'):
                 return direct[:500]
 
-    # Flat fallbacks (batch / list payloads)
+    # Flat fallbacks (batch / list payloads use direct URL strings)
     return _extract_image_url(
         c.get('avatar') or c.get('avatar_url') or c.get('avatarLarger')
-        or c.get('head_img') or c.get('headImg') or c.get('avatarThumb')
+        or c.get('avatar_larger') or c.get('head_img') or c.get('headImg')
+        or c.get('head_image') or c.get('headImage')
+        or c.get('profile_image') or c.get('profile_pic') or c.get('profilePic')
+        or c.get('avatarThumb') or c.get('avatar_thumb_url')
+        or c.get('avatar_medium') or c.get('avatar_medium_url')
     )
 
 
@@ -696,6 +705,16 @@ def fetch_similar_creators(unique_id: str, region: str = 'US',
             'page_size': min(limit + 4, 20),
         })
 
+    # Debug: log the keys of the first raw item so we can see what
+    # avatar field the API is actually returning.
+    if raw_list:
+        first = raw_list[0] if isinstance(raw_list[0], dict) else {}
+        log.info("[EchoTik] similar_creators raw keys=%s, avatar_sample=%r",
+                 list(first.keys())[:30],
+                 (first.get('avatar') or first.get('head_image')
+                  or first.get('avatar_url') or first.get('head_img')
+                  or first.get('profile_image')))
+
     results = []
     for c in raw_list:
         cid = str(c.get('unique_id') or c.get('uniqueId') or c.get('handle', '')).strip()
@@ -707,10 +726,12 @@ def fetch_similar_creators(unique_id: str, region: str = 'US',
             or c.get('engagement_rate') or 0
         )
         results.append({
+            'user_id': str(c.get('user_id') or c.get('userId') or ''),
             'unique_id': cid,
             'nick_name': (c.get('nick_name') or c.get('nickname')
                           or c.get('nickName') or c.get('name') or cid),
-            'avatar_url': avatar,
+            'avatar': avatar,          # legacy name
+            'avatar_url': avatar,      # primary name used by template
             'total_followers_cnt': _safe_int(
                 c.get('total_followers_cnt') or c.get('follower_count')
                 or c.get('followerCount') or 0
@@ -722,48 +743,73 @@ def fetch_similar_creators(unique_id: str, region: str = 'US',
         if len(results) >= limit:
             break
 
+    log.info("[EchoTik] similar_creators(%s) returned %d results (%d with avatars)",
+             uid, len(results), sum(1 for r in results if r['avatar_url']))
     return results
 
 
-def fetch_creator_videos(unique_id: str, limit: int = 12) -> list[dict]:
+def fetch_creator_videos(unique_id: str, user_id: str = '',
+                         limit: int = 12) -> list[dict]:
     """
     Fetch a creator's recent videos.
 
-    Tries a few endpoint variants since EchoTik has renamed this one a
-    couple of times. Returns a list of dicts with a consistent schema.
+    EchoTik's influencer video endpoint expects the numeric TikTok
+    ``user_id``, not the ``@handle``. We try ``user_id`` first (if we
+    have it from the batch detail response) then fall back to variants
+    with ``unique_id`` so older endpoints still work.
     """
     uid = (unique_id or '').strip()
-    if not uid:
+    user_id = str(user_id or '').strip()
+    if not uid and not user_id:
         return []
 
-    attempts = [
-        (f"{ECHOTIK_V3_BASE}/influencer/video/list",
-         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
-        (f"{ECHOTIK_V3_BASE}/influencer/video",
-         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
-        (f"{ECHOTIK_V3_BASE}/influencer/videos",
-         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
-        (f"{ECHOTIK_V3_BASE}/influencer/video/list",
-         {'unique_ids': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
-    ]
+    size = min(limit, 20)
+    attempts = []
+    # Prefer numeric user_id (per EchoTik docs that's what this endpoint expects)
+    if user_id:
+        attempts += [
+            (f"{ECHOTIK_V3_BASE}/influencer/video/list",
+             {'user_id': user_id, 'page_num': 1, 'page_size': size}),
+            (f"{ECHOTIK_V3_BASE}/influencer/video",
+             {'user_id': user_id, 'page_num': 1, 'page_size': size}),
+        ]
+    if uid:
+        attempts += [
+            (f"{ECHOTIK_V3_BASE}/influencer/video/list",
+             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
+            (f"{ECHOTIK_V3_BASE}/influencer/video",
+             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
+            (f"{ECHOTIK_V3_BASE}/influencer/videos",
+             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
+        ]
 
     raw_list = []
     for url, params in attempts:
         try:
             resp = _request('GET', url, params=params)
-            raw = resp.get('data') or []
+            raw = resp.get('data')
             if isinstance(raw, dict):
-                raw = raw.get('list') or raw.get('records') or raw.get('videos') or []
-            if raw:
+                raw = (raw.get('list') or raw.get('records')
+                       or raw.get('videos') or raw.get('video_list') or [])
+            if isinstance(raw, list) and raw:
+                log.info("[EchoTik] creator videos HIT %s params=%s items=%d",
+                         url, list(params.keys()), len(raw))
                 raw_list = raw
                 break
+            else:
+                log.info("[EchoTik] creator videos empty %s params=%s",
+                         url, list(params.keys()))
         except EchoTikError as exc:
-            log.debug("[EchoTik] creator videos %s failed: %s", url, exc)
+            log.info("[EchoTik] creator videos %s FAILED: %s", url, exc)
             continue
 
     if not raw_list:
-        log.info("[EchoTik] No videos found for creator %s", uid)
+        log.info("[EchoTik] No videos found for creator uid=%s user_id=%s", uid, user_id)
         return []
+
+    # Debug: first-item keys so we can see the actual field names
+    first = raw_list[0] if isinstance(raw_list[0], dict) else {}
+    log.info("[EchoTik] creator video keys=%s", list(first.keys())[:40])
 
     videos = []
     for v in raw_list:
@@ -772,22 +818,31 @@ def fetch_creator_videos(unique_id: str, limit: int = 12) -> list[dict]:
         # Cover / thumbnail — try every known shape
         cover = _extract_image_url(
             v.get('cover_url') or v.get('coverUrl') or v.get('cover')
+            or v.get('video_cover') or v.get('videoCover')
             or v.get('dynamic_cover') or v.get('origin_cover')
             or v.get('thumbnail') or v.get('thumb_url')
+            or v.get('image_url') or v.get('imageUrl')
         )
-        # Product attachment: treat anything truthy as "has a product"
+        # Product attachment — covers many shapes
+        product_cnt = _safe_int(
+            v.get('product_cnt') or v.get('productCnt')
+            or v.get('product_count') or v.get('productCount') or 0
+        )
         has_product = bool(
-            v.get('product_id') or v.get('productId')
+            product_cnt > 0
+            or v.get('product_id') or v.get('productId')
             or v.get('products') or v.get('product_list')
             or v.get('anchor_product') or v.get('shop_item')
+            or v.get('shop_flag') == 1 or v.get('shopFlag') == 1
         )
 
-        # Timestamp → ISO string the template can format
+        # Timestamp → ISO string
         ts = (v.get('create_time') or v.get('createTime')
               or v.get('publish_time') or v.get('publishTime')
               or v.get('create_timestamp'))
+        if isinstance(ts, str) and ts.isdigit():
+            ts = int(ts)
         if isinstance(ts, (int, float)):
-            # Normalize ms → s if needed
             if ts > 10_000_000_000:
                 ts = ts / 1000
             try:
@@ -799,58 +854,85 @@ def fetch_creator_videos(unique_id: str, limit: int = 12) -> list[dict]:
             'video_id': str(v.get('video_id') or v.get('videoId') or v.get('id') or ''),
             'cover_url': cover,
             'title': (v.get('title') or v.get('desc') or v.get('description')
-                      or v.get('video_desc') or ''),
+                      or v.get('video_desc') or v.get('videoDesc') or ''),
             'view_count': _safe_int(
-                v.get('view_count') or v.get('viewCount') or v.get('vv')
+                v.get('play_cnt') or v.get('playCnt')
+                or v.get('view_count') or v.get('viewCount')
+                or v.get('view_cnt') or v.get('vv')
                 or v.get('play_count') or v.get('playCount') or 0
             ),
             'like_count': _safe_int(
-                v.get('like_count') or v.get('likeCount') or v.get('digg_count')
-                or v.get('diggCount') or 0
+                v.get('digg_cnt') or v.get('diggCnt')
+                or v.get('like_cnt') or v.get('likeCnt')
+                or v.get('like_count') or v.get('likeCount')
+                or v.get('digg_count') or v.get('diggCount') or 0
             ),
             'created_at': ts,
             'has_product': has_product,
             'video_url': (v.get('share_url') or v.get('shareUrl')
-                          or v.get('video_url') or ''),
+                          or v.get('video_url') or v.get('videoUrl') or ''),
         })
 
     return videos
 
 
-def fetch_creator_shop_products(unique_id: str, limit: int = 20) -> list[dict]:
+def fetch_creator_shop_products(unique_id: str, user_id: str = '',
+                                limit: int = 20) -> list[dict]:
     """
     Fetch the list of products a creator has promoted.
 
-    Tries `/influencer/product/list` and a couple of param variants.
+    Like the video endpoint, this one prefers the numeric TikTok
+    ``user_id`` from the batch detail response. We fall back to
+    ``unique_id`` for older routes.
     """
     uid = (unique_id or '').strip()
-    if not uid:
+    user_id = str(user_id or '').strip()
+    if not uid and not user_id:
         return []
 
-    attempts = [
-        (f"{ECHOTIK_V3_BASE}/influencer/product/list",
-         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
-        (f"{ECHOTIK_V3_BASE}/influencer/product",
-         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
-        (f"{ECHOTIK_V3_BASE}/influencer/products",
-         {'unique_id': uid, 'page_num': 1, 'page_size': min(limit, 20)}),
-    ]
+    size = min(limit, 20)
+    attempts = []
+    if user_id:
+        attempts += [
+            (f"{ECHOTIK_V3_BASE}/influencer/product/list",
+             {'user_id': user_id, 'page_num': 1, 'page_size': size}),
+            (f"{ECHOTIK_V3_BASE}/influencer/product",
+             {'user_id': user_id, 'page_num': 1, 'page_size': size}),
+        ]
+    if uid:
+        attempts += [
+            (f"{ECHOTIK_V3_BASE}/influencer/product/list",
+             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
+            (f"{ECHOTIK_V3_BASE}/influencer/product",
+             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
+            (f"{ECHOTIK_V3_BASE}/influencer/products",
+             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
+        ]
 
     raw_list = []
     for url, params in attempts:
         try:
             resp = _request('GET', url, params=params)
-            raw = resp.get('data') or []
+            raw = resp.get('data')
             if isinstance(raw, dict):
-                raw = raw.get('list') or raw.get('records') or []
-            if raw:
+                raw = raw.get('list') or raw.get('records') or raw.get('products') or []
+            if isinstance(raw, list) and raw:
+                log.info("[EchoTik] creator products HIT %s params=%s items=%d",
+                         url, list(params.keys()), len(raw))
                 raw_list = raw
                 break
-        except EchoTikError:
+            else:
+                log.info("[EchoTik] creator products empty %s params=%s",
+                         url, list(params.keys()))
+        except EchoTikError as exc:
+            log.info("[EchoTik] creator products %s FAILED: %s", url, exc)
             continue
 
     if not raw_list:
         return []
+
+    first = raw_list[0] if isinstance(raw_list[0], dict) else {}
+    log.info("[EchoTik] creator product keys=%s", list(first.keys())[:40])
 
     products = []
     for p in raw_list:

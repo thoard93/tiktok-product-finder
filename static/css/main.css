@@ -1114,7 +1114,16 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 
 .creator-growth-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-3);margin-bottom:var(--space-5)}
 @media(max-width:700px){.creator-growth-grid{grid-template-columns:repeat(2,1fr)}}
-.creator-growth-card{padding:var(--space-4)}
+.creator-growth-card{padding:var(--space-4);display:flex;flex-direction:column;gap:6px}
+.creator-growth-period{font-size:11px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.04em}
+.creator-growth-number-row{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--text-2xl);line-height:1.1}
+.creator-growth-number{font-family:var(--font-display,'Cabinet Grotesk',sans-serif)}
+.creator-growth-ico{flex-shrink:0}
+.creator-growth-caption{font-size:11px;color:var(--text-faint);font-weight:500}
+.creator-growth-card--up .creator-growth-number-row{color:#10b981}
+.creator-growth-card--down .creator-growth-number-row{color:#ef4444}
+.creator-growth-card--flat .creator-growth-number-row{color:var(--text-faint)}
+/* legacy classes kept so older templates don't break */
 .creator-growth-value{font-size:var(--text-xl);font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px;display:flex;align-items:center;gap:6px}
 .creator-growth-arrow{font-size:14px}
 .creator-behavior-card{padding:var(--space-4) var(--space-5)}
