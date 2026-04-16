@@ -322,9 +322,12 @@ def dashboard():
         Product.commission_rate > 0
     ).scalar() or 0
     try:
-        brand_count = Brand.query.count()
+        brand_count = ScannedBrand.query.count()
     except Exception:
-        brand_count = 0
+        try:
+            brand_count = Brand.query.count()
+        except Exception:
+            brand_count = 0
 
     ctx['stats'] = {
         'tracked_count': total,

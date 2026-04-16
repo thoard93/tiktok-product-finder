@@ -427,8 +427,13 @@ def fetch_top_shops(country: str = "US", page_size: int = 10, page: int = 1) -> 
                             "region": country,
                             "page_num": page,
                             "page_size": min(page_size, 10),
-                            "order": "total_sale_nd_cnt",  # Sort by 30-day sales count
+                            # Try all common EchoTik sort param patterns
+                            "order": "total_sale_nd_cnt",
                             "sort": "desc",
+                            "sort_field": "total_sale_nd_cnt",
+                            "sort_type": "desc",
+                            "order_by": "total_sale_nd_cnt",
+                            "date_range": 30,
                             "dateRange": 30,
                         })
     except EchoTikError as exc:
