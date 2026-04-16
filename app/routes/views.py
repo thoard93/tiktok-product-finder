@@ -24,6 +24,19 @@ def login_required(f):
     return decorated
 
 
+def admin_page_required(f):
+    """Page-level admin check: redirects to /app/dashboard if not admin."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect('/login')
+        user = get_current_user()
+        if not user or not user.is_admin:
+            return redirect('/app/dashboard')
+        return f(*args, **kwargs)
+    return decorated
+
+
 def api_auth(f):
     """API-level login check: returns JSON 401."""
     @wraps(f)
@@ -266,9 +279,11 @@ def _base_context(active_page='dashboard'):
     """Build the common context dict shared by all app templates."""
     user = get_current_user()
     sub = _get_subscription(user)
+    # is_pro: admins always True, subscribers only if status is 'active'
+    # past_due, cancelled, expired → False (data gets blurred)
     is_pro = bool(
-        (sub and sub.status == 'active') or
-        (user and user.is_admin)
+        (user and user.is_admin) or
+        (sub and sub.status == 'active')
     )
     return {
         'current_user': user,
@@ -913,11 +928,8 @@ def tap_lists_page():
 
 
 @views_bp.route('/app/admin/tap-lists')
-@login_required
+@admin_page_required
 def admin_tap_lists():
-    user = get_current_user()
-    if not user or not user.is_admin:
-        return redirect('/app/dashboard')
     ctx = _base_context('admin')
     try:
         ctx['lists'] = TapList.query.order_by(desc(TapList.created_at)).all()
@@ -1008,12 +1020,9 @@ def api_tap_lists():
 
 
 @views_bp.route('/app/admin')
-@login_required
+@admin_page_required
 def admin_panel():
     ctx = _base_context('admin')
-    user = ctx['current_user']
-    if not user or not user.is_admin:
-        return redirect('/app/dashboard')
 
     try:
         from sqlalchemy import func
@@ -1444,11 +1453,8 @@ def api_echotik_debug():
 # ---------------------------------------------------------------------------
 
 @views_bp.route('/app/admin/tap')
-@login_required
+@admin_page_required
 def admin_tap():
-    user = get_current_user()
-    if not user or not user.is_admin:
-        return redirect('/app/dashboard')
     ctx = _base_context('admin')
     try:
         ctx['taps'] = TapProduct.query.order_by(desc(TapProduct.created_at)).all()
@@ -1574,12 +1580,9 @@ def api_profile_update():
 # ---------------------------------------------------------------------------
 
 @views_bp.route('/app/admin/campaigns')
-@login_required
+@admin_page_required
 def admin_campaigns():
     ctx = _base_context('campaigns')
-    user = ctx['current_user']
-    if not user or not user.is_admin:
-        return redirect('/app/dashboard')
     ctx['campaigns'] = CampaignBanner.query.order_by(
         CampaignBanner.priority.desc(), CampaignBanner.created_at.desc()
     ).all()
@@ -1733,12 +1736,9 @@ def redeem_coupon():
 # ---------------------------------------------------------------------------
 
 @views_bp.route('/app/admin/coupons')
-@login_required
+@admin_page_required
 def admin_coupons():
     ctx = _base_context('coupons')
-    user = ctx['current_user']
-    if not user or not user.is_admin:
-        return redirect('/app/dashboard')
     ctx['coupons'] = CouponCode.query.order_by(CouponCode.created_at.desc()).all()
     ctx['now'] = datetime.utcnow()
     return render_template('admin_coupons.html', **ctx)

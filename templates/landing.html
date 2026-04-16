@@ -97,9 +97,9 @@
 
     {# Preview product rows #}
     <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;text-align:left">
-      <div style="display:grid;grid-template-columns:40px 1fr 80px 80px 80px;gap:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06)">#<span></span><span>Product</span><span>Commission</span><span>7d Sales</span><span>Videos</span></div>
+      <div class="trending-preview-grid" style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06)">#<span></span><span>Product</span><span>Commission</span><span>7d Sales</span><span class="tp-col-videos">Videos</span></div>
       {% for i in range(5) %}
-      <div style="display:grid;grid-template-columns:40px 1fr 80px 80px 80px;gap:0;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);align-items:center">
+      <div class="trending-preview-grid" style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);align-items:center">
         <span style="color:var(--text-faint);font-weight:600;font-size:12px">{{ i + 1 }}</span>
         <span style="display:flex;align-items:center;gap:10px">
           <div style="width:36px;height:36px;border-radius:6px;background:linear-gradient(135deg,{{ ['#f953c6,#b91d73','#4776e6,#1cb5e0','#56ab2f,#a8e063','#f7971e,#ffd200','#11998e,#38ef7d'][i] }});flex-shrink:0"></div>
@@ -107,7 +107,7 @@
         </span>
         <span style="color:var(--accent);font-weight:700;font-size:14px">{{ ['25%','18%','35%','15%','22%'][i] }}</span>
         <span style="font-weight:600;font-size:13px;color:var(--text-primary);font-variant-numeric:tabular-nums">{{ ['12,450','8,230','6,870','5,100','4,560'][i] }}</span>
-        <span style="font-size:13px;color:var(--text-muted)">{{ ['1,240','890','2,100','450','780'][i] }}</span>
+        <span class="tp-col-videos" style="font-size:13px;color:var(--text-muted)">{{ ['1,240','890','2,100','450','780'][i] }}</span>
       </div>
       {% endfor %}
       <div style="padding:16px;text-align:center;background:rgba(255,255,255,0.02)">

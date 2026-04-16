@@ -110,34 +110,21 @@
             </div>
           </div>
         </td>
-        <td style="font-weight:600;font-variant-numeric:tabular-nums">${{ p.gmv | format_number if p.gmv else '—' }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}${{ p.gmv | format_number if p.gmv else '—' }}{% else %}<span class="blurred-data">$48.2K</span>{% endif %}</td>
         <td>
-          {% if growth > 0 %}
-            <span class="growth-badge growth-badge--up">+{{ "%.0f" | format(growth) }}%</span>
-          {% elif growth < 0 %}
-            <span class="growth-badge growth-badge--down">{{ "%.0f" | format(growth) }}%</span>
-          {% else %}
-            <span class="growth-badge growth-badge--flat">—</span>
-          {% endif %}
+          {% if is_pro %}
+            {% if growth > 0 %}<span class="growth-badge growth-badge--up">+{{ "%.0f" | format(growth) }}%</span>
+            {% elif growth < 0 %}<span class="growth-badge growth-badge--down">{{ "%.0f" | format(growth) }}%</span>
+            {% else %}<span class="growth-badge growth-badge--flat">—</span>{% endif %}
+          {% else %}<span class="blurred-data">+12%</span>{% endif %}
         </td>
-        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
-        <td style="font-variant-numeric:tabular-nums">
-          ${{ "%.2f" | format(p.price or 0) }}
-          {% if p.is_on_sale and p.discount_pct >= 20 %}
-            <span style="font-size:10px;color:#e8384d;font-weight:700;margin-left:2px">-{{ p.discount_pct }}%</span>
-          {% endif %}
-        </td>
-        <td class="commission-cell">
-          {% if p._tap %}
-            <span style="color:var(--teal);font-weight:700">{{ "%.0f" | format((p._tap.boosted_commission or 0) * 100) }}%</span>
-            <span class="tap-badge" style="font-size:10px;margin-left:3px">&#x26a1;</span>
-          {% else %}
-            {{ "%.0f" | format((p.commission_rate or 0) * 100) }}%
-          {% endif %}
-        </td>
-        <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.influencer_count or 0) }}</td>
-        <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.video_count or 0) }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(p.sales_7d or 0) }}{% else %}<span class="blurred-data">8,240</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}${{ "%.2f" | format(p.price or 0) }}{% if p.is_on_sale and p.discount_pct >= 20 %}<span style="font-size:10px;color:#e8384d;font-weight:700;margin-left:2px">-{{ p.discount_pct }}%</span>{% endif %}{% else %}<span class="blurred-data">$24.99</span>{% endif %}</td>
+        <td class="commission-cell">{% if is_pro %}{% if p._tap %}<span style="color:var(--teal);font-weight:700">{{ "%.0f" | format((p._tap.boosted_commission or 0) * 100) }}%</span><span class="tap-badge" style="font-size:10px;margin-left:3px">&#x26a1;</span>{% else %}{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%{% endif %}{% else %}<span class="blurred-data">15%</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(p.influencer_count or 0) }}{% else %}<span class="blurred-data">342</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(p.video_count or 0) }}{% else %}<span class="blurred-data">1,205</span>{% endif %}</td>
         <td>
+          {% if is_pro %}
           <div class="score-ring-wrap" style="width:30px;height:30px">
             <svg viewBox="0 0 36 36" width="30" height="30">
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
@@ -147,6 +134,7 @@
             </svg>
             <span class="score-number" style="font-size:9px">{{ p.trending_score }}</span>
           </div>
+          {% else %}<span class="blurred-data">74</span>{% endif %}
         </td>
         <td style="display:flex;gap:4px;align-items:center">
           <button class="fav-btn-inline {{ 'active' if p.is_favorite else '' }}" onclick="toggleFavorite('{{ p.product_id }}',this)" title="Favorite">

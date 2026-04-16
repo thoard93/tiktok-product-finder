@@ -1044,3 +1044,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .brand-search-item__info{min-width:0}
 .brand-search-item__name{font-weight:600;color:var(--text-primary)}
 .brand-search-item__cat{font-size:11px;color:var(--text-faint)}
+
+/* 51. FREEMIUM BLUR (non-subscriber data gating) ========================= */
+.blurred-data{filter:blur(5px);user-select:none;pointer-events:none;display:inline-block;min-width:2ch}
+.freemium-gate{background:var(--bg-surface);border:1px solid var(--accent);border-radius:var(--radius-lg);padding:var(--space-4) var(--space-6);display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-6);flex-wrap:wrap}
+.freemium-gate__text{font-size:var(--text-sm);color:var(--text-secondary);font-weight:500}
+.freemium-gate__text strong{color:var(--text-primary)}
+.freemium-gate__cta{flex-shrink:0}
+
+/* 52. TRENDING PREVIEW TABLE (landing page) =============================== */
+.trending-preview-grid{display:grid;grid-template-columns:40px 1fr 80px 80px 80px;gap:0}
+@media(max-width:640px){.trending-preview-grid{grid-template-columns:28px 1fr 60px 60px;font-size:11px}.trending-preview-grid .tp-col-videos{display:none}}

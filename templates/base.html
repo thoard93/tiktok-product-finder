@@ -177,12 +177,11 @@
       </div>
       {% endif %}
 
-      {# Upgrade banner for non-subscribers #}
+      {# Freemium gate banner for non-subscribers #}
       {% if not is_pro %}
-      <div class="upgrade-banner">
-        <i data-lucide="zap" style="width:16px;height:16px"></i>
-        <span>You're on the free plan — unlock full product data and analytics.</span>
-        <a href="/app/subscribe" class="upgrade-banner__cta">Upgrade for $19.99/mo &rarr;</a>
+      <div class="freemium-gate">
+        <div class="freemium-gate__text"><strong>You're viewing a preview.</strong> Subscribe to Vantage Pro to unlock all product data, scores, and analytics.</div>
+        <a href="/app/subscribe" class="btn btn-primary btn-sm freemium-gate__cta">Upgrade Now &rarr;</a>
       </div>
       {% endif %}
 
