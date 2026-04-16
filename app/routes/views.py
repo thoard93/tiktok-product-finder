@@ -2203,32 +2203,64 @@ def _run_batch_brand_scan(app, job_id, brands_list):
 
         try:
             for brand_info in brands_list:
-                db.session.refresh(job)
-                if job.status in ('stopped', 'error'):
-                    break
+                # Defensive: always rollback any dirty session state from prior brand
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+                # Re-fetch job fresh from DB (survives cross-brand session issues)
+                try:
+                    job = BrandScanJob.query.get(job_id)
+                    if not job or job.status in ('stopped', 'error'):
+                        break
+                except Exception:
+                    db.session.rollback()
+                    continue
 
                 shop_id = brand_info.get('shop_id', '')
                 name = brand_info.get('name', 'Unknown')
                 if not shop_id:
                     continue
 
-                # Primary scan with user-requested page range
-                found = _scan_single_brand(shop_id, name, job.page_start, job.page_end, job)
+                # Wrap each brand scan — don't let one brand's error kill the batch
+                try:
+                    found = _scan_single_brand(shop_id, name, job.page_start, job.page_end, job)
 
-                # Fallback: if nothing found in the requested range AND we weren't
-                # already scanning from page 1, try the first 10 pages instead
-                # (common case: brand has <100 products, requested 100-200 range)
-                if found == 0 and job.page_start > 1:
-                    db.session.refresh(job)
-                    if job.status in ('stopped', 'error'):
-                        break
-                    log.info(f"[BrandScan] {name} found 0 in {job.page_start}-{job.page_end}, falling back to 1-10")
-                    _scan_single_brand(shop_id, name, 1, 10, job)
+                    # Fallback: if nothing found AND we weren't starting at page 1,
+                    # try pages 1-10 (catches small brands requested with high ranges)
+                    if found == 0 and job.page_start > 1:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        job = BrandScanJob.query.get(job_id)
+                        if not job or job.status in ('stopped', 'error'):
+                            break
+                        log.info(f"[BrandScan] {name} found 0 in {job.page_start}-{job.page_end}, falling back to 1-10")
+                        try:
+                            _scan_single_brand(shop_id, name, 1, 10, job)
+                        except Exception as e:
+                            log.error(f"[BrandScan] Fallback scan error for {name}: {e}")
+                            db.session.rollback()
+                except Exception as e:
+                    log.error(f"[BrandScan] Brand scan error for {name}: {e}")
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    continue  # Skip this brand, move to next
 
-            if job.status == 'running':
+            # Final status update — re-fetch job fresh
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            job = BrandScanJob.query.get(job_id)
+            if job and job.status == 'running':
                 job.status = 'complete'
-            job.completed_at = datetime.utcnow()
-            db.session.commit()
+                job.completed_at = datetime.utcnow()
+                db.session.commit()
 
         except Exception as e:
             job.status = 'error'
