@@ -752,7 +752,7 @@ def _try_raw(url, params):
     """
     Bypass the strict ``code != 0`` check in ``_request`` so we can log
     the full payload when an endpoint exists but returns an error code.
-    Returns (status, body_dict) or (None, None) on network failure.
+    Returns (status, body_dict) or (None, dict) on network failure.
     """
     try:
         auth = _get_auth()
@@ -762,8 +762,18 @@ def _try_raw(url, params):
             body = resp.json()
         except Exception:
             body = {'_raw_text': resp.text[:300]}
+        # Print a one-line summary of every attempt so we always have
+        # something in Render logs even when callers swallow the result.
+        try:
+            import json as _json
+            preview = _json.dumps(body)[:400] if body else ''
+        except Exception:
+            preview = str(body)[:400]
+        print(f"[EchoTik RAW] {url} params={params} -> status={resp.status_code} body={preview}",
+              flush=True)
         return resp.status_code, body
     except (requests.ConnectionError, requests.Timeout) as exc:
+        print(f"[EchoTik RAW] {url} params={params} -> NETWORK_ERR {exc}", flush=True)
         return None, {'_error': str(exc)}
 
 
@@ -808,8 +818,9 @@ def fetch_creator_videos(unique_id: str, user_id: str = '',
     raw_list = []
     for url, params in attempts:
         status, body = _try_raw(url, params)
+        tag = url.split('/echotik/')[-1]
         if status is None:
-            log.info("[EchoTik] videos NETWORK %s: %s", url, body)
+            print(f"[EchoTik] videos NETWORK {tag}: {body}", flush=True)
             continue
         code = (body or {}).get('code')
         msg = (body or {}).get('message', '')
@@ -818,16 +829,15 @@ def fetch_creator_videos(unique_id: str, user_id: str = '',
             data = (data.get('list') or data.get('records')
                     or data.get('videos') or data.get('video_list') or [])
         n = len(data) if isinstance(data, list) else 0
-        log.info("[EchoTik] videos %s status=%s code=%s msg=%r items=%d params=%s",
-                 url.split('/echotik/')[-1], status, code, msg, n,
-                 list(params.keys()))
+        print(f"[EchoTik] videos {tag} status={status} code={code} msg={msg!r} "
+              f"items={n} params={list(params.keys())}", flush=True)
         if code == 0 and isinstance(data, list) and data:
             raw_list = data
             break
 
     if not raw_list:
-        log.info("[EchoTik] No videos for uid=%s user_id=%s after %d attempts",
-                 uid, user_id, len(attempts))
+        print(f"[EchoTik] No videos for uid={uid} user_id={user_id} "
+              f"after {len(attempts)} attempts", flush=True)
         return []
 
     # Debug: first-item keys so we can see the actual field names
@@ -938,8 +948,9 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
     raw_list = []
     for url, params in attempts:
         status, body = _try_raw(url, params)
+        tag = url.split('/echotik/')[-1]
         if status is None:
-            log.info("[EchoTik] products NETWORK %s: %s", url, body)
+            print(f"[EchoTik] products NETWORK {tag}: {body}", flush=True)
             continue
         code = (body or {}).get('code')
         msg = (body or {}).get('message', '')
@@ -948,20 +959,19 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
             data = (data.get('list') or data.get('records')
                     or data.get('products') or [])
         n = len(data) if isinstance(data, list) else 0
-        log.info("[EchoTik] products %s status=%s code=%s msg=%r items=%d params=%s",
-                 url.split('/echotik/')[-1], status, code, msg, n,
-                 list(params.keys()))
+        print(f"[EchoTik] products {tag} status={status} code={code} msg={msg!r} "
+              f"items={n} params={list(params.keys())}", flush=True)
         if code == 0 and isinstance(data, list) and data:
             raw_list = data
             break
 
     if not raw_list:
-        log.info("[EchoTik] No products for uid=%s user_id=%s after %d attempts",
-                 uid, user_id, len(attempts))
+        print(f"[EchoTik] No products for uid={uid} user_id={user_id} "
+              f"after {len(attempts)} attempts", flush=True)
         return []
 
     first = raw_list[0] if isinstance(raw_list[0], dict) else {}
-    log.info("[EchoTik] creator product keys=%s", list(first.keys())[:40])
+    print(f"[EchoTik] creator product keys={list(first.keys())[:40]}", flush=True)
 
     products = []
     for p in raw_list:
