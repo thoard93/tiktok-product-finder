@@ -13,6 +13,8 @@
   <meta property="og:title" content="Vantage — TikTok Shop Intelligence">
   <meta property="og:description" content="Research trending TikTok Shop products with real sales data and commission rates.">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="https://thoardburgersauce.com/static/img/og-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="/static/css/main.css">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   {% block head %}{% endblock %}
@@ -260,15 +262,15 @@
         <svg width="20" height="20" viewBox="0 0 28 28" fill="none"><path d="M6 22L14 4L22 22" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 4V14" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/><path d="M14 14L20 8" stroke="var(--teal)" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="8" r="2" fill="var(--teal)"/></svg>
         <span style="font-weight:600">Vantage AI</span>
       </div>
-      <button onclick="toggleChat()" style="color:var(--text-muted);cursor:pointer"><i data-lucide="x" style="width:18px;height:18px"></i></button>
+      <button onclick="toggleChat()" style="color:var(--text-muted);cursor:pointer" aria-label="Close chat"><i data-lucide="x" style="width:18px;height:18px"></i></button>
     </div>
     <div class="chat-messages" id="chatMessages">
       <div class="chat-msg chat-msg--ai">Hi! I'm Vantage AI. Ask me about trending products, top categories, or commission opportunities.</div>
     </div>
     <div class="chat-input-wrap">
-      <input type="text" class="input" id="chatInput" placeholder="Ask about products..." autocomplete="off"
+      <input type="text" class="input" id="chatInput" placeholder="Ask about products..." autocomplete="off" aria-label="Chat with Vantage AI"
              onkeydown="if(event.key==='Enter'){event.preventDefault();sendChat()}">
-      <button class="btn btn-primary btn-sm" onclick="sendChat()" id="chatSendBtn" style="flex-shrink:0">
+      <button class="btn btn-primary btn-sm" onclick="sendChat()" id="chatSendBtn" style="flex-shrink:0" aria-label="Send message">
         <i data-lucide="send" style="width:14px;height:14px"></i>
       </button>
     </div>
