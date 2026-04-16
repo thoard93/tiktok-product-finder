@@ -162,6 +162,10 @@ class Product(db.Model):
     trend_data_json = db.Column(db.Text, nullable=True)
     trend_last_synced = db.Column(db.DateTime, nullable=True)
 
+    # Opportunity Score cache (24h TTL, recomputed during daily sync)
+    cached_score = db.Column(db.Integer, nullable=True)
+    score_cached_at = db.Column(db.DateTime, nullable=True)
+
     # Composite indexes for common query patterns
     __table_args__ = (
         db.Index('idx_influencer_sales', 'influencer_count', 'sales_7d'),

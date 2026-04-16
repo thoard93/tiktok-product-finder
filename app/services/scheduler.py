@@ -159,7 +159,42 @@ def daily_sync(app):
         except Exception:
             log.exception("[SCHEDULER] Seller enrichment failed")
 
+        # Step 6: Warm Opportunity Score cache for all active products
+        try:
+            _warm_score_cache(app)
+        except Exception:
+            log.exception("[SCHEDULER] Score cache warm failed")
+
         log.info("[SCHEDULER] === Daily sync complete ===")
+
+
+def _warm_score_cache(app):
+    """Pre-compute and cache Opportunity Scores for all active products."""
+    from app import db
+    from app.models import Product
+    from app.routes.views import _calc_score_raw
+    from sqlalchemy import or_
+
+    with app.app_context():
+        products = Product.query.filter(
+            or_(Product.product_status == 'active', Product.product_status.is_(None)),
+        ).all()
+
+        count = 0
+        for p in products:
+            try:
+                p.cached_score = _calc_score_raw(p)
+                p.score_cached_at = datetime.utcnow()
+                count += 1
+            except Exception:
+                continue
+
+        try:
+            db.session.commit()
+            log.info("[SCHEDULER] Score cache warmed for %d products", count)
+        except Exception:
+            db.session.rollback()
+            log.exception("[SCHEDULER] Score cache commit failed")
 
 
 def _deep_refresh_with_videos(app):

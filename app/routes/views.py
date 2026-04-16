@@ -52,7 +52,35 @@ views_bp = Blueprint('views', __name__)
 _active_filter = or_(Product.product_status == 'active', Product.product_status.is_(None))
 
 
+SCORE_CACHE_TTL_HOURS = 24
+
+
 def _calc_score(p):
+    """Public Opportunity Score (0-99) with 24h cache. Returns cached value if fresh."""
+    # Cache hit: use cached_score if it's fresh (less than 24h old)
+    try:
+        cached = getattr(p, 'cached_score', None)
+        cached_at = getattr(p, 'score_cached_at', None)
+        if cached is not None and cached_at is not None:
+            from datetime import timedelta
+            age = datetime.utcnow() - cached_at
+            if age < timedelta(hours=SCORE_CACHE_TTL_HOURS):
+                return cached
+    except Exception:
+        pass
+
+    # Cache miss or stale: recompute + save
+    score = _calc_score_raw(p)
+    try:
+        p.cached_score = score
+        p.score_cached_at = datetime.utcnow()
+        # Don't commit here — caller batches commits
+    except Exception:
+        pass
+    return score
+
+
+def _calc_score_raw(p):
     """
     Opportunity Score (0-99) — composite metric for affiliate product potential.
 
