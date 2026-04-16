@@ -696,17 +696,64 @@ def product_detail(product_id):
         raw_json = getattr(product, 'trend_data_json', None)
         if raw_json:
             trend_data = json.loads(raw_json)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[ProductDetail] trend {product_id} error: {e}")
     ctx['trend_data'] = trend_data
 
-    # Videos (<=15s, from DB) — defensive if table doesn't exist yet
+    # Videos — try DB first, then fetch from EchoTik on-demand and persist
     try:
-        ctx['videos'] = ProductVideo.query.filter_by(
+        db_videos = ProductVideo.query.filter_by(
             product_id=product_id
         ).order_by(desc(ProductVideo.view_count)).limit(5).all()
     except Exception:
-        ctx['videos'] = []
+        db_videos = []
+
+    if not db_videos:
+        try:
+            from app.services.echotik import fetch_product_videos
+            raw_id = product_id.replace('shop_', '')
+            api_vids = fetch_product_videos(raw_id, page_size=10)
+            # Persist to DB so this is instant next time
+            for v in api_vids:
+                vid_id = v.get('video_id')
+                if not vid_id:
+                    continue
+                try:
+                    exists = ProductVideo.query.filter_by(
+                        product_id=product_id, video_id=vid_id
+                    ).first()
+                    if exists:
+                        continue
+                    duration = v.get('duration') or 0
+                    db.session.add(ProductVideo(
+                        product_id=product_id,
+                        video_id=vid_id,
+                        video_url=(v.get('video_url') or '')[:500] or None,
+                        cover_url=(v.get('cover_url') or '')[:500] or None,
+                        creator_name=(v.get('creator_name') or '')[:200] or None,
+                        creator_handle=(v.get('creator_handle') or '')[:200] or None,
+                        creator_avatar=(v.get('creator_avatar') or '')[:500] or None,
+                        view_count=int(v.get('view_count') or 0),
+                        like_count=int(v.get('like_count') or 0),
+                        duration_seconds=int(duration) if duration else None,
+                    ))
+                except Exception:
+                    db.session.rollback()
+                    continue
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            db_videos = ProductVideo.query.filter_by(
+                product_id=product_id
+            ).order_by(desc(ProductVideo.view_count)).limit(5).all()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"[ProductDetail] live video fetch {product_id} error: {e}"
+            )
+    ctx['videos'] = db_videos
 
     # Similar products (same category)
     similar = []

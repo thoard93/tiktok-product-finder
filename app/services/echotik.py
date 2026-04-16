@@ -370,23 +370,31 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
 
     Args:
         product_id: Raw product ID (without shop_ prefix).
-        page_size: Number of videos to fetch (default 10).
+        page_size: Number of videos to fetch (default 10, capped at 10).
 
     Returns:
         List of video dicts with normalized field names.
     """
     raw_id = str(product_id).replace('shop_', '')
+    size = min(max(page_size, 1), 10)
 
-    try:
-        data = _request('GET', f"{ECHOTIK_V3_BASE}/product/video",
-                        params={'product_id': raw_id, 'page_size': min(page_size, 10), 'page_num': 1})
-    except EchoTikError as exc:
-        log.warning("fetch_product_videos(%s) failed: %s", raw_id, exc)
+    url = f"{ECHOTIK_V3_BASE}/product/video"
+    params = {'product_id': raw_id, 'page_num': 1, 'page_size': size}
+    status, body = _try_raw(url, params)
+    if status is None:
+        print(f"[EchoTik] product_videos NETWORK err for {raw_id}", flush=True)
         return []
-
-    raw_list = data.get('data', [])
-    if isinstance(raw_list, dict):
-        raw_list = raw_list.get('list', [])
+    code = (body or {}).get('code')
+    msg = (body or {}).get('message', '')
+    data = (body or {}).get('data')
+    if isinstance(data, dict):
+        data = data.get('list') or data.get('records') or []
+    n = len(data) if isinstance(data, list) else 0
+    print(f"[EchoTik] product_videos pid={raw_id} status={status} "
+          f"code={code} msg={msg!r} items={n}", flush=True)
+    if code != 0 or not isinstance(data, list):
+        return []
+    raw_list = data
 
     videos = []
     for v in (raw_list or []):
@@ -1133,22 +1141,28 @@ def fetch_product_trend(product_id: str, days: int = 30) -> list[dict]:
     end = datetime.utcnow()
     start = end - timedelta(days=days)
 
-    try:
-        data = _request('GET', f"{ECHOTIK_V3_BASE}/product/trend",
-                        params={
-                            'product_id': raw_id,
-                            'start_date': start.strftime('%Y-%m-%d'),
-                            'end_date': end.strftime('%Y-%m-%d'),
-                            'page_num': 1,
-                            'page_size': min(days, 10),
-                        })
-    except EchoTikError as exc:
-        log.warning("fetch_product_trend(%s) failed: %s", raw_id, exc)
+    url = f"{ECHOTIK_V3_BASE}/product/trend"
+    params = {
+        'product_id': raw_id,
+        'start_date': start.strftime('%Y-%m-%d'),
+        'end_date': end.strftime('%Y-%m-%d'),
+        'page_num': 1,
+        'page_size': min(max(days, 1), 10),  # hard cap at 10
+    }
+    status, body = _try_raw(url, params)
+    if status is None:
         return []
-
-    raw_list = data.get('data', [])
-    if isinstance(raw_list, dict):
-        raw_list = raw_list.get('list') or raw_list.get('trend', [])
+    code = (body or {}).get('code')
+    msg = (body or {}).get('message', '')
+    data = (body or {}).get('data')
+    if isinstance(data, dict):
+        data = data.get('list') or data.get('trend') or []
+    n = len(data) if isinstance(data, list) else 0
+    print(f"[EchoTik] product_trend pid={raw_id} status={status} "
+          f"code={code} msg={msg!r} items={n}", flush=True)
+    if code != 0 or not isinstance(data, list):
+        return []
+    raw_list = data
 
     trend = []
     for item in (raw_list or []):

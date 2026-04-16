@@ -232,32 +232,46 @@
   var trendData = {{ trend_data | tojson | default('[]') }};
   var labels = [], values = [];
 
-  if (trendData && trendData.length > 0) {
+  // Only trust the API data if it actually contains non-zero sales.
+  // EchoTik sometimes returns a row-per-day shell with all sales=0,
+  // which would otherwise flat-line the chart.
+  var hasRealData = Array.isArray(trendData) && trendData.length > 0
+    && trendData.some(function(t) { return Number(t.sales || 0) > 0; });
+
+  if (hasRealData) {
     for (var i = 0; i < trendData.length; i++) {
       labels.push(trendData[i].date || "");
-      values.push(trendData[i].sales || 0);
+      values.push(Number(trendData[i].sales) || 0);
     }
   } else {
     /* Build estimated 30-day curve from sales_7d and sales_30d */
     var s7 = {{ product.sales_7d or 0 }};
     var s30 = {{ product.sales_30d or 0 }};
-    /* If s7 and s30 are suspiciously equal (brand import artifact), use s30 as daily base */
+    /* If s7 and s30 are suspiciously equal (brand import artifact), derive s7 */
     if (s30 > 0 && s7 === s30) { s7 = Math.round(s30 / 4.3); }
     if (s30 === 0 && s7 > 0) { s30 = s7 * 4; }
+    if (s7 === 0 && s30 === 0) {
+      // Nothing to plot — bail and show an empty state
+      var wrap = document.getElementById('detailSalesChart');
+      if (wrap && wrap.parentElement) {
+        wrap.parentElement.innerHTML = '<p class="text-sm text-faint text-center" style="padding:var(--space-6) 0">No sales data available yet.</p>';
+      }
+      return;
+    }
     var dailyRecent = Math.max(s7 / 7, 0.1);
     var dailyOlder = s30 > s7 ? (s30 - s7) / 23 : dailyRecent * 0.7;
-    for (var i = 0; i < 30; i++) {
-      var d = new Date(); d.setDate(d.getDate() - 29 + i);
+    for (var j = 0; j < 30; j++) {
+      var d = new Date(); d.setDate(d.getDate() - 29 + j);
       labels.push(d.toLocaleDateString("en-US", {month:"short", day:"numeric"}));
-      /* Smooth transition from older daily rate to recent rate */
-      var t = i / 29; /* 0 = oldest, 1 = newest */
+      var t = j / 29; /* 0 = oldest, 1 = newest */
       var base = dailyOlder + (dailyRecent - dailyOlder) * t;
-      /* Add small variance for realism (±15%) */
-      var variance = base * 0.15 * (Math.sin(i * 1.7) * 0.8 + Math.cos(i * 0.9) * 0.5);
+      var variance = base * 0.15 * (Math.sin(j * 1.7) * 0.8 + Math.cos(j * 0.9) * 0.5);
       values.push(Math.max(0, Math.round(base + variance)));
     }
   }
-  createLineChart("detailSalesChart", labels, values, CHART_COLORS.teal);
+  if (typeof createLineChart === 'function') {
+    createLineChart("detailSalesChart", labels, values, CHART_COLORS.teal);
+  }
 })();
 
 /* Stats tab switching */
