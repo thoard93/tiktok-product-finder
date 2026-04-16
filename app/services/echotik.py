@@ -423,7 +423,14 @@ def fetch_top_shops(country: str = "US", page_size: int = 10, page: int = 1) -> 
     """
     try:
         data = _request('GET', f"{ECHOTIK_V3_BASE}/seller/list",
-                        params={"region": country, "page_num": page, "page_size": min(page_size, 10)})
+                        params={
+                            "region": country,
+                            "page_num": page,
+                            "page_size": min(page_size, 10),
+                            "order": "total_sale_nd_cnt",  # Sort by 30-day sales count
+                            "sort": "desc",
+                            "dateRange": 30,
+                        })
     except EchoTikError as exc:
         log.warning("[EchoTik] seller/list failed: %s", exc)
         return []
@@ -468,6 +475,12 @@ def fetch_top_shops(country: str = "US", page_size: int = 10, page: int = 1) -> 
             s.get('total_fans_cnt') or s.get('follower_count') or s.get('followerCount')
             or s.get('fans_count') or s.get('fansCount')
         )
+        # 30-day sales count (the primary ranking metric on EchoTik)
+        sales_30d = _safe_int(
+            s.get('total_sale_nd_cnt') or s.get('total_sale_30d_cnt')
+            or s.get('sale_cnt_30d') or s.get('sales_30d') or 0
+        )
+
         gmv = _safe_float(
             s.get('total_sale_gmv_amt') or s.get('total_sale_gmv_30d_amt')
             or s.get('gmv_30d') or s.get('gmv') or s.get('sales_30d')
@@ -488,6 +501,7 @@ def fetch_top_shops(country: str = "US", page_size: int = 10, page: int = 1) -> 
                 'shop_id': sid, 'name': name, 'avatar_url': avatar,
                 'country': s.get('country') or s.get('region') or country,
                 'category': cat, 'follower_count': followers,
+                'sales_30d': sales_30d,
                 'gmv_30d': gmv, 'product_count': products,
                 'trending_score': score, 'shop_url': shop_url,
             })

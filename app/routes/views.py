@@ -541,7 +541,15 @@ def product_detail(product_id):
     from datetime import timedelta
     ctx = _base_context('products')
 
-    product = Product.query.get_or_404(product_id)
+    # Try both raw ID and shop_ prefixed ID
+    product = Product.query.get(product_id)
+    if not product and not product_id.startswith('shop_'):
+        product = Product.query.get(f'shop_{product_id}')
+    if not product and product_id.startswith('shop_'):
+        product = Product.query.get(product_id.replace('shop_', ''))
+    if not product:
+        from flask import abort
+        abort(404)
     product.trending_score = _calc_score(product)
     product.lifecycle = _calc_lifecycle(product)
     ctx['product'] = product
@@ -2099,6 +2107,40 @@ def brand_hunter_detail(brand_id):
     ctx['brand_sort'] = sort
     ctx['gems_only'] = gems_only
     return render_template('brand_hunter_detail.html', **ctx)
+
+
+@views_bp.route('/app/brand-hunter/delete-batch', methods=['POST'])
+@login_required
+def brand_hunter_delete_batch():
+    """Mass delete selected brands."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    data = request.get_json() or {}
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'error': 'No brands selected'}), 400
+    deleted = 0
+    for bid in ids:
+        brand = ScannedBrand.query.get(int(bid))
+        if brand:
+            db.session.delete(brand)
+            deleted += 1
+    db.session.commit()
+    return jsonify({'success': True, 'deleted': deleted})
+
+
+@views_bp.route('/app/brand-hunter/delete-all', methods=['POST'])
+@login_required
+def brand_hunter_delete_all():
+    """Delete ALL scanned brands."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    BrandProduct.query.delete()
+    ScannedBrand.query.delete()
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @views_bp.route('/app/brand-hunter/<int:brand_id>/delete', methods=['POST'])

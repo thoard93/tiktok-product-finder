@@ -52,8 +52,9 @@
             <th scope="col" style="width:40px">#</th>
             <th scope="col">Brand</th>
             <th scope="col">Category</th>
+            <th scope="col">30d Sales</th>
             <th scope="col">30d GMV</th>
-            <th scope="col">Followers</th>
+            <th scope="col">Products</th>
             <th scope="col">Status</th>
           </tr>
         </thead>
@@ -106,7 +107,17 @@
 {# ===== SCANNED BRANDS LIBRARY ===== #}
 <div class="section-header">
   <h2 class="section-title">Scanned Brands</h2>
-  <span class="text-sm text-muted">Sorted by 30-day sales</span>
+  <div class="flex gap-2 items-center">
+    {% if brands and brands | length > 0 and current_user and current_user.is_admin %}
+    <button class="btn btn-ghost btn-sm" onclick="deleteSelected()" id="deleteSelectedBtn" style="font-size:12px;color:var(--accent);display:none">
+      <i data-lucide="trash-2" style="width:12px;height:12px"></i> Delete Selected
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="deleteAllBrands()" style="font-size:12px;color:var(--text-faint)">
+      <i data-lucide="trash" style="width:12px;height:12px"></i> Clear All
+    </button>
+    {% endif %}
+    <span class="text-sm text-muted">Sorted by 30-day sales</span>
+  </div>
 </div>
 
 {% if brands and brands | length > 0 %}
@@ -114,6 +125,7 @@
   <table class="product-table">
     <thead>
       <tr>
+        <th scope="col" style="width:32px"><input type="checkbox" onchange="document.querySelectorAll('.scanned-check').forEach(c=>c.checked=this.checked);updateDeleteBtn()" aria-label="Select all"></th>
         <th scope="col" style="width:36px">#</th>
         <th scope="col" style="min-width:200px">Brand</th>
         <th scope="col">30d Sales</th>
@@ -128,6 +140,7 @@
     <tbody>
       {% for b in brands %}
       <tr>
+        <td><input type="checkbox" class="scanned-check" value="{{ b.id }}" onchange="updateDeleteBtn()" aria-label="Select {{ b.brand_name }}"></td>
         <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
         <td>
           <div style="display:flex;align-items:center;gap:10px">
@@ -207,15 +220,17 @@ function renderBrandList() {
   body.innerHTML = loadedBrands.map(function(b, i) {
     var letter = (b.name || '?')[0].toUpperCase();
     var scanned = b.already_scanned ? '<span style="color:var(--teal);font-size:11px;font-weight:600">Scanned</span>' : '<span style="color:var(--text-faint);font-size:11px">New</span>';
+    var sales = b.sales_30d ? Number(b.sales_30d).toLocaleString() : '—';
     var gmv = b.gmv_30d ? '$' + Number(b.gmv_30d).toLocaleString() : '—';
-    var followers = b.follower_count ? Number(b.follower_count).toLocaleString() : '—';
+    var products = b.product_count ? Number(b.product_count).toLocaleString() : '—';
     return '<tr>'
       + '<td><input type="checkbox" class="brand-check" data-idx="' + i + '" onchange="updateCount()" aria-label="Select ' + (b.name||'') + '"></td>'
       + '<td style="color:var(--text-faint);font-weight:600;font-size:12px;font-variant-numeric:tabular-nums">' + b.rank + '</td>'
       + '<td><div style="display:flex;align-items:center;gap:8px"><div class="brand-letter-avatar" style="width:28px;height:28px;font-size:12px">' + letter + '</div><span style="font-weight:600;font-size:13px">' + (b.name||'Unknown') + '</span></div></td>'
       + '<td style="font-size:12px;color:var(--text-muted)">' + (b.category || '—') + '</td>'
+      + '<td style="font-weight:600;font-variant-numeric:tabular-nums;font-size:13px">' + sales + '</td>'
       + '<td style="font-variant-numeric:tabular-nums;font-size:13px">' + gmv + '</td>'
-      + '<td style="font-variant-numeric:tabular-nums;font-size:13px">' + followers + '</td>'
+      + '<td style="font-variant-numeric:tabular-nums;font-size:13px">' + products + '</td>'
       + '<td>' + scanned + '</td>'
       + '</tr>';
   }).join('');
@@ -287,5 +302,31 @@ function startPolling(jobId, ps, pe) {
 {% if active_job and active_job.status in ['queued', 'running'] %}
 startPolling({{ active_job.id }}, {{ active_job.page_start }}, {{ active_job.page_end }});
 {% endif %}
+
+/* Mass delete */
+function updateDeleteBtn() {
+  var checked = document.querySelectorAll('.scanned-check:checked').length;
+  var btn = document.getElementById('deleteSelectedBtn');
+  if (btn) { btn.style.display = checked > 0 ? '' : 'none'; btn.textContent = 'Delete ' + checked + ' selected'; }
+}
+
+async function deleteSelected() {
+  var checked = document.querySelectorAll('.scanned-check:checked');
+  if (!checked.length) return;
+  if (!confirm('Delete ' + checked.length + ' brand(s) and all their products?')) return;
+  var ids = Array.from(checked).map(function(c){ return c.value; });
+  try {
+    await fetch('/app/brand-hunter/delete-batch', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ids: ids}) });
+    window.location.reload();
+  } catch(e) { alert('Error deleting'); }
+}
+
+async function deleteAllBrands() {
+  if (!confirm('Delete ALL scanned brands and products? This cannot be undone.')) return;
+  try {
+    await fetch('/app/brand-hunter/delete-all', { method: 'POST' });
+    window.location.reload();
+  } catch(e) { alert('Error'); }
+}
 </script>
 {% endblock %}
