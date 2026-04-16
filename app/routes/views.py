@@ -2240,6 +2240,8 @@ def brand_hunter_detail(brand_id):
 
     if sort == 'sales':
         query = query.order_by(BrandProduct.sales_30d.desc().nullslast())
+    elif sort == 'revenue':
+        query = query.order_by(BrandProduct.revenue_30d.desc().nullslast())
     elif sort == 'commission':
         query = query.order_by(BrandProduct.commission_rate.desc().nullslast())
     elif sort == 'price':
