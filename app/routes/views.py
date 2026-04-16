@@ -2212,7 +2212,18 @@ def _run_batch_brand_scan(app, job_id, brands_list):
                 if not shop_id:
                     continue
 
-                _scan_single_brand(shop_id, name, job.page_start, job.page_end, job)
+                # Primary scan with user-requested page range
+                found = _scan_single_brand(shop_id, name, job.page_start, job.page_end, job)
+
+                # Fallback: if nothing found in the requested range AND we weren't
+                # already scanning from page 1, try the first 10 pages instead
+                # (common case: brand has <100 products, requested 100-200 range)
+                if found == 0 and job.page_start > 1:
+                    db.session.refresh(job)
+                    if job.status in ('stopped', 'error'):
+                        break
+                    log.info(f"[BrandScan] {name} found 0 in {job.page_start}-{job.page_end}, falling back to 1-10")
+                    _scan_single_brand(shop_id, name, 1, 10, job)
 
             if job.status == 'running':
                 job.status = 'complete'
