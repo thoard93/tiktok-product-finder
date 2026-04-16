@@ -227,7 +227,7 @@
 {% block scripts %}
 <script src="/static/js/dashboard.js"></script>
 <script>
-/* Sales trend chart — uses real trend data if available, otherwise placeholder */
+/* Sales trend chart — uses real trend data if available, otherwise estimate from 7d/30d */
 (function() {
   var trendData = {{ trend_data | tojson | default('[]') }};
   var labels = [], values = [];
@@ -238,11 +238,20 @@
       values.push(trendData[i].sales || 0);
     }
   } else {
-    var base = {{ product.sales_7d or 10 }} / 7;
+    /* Build estimated 30-day curve from sales_7d and sales_30d */
+    var s7 = {{ product.sales_7d or 0 }};
+    var s30 = {{ product.sales_30d or 0 }};
+    var dailyRecent = s7 / 7;
+    var dailyOlder = s30 > s7 ? (s30 - s7) / 23 : dailyRecent * 0.7;
     for (var i = 0; i < 30; i++) {
       var d = new Date(); d.setDate(d.getDate() - 29 + i);
       labels.push(d.toLocaleDateString("en-US", {month:"short", day:"numeric"}));
-      values.push(Math.floor(base * (0.5 + Math.random())));
+      /* Smooth transition from older daily rate to recent rate */
+      var t = i / 29; /* 0 = oldest, 1 = newest */
+      var base = dailyOlder + (dailyRecent - dailyOlder) * t;
+      /* Add small variance for realism (±15%) */
+      var variance = base * 0.15 * (Math.sin(i * 1.7) * 0.8 + Math.cos(i * 0.9) * 0.5);
+      values.push(Math.max(0, Math.round(base + variance)));
     }
   }
   createLineChart("detailSalesChart", labels, values, CHART_COLORS.teal);

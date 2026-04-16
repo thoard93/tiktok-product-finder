@@ -500,6 +500,14 @@ def _products_list_inner(ctx):
         p.is_on_sale = bool(p.original_price and p.original_price > p.price and p.price > 0)
         p.discount_pct = round((1 - p.price / p.original_price) * 100) if p.is_on_sale else 0
         p.is_hot_deal = p.is_on_sale and p.trending_score >= 60
+        # Sales momentum: compare 7d vs weekly average of 30d
+        s7 = p.sales_7d or 0
+        s30 = p.sales_30d or 0
+        if s30 > 0 and s7 > 0:
+            weekly_avg = s30 / 4.3
+            p.sales_growth = round(((s7 - weekly_avg) / weekly_avg) * 100)
+        else:
+            p.sales_growth = 0
 
     ctx['products'] = products
     ctx['page'] = page

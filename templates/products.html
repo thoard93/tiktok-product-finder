@@ -66,7 +66,7 @@
         <th scope="col" style="min-width:280px">Product Info</th>
         <th scope="col"><a href="?sort=gmv&{{ filter_params }}" class="th-sort {% if current_sort == 'gmv' %}th-sort--active{% endif %}">Revenue &#x25BE;</a></th>
         <th scope="col">Growth</th>
-        <th scope="col"><a href="?sort=sales&{{ filter_params }}" class="th-sort {% if current_sort == 'sales' %}th-sort--active{% endif %}">Items Sold &#x25BE;</a></th>
+        <th scope="col"><a href="?sort=sales&{{ filter_params }}" class="th-sort {% if current_sort == 'sales' %}th-sort--active{% endif %}">7d Sales &#x25BE;</a></th>
         <th scope="col">Avg Price</th>
         <th scope="col"><a href="?sort=commission&{{ filter_params }}" class="th-sort {% if current_sort == 'commission' %}th-sort--active{% endif %}">Commission &#x25BE;</a></th>
         <th scope="col">Creators</th>
@@ -80,7 +80,7 @@
       {% set cat_lower = (p.category or '')|lower %}
       {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-food' if 'food' in cat_lower else 'cat-default'))))) %}
       {% set score_color = '#0d9488' if p.trending_score >= 60 else ('#d97706' if p.trending_score >= 35 else '#dc2626') %}
-      {% set growth = p.gmv_growth or 0 %}
+      {% set growth = p.sales_growth or 0 %}
       <tr>
         <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index + (page - 1) * 30 }}</td>
         <td>
