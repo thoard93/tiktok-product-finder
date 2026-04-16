@@ -4,30 +4,34 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">Brand Hunter</h1>
-  <p class="page-subtitle">Top TikTok Shop brands ranked by 30-day GMV</p>
+  <p class="page-subtitle">Top TikTok Shop brands &mdash; sorted by {{ 'followers' if current_sort == 'followers' else ('product count' if current_sort == 'products' else ('trending score' if current_sort == 'trending' else '30-day sales')) }}</p>
 </div>
 
 {# ===== FILTER BAR ===== #}
-<form class="filter-bar" id="brandFilterForm" method="GET" action="/app/brands">
-  <select class="select" name="category" onchange="this.form.submit()">
-    <option value="">All Categories</option>
-    {% for cat in categories | default([]) %}
-      <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
-    {% endfor %}
-  </select>
-  <select class="select" name="sort" onchange="this.form.submit()" style="min-width:140px">
-    <option value="gmv" {% if current_sort == 'gmv' %}selected{% endif %}>Sort: 30d GMV</option>
-    <option value="followers" {% if current_sort == 'followers' %}selected{% endif %}>Sort: Followers</option>
-    <option value="products" {% if current_sort == 'products' %}selected{% endif %}>Sort: Products</option>
-    <option value="trending" {% if current_sort == 'trending' %}selected{% endif %}>Sort: Trending</option>
-  </select>
-  <div class="topbar-search" style="flex:1;max-width:240px">
-    <i data-lucide="search"></i>
-    <input type="text" class="input" name="q" placeholder="Search brands..." value="{{ current_search | default('') }}">
+<form class="filter-card" id="brandFilterForm" method="GET" action="/app/brands">
+  <div class="filter-row">
+    <select class="filter-input" name="category" onchange="this.form.submit()" aria-label="Filter by category">
+      <option value="">All Categories</option>
+      {% for cat in categories | default([]) %}
+        <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+    <select class="filter-input" name="sort" onchange="this.form.submit()" style="min-width:155px" aria-label="Sort order">
+      <option value="gmv" {% if current_sort == 'gmv' %}selected{% endif %}>Sort: 30d Sales</option>
+      <option value="followers" {% if current_sort == 'followers' %}selected{% endif %}>Sort: Followers</option>
+      <option value="products" {% if current_sort == 'products' %}selected{% endif %}>Sort: Products</option>
+      <option value="trending" {% if current_sort == 'trending' %}selected{% endif %}>Sort: Trending</option>
+    </select>
+    <div style="position:relative;flex:1;min-width:140px">
+      <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-faint);pointer-events:none"></i>
+      <input type="text" class="filter-input" name="q" placeholder="Search brands..." value="{{ current_search | default('') }}" style="padding-left:32px;width:100%" aria-label="Search brands">
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm">Search</button>
+    {% if current_category or current_search %}<a href="/app/brands" class="btn btn-ghost btn-sm">Reset</a>{% endif %}
   </div>
-  <button type="submit" class="btn btn-ghost btn-sm">Search</button>
-  {% if current_category or current_search %}<a href="/app/brands" class="btn btn-ghost btn-sm" style="color:var(--danger)">Clear</a>{% endif %}
-  <div class="filter-count">{{ total_count | default(0) }} brands</div>
+  <div class="filter-actions">
+    <span class="filter-count-label">{{ total_count | default(0) }} brands</span>
+  </div>
 </form>
 
 {# ===== BRAND GRID ===== #}
@@ -39,17 +43,15 @@
       {% if b.avatar_url %}
         <img src="{{ b.avatar_url }}" alt="{{ b.name }}" loading="lazy" style="object-fit:cover;width:100%;height:100%"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="product-card-img-fallback" style="display:none">
-          <i data-lucide="store"></i>
-          <span>{{ b.category or 'Brand' }}</span>
-        </div>
+        <div class="brand-avatar-fallback" style="display:none">{{ (b.name or '?')[0] | upper }}</div>
       {% else %}
-        <div class="product-card-img-fallback">
-          <i data-lucide="store"></i>
-          <span>{{ b.category or 'Brand' }}</span>
-        </div>
+        <div class="brand-avatar-fallback">{{ (b.name or '?')[0] | upper }}</div>
       {% endif %}
       {% if b.category %}<span class="badge badge-muted badge-overlay-tl">{{ b.category }}</span>{% endif %}
+      {# Hidden Gem badge: brands with high GMV but few products #}
+      {% if b.gmv_30d and b.gmv_30d > 50000 and (b.product_count or 0) <= 20 %}
+        <span class="badge brand-gem-badge">&#x1f48e; Hidden Gem</span>
+      {% endif %}
     </div>
     <div class="product-card-body">
       <div class="product-card-name"><a href="/app/brands/{{ b.id }}" style="color:inherit;text-decoration:none">{{ b.name }}</a></div>
@@ -57,15 +59,15 @@
       <div class="product-card-stats">
         <div class="product-card-stat">
           <i data-lucide="dollar-sign" style="width:12px;height:12px"></i>
-          <span>${{ b.gmv_30d | format_number }} <small>30d GMV</small></span>
+          <span style="font-variant-numeric:tabular-nums">${{ b.gmv_30d | format_number }} <small>30d GMV</small></span>
         </div>
         <div class="product-card-stat">
           <i data-lucide="users" style="width:12px;height:12px"></i>
-          <span>{{ b.follower_count | format_number }} <small>followers</small></span>
+          <span style="font-variant-numeric:tabular-nums">{{ b.follower_count | format_number }} <small>followers</small></span>
         </div>
         <div class="product-card-stat">
           <i data-lucide="package" style="width:12px;height:12px"></i>
-          <span>{{ b.product_count or 0 }} <small>products</small></span>
+          <span style="font-variant-numeric:tabular-nums">{{ b.product_count or 0 }} <small>products</small></span>
         </div>
       </div>
 
@@ -83,7 +85,7 @@
 {# Pagination #}
 {% if total_pages is defined and total_pages > 1 %}
 <div class="pagination">
-  <button class="page-btn" {% if page <= 1 %}disabled{% endif %} onclick="goPage({{ page - 1 }})">
+  <button class="page-btn" {% if page <= 1 %}disabled{% endif %} onclick="goPage({{ page - 1 }})" aria-label="Previous page">
     <i data-lucide="chevron-left" style="width:16px;height:16px"></i>
   </button>
   {% for pg in range(1, total_pages + 1) %}
@@ -93,7 +95,7 @@
       <span class="page-btn" style="cursor:default;opacity:.3">&hellip;</span>
     {% endif %}
   {% endfor %}
-  <button class="page-btn" {% if page >= total_pages %}disabled{% endif %} onclick="goPage({{ page + 1 }})">
+  <button class="page-btn" {% if page >= total_pages %}disabled{% endif %} onclick="goPage({{ page + 1 }})" aria-label="Next page">
     <i data-lucide="chevron-right" style="width:16px;height:16px"></i>
   </button>
   <span class="text-sm text-muted" style="margin-left:var(--space-3)">Page {{ page }} of {{ total_pages }}</span>
@@ -101,12 +103,19 @@
 {% endif %}
 
 {% else %}
-<div class="empty-state">
-  <div class="empty-icon"><i data-lucide="store" style="width:80px;height:80px"></i></div>
-  <h3 class="empty-title">No brands synced yet</h3>
-  <p class="empty-desc">Run a brand sync from the Admin Panel to populate this page with top TikTok Shop brands.</p>
+{# ===== EMPTY STATE ===== #}
+<div class="card" style="padding:var(--space-12) var(--space-8);text-align:center;max-width:560px;margin:var(--space-8) auto">
+  <div style="width:72px;height:72px;border-radius:var(--radius-full);background:var(--accent-glow);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-5)">
+    <i data-lucide="scan-search" style="width:32px;height:32px;color:var(--accent)"></i>
+  </div>
+  <h3 style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-2)">No brands scanned yet</h3>
+  <p style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-6);line-height:1.7">Launch your first deep scan to uncover hidden gems from top brands like Nike, QVC, and Shark. Brands are ranked by GMV with product counts and follower data.</p>
   {% if current_user and current_user.is_admin %}
-    <a href="/app/admin" class="btn btn-primary">Go to Admin Panel</a>
+    <a href="/app/admin" class="btn btn-primary btn-lg">
+      <i data-lucide="scan-search" style="width:18px;height:18px"></i> Launch Brand Scan
+    </a>
+  {% else %}
+    <p style="font-size:var(--text-xs);color:var(--text-faint)">Ask an admin to run the brand sync from the Admin Panel.</p>
   {% endif %}
 </div>
 {% endif %}

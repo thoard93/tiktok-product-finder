@@ -8,20 +8,24 @@
 <div class="card mb-6">
   <div class="flex gap-4 items-center" style="flex-wrap:wrap">
     {% if brand.avatar_url %}
-      <img src="{{ brand.avatar_url }}" alt="{{ brand.name }}" style="width:64px;height:64px;border-radius:var(--radius-lg);object-fit:cover;background:var(--bg-elevated);border:1px solid var(--border)"
-           onerror="this.style.display='none'">
+      <img src="{{ brand.avatar_url }}" alt="{{ brand.name }}" style="width:64px;height:64px;border-radius:var(--radius-full);object-fit:cover;background:var(--bg-elevated);border:2px solid var(--border)"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="brand-header-avatar-fallback" style="display:none">{{ (brand.name or '?')[0] | upper }}</div>
     {% else %}
-      <div style="width:64px;height:64px;border-radius:var(--radius-lg);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;color:var(--text-muted)">
-        <i data-lucide="store" style="width:28px;height:28px"></i>
-      </div>
+      <div class="brand-header-avatar-fallback">{{ (brand.name or '?')[0] | upper }}</div>
     {% endif %}
     <div style="flex:1">
-      <h1 style="font-size:var(--text-xl);font-weight:700;margin-bottom:4px">{{ brand.name }}</h1>
-      <div class="flex gap-3 items-center" style="flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <h1 style="font-size:var(--text-xl);font-weight:700">{{ brand.name }}</h1>
+        {% if brand.gmv_30d and brand.gmv_30d > 50000 and (brand.product_count or 0) <= 20 %}
+          <span class="brand-gem-badge-inline">&#x1f48e; Hidden Gem</span>
+        {% endif %}
+      </div>
+      <div class="flex gap-4 items-center" style="flex-wrap:wrap">
         {% if brand.category %}<span class="badge badge-muted">{{ brand.category }}</span>{% endif %}
-        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">${{ brand.gmv_30d | format_number }}</strong> GMV</span>
-        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.follower_count | format_number }}</strong> followers</span>
-        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.product_count or 0 }}</strong> products</span>
+        <span style="font-size:13px;color:var(--text-muted);font-variant-numeric:tabular-nums"><strong style="color:var(--text-primary)">${{ brand.gmv_30d | format_number }}</strong> GMV</span>
+        <span style="font-size:13px;color:var(--text-muted);font-variant-numeric:tabular-nums"><strong style="color:var(--text-primary)">{{ brand.follower_count | format_number }}</strong> followers</span>
+        <span style="font-size:13px;color:var(--text-muted);font-variant-numeric:tabular-nums"><strong style="color:var(--text-primary)">{{ brand.product_count or 0 }}</strong> products</span>
       </div>
     </div>
     {% if brand.tiktok_shop_url %}
@@ -40,7 +44,7 @@
       <a href="/app/brands/{{ brand.id }}?sort={{ val }}" class="btn btn-sm {{ 'btn-primary' if brand_sort == val else 'btn-ghost' }}">{{ label }}</a>
     {% endfor %}
   </div>
-  <span class="text-sm text-muted">{{ products | length }} products</span>
+  <span class="text-sm text-muted" style="font-variant-numeric:tabular-nums">{{ products | length }} products</span>
 </div>
 
 {# ===== PRODUCTS TABLE ===== #}
@@ -49,15 +53,15 @@
   <table class="product-table">
     <thead>
       <tr>
-        <th style="width:36px">#</th>
-        <th style="min-width:240px">Product Info</th>
-        <th>Commission</th>
-        <th>Price</th>
-        <th>7d Sales</th>
-        <th>Creators</th>
-        <th>Videos</th>
-        <th>Score</th>
-        <th style="width:60px"></th>
+        <th scope="col" style="width:36px">#</th>
+        <th scope="col" style="min-width:240px">Product Info</th>
+        <th scope="col">Commission</th>
+        <th scope="col">Price</th>
+        <th scope="col">7d Sales</th>
+        <th scope="col">Creators</th>
+        <th scope="col">Videos</th>
+        <th scope="col">Score</th>
+        <th scope="col" style="width:60px"></th>
       </tr>
     </thead>
     <tbody>
@@ -82,7 +86,7 @@
             </div>
           </div>
         </td>
-        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
+        <td class="commission-cell" style="font-variant-numeric:tabular-nums">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
         <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
         <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
         <td style="font-variant-numeric:tabular-nums">{{ "{:,}".format(p.influencer_count or 0) }}</td>
@@ -106,10 +110,12 @@
 </div>
 
 {% else %}
-<div class="empty-state">
-  <div class="empty-icon"><i data-lucide="package-search" style="width:64px;height:64px"></i></div>
-  <h3 class="empty-title">No products found for this brand</h3>
-  <p class="empty-desc">Products will appear after the next sync. Try running a manual scan from the Admin Panel.</p>
+<div class="card" style="padding:var(--space-10) var(--space-8);text-align:center">
+  <div style="width:56px;height:56px;border-radius:var(--radius-full);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-4)">
+    <i data-lucide="package-search" style="width:24px;height:24px;color:var(--text-muted)"></i>
+  </div>
+  <h3 style="font-size:var(--text-base);font-weight:700;margin-bottom:var(--space-2)">No products found for this brand</h3>
+  <p style="font-size:var(--text-sm);color:var(--text-muted);max-width:360px;margin:0 auto">Products will appear after the next sync. Try running a manual scan from the Admin Panel.</p>
 </div>
 {% endif %}
 {% endblock %}
