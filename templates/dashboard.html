@@ -62,12 +62,12 @@
         </div>
         <div class="product-card-body">
           <div class="product-card-name">{{ p.product_name }}</div>
-          <div class="product-card-commission">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</div>
-          <div class="product-card-price">${{ "%.2f" | format(p.price or 0) }}</div>
+          <div class="product-card-commission">{% if is_pro %}{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%{% else %}<span class="blurred-data">18%</span>{% endif %}</div>
+          <div class="product-card-price">{% if is_pro %}${{ "%.2f" | format(p.price or 0) }}{% else %}<span class="blurred-data">$24.99</span>{% endif %}</div>
           <div class="product-card-stats" style="margin:var(--space-2) 0">
-            <div class="product-card-stat"><span>{{ "{:,}".format(p.sales_7d or 0) }} <small>7d sales</small></span></div>
-            <div class="product-card-stat"><span>{{ "{:,}".format(p.influencer_count or 0) }} <small>creators</small></span></div>
-            <div class="product-card-stat"><span>{{ "{:,}".format(p.video_count or 0) }} <small>videos</small></span></div>
+            <div class="product-card-stat"><span>{% if is_pro %}{{ "{:,}".format(p.sales_7d or 0) }}{% else %}<span class="blurred-data">5,420</span>{% endif %} <small>7d sales</small></span></div>
+            <div class="product-card-stat"><span>{% if is_pro %}{{ "{:,}".format(p.influencer_count or 0) }}{% else %}<span class="blurred-data">182</span>{% endif %} <small>creators</small></span></div>
+            <div class="product-card-stat"><span>{% if is_pro %}{{ "{:,}".format(p.video_count or 0) }}{% else %}<span class="blurred-data">890</span>{% endif %} <small>videos</small></span></div>
           </div>
           <div style="margin-top:var(--space-3)">
             <a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm w-full">View Details</a>
@@ -122,12 +122,13 @@
             </div>
           </div>
         </td>
-        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
-        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
-        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
-        <td>{{ "{:,}".format(p.influencer_count or 0) }}</td>
-        <td>{{ "{:,}".format(p.video_count or 0) }}</td>
+        <td class="commission-cell">{% if is_pro %}{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%{% else %}<span class="blurred-data">15%</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}${{ "%.2f" | format(p.price or 0) }}{% else %}<span class="blurred-data">$29.99</span>{% endif %}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(p.sales_7d or 0) }}{% else %}<span class="blurred-data">3,120</span>{% endif %}</td>
+        <td>{% if is_pro %}{{ "{:,}".format(p.influencer_count or 0) }}{% else %}<span class="blurred-data">245</span>{% endif %}</td>
+        <td>{% if is_pro %}{{ "{:,}".format(p.video_count or 0) }}{% else %}<span class="blurred-data">670</span>{% endif %}</td>
         <td>
+          {% if is_pro %}
           <div class="score-ring-wrap" style="width:30px;height:30px">
             <svg viewBox="0 0 36 36" width="30" height="30">
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
@@ -137,6 +138,7 @@
             </svg>
             <span class="score-number" style="font-size:9px">{{ p.trending_score }}</span>
           </div>
+          {% else %}<span class="blurred-data">68</span>{% endif %}
         </td>
         <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
       </tr>

@@ -125,6 +125,7 @@
         <tr><td class="text-muted">Active products</td><td class="font-semibold">{{ active_products | default(0) | int }}</td></tr>
         <tr><td class="text-muted">Brands synced</td><td class="font-semibold">{{ brand_count | default(0) | int }}</td></tr>
         <tr><td class="text-muted">Registered users</td><td class="font-semibold">{{ user_count | default(0) | int }}</td></tr>
+        <tr><td class="text-muted">Active subscribers</td><td class="font-semibold" style="color:var(--teal)">{{ subscriber_count | default(0) | int }}</td></tr>
         <tr><td class="text-muted">EchoTik API</td><td><span class="badge badge-green" id="echotikStatus">Checking...</span></td></tr>
       </tbody>
     </table>

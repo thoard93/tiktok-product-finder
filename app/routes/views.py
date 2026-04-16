@@ -1030,6 +1030,7 @@ def admin_panel():
         ctx['active_products'] = Product.query.filter(_active_filter).count()
         ctx['blacklisted_count'] = BlacklistedBrand.query.count()
         ctx['user_count'] = User.query.count()
+        ctx['subscriber_count'] = Subscription.query.filter_by(status='active').count()
 
         last = db.session.query(func.max(Product.last_echotik_sync)).scalar()
         ctx['last_sync'] = last.strftime('%b %d, %Y at %I:%M %p UTC') if last else None

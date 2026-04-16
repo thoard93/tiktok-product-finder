@@ -39,12 +39,13 @@
             </div>
           </div>
         </td>
-        <td class="commission-cell">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
-        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
-        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_7d or 0) }}</td>
-        <td>{{ "{:,}".format(p.influencer_count or 0) }}</td>
-        <td>{{ "{:,}".format(p.video_count or 0) }}</td>
+        <td class="commission-cell">{% if is_pro %}{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%{% else %}<span class="blurred-data">15%</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}${{ "%.2f" | format(p.price or 0) }}{% else %}<span class="blurred-data">$24.99</span>{% endif %}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(p.sales_7d or 0) }}{% else %}<span class="blurred-data">4,830</span>{% endif %}</td>
+        <td>{% if is_pro %}{{ "{:,}".format(p.influencer_count or 0) }}{% else %}<span class="blurred-data">192</span>{% endif %}</td>
+        <td>{% if is_pro %}{{ "{:,}".format(p.video_count or 0) }}{% else %}<span class="blurred-data">1,050</span>{% endif %}</td>
         <td>
+          {% if is_pro %}
           <div class="score-ring-wrap" style="width:30px;height:30px">
             <svg viewBox="0 0 36 36" width="30" height="30">
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
@@ -54,6 +55,7 @@
             </svg>
             <span class="score-number" style="font-size:9px">{{ p.trending_score }}</span>
           </div>
+          {% else %}<span class="blurred-data">72</span>{% endif %}
         </td>
         <td style="display:flex;gap:4px;align-items:center">
           <button class="fav-btn-inline active" onclick="toggleFavorite('{{ p.product_id }}',this)" title="Remove from favorites">

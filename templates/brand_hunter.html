@@ -151,10 +151,10 @@
             {% if b.is_hidden_gem %}<span class="brand-gem-badge-inline" style="font-size:10px">&#x1f48e; Gem</span>{% endif %}
           </div>
         </td>
-        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(b.sales_30d or 0) }}</td>
-        <td style="font-variant-numeric:tabular-nums">${{ b.revenue_30d | format_number }}</td>
-        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ b.total_products or 0 }}</td>
-        <td style="font-variant-numeric:tabular-nums">{{ "%.0f" | format((b.avg_commission or 0) * 100) }}%</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ "{:,}".format(b.sales_30d or 0) }}{% else %}<span class="blurred-data">12,450</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}${{ b.revenue_30d | format_number }}{% else %}<span class="blurred-data">$482K</span>{% endif %}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{% if is_pro %}{{ b.total_products or 0 }}{% else %}<span class="blurred-data">340</span>{% endif %}</td>
+        <td style="font-variant-numeric:tabular-nums">{% if is_pro %}{{ "%.0f" | format((b.avg_commission or 0) * 100) }}%{% else %}<span class="blurred-data">15%</span>{% endif %}</td>
         <td style="font-size:12px;color:var(--text-faint)">{{ b.pages_scanned or '—' }}</td>
         <td style="font-size:12px;color:var(--text-faint)">{{ b.last_scanned.strftime('%b %d') if b.last_scanned else '—' }}</td>
         <td>
