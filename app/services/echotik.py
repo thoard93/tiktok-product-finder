@@ -748,15 +748,33 @@ def fetch_similar_creators(unique_id: str, region: str = 'US',
     return results
 
 
+def _try_raw(url, params):
+    """
+    Bypass the strict ``code != 0`` check in ``_request`` so we can log
+    the full payload when an endpoint exists but returns an error code.
+    Returns (status, body_dict) or (None, None) on network failure.
+    """
+    try:
+        auth = _get_auth()
+        resp = requests.get(url, params=params, auth=auth, timeout=30)
+        body = None
+        try:
+            body = resp.json()
+        except Exception:
+            body = {'_raw_text': resp.text[:300]}
+        return resp.status_code, body
+    except (requests.ConnectionError, requests.Timeout) as exc:
+        return None, {'_error': str(exc)}
+
+
 def fetch_creator_videos(unique_id: str, user_id: str = '',
                          limit: int = 12) -> list[dict]:
     """
     Fetch a creator's recent videos.
 
     EchoTik's influencer video endpoint expects the numeric TikTok
-    ``user_id``, not the ``@handle``. We try ``user_id`` first (if we
-    have it from the batch detail response) then fall back to variants
-    with ``unique_id`` so older endpoints still work.
+    ``user_id``, not the ``@handle``. We try ``user_id`` first then
+    fall back to ``unique_id`` across a bunch of path + param variants.
     """
     uid = (unique_id or '').strip()
     user_id = str(user_id or '').strip()
@@ -764,47 +782,52 @@ def fetch_creator_videos(unique_id: str, user_id: str = '',
         return []
 
     size = min(limit, 20)
-    attempts = []
-    # Prefer numeric user_id (per EchoTik docs that's what this endpoint expects)
+    # Paths we've seen EchoTik use / be likely to use for this data
+    paths = [
+        f"{ECHOTIK_V3_BASE}/influencer/video/list",
+        f"{ECHOTIK_V3_BASE}/influencer/video",
+        f"{ECHOTIK_V3_BASE}/influencer/videos",
+        f"{ECHOTIK_V3_BASE}/influencer/video_list",
+    ]
+    # Param variants — EchoTik switches between page/limit and page_num/page_size
+    param_sets = []
     if user_id:
-        attempts += [
-            (f"{ECHOTIK_V3_BASE}/influencer/video/list",
-             {'user_id': user_id, 'page_num': 1, 'page_size': size}),
-            (f"{ECHOTIK_V3_BASE}/influencer/video",
-             {'user_id': user_id, 'page_num': 1, 'page_size': size}),
+        param_sets += [
+            {'user_id': user_id, 'page_num': 1, 'page_size': size},
+            {'user_id': user_id, 'page': 1, 'limit': size},
+            {'userId': user_id, 'page_num': 1, 'page_size': size},
         ]
     if uid:
-        attempts += [
-            (f"{ECHOTIK_V3_BASE}/influencer/video/list",
-             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
-            (f"{ECHOTIK_V3_BASE}/influencer/video",
-             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
-            (f"{ECHOTIK_V3_BASE}/influencer/videos",
-             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
+        param_sets += [
+            {'unique_id': uid, 'page_num': 1, 'page_size': size},
+            {'unique_id': uid, 'page': 1, 'limit': size},
         ]
+
+    attempts = [(p, params) for p in paths for params in param_sets]
 
     raw_list = []
     for url, params in attempts:
-        try:
-            resp = _request('GET', url, params=params)
-            raw = resp.get('data')
-            if isinstance(raw, dict):
-                raw = (raw.get('list') or raw.get('records')
-                       or raw.get('videos') or raw.get('video_list') or [])
-            if isinstance(raw, list) and raw:
-                log.info("[EchoTik] creator videos HIT %s params=%s items=%d",
-                         url, list(params.keys()), len(raw))
-                raw_list = raw
-                break
-            else:
-                log.info("[EchoTik] creator videos empty %s params=%s",
-                         url, list(params.keys()))
-        except EchoTikError as exc:
-            log.info("[EchoTik] creator videos %s FAILED: %s", url, exc)
+        status, body = _try_raw(url, params)
+        if status is None:
+            log.info("[EchoTik] videos NETWORK %s: %s", url, body)
             continue
+        code = (body or {}).get('code')
+        msg = (body or {}).get('message', '')
+        data = (body or {}).get('data')
+        if isinstance(data, dict):
+            data = (data.get('list') or data.get('records')
+                    or data.get('videos') or data.get('video_list') or [])
+        n = len(data) if isinstance(data, list) else 0
+        log.info("[EchoTik] videos %s status=%s code=%s msg=%r items=%d params=%s",
+                 url.split('/echotik/')[-1], status, code, msg, n,
+                 list(params.keys()))
+        if code == 0 and isinstance(data, list) and data:
+            raw_list = data
+            break
 
     if not raw_list:
-        log.info("[EchoTik] No videos found for creator uid=%s user_id=%s", uid, user_id)
+        log.info("[EchoTik] No videos for uid=%s user_id=%s after %d attempts",
+                 uid, user_id, len(attempts))
         return []
 
     # Debug: first-item keys so we can see the actual field names
@@ -881,9 +904,9 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
     """
     Fetch the list of products a creator has promoted.
 
-    Like the video endpoint, this one prefers the numeric TikTok
-    ``user_id`` from the batch detail response. We fall back to
-    ``unique_id`` for older routes.
+    Like the video endpoint this one prefers the numeric TikTok
+    ``user_id``. Tries several path + param combos and logs the raw
+    response status/code/message for each attempt.
     """
     uid = (unique_id or '').strip()
     user_id = str(user_id or '').strip()
@@ -891,44 +914,50 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
         return []
 
     size = min(limit, 20)
-    attempts = []
+    paths = [
+        f"{ECHOTIK_V3_BASE}/influencer/product/list",
+        f"{ECHOTIK_V3_BASE}/influencer/product",
+        f"{ECHOTIK_V3_BASE}/influencer/products",
+        f"{ECHOTIK_V3_BASE}/influencer/product_list",
+    ]
+    param_sets = []
     if user_id:
-        attempts += [
-            (f"{ECHOTIK_V3_BASE}/influencer/product/list",
-             {'user_id': user_id, 'page_num': 1, 'page_size': size}),
-            (f"{ECHOTIK_V3_BASE}/influencer/product",
-             {'user_id': user_id, 'page_num': 1, 'page_size': size}),
+        param_sets += [
+            {'user_id': user_id, 'page_num': 1, 'page_size': size},
+            {'user_id': user_id, 'page': 1, 'limit': size},
+            {'userId': user_id, 'page_num': 1, 'page_size': size},
         ]
     if uid:
-        attempts += [
-            (f"{ECHOTIK_V3_BASE}/influencer/product/list",
-             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
-            (f"{ECHOTIK_V3_BASE}/influencer/product",
-             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
-            (f"{ECHOTIK_V3_BASE}/influencer/products",
-             {'unique_id': uid, 'page_num': 1, 'page_size': size}),
+        param_sets += [
+            {'unique_id': uid, 'page_num': 1, 'page_size': size},
+            {'unique_id': uid, 'page': 1, 'limit': size},
         ]
+
+    attempts = [(p, params) for p in paths for params in param_sets]
 
     raw_list = []
     for url, params in attempts:
-        try:
-            resp = _request('GET', url, params=params)
-            raw = resp.get('data')
-            if isinstance(raw, dict):
-                raw = raw.get('list') or raw.get('records') or raw.get('products') or []
-            if isinstance(raw, list) and raw:
-                log.info("[EchoTik] creator products HIT %s params=%s items=%d",
-                         url, list(params.keys()), len(raw))
-                raw_list = raw
-                break
-            else:
-                log.info("[EchoTik] creator products empty %s params=%s",
-                         url, list(params.keys()))
-        except EchoTikError as exc:
-            log.info("[EchoTik] creator products %s FAILED: %s", url, exc)
+        status, body = _try_raw(url, params)
+        if status is None:
+            log.info("[EchoTik] products NETWORK %s: %s", url, body)
             continue
+        code = (body or {}).get('code')
+        msg = (body or {}).get('message', '')
+        data = (body or {}).get('data')
+        if isinstance(data, dict):
+            data = (data.get('list') or data.get('records')
+                    or data.get('products') or [])
+        n = len(data) if isinstance(data, list) else 0
+        log.info("[EchoTik] products %s status=%s code=%s msg=%r items=%d params=%s",
+                 url.split('/echotik/')[-1], status, code, msg, n,
+                 list(params.keys()))
+        if code == 0 and isinstance(data, list) and data:
+            raw_list = data
+            break
 
     if not raw_list:
+        log.info("[EchoTik] No products for uid=%s user_id=%s after %d attempts",
+                 uid, user_id, len(attempts))
         return []
 
     first = raw_list[0] if isinstance(raw_list[0], dict) else {}

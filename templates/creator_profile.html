@@ -27,6 +27,7 @@
       {% if creator.avatar_url %}
         <img src="{{ creator.avatar_url }}" alt="{{ creator.nick_name }}"
              class="creator-avatar"
+             referrerpolicy="no-referrer"
              onerror="this.onerror=null;this.src='/static/img/avatar-placeholder.png'">
       {% else %}
         <div class="creator-avatar creator-avatar--fallback">{{ (creator.nick_name or '?')[0] | upper }}</div>
@@ -560,11 +561,16 @@ async function loadSimilar() {
       // NOTE: TikTok CDN URLs (p16-sign-va.tiktokcdn.com) expire after a few
       // hours. They render fine on first load; a proxy is a future fix.
       const avatarUrl = c.avatar_url || c.avatar || '';
+      // NOTE: EchoTik's tos-ap-southeast-1.volces.com CDN is in Asia and
+      // frequently times out from US. Swap to the placeholder if the
+      // image hasn't loaded within 5s.
       const avatar = avatarUrl
         ? '<img src="' + escapeHtml(avatarUrl) + '" '
           + 'alt="' + escapeHtml(c.nick_name || c.unique_id) + '" '
-          + 'loading="lazy" class="creator-similar-avatar similar-creator-avatar" '
-          + 'onerror="this.onerror=null;this.src=\'/static/img/avatar-placeholder.png\'">'
+          + 'loading="lazy" referrerpolicy="no-referrer" '
+          + 'class="creator-similar-avatar similar-creator-avatar" '
+          + 'onerror="this.onerror=null;this.src=\'/static/img/avatar-placeholder.png\'" '
+          + 'onload="this.dataset.loaded=\'1\'">'
         : '<div class="creator-similar-avatar creator-similar-avatar--fallback">' + letter + '</div>';
       const eng = c.interaction_rate;
       const engPct = eng && eng < 1 ? (eng * 100) : eng;
@@ -581,6 +587,14 @@ async function loadSimilar() {
         + '<a href="/app/creators/' + encodeURIComponent(c.unique_id) + '" class="btn btn-ghost btn-sm">View Profile</a>'
         + '</div>';
     }).join('');
+    // Force-swap any avatar still pending after 5s to the placeholder
+    setTimeout(function() {
+      grid.querySelectorAll('img.similar-creator-avatar').forEach(function(img) {
+        if (img.dataset.loaded !== '1' && !img.complete) {
+          img.src = '/static/img/avatar-placeholder.png';
+        }
+      });
+    }, 5000);
   } catch(e) {
     console.warn('[Creator] similar fetch failed', e);
     grid.style.display = 'none';
