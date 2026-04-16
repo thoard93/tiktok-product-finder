@@ -47,47 +47,60 @@ PAYPAL_API_BASE = (
     else 'https://api-m.sandbox.paypal.com'
 )
 
-# Discord bot token + guild/role config for role management from webhooks
+# Discord bot token + multi-guild role config for role management from webhooks
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
-DISCORD_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '')
-VANTAGE_PRO_ROLE_ID = os.environ.get('VANTAGE_PRO_ROLE_ID', '')  # Set after creating the role
+
+# Guild ID → Vantage Pro Role ID mapping (each server has its own role ID)
+# Set env vars: VANTAGE_PRO_ROLE_ID, VANTAGE_PRO_ROLE_ID_AA, VANTAGE_PRO_ROLE_ID_3
+DISCORD_GUILD_ROLES = {}
+for _gid_key, _rid_key in [
+    ('DISCORD_GUILD_ID', 'VANTAGE_PRO_ROLE_ID'),
+    ('DISCORD_GUILD_ID_AA', 'VANTAGE_PRO_ROLE_ID_AA'),
+    ('DISCORD_GUILD_ID_3', 'VANTAGE_PRO_ROLE_ID_3'),
+]:
+    _gid = os.environ.get(_gid_key, '')
+    _rid = os.environ.get(_rid_key, '')
+    if _gid and _rid:
+        DISCORD_GUILD_ROLES[_gid] = _rid
 
 
 def _discord_assign_role(discord_id: str):
-    """Assign Vantage Pro role via Discord REST API (from Flask, not the bot)."""
-    if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ID or not VANTAGE_PRO_ROLE_ID:
-        log.warning('[Discord] Role assign skipped — missing DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, or VANTAGE_PRO_ROLE_ID env vars')
+    """Assign Vantage Pro role across ALL configured guilds via Discord REST API."""
+    if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ROLES:
+        log.warning('[Discord] Role assign skipped — missing DISCORD_BOT_TOKEN or no guild/role pairs configured')
         return
-    try:
-        resp = requests.put(
-            f'https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_id}/roles/{VANTAGE_PRO_ROLE_ID}',
-            headers={'Authorization': f'Bot {DISCORD_BOT_TOKEN}', 'Content-Type': 'application/json'},
-            timeout=10,
-        )
-        if resp.status_code in (200, 204):
-            log.info(f'[Discord] Assigned Vantage Pro role to {discord_id}')
-        else:
-            log.warning(f'[Discord] Role assign failed: {resp.status_code} {resp.text[:200]}')
-    except Exception as e:
-        log.error(f'[Discord] Role assign error: {e}')
+    headers = {'Authorization': f'Bot {DISCORD_BOT_TOKEN}', 'Content-Type': 'application/json'}
+    for guild_id, role_id in DISCORD_GUILD_ROLES.items():
+        try:
+            resp = requests.put(
+                f'https://discord.com/api/v10/guilds/{guild_id}/members/{discord_id}/roles/{role_id}',
+                headers=headers, timeout=10,
+            )
+            if resp.status_code in (200, 204):
+                log.info(f'[Discord] Assigned Vantage Pro to {discord_id} in guild {guild_id}')
+            elif resp.status_code == 404:
+                pass  # User not in this guild — normal
+            else:
+                log.warning(f'[Discord] Role assign {guild_id}: {resp.status_code} {resp.text[:100]}')
+        except Exception as e:
+            log.error(f'[Discord] Role assign error in {guild_id}: {e}')
 
 
 def _discord_remove_role(discord_id: str):
-    """Remove Vantage Pro role via Discord REST API."""
-    if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ID or not VANTAGE_PRO_ROLE_ID:
+    """Remove Vantage Pro role from ALL configured guilds."""
+    if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ROLES:
         return
-    try:
-        resp = requests.delete(
-            f'https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_id}/roles/{VANTAGE_PRO_ROLE_ID}',
-            headers={'Authorization': f'Bot {DISCORD_BOT_TOKEN}', 'Content-Type': 'application/json'},
-            timeout=10,
-        )
-        if resp.status_code in (200, 204):
-            log.info(f'[Discord] Removed Vantage Pro role from {discord_id}')
-        else:
-            log.warning(f'[Discord] Role remove failed: {resp.status_code} {resp.text[:200]}')
-    except Exception as e:
-        log.error(f'[Discord] Role remove error: {e}')
+    headers = {'Authorization': f'Bot {DISCORD_BOT_TOKEN}', 'Content-Type': 'application/json'}
+    for guild_id, role_id in DISCORD_GUILD_ROLES.items():
+        try:
+            resp = requests.delete(
+                f'https://discord.com/api/v10/guilds/{guild_id}/members/{discord_id}/roles/{role_id}',
+                headers=headers, timeout=10,
+            )
+            if resp.status_code in (200, 204):
+                log.info(f'[Discord] Removed Vantage Pro from {discord_id} in guild {guild_id}')
+        except Exception as e:
+            log.error(f'[Discord] Role remove error in {guild_id}: {e}')
 
 # Coupon codes: code -> {discount_percent, description, referral_source}
 COUPON_CODES = {
