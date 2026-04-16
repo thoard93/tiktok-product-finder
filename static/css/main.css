@@ -995,3 +995,49 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   0%,100%{background-position:0% 50%}
   50%{background-position:100% 50%}
 }
+
+/* 50. BRAND HUNTER v2 — SCAN UI =========================================== */
+
+/* Page range radio buttons */
+.scan-range-group{display:flex;gap:var(--space-2);flex-wrap:wrap;margin:var(--space-4) 0}
+.scan-range-opt{position:relative}
+.scan-range-opt input[type="radio"]{position:absolute;opacity:0;pointer-events:none}
+.scan-range-opt label{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg-surface);color:var(--text-secondary);font-size:13px;font-weight:600;cursor:pointer;transition:all var(--dur-fast)}
+.scan-range-opt input:checked+label{border-color:var(--accent);background:var(--accent-glow);color:var(--accent)}
+.scan-range-opt:hover label{border-color:var(--border-strong)}
+
+/* Gold shimmer for Hidden Gems option */
+.scan-range--gem input:checked+label{border-color:#d97706;background:rgba(217,119,6,.1);color:#d97706}
+.scan-range--gem label{border-color:rgba(217,119,6,.3);animation:gemBorderPulse 3s ease infinite}
+@keyframes gemBorderPulse{
+  0%,100%{border-color:rgba(217,119,6,.3)}
+  50%{border-color:rgba(217,119,6,.6)}
+}
+
+/* Custom range inputs */
+.scan-custom-inputs{display:none;align-items:center;gap:var(--space-2);margin-top:var(--space-2)}
+.scan-custom-inputs.visible{display:flex}
+.scan-custom-inputs input{width:70px}
+
+/* Scan progress bar */
+.scan-progress{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-4);margin-bottom:var(--space-6)}
+.scan-progress__info{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-3);font-size:13px;font-weight:600}
+.scan-progress__bar{height:8px;background:var(--bg-elevated);border-radius:var(--radius-full);overflow:hidden}
+.scan-progress__fill{height:100%;border-radius:var(--radius-full);background:linear-gradient(90deg,var(--accent),#f97316,var(--teal));background-size:200% 100%;animation:scanBarShimmer 2s linear infinite;transition:width .5s ease}
+@keyframes scanBarShimmer{
+  0%{background-position:200% 0}
+  100%{background-position:0 0}
+}
+.scan-progress__detail{font-size:12px;color:var(--text-muted);margin-top:var(--space-2);font-variant-numeric:tabular-nums}
+
+/* Brand search dropdown */
+.brand-search-wrap{position:relative}
+.brand-search-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);max-height:240px;overflow-y:auto;z-index:20;box-shadow:var(--shadow-lg);display:none}
+.brand-search-dropdown.visible{display:block}
+.brand-search-item{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);cursor:pointer;transition:background var(--dur-fast);font-size:13px}
+.brand-search-item:hover{background:var(--bg-hover)}
+.brand-search-item__avatar{width:32px;height:32px;border-radius:var(--radius-full);background:linear-gradient(135deg,var(--accent),#d97706);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;overflow:hidden;flex-shrink:0}
+.brand-search-item__avatar img{width:100%;height:100%;object-fit:cover}
+.brand-search-item__info{min-width:0}
+.brand-search-item__name{font-weight:600;color:var(--text-primary)}
+.brand-search-item__cat{font-size:11px;color:var(--text-faint)}

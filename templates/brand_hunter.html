@@ -1,0 +1,515 @@
+{% extends "base.html" %}
+{% block title %}Brand Hunter{% endblock %}
+
+{% block head %}
+<style>
+  /* ===== Scan Range Radio Buttons ===== */
+  .scan-ranges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .scan-range {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    border: 1.5px solid var(--border);
+    background: var(--bg-surface);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: border-color .15s, background .15s, color .15s;
+  }
+  .scan-range:hover {
+    border-color: var(--text-faint);
+  }
+  .scan-range input[type="radio"] {
+    accent-color: var(--accent);
+    margin: 0;
+  }
+  .scan-range.active {
+    border-color: var(--accent);
+    background: var(--accent-dim, rgba(255,77,109,.06));
+    color: var(--text-primary);
+  }
+  .scan-range--gem {
+    background: linear-gradient(135deg, rgba(251,191,36,.08), rgba(245,158,11,.04));
+    border-color: rgba(245,158,11,.35);
+  }
+  .scan-range--gem.active {
+    border-color: #f59e0b;
+    background: linear-gradient(135deg, rgba(251,191,36,.15), rgba(245,158,11,.08));
+    box-shadow: 0 0 12px rgba(251,191,36,.15);
+  }
+  .scan-range--gem::after {
+    content: "\1F48E";
+    font-size: 12px;
+  }
+  .custom-range-inputs {
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  .custom-range-inputs.visible {
+    display: flex;
+  }
+  .custom-range-inputs input {
+    width: 70px;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    border: 1.5px solid var(--border);
+    background: var(--bg-surface);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+  }
+  .custom-range-inputs span {
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
+  /* ===== Launch Button ===== */
+  .btn-launch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: transform .1s, box-shadow .15s;
+  }
+  .btn-launch:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255,77,109,.25);
+  }
+  .btn-launch:active {
+    transform: translateY(0);
+  }
+  .btn-launch:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* ===== Progress Bar ===== */
+  .scan-progress {
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: var(--radius);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+  }
+  .scan-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .scan-progress-header .scan-stats {
+    display: flex;
+    gap: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .scan-progress-header .scan-stats span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .progress-track {
+    width: 100%;
+    height: 10px;
+    border-radius: 99px;
+    background: var(--bg-elevated, var(--bg-surface));
+    overflow: hidden;
+    position: relative;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--teal));
+    background-size: 200% 100%;
+    animation: progressShimmer 2s ease-in-out infinite;
+    transition: width .4s ease;
+  }
+  @keyframes progressShimmer {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* ===== Brand Grid Overrides ===== */
+  .brand-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .brand-card-meta img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .brand-card-meta .brand-avatar-fallback {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+  .brand-card-name {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .brand-delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,.45);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s;
+    font-size: 12px;
+    z-index: 2;
+  }
+  .product-card:hover .brand-delete-btn {
+    opacity: 1;
+  }
+
+  /* ===== Empty State ===== */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+    text-align: center;
+    color: var(--text-faint);
+  }
+  .empty-state svg {
+    margin-bottom: 16px;
+    opacity: .35;
+  }
+  .empty-state p {
+    max-width: 420px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ===== SECTION 1: SCAN LAUNCHER ===== #}
+<div class="page-header">
+  <h1 class="page-title">Brand Hunter</h1>
+  <p class="page-subtitle">Deep scan TikTok Shop seller rankings to discover top brands and hidden gems</p>
+</div>
+
+<div class="card filter-card" id="scanLauncher">
+  <div style="margin-bottom:16px">
+    <label style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;display:block">Scan Range</label>
+    <div class="scan-ranges" id="scanRanges">
+      <label class="scan-range active" data-from="1" data-to="50">
+        <input type="radio" name="scan_range" value="quick" checked aria-label="Quick Scan pages 1 to 50"> Quick Scan (1&ndash;50)
+      </label>
+      <label class="scan-range" data-from="1" data-to="100">
+        <input type="radio" name="scan_range" value="standard" aria-label="Standard scan pages 1 to 100"> Standard (1&ndash;100)
+      </label>
+      <label class="scan-range" data-from="1" data-to="200">
+        <input type="radio" name="scan_range" value="full" aria-label="Full scan pages 1 to 200"> Full Scan (1&ndash;200)
+      </label>
+      <label class="scan-range scan-range--gem" data-from="100" data-to="200">
+        <input type="radio" name="scan_range" value="gems" aria-label="Hidden Gems scan pages 100 to 200"> Hidden Gems (100&ndash;200)
+      </label>
+      <label class="scan-range" data-from="" data-to="">
+        <input type="radio" name="scan_range" value="custom" aria-label="Custom page range"> Custom
+      </label>
+    </div>
+    <div class="custom-range-inputs" id="customRangeInputs">
+      <input type="number" id="customFrom" min="1" max="500" placeholder="1" value="1" aria-label="Custom range start page">
+      <span>to</span>
+      <input type="number" id="customTo" min="1" max="500" placeholder="200" value="200" aria-label="Custom range end page">
+    </div>
+  </div>
+  <button class="btn-launch" id="launchBtn" onclick="launchScan()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+    Launch Deep Scan
+  </button>
+</div>
+
+{# ===== SECTION 2: SCAN PROGRESS ===== #}
+{% if active_job and active_job.status in ['running', 'queued'] %}
+<div class="scan-progress" id="scanProgress" data-job-id="{{ active_job.id }}">
+  <div class="scan-progress-header">
+    <span id="progressLabel">
+      Scanning page <strong id="progressPage">{{ active_job.current_page or active_job.page_start }}</strong>
+      of <strong>{{ active_job.page_end }}</strong>
+    </span>
+    <div class="scan-stats">
+      <span><i data-lucide="store" style="width:13px;height:13px"></i> <span id="progressBrands" style="font-variant-numeric:tabular-nums">{{ active_job.brands_found or 0 }}</span> brands</span>
+      <span><i data-lucide="package" style="width:13px;height:13px"></i> <span id="progressProducts" style="font-variant-numeric:tabular-nums">{{ active_job.products_found or 0 }}</span> products</span>
+    </div>
+  </div>
+  <div class="progress-track">
+    {% set pct = ((active_job.current_page or active_job.page_start) / active_job.page_end * 100) if active_job.page_end else 0 %}
+    <div class="progress-fill" id="progressFill" style="width:{{ pct | round(1) }}%"></div>
+  </div>
+</div>
+{% else %}
+<div class="scan-progress" id="scanProgress" style="display:none">
+  <div class="scan-progress-header">
+    <span id="progressLabel">Scanning page <strong id="progressPage">0</strong> of <strong id="progressEnd">0</strong></span>
+    <div class="scan-stats">
+      <span><i data-lucide="store" style="width:13px;height:13px"></i> <span id="progressBrands" style="font-variant-numeric:tabular-nums">0</span> brands</span>
+      <span><i data-lucide="package" style="width:13px;height:13px"></i> <span id="progressProducts" style="font-variant-numeric:tabular-nums">0</span> products</span>
+    </div>
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+</div>
+{% endif %}
+
+{# ===== SECTION 3: BRAND LIBRARY ===== #}
+<div style="margin-top:32px">
+  <div class="section-header">
+    <div>
+      <h2 class="section-title">Brand Library</h2>
+      <p class="page-subtitle" style="margin-top:2px">Sorted by 30-day sales</p>
+    </div>
+    <span class="filter-count-label">{{ brands | length if brands else 0 }} brands</span>
+  </div>
+
+  {% if brands and brands | length > 0 %}
+  <div class="product-grid" id="brandGrid">
+    {% for brand in brands %}
+    <div class="product-card" style="position:relative">
+      {# Admin delete button #}
+      {% if current_user and current_user.is_admin %}
+      <button class="brand-delete-btn" onclick="if(confirm('Delete {{ brand.brand_name | replace("'", "\\'") }}?')) location.href='/app/brand-hunter/{{ brand.brand_id }}/delete'" aria-label="Delete brand {{ brand.brand_name }}">
+        <i data-lucide="x" style="width:12px;height:12px"></i>
+      </button>
+      {% endif %}
+
+      <div class="product-card-img" style="aspect-ratio:16/10;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center">
+        {% if brand.brand_logo_url %}
+          <img src="{{ brand.brand_logo_url }}" alt="{{ brand.brand_name }}" loading="lazy" style="object-fit:cover;width:100%;height:100%"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="brand-avatar-fallback" style="display:none">{{ (brand.brand_name or '?')[0] | upper }}</div>
+        {% else %}
+          <div class="brand-avatar-fallback">{{ (brand.brand_name or '?')[0] | upper }}</div>
+        {% endif %}
+        {% if brand.brand_category %}
+          <span class="badge badge-muted badge-overlay-tl">{{ brand.brand_category }}</span>
+        {% endif %}
+        {% if brand.is_hidden_gem %}
+          <span class="badge brand-gem-badge">&#x1F48E; Hidden Gem</span>
+        {% endif %}
+      </div>
+
+      <div class="product-card-body">
+        <div class="brand-card-meta">
+          {% if brand.brand_logo_url %}
+            <img src="{{ brand.brand_logo_url }}" alt="" loading="lazy"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="brand-avatar-fallback" style="display:none;width:32px;height:32px;font-size:13px">{{ (brand.brand_name or '?')[0] | upper }}</div>
+          {% else %}
+            <div class="brand-avatar-fallback" style="width:32px;height:32px;font-size:13px">{{ (brand.brand_name or '?')[0] | upper }}</div>
+          {% endif %}
+          <div style="min-width:0">
+            <div class="brand-card-name">{{ brand.brand_name }}</div>
+            {% if brand.brand_category %}
+              <span style="font-size:11px;color:var(--text-faint)">{{ brand.brand_category }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="product-card-stats">
+          <div class="product-card-stat">
+            <i data-lucide="trending-up" style="width:12px;height:12px"></i>
+            <span style="font-variant-numeric:tabular-nums">{{ brand.sales_30d | format_number }} <small>30d sales</small></span>
+          </div>
+          <div class="product-card-stat">
+            <i data-lucide="dollar-sign" style="width:12px;height:12px"></i>
+            <span style="font-variant-numeric:tabular-nums">${{ brand.revenue_30d | format_number }} <small>revenue</small></span>
+          </div>
+          <div class="product-card-stat">
+            <i data-lucide="package" style="width:12px;height:12px"></i>
+            <span style="font-variant-numeric:tabular-nums">{{ brand.total_products or 0 }} <small>products</small></span>
+          </div>
+          <div class="product-card-stat">
+            <i data-lucide="percent" style="width:12px;height:12px"></i>
+            <span style="font-variant-numeric:tabular-nums">{{ "%.0f" | format((brand.avg_commission or 0) * 100) }}% <small>commission</small></span>
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:var(--text-faint);margin-top:6px">
+          Last scanned: {{ brand.last_scanned.strftime('%b %d, %I:%M%p') if brand.last_scanned else 'Never' }}
+        </div>
+
+        <div class="product-card-actions" style="margin-top:10px">
+          <a href="/app/brand-hunter/{{ brand.brand_id }}" class="btn btn-ghost" style="flex:1">View Products</a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  {# ===== EMPTY STATE ===== #}
+  <div class="empty-state">
+    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <path d="M21 21l-4.35-4.35"/>
+      <path d="M11 8v6"/>
+      <path d="M8 11h6"/>
+    </svg>
+    <p>No brands scanned yet. Launch your first deep scan to uncover hidden gems from top brands like Nike, QVC, and Shark.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  // ===== Radio button handler =====
+  const ranges = document.querySelectorAll('.scan-range');
+  const customInputs = document.getElementById('customRangeInputs');
+
+  ranges.forEach(label => {
+    const radio = label.querySelector('input[type="radio"]');
+    radio.addEventListener('change', function() {
+      ranges.forEach(l => l.classList.remove('active'));
+      label.classList.add('active');
+      if (this.value === 'custom') {
+        customInputs.classList.add('visible');
+      } else {
+        customInputs.classList.remove('visible');
+      }
+    });
+  });
+
+  // ===== Launch Scan =====
+  window.launchScan = async function() {
+    const selected = document.querySelector('input[name="scan_range"]:checked');
+    if (!selected) return;
+
+    let pageStart, pageEnd;
+    if (selected.value === 'custom') {
+      pageStart = parseInt(document.getElementById('customFrom').value) || 1;
+      pageEnd = parseInt(document.getElementById('customTo').value) || 200;
+    } else {
+      const label = selected.closest('.scan-range');
+      pageStart = parseInt(label.dataset.from);
+      pageEnd = parseInt(label.dataset.to);
+    }
+
+    if (pageStart < 1 || pageEnd < pageStart) {
+      alert('Invalid page range. Start must be >= 1 and end must be >= start.');
+      return;
+    }
+
+    const btn = document.getElementById('launchBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" style="width:16px;height:16px;animation:spin 1s linear infinite"></i> Starting scan...';
+
+    try {
+      const res = await fetch('/app/brand-hunter/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page_start: pageStart, page_end: pageEnd })
+      });
+      const data = await res.json();
+
+      if (data.job_id) {
+        showProgress(pageStart, pageEnd);
+        startPolling(data.job_id, pageEnd);
+      } else {
+        alert(data.error || 'Failed to start scan');
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> Launch Deep Scan';
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> Launch Deep Scan';
+    }
+  };
+
+  function showProgress(pageStart, pageEnd) {
+    const el = document.getElementById('scanProgress');
+    el.style.display = '';
+    const endEl = document.getElementById('progressEnd');
+    if (endEl) endEl.textContent = pageEnd;
+  }
+
+  // ===== Poll for status =====
+  let pollInterval = null;
+
+  window.startPolling = function(jobId, pageEnd) {
+    if (pollInterval) clearInterval(pollInterval);
+
+    pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/app/brand-hunter/scan/' + jobId + '/status');
+        const data = await res.json();
+
+        const pageEl = document.getElementById('progressPage');
+        const brandsEl = document.getElementById('progressBrands');
+        const productsEl = document.getElementById('progressProducts');
+        const fillEl = document.getElementById('progressFill');
+
+        if (pageEl) pageEl.textContent = data.current_page || 0;
+        if (brandsEl) brandsEl.textContent = data.brands_found || 0;
+        if (productsEl) productsEl.textContent = data.products_found || 0;
+
+        const end = data.page_end || pageEnd || 1;
+        const pct = Math.min(100, ((data.current_page || 0) / end * 100));
+        if (fillEl) fillEl.style.width = pct.toFixed(1) + '%';
+
+        if (data.status === 'completed' || data.status === 'failed') {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          setTimeout(() => location.reload(), 800);
+        }
+      } catch (e) {
+        console.error('Poll error:', e);
+      }
+    }, 2000);
+  };
+
+  // Auto-start polling if job is already active
+  {% if active_job and active_job.status in ['running', 'queued'] %}
+  startPolling({{ active_job.id }}, {{ active_job.page_end }});
+  document.getElementById('launchBtn').disabled = true;
+  document.getElementById('launchBtn').innerHTML = '<i data-lucide="loader" style="width:16px;height:16px;animation:spin 1s linear infinite"></i> Scan in progress...';
+  {% endif %}
+})();
+</script>
+{% endblock %}

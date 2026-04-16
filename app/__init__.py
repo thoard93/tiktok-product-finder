@@ -140,6 +140,20 @@ def _auto_migrate(app, db):
                 db.session.rollback()
                 print(f"[MIGRATE] {tbl} creation failed: {e}")
 
+    # Fix Brand Hunter v2 tables if missing
+    for tbl in ['scanned_brands', 'brand_products', 'brand_scan_jobs']:
+        try:
+            db.session.execute(db.text(f"SELECT id FROM {tbl} LIMIT 1"))
+            db.session.rollback()
+        except Exception:
+            db.session.rollback()
+            try:
+                db.create_all()
+                print(f"[MIGRATE] Created {tbl} table")
+            except Exception as e:
+                db.session.rollback()
+                print(f"[MIGRATE] {tbl} creation failed: {e}")
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -342,6 +356,9 @@ from app.models import (  # noqa: E402, F401
     CampaignBanner,
     CouponCode,
     CouponRedemption,
+    ScannedBrand,
+    BrandProduct,
+    BrandScanJob,
 )
 
 # Re-export helper functions for backward compat (used by discord_bot.py, price_research.py, etc.)

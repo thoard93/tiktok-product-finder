@@ -497,6 +497,56 @@ def fetch_top_shops(country: str = "US", page_size: int = 10, page: int = 1) -> 
 
 
 # ---------------------------------------------------------------------------
+# Public API — search_sellers (Brand Hunter typeahead)
+# ---------------------------------------------------------------------------
+
+def search_sellers(keyword: str, page: int = 1) -> list[dict]:
+    """
+    Search for TikTok Shop sellers/brands by keyword.
+    Uses the seller/list endpoint with keyword filter.
+
+    Returns list of dicts: {shop_id, name, avatar_url, category, follower_count, gmv_30d}
+    """
+    try:
+        data = _request('GET', f"{ECHOTIK_V3_BASE}/seller/list",
+                        params={
+                            "region": "US",
+                            "keyword": keyword,
+                            "page_num": page,
+                            "page_size": 10,
+                        })
+    except EchoTikError as exc:
+        log.warning("[EchoTik] seller search '%s' failed: %s", keyword, exc)
+        return []
+
+    raw = data.get("data") or []
+    if isinstance(raw, dict):
+        raw = raw.get("list") or raw.get("records") or []
+    if not raw:
+        return []
+
+    results = []
+    for s in raw:
+        shop_id = str(s.get('shop_id') or s.get('seller_id') or s.get('shopId') or s.get('sellerId') or s.get('id', ''))
+        name = (s.get('shop_name') or s.get('seller_name') or s.get('shopName')
+                or s.get('sellerName') or s.get('name') or s.get('title') or '')
+        avatar = s.get('cover_url') or s.get('logo_url') or s.get('avatar') or s.get('coverUrl') or ''
+        if isinstance(avatar, list) and avatar:
+            avatar = avatar[0] if isinstance(avatar[0], str) else (avatar[0].get('url') or '')
+        category = s.get('category_name') or s.get('category') or s.get('categoryName') or ''
+        results.append({
+            'shop_id': shop_id,
+            'name': name.strip(),
+            'avatar_url': avatar,
+            'category': category,
+            'follower_count': _safe_int(s.get('follower_count') or s.get('fans_count') or s.get('followerCount') or 0),
+            'gmv_30d': _safe_float(s.get('gmv_30d') or s.get('revenue_30d') or s.get('gmv30d') or 0),
+        })
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Public API — fetch_brand_products
 # ---------------------------------------------------------------------------
 

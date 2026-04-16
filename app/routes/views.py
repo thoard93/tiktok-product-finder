@@ -10,7 +10,7 @@ from datetime import timedelta
 from flask import Blueprint, render_template, redirect, session, request, jsonify, flash
 from sqlalchemy import desc, or_
 from app import db
-from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView, CampaignBanner, CouponCode, CouponRedemption
+from app.models import Product, BlacklistedBrand, Subscription, User, Brand, ProductVideo, TapProduct, TapList, ProductView, CampaignBanner, CouponCode, CouponRedemption, ScannedBrand, BrandProduct, BrandScanJob
 from app.routes.auth import get_current_user
 
 
@@ -730,6 +730,12 @@ def subscribe():
 
 
 @views_bp.route('/app/brands')
+@login_required
+def brands_list_redirect():
+    return redirect('/app/brand-hunter')
+
+
+@views_bp.route('/app/brands-legacy')
 @login_required
 def brands_list():
     ctx = _base_context('brands')
@@ -1778,3 +1784,257 @@ def admin_coupon_delete(cid):
         db.session.delete(c)
         db.session.commit()
     return redirect('/app/admin/coupons')
+
+
+# ---------------------------------------------------------------------------
+# Brand Hunter v2 — Deep Scan System
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/app/brand-hunter')
+@login_required
+def brand_hunter():
+    ctx = _base_context('brands')
+    ctx['brands'] = ScannedBrand.query.order_by(
+        ScannedBrand.sales_30d.desc().nullslast()
+    ).all()
+    # Check for active scan jobs
+    active_job = BrandScanJob.query.filter(
+        BrandScanJob.status.in_(['queued', 'running'])
+    ).order_by(BrandScanJob.created_at.desc()).first()
+    ctx['active_job'] = active_job
+    return render_template('brand_hunter.html', **ctx)
+
+
+@views_bp.route('/app/brand-hunter/search')
+@login_required
+def brand_hunter_search():
+    """Typeahead search for brands via EchoTik API."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    try:
+        from app.services.echotik import search_sellers
+        results = search_sellers(q)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@views_bp.route('/app/brand-hunter/scan', methods=['POST'])
+@login_required
+def brand_hunter_scan():
+    """Launch a background scan of EchoTik seller ranking pages."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Auth required'}), 401
+
+    data = request.get_json() or {}
+    page_start = int(data.get('page_start', 1))
+    page_end = int(data.get('page_end', 50))
+
+    # Sanity checks
+    if page_start < 1:
+        page_start = 1
+    if page_end > 500:
+        page_end = 500
+    if page_end < page_start:
+        page_end = page_start
+
+    # Check for existing running job
+    existing = BrandScanJob.query.filter(
+        BrandScanJob.status.in_(['queued', 'running'])
+    ).first()
+    if existing:
+        return jsonify({'error': 'A scan is already running', 'job_id': existing.id}), 409
+
+    job = BrandScanJob(
+        page_start=page_start,
+        page_end=page_end,
+        status='queued',
+    )
+    db.session.add(job)
+    db.session.commit()
+
+    # Launch background scan
+    from app import executor
+    from flask import current_app
+    app = current_app._get_current_object()
+    executor.submit(_run_brand_scan, app, job.id)
+
+    return jsonify({'job_id': job.id})
+
+
+@views_bp.route('/app/brand-hunter/scan/<int:job_id>/status')
+@login_required
+def brand_hunter_scan_status(job_id):
+    """Poll scan progress."""
+    job = BrandScanJob.query.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+    return jsonify({
+        'status': job.status,
+        'current_page': job.current_page,
+        'page_start': job.page_start,
+        'page_end': job.page_end,
+        'brands_found': job.brands_found,
+        'products_found': job.products_found,
+        'error_message': job.error_message,
+    })
+
+
+def _run_brand_scan(app, job_id):
+    """Background: scan EchoTik seller ranking pages and store brands + products."""
+    import time as _time
+    from app.services.echotik import fetch_top_shops, fetch_brand_products
+
+    with app.app_context():
+        job = BrandScanJob.query.get(job_id)
+        if not job:
+            return
+        job.status = 'running'
+        job.started_at = datetime.utcnow()
+        db.session.commit()
+
+        try:
+            brands_found = 0
+            total_products = 0
+
+            for page in range(job.page_start, job.page_end + 1):
+                job.current_page = page
+                db.session.commit()
+
+                # Fetch sellers from this ranking page
+                try:
+                    sellers = fetch_top_shops(country="US", page_size=10, page=page)
+                except Exception:
+                    continue
+
+                if not sellers:
+                    continue
+
+                for seller in sellers:
+                    shop_id = seller.get('shop_id', '')
+                    if not shop_id:
+                        continue
+
+                    # Upsert ScannedBrand
+                    brand = ScannedBrand.query.filter_by(brand_id=str(shop_id)).first()
+                    if not brand:
+                        brand = ScannedBrand(brand_id=str(shop_id))
+                        db.session.add(brand)
+
+                    brand.brand_name = seller.get('name', 'Unknown')
+                    brand.brand_logo_url = seller.get('avatar_url', '')
+                    brand.brand_category = seller.get('category', '')
+                    brand.follower_count = seller.get('follower_count', 0)
+                    brand.sales_30d = int(seller.get('gmv_30d', 0) or 0)
+                    brand.revenue_30d = float(seller.get('gmv_30d', 0) or 0)
+                    brand.page_found_on = page
+                    brand.is_hidden_gem = (page > 99)
+                    brand.scan_status = 'scanning'
+                    brand.last_scanned = datetime.utcnow()
+                    brand.pages_scanned = f"{job.page_start}-{job.page_end}"
+                    db.session.flush()
+
+                    # Fetch products for this brand (first 2 pages = up to 20 products)
+                    brand_products = []
+                    for ppage in range(1, 3):
+                        try:
+                            products = fetch_brand_products(str(shop_id), page=ppage, page_size=10)
+                            if products:
+                                brand_products.extend(products)
+                            _time.sleep(0.2)
+                        except Exception:
+                            break
+
+                    # Clear old products for this brand
+                    BrandProduct.query.filter_by(brand_id=brand.id).delete()
+
+                    for p in brand_products:
+                        bp = BrandProduct(
+                            brand_id=brand.id,
+                            product_id=p.get('product_id', ''),
+                            title=(p.get('product_name', '') or '')[:500],
+                            image_url=p.get('image_url', ''),
+                            price=p.get('price', 0) or 0,
+                            commission_rate=p.get('commission_rate', 0) or 0,
+                            sales_30d=p.get('sales_30d', 0) or p.get('sales', 0) or 0,
+                            revenue_30d=p.get('gmv_30d', 0) or p.get('gmv', 0) or 0,
+                            total_videos=p.get('video_count_alltime', 0) or p.get('video_count', 0) or 0,
+                            total_sales=p.get('sales', 0) or 0,
+                            influencer_count=p.get('influencer_count', 0) or 0,
+                            category=p.get('category', ''),
+                            page_found=page,
+                            is_hidden_gem=(page > 99),
+                        )
+                        db.session.add(bp)
+
+                    brand.total_products = len(brand_products)
+                    if brand_products:
+                        comms = [p.get('commission_rate', 0) or 0 for p in brand_products if p.get('commission_rate')]
+                        brand.avg_commission = sum(comms) / len(comms) if comms else 0
+                    brand.scan_status = 'complete'
+
+                    brands_found += 1
+                    total_products += len(brand_products)
+                    job.brands_found = brands_found
+                    job.products_found = total_products
+                    db.session.commit()
+
+                _time.sleep(0.3)
+
+            job.status = 'complete'
+            job.completed_at = datetime.utcnow()
+            db.session.commit()
+
+        except Exception as e:
+            job.status = 'error'
+            job.error_message = str(e)[:500]
+            job.completed_at = datetime.utcnow()
+            db.session.commit()
+
+
+@views_bp.route('/app/brand-hunter/<int:brand_id>')
+@login_required
+def brand_hunter_detail(brand_id):
+    ctx = _base_context('brands')
+    brand = ScannedBrand.query.get_or_404(brand_id)
+    sort = request.args.get('sort', 'videos')
+    gems_only = request.args.get('gems_only', '') == '1'
+
+    query = BrandProduct.query.filter_by(brand_id=brand.id)
+
+    if gems_only:
+        query = query.filter(BrandProduct.is_hidden_gem == True)
+
+    if sort == 'sales':
+        query = query.order_by(BrandProduct.sales_30d.desc().nullslast())
+    elif sort == 'commission':
+        query = query.order_by(BrandProduct.commission_rate.desc().nullslast())
+    elif sort == 'price':
+        query = query.order_by(BrandProduct.price.desc().nullslast())
+    elif sort == 'score':
+        query = query.order_by(BrandProduct.vantage_score.desc().nullslast())
+    else:  # videos (default)
+        query = query.order_by(BrandProduct.total_videos.desc().nullslast())
+
+    products = query.limit(100).all()
+
+    ctx['brand'] = brand
+    ctx['products'] = products
+    ctx['brand_sort'] = sort
+    ctx['gems_only'] = gems_only
+    return render_template('brand_hunter_detail.html', **ctx)
+
+
+@views_bp.route('/app/brand-hunter/<int:brand_id>/delete', methods=['POST'])
+@login_required
+def brand_hunter_delete(brand_id):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return redirect('/app/brand-hunter')
+    brand = ScannedBrand.query.get(brand_id)
+    if brand:
+        db.session.delete(brand)
+        db.session.commit()
+    return redirect('/app/brand-hunter')

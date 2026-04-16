@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}{{ brand.brand_name }}{% endblock %}
+
+{% block content %}
+<a href="/app/brand-hunter" class="detail-back"><i data-lucide="arrow-left"></i> Back to Brand Hunter</a>
+
+{# ===== BRAND HEADER ===== #}
+<div class="card mb-6">
+  <div class="flex gap-4 items-center" style="flex-wrap:wrap">
+    {% if brand.brand_logo_url %}
+      <img src="{{ brand.brand_logo_url }}" alt="{{ brand.brand_name }}" style="width:64px;height:64px;border-radius:var(--radius-full);object-fit:cover;background:var(--bg-elevated);border:2px solid var(--border)"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="brand-header-avatar-fallback" style="display:none">{{ (brand.brand_name or '?')[0] | upper }}</div>
+    {% else %}
+      <div class="brand-header-avatar-fallback">{{ (brand.brand_name or '?')[0] | upper }}</div>
+    {% endif %}
+    <div style="flex:1">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <h1 style="font-size:var(--text-xl);font-weight:700">{{ brand.brand_name }}</h1>
+        {% if brand.is_hidden_gem %}
+          <span class="brand-gem-badge-inline">&#x1f48e; Hidden Gem</span>
+        {% endif %}
+      </div>
+      <div class="flex gap-4 items-center" style="flex-wrap:wrap;font-variant-numeric:tabular-nums">
+        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.sales_30d | format_number }}</strong> sales</span>
+        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">${{ brand.revenue_30d | format_number }}</strong> revenue</span>
+        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.total_products or 0 }}</strong> products</span>
+        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ "%.0f" | format((brand.avg_commission or 0) * 100) }}%</strong> avg commission</span>
+        <span style="font-size:13px;color:var(--text-muted)"><strong style="color:var(--text-primary)">{{ brand.follower_count | format_number }}</strong> followers</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-faint);margin-top:6px">
+        Scanned pages {{ brand.pages_scanned or 0 }} &middot; Last updated {{ brand.last_scanned.strftime('%b %d, %Y') if brand.last_scanned else 'N/A' }}
+      </div>
+    </div>
+    <div class="flex gap-2" style="flex-wrap:wrap">
+      <a href="/app/brand-hunter" class="btn btn-ghost btn-sm">
+        <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Rescan
+      </a>
+      {% if session.get('is_admin') %}
+        <form method="POST" action="/app/brand-hunter/{{ brand.id }}/delete" style="margin:0" onsubmit="return confirm('Delete this brand and all its products?')">
+          <button type="submit" class="btn btn-ghost btn-sm" style="color:#dc2626">
+            <i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ===== FILTER / SORT BAR ===== #}
+<div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:8px">
+  <div class="flex gap-2" style="flex-wrap:wrap">
+    {% for val, label in [('videos', 'Total Videos'), ('sales', '7d Sales'), ('commission', 'Commission'), ('price', 'Price'), ('score', 'Score')] %}
+      <a href="?sort={{ val }}{% if gems_only %}&gems_only=1{% endif %}" class="btn btn-sm {{ 'btn-primary' if brand_sort == val else 'btn-ghost' }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  <div class="flex gap-3 items-center">
+    <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;padding:5px 10px;border-radius:var(--radius);border:1px solid {{ '#6366f1' if gems_only else 'var(--border)' }};background:{{ 'rgba(99,102,241,.08)' if gems_only else 'transparent' }};color:{{ '#6366f1' if gems_only else 'var(--text-muted)' }}">
+      <input type="checkbox" {% if gems_only %}checked{% endif %} onchange="window.location.href='?sort={{ brand_sort }}'+(this.checked?'&gems_only=1':'')" style="display:none">
+      &#x1f48e; Hidden Gems Only
+    </label>
+    <span class="text-sm text-muted" style="font-variant-numeric:tabular-nums">{{ products | length }} products</span>
+  </div>
+</div>
+
+{# ===== PRODUCTS TABLE ===== #}
+{% if products and products | length > 0 %}
+<div class="product-table-wrap">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th scope="col" style="width:36px">#</th>
+        <th scope="col" style="min-width:240px">Product Info</th>
+        <th scope="col">Commission</th>
+        <th scope="col">Price</th>
+        <th scope="col">7d Sales</th>
+        <th scope="col">Total Videos</th>
+        <th scope="col">Creators</th>
+        <th scope="col">Page Found</th>
+        <th scope="col" style="width:60px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      {% set cat_lower = (p.category or '')|lower %}
+      {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-food' if 'food' in cat_lower else 'cat-default'))))) %}
+      {% set score_color = '#0d9488' if p.vantage_score >= 60 else ('#d97706' if p.vantage_score >= 35 else '#dc2626') %}
+      <tr>
+        <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
+        <td>
+          <div class="product-row-name">
+            {% if p.image_url %}
+              <img src="{{ p.image_url }}" class="product-row-thumb" alt="{{ p.title }}" loading="lazy"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+              <div class="product-row-thumb-fallback {{ cat_class }}" style="display:none">{{ (p.title or '?')[0] | upper }}</div>
+            {% else %}
+              <div class="product-row-thumb-fallback {{ cat_class }}">{{ (p.title or '?')[0] | upper }}</div>
+            {% endif %}
+            <div style="min-width:0">
+              <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.title }}</a>
+              {% if p.category %}<span style="font-size:11px;color:var(--text-faint)">{{ p.category }}</span>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td class="commission-cell" style="font-variant-numeric:tabular-nums">{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%</td>
+        <td style="font-variant-numeric:tabular-nums">${{ "%.2f" | format(p.price or 0) }}</td>
+        <td style="font-weight:600;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.sales_30d or 0) }}</td>
+        <td style="font-weight:700;font-variant-numeric:tabular-nums">{{ "{:,}".format(p.total_videos or 0) }}</td>
+        <td style="font-variant-numeric:tabular-nums">{{ p.influencer_count or 0 }}</td>
+        <td style="font-variant-numeric:tabular-nums">
+          <span>{{ p.page_found or '—' }}</span>
+          {% if p.is_hidden_gem %}<span class="brand-gem-badge-inline" style="font-size:11px;margin-left:4px">&#x1f48e;</span>{% endif %}
+        </td>
+        <td><a href="/app/products/{{ p.product_id }}" class="btn btn-ghost btn-sm" style="font-size:12px">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+{# ===== EMPTY STATE ===== #}
+<div class="card" style="padding:var(--space-10) var(--space-8);text-align:center">
+  <div style="width:56px;height:56px;border-radius:var(--radius-full);background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-4)">
+    <i data-lucide="package-search" style="width:24px;height:24px;color:var(--text-muted)"></i>
+  </div>
+  <h3 style="font-size:var(--text-base);font-weight:700;margin-bottom:var(--space-2)">No products found for this brand</h3>
+  <p style="font-size:var(--text-sm);color:var(--text-muted);max-width:400px;margin:0 auto">Products will appear after scanning. Try running a deep scan from the Brand Hunter page.</p>
+</div>
+{% endif %}
+{% endblock %}

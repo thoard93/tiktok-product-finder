@@ -622,3 +622,104 @@ class CouponRedemption(db.Model):
     __table_args__ = (
         db.UniqueConstraint('coupon_id', 'user_id', name='uq_coupon_user'),
     )
+
+
+# =============================================================================
+# BRAND HUNTER v2 — Deep Scan System
+# =============================================================================
+
+class ScannedBrand(db.Model):
+    """Brands discovered and scanned via Brand Hunter deep scan"""
+    __tablename__ = 'scanned_brands'
+
+    id = db.Column(db.Integer, primary_key=True)
+    brand_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    brand_name = db.Column(db.String(300), nullable=False)
+    brand_logo_url = db.Column(db.String(500))
+    brand_category = db.Column(db.String(100))
+
+    # 30-day stats (primary sort key)
+    sales_30d = db.Column(db.Integer, default=0)
+    revenue_30d = db.Column(db.Float, default=0)
+    units_sold_30d = db.Column(db.Integer, default=0)
+
+    # Overall stats
+    total_products = db.Column(db.Integer, default=0)
+    avg_commission = db.Column(db.Float, default=0)
+    follower_count = db.Column(db.BigInteger, default=0)
+    top_product_name = db.Column(db.String(300))
+
+    # Scan metadata
+    last_scanned = db.Column(db.DateTime, default=datetime.utcnow)
+    pages_scanned = db.Column(db.String(50))       # e.g. "100-200"
+    page_found_on = db.Column(db.Integer, default=0)  # which ranking page this brand was found on
+    scan_status = db.Column(db.String(20), default='idle')  # idle, scanning, complete, error
+    is_hidden_gem = db.Column(db.Boolean, default=False)    # found on page 100+
+
+    products = db.relationship('BrandProduct', backref='brand', lazy='dynamic', cascade='all,delete-orphan')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'brand_id': self.brand_id,
+            'brand_name': self.brand_name,
+            'brand_logo_url': self.brand_logo_url,
+            'brand_category': self.brand_category,
+            'sales_30d': self.sales_30d,
+            'revenue_30d': self.revenue_30d,
+            'total_products': self.total_products,
+            'avg_commission': self.avg_commission,
+            'follower_count': self.follower_count,
+            'is_hidden_gem': self.is_hidden_gem,
+            'pages_scanned': self.pages_scanned,
+            'scan_status': self.scan_status,
+            'last_scanned': self.last_scanned.isoformat() if self.last_scanned else None,
+        }
+
+
+class BrandProduct(db.Model):
+    """Products linked to a scanned brand"""
+    __tablename__ = 'brand_products'
+
+    id = db.Column(db.Integer, primary_key=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey('scanned_brands.id'), nullable=False, index=True)
+    product_id = db.Column(db.String(100), nullable=False)
+
+    title = db.Column(db.String(500))
+    image_url = db.Column(db.String(500))
+    price = db.Column(db.Float, default=0)
+    commission_rate = db.Column(db.Float, default=0)
+    sales_30d = db.Column(db.Integer, default=0)
+    revenue_30d = db.Column(db.Float, default=0)
+    total_videos = db.Column(db.Integer, default=0)
+    total_sales = db.Column(db.Integer, default=0)
+    influencer_count = db.Column(db.Integer, default=0)
+    rating = db.Column(db.Float, default=0)
+    vantage_score = db.Column(db.Integer, default=0)
+    category = db.Column(db.String(100))
+
+    page_found = db.Column(db.Integer, default=0)
+    is_hidden_gem = db.Column(db.Boolean, default=False)
+    last_synced = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index('ix_bp_brand_videos', 'brand_id', 'total_videos'),
+    )
+
+
+class BrandScanJob(db.Model):
+    """Tracks brand hunter scan progress"""
+    __tablename__ = 'brand_scan_jobs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    page_start = db.Column(db.Integer, default=1)
+    page_end = db.Column(db.Integer, default=50)
+    current_page = db.Column(db.Integer, default=0)
+    brands_found = db.Column(db.Integer, default=0)
+    products_found = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(20), default='queued')  # queued, running, complete, error
+    error_message = db.Column(db.String(500))
+    started_at = db.Column(db.DateTime)
+    completed_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
