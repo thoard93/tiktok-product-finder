@@ -434,6 +434,7 @@ def fetch_batch_images(cover_urls: list[str]) -> dict[str, str]:
     trusted_domains = [
         'echosell-images', 'tiktokcdn.com', 'p16-shop',
         'p77-shop', 'byteimg.com', 'volces.com',
+        'cloudfront.net',  # EchoTik also serves some video covers via CloudFront
     ]
     valid = [u for u in cover_urls
              if u and any(dom in str(u) for dom in trusted_domains)]

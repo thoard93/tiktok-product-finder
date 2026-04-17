@@ -3,6 +3,43 @@
    Flash messages, confirm modal, nav, counters, tooltips, loading states
    ============================================================================= */
 
+/* --- Image proxy fallback detector --------------------------------------- */
+/* When /api/image-proxy can't sign/fetch an upstream image it returns a
+   1x1 transparent PNG with X-Proxy-Status:upstream-failed. Browsers treat
+   that as a successful load (no onerror), so existing fallback placeholders
+   never show. This hook watches for tiny-dimension images on load and
+   synthetically fires the error event so onerror="..." handlers run. */
+(function() {
+  function checkTiny(img) {
+    if (img.naturalWidth > 0 && img.naturalWidth <= 2 && img.naturalHeight <= 2) {
+      img.dispatchEvent(new Event('error'));
+    }
+  }
+  function watch(img) {
+    if (img.complete) checkTiny(img);
+    else img.addEventListener('load', function() { checkTiny(img); }, { once: true });
+  }
+  function scanAll() {
+    document.querySelectorAll('img').forEach(watch);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scanAll);
+  } else {
+    scanAll();
+  }
+  // Catch images added dynamically (e.g. similar-creator cards)
+  var mo = new MutationObserver(function(records) {
+    records.forEach(function(r) {
+      r.addedNodes.forEach(function(n) {
+        if (n.nodeType !== 1) return;
+        if (n.tagName === 'IMG') watch(n);
+        else n.querySelectorAll && n.querySelectorAll('img').forEach(watch);
+      });
+    });
+  });
+  try { mo.observe(document.body, { childList: true, subtree: true }); } catch (e) {}
+})();
+
 /* --- Flash / Toast -------------------------------------------------------- */
 function showFlash(message, type) {
   type = type || "info";
