@@ -487,8 +487,14 @@ function renderVideos(sortBy) {
       ? '<span class="creator-video-shop">🛍 Shop</span>' : '';
     const vidId = v.video_id || '';
     const ttUrl = v.video_url || (vidId ? 'https://www.tiktok.com/video/' + vidId : '');
+    // Use data-attrs rather than stuffing values into an onclick="" string —
+    // JSON.stringify(url) put bare double quotes inside the attribute and
+    // broke the handler.
     const clickable = vidId
-      ? 'role="button" tabindex="0" onclick="openVideoModal(\'' + vidId + '\', ' + JSON.stringify(ttUrl) + ')"'
+      ? 'role="button" tabindex="0" '
+        + 'data-video-id="' + escapeHtml(vidId) + '" '
+        + 'data-tt-url="' + escapeHtml(ttUrl) + '" '
+        + 'onclick="openVideoModal(this.dataset.videoId, this.dataset.ttUrl)"'
       : '';
     return '<div class="creator-video-card" ' + clickable + '>'
       + '<div class="creator-video-thumb-wrap">' + cover + productBadge + '</div>'

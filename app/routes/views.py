@@ -2599,6 +2599,18 @@ def api_image_proxy():
     if not any(allowed in host for allowed in _IMAGE_PROXY_ALLOWED_HOSTS):
         abort(403)
 
+    # If this is an unsigned echosell URL, swap it for a signed one so
+    # the CDN won't 403 us. The batch/cover/download endpoint returns
+    # a short-lived signed URL keyed by the original URL.
+    if 'echosell-images' in host and 'X-Tos-Signature' not in url:
+        try:
+            from app.services.echotik import fetch_batch_images
+            signed_map = fetch_batch_images([url])
+            if signed_map and url in signed_map:
+                url = signed_map[url]
+        except Exception as e:
+            print(f"[ImageProxy] sign attempt failed for {url[:80]}: {e}", flush=True)
+
     # Cache hit
     now = datetime.utcnow().timestamp()
     cached = _IMAGE_PROXY_CACHE.get(url)
