@@ -32,6 +32,37 @@ from app.routes.auth import (
 
 admin_bp = Blueprint('admin', __name__)
 
+
+# =============================================================================
+# GLOBAL ADMIN GUARD — every route on this blueprint requires is_admin.
+# This is belt-and-suspenders on top of per-route @admin_required decorators,
+# because several legacy routes forgot to include the decorator and we don't
+# want a new route on this blueprint to ever ship without protection.
+# =============================================================================
+
+# Endpoints on admin_bp that are safe to leave open (e.g. user-level logging).
+# Add sparingly — everything else gets admin-gated.
+_ADMIN_BP_PUBLIC_ENDPOINTS = {
+    'admin.api_log_activity',   # regular users log their own activity
+}
+
+
+@admin_bp.before_request
+def _require_admin_on_admin_bp():
+    from flask import request as _req
+    # Skip the OPTIONS preflight so CORS still works
+    if _req.method == 'OPTIONS':
+        return None
+    endpoint = _req.endpoint or ''
+    if endpoint in _ADMIN_BP_PUBLIC_ENDPOINTS:
+        return None
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    user = User.query.get(session.get('user_id'))
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    return None
+
 # =============================================================================
 # CONFIG (loaded from environment)
 # =============================================================================

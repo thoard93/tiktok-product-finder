@@ -46,6 +46,19 @@ def api_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+
+def api_admin_required(f):
+    """API-level admin-only check: 401 if not logged in, 403 if not admin."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Authentication required'}), 401
+        user = get_current_user()
+        if not user or not user.is_admin:
+            return jsonify({'error': 'Admin privileges required'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
 views_bp = Blueprint('views', __name__)
 
 # Products with status='active' or NULL (new products may not have status set)
@@ -360,6 +373,50 @@ def auth_page():
 @views_bp.route('/health')
 def health():
     return 'ok', 200
+
+
+@views_bp.route('/robots.txt')
+def robots_txt():
+    """Search engine crawl rules. Crawl the public marketing pages;
+    block the authenticated app and admin surfaces."""
+    from flask import Response
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Allow: /login\n"
+        "Allow: /register\n"
+        "Disallow: /app/\n"
+        "Disallow: /api/\n"
+        "Disallow: /admin\n"
+        "Disallow: /static/cookies.html\n"
+        "\n"
+        "Sitemap: https://vantagehq.shop/sitemap.xml\n"
+    )
+    return Response(body, mimetype='text/plain')
+
+
+@views_bp.route('/sitemap.xml')
+def sitemap_xml():
+    """Minimal sitemap — landing + pricing anchor + legal pages."""
+    from flask import Response
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    urls = [
+        ('https://vantagehq.shop/',         '1.0', 'daily'),
+        ('https://vantagehq.shop/#features','0.8', 'weekly'),
+        ('https://vantagehq.shop/#pricing', '0.8', 'weekly'),
+        ('https://vantagehq.shop/register', '0.7', 'monthly'),
+        ('https://vantagehq.shop/login',    '0.5', 'monthly'),
+        ('https://vantagehq.shop/terms',    '0.3', 'yearly'),
+        ('https://vantagehq.shop/privacy',  '0.3', 'yearly'),
+    ]
+    body = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    body += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for loc, prio, freq in urls:
+        body += f'  <url><loc>{loc}</loc><lastmod>{today}</lastmod>'
+        body += f'<changefreq>{freq}</changefreq><priority>{prio}</priority></url>\n'
+    body += '</urlset>\n'
+    return Response(body, mimetype='application/xml')
 
 # ---------------------------------------------------------------------------
 # App pages (require login)
@@ -1169,7 +1226,7 @@ def admin_panel():
 # ---------------------------------------------------------------------------
 
 @views_bp.route('/api/admin/sync-categories', methods=['POST'])
-@api_auth
+@api_admin_required
 def api_sync_categories():
     """Auto-categorize products by name keywords. No API calls needed."""
     user = get_current_user()
@@ -1264,7 +1321,7 @@ def api_sync_categories():
 
 
 @views_bp.route('/api/admin/sync-images', methods=['POST'])
-@api_auth
+@api_admin_required
 def api_sync_images():
     """Sign images for products missing cached_image_url."""
     user = get_current_user()
@@ -1312,7 +1369,7 @@ def api_sync_images():
 
 
 @views_bp.route('/api/admin/sync-sellers', methods=['POST'])
-@api_auth
+@api_admin_required
 def api_sync_sellers():
     """Enrich seller/shop names for products that have 'Unknown' seller via product detail API."""
     user = get_current_user()
@@ -1367,7 +1424,7 @@ def api_sync_sellers():
 
 
 @views_bp.route('/api/admin/sync-brands', methods=['POST'])
-@api_auth
+@api_admin_required
 def api_sync_brands():
     """Fetch top shops from EchoTik and upsert to Brand table."""
     user = get_current_user()
@@ -1456,7 +1513,7 @@ def api_sync_brands():
 
 
 @views_bp.route('/api/admin/echotik-debug', methods=['POST'])
-@api_auth
+@api_admin_required
 def api_echotik_debug():
     """Brute-force test every EchoTik base URL + path + auth combo for shop data."""
     user = get_current_user()
@@ -1696,12 +1753,9 @@ def api_mark_onboarded():
 
 
 @views_bp.route('/api/admin/products/<product_id>/hide', methods=['POST'])
-@api_auth
+@api_admin_required
 def api_admin_hide_product(product_id):
     """Admin-only: toggle product_status between 'active' and 'hidden'."""
-    user = get_current_user()
-    if not user or not user.is_admin:
-        return jsonify({'error': 'Admin only'}), 403
     product = Product.query.get(product_id)
     if not product:
         return jsonify({'error': 'Not found'}), 404

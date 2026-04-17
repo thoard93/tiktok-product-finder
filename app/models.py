@@ -358,7 +358,7 @@ class Subscription(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     status = db.Column(db.String(20), default='inactive', index=True)  # active, inactive, cancelled, past_due
     paypal_subscription_id = db.Column(db.String(100), unique=True, nullable=True)
-    plan = db.Column(db.String(50), default='monthly_19.99')
+    plan = db.Column(db.String(50), default='monthly_29.99')
     referral_code = db.Column(db.String(50), nullable=True, index=True)
     coupon_code = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

@@ -1,8 +1,8 @@
 {% extends "base_public.html" %}
-{% block title %}Vantage — TikTok Shop Product Research{% endblock %}
-{% block meta_desc %}Vantage gives TikTok Shop affiliates real-time product data, commission rates, and trending scores to find winning products. Start free today.{% endblock %}
-{% block og_title %}Vantage — Find Winning TikTok Shop Products{% endblock %}
-{% block og_desc %}Real-time sales data, commission tracking, and AI-powered trending scores for TikTok Shop affiliate marketers. Plans from $29.99/mo.{% endblock %}
+{% block title %}Vantage — TikTok Shop Product & Creator Research{% endblock %}
+{% block meta_desc %}Live TikTok Shop product + creator research. Paste any TikTok link for instant sales data, commissions, and top-performer videos. Plans from $29.99/mo — pause or cancel anytime.{% endblock %}
+{% block og_title %}Vantage — Find Winning TikTok Shop Products & Creators{% endblock %}
+{% block og_desc %}Real-time sales data, creator profiles, commission tracking, and AI-powered opportunity scores for TikTok Shop affiliate marketers. Paste any TikTok link to look it up instantly.{% endblock %}
 
 {% block content %}
 {# ===== HERO ===== #}
@@ -11,8 +11,8 @@
     <div class="hero-eyebrow">
       <i data-lucide="zap"></i> TikTok Shop Intelligence Platform
     </div>
-    <h1 class="hero-title">Research products.<br>Find opportunities.<br><span style="color:var(--accent)">Earn commissions.</span></h1>
-    <p class="hero-sub">Vantage gives TikTok Shop affiliates the data they need to find high-commission products with proven demand — before the market catches on.</p>
+    <h1 class="hero-title">Research products.<br>Research creators.<br><span style="color:var(--accent)">Earn commissions.</span></h1>
+    <p class="hero-sub">Live TikTok Shop data for affiliate marketers — sales, commissions, creator profiles, and opportunity scores. Paste any TikTok link to look up a product or creator instantly.</p>
     <div class="hero-ctas">
       <a href="/register" class="btn btn-primary btn-lg" style="font-size:15px;padding:14px 32px">Get access in 60 seconds &rarr;</a>
       <a href="#pricing" class="btn btn-ghost btn-lg">View pricing</a>
@@ -157,28 +157,41 @@
       <div class="feature-card feature-card--large">
         <i data-lucide="trending-up" class="feature-icon"></i>
         <h3>Product Research</h3>
-        <p>Browse hundreds of trending products with real sales data, commission rates, and demand scores. Table and grid views with powerful filters.</p>
+        <p>Browse hundreds of trending products with real sales data, commission rates, and demand scores. Paste any TikTok Shop link to look up a specific product instantly.</p>
       </div>
       <div class="features-stack">
         <div class="feature-card">
-          <i data-lucide="store" class="feature-icon" style="color:var(--teal)"></i>
-          <h3>Brand Hunter</h3>
-          <p>Discover top-performing TikTok Shop brands. See their product catalogs, GMV rankings, and find untapped niches.</p>
+          <i data-lucide="users" class="feature-icon" style="color:var(--teal)"></i>
+          <h3>Creator Research</h3>
+          <p>Search any TikTok creator to see their follower growth, promoted products, engagement rate, and recent videos. Save creators to track.</p>
         </div>
         <div class="feature-card">
-          <i data-lucide="bar-chart-2" class="feature-icon"></i>
-          <h3>Market Analytics</h3>
-          <p>Category breakdowns, commission distributions, price analysis — understand the market before you enter it.</p>
+          <i data-lucide="store" class="feature-icon"></i>
+          <h3>Brand Hunter</h3>
+          <p>Discover top-performing TikTok Shop brands. Scan any brand's product catalog, GMV rankings, and find untapped niches.</p>
         </div>
       </div>
     </div>
 
     <div class="features-row features-row-3">
       <div class="feature-card">
-        <i data-lucide="video" class="feature-icon" style="color:var(--teal)"></i>
-        <h3>Top Creator Videos</h3>
-        <p>See which videos are driving sales for each product. Learn what content formats and creators are winning.</p>
+        <i data-lucide="link" class="feature-icon" style="color:var(--teal)"></i>
+        <h3>Instant Link Lookup</h3>
+        <p>Saw a product in a TikTok? Paste the share link into Vantage and get full sales history, commission rates, and top creators in one click.</p>
       </div>
+      <div class="feature-card">
+        <i data-lucide="video" class="feature-icon"></i>
+        <h3>Top Creator Videos</h3>
+        <p>See which videos are driving sales for each product. Preview them right in Vantage — no need to open TikTok.</p>
+      </div>
+      <div class="feature-card">
+        <i data-lucide="bar-chart-2" class="feature-icon" style="color:var(--teal)"></i>
+        <h3>Market Analytics</h3>
+        <p>Category breakdowns, commission distributions, price analysis, and opportunity scores — understand the market before you enter it.</p>
+      </div>
+    </div>
+
+    <div class="features-row features-row-3" style="margin-top:24px">
       <div class="feature-card">
         <i data-lucide="zap" class="feature-icon"></i>
         <h3>TAP Boosted Links</h3>
@@ -188,6 +201,11 @@
         <i data-lucide="message-circle" class="feature-icon" style="color:var(--teal)"></i>
         <h3>AI Assistant</h3>
         <p>Ask Vantage AI about trending products, market opportunities, and commission strategies — powered by your real-time data.</p>
+      </div>
+      <div class="feature-card">
+        <i data-lucide="heart" class="feature-icon"></i>
+        <h3>Favorites &amp; Alerts</h3>
+        <p>Save products and creators to your personal watchlist. Access them in one click from any device.</p>
       </div>
     </div>
   </div>
@@ -253,15 +271,15 @@
 
         <ul class="pricing-features">
           <li><i data-lucide="check"></i> Unlimited product research</li>
-          <li><i data-lucide="check"></i> Real-time sales &amp; revenue data</li>
-          <li><i data-lucide="check"></i> Brand Hunter — top seller rankings</li>
-          <li><i data-lucide="check"></i> Top creator video tracking</li>
+          <li><i data-lucide="check"></i> Creator search &amp; profile analytics</li>
+          <li><i data-lucide="check"></i> Paste any TikTok link for instant lookup</li>
+          <li><i data-lucide="check"></i> Brand Hunter — full catalog scans</li>
+          <li><i data-lucide="check"></i> Top creator videos per product</li>
           <li><i data-lucide="check"></i> TAP boosted commission links</li>
           <li><i data-lucide="check"></i> AI-powered product assistant</li>
           <li><i data-lucide="check"></i> Market analytics dashboard</li>
           <li><i data-lucide="check"></i> Discord community access</li>
-          <li><i data-lucide="check"></i> Daily data updates</li>
-          <li><i data-lucide="check"></i> Referral program</li>
+          <li><i data-lucide="check"></i> Pause anytime — keep your saves</li>
         </ul>
 
         <a href="/register" class="btn-pricing-cta">Start for free &rarr;</a>
@@ -300,15 +318,23 @@
     <div class="faq-list">
       <details class="faq-item">
         <summary class="faq-question">How fresh is the product data?</summary>
-        <p class="faq-answer">Product data is synced daily from TikTok Shop via the EchoTik API. Sales, commission rates, and video counts are updated every 24 hours.</p>
+        <p class="faq-answer">Product data syncs continuously from TikTok Shop. Trending products refresh hourly, and any specific product or creator you look up pulls live data on demand.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-question">Can I look up a specific TikTok product I saw?</summary>
+        <p class="faq-answer">Yes. Paste any TikTok Shop product share link (or the product ID) into the search bar and Vantage pulls the full sales history, commission rate, top promoter videos, and opportunity score instantly.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-question">What data do I get on creators?</summary>
+        <p class="faq-answer">Search any TikTok creator to see their follower count, growth over 1/7/30/90 days, engagement rate, recent videos with view/like stats, and the products they've promoted with creator-attributed sales.</p>
       </details>
       <details class="faq-item">
         <summary class="faq-question">What's included in the $29.99/month plan?</summary>
-        <p class="faq-answer">Everything — unlimited product research, Brand Hunter, analytics dashboard, AI assistant, TAP boosted commission links, Discord bot access, and daily data updates. No feature tiers.</p>
+        <p class="faq-answer">Everything — unlimited product research, Creator Research, Brand Hunter, analytics dashboard, AI assistant, TAP boosted commission links, Discord bot access, and continuous data updates. No feature tiers.</p>
       </details>
       <details class="faq-item">
-        <summary class="faq-question">Can I cancel anytime?</summary>
-        <p class="faq-answer">Yes. Cancel from your Settings page with one click. Your access continues until the end of your billing period. No contracts or cancellation fees.</p>
+        <summary class="faq-question">Can I pause or cancel anytime?</summary>
+        <p class="faq-answer">Yes to both. Pause your subscription for 30, 60, or 90 days and resume anytime — your saved products and creators stay on your account. Cancel from Settings with one click and access continues through the end of the billing period. No contracts, no cancellation fees.</p>
       </details>
       <details class="faq-item">
         <summary class="faq-question">What is the Opportunity Score?</summary>
