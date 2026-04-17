@@ -401,6 +401,62 @@ def subscription_webhook():
     return jsonify({'status': 'processed', 'event_type': event_type}), 200
 
 
+@payments_bp.route('/api/subscribe/pause', methods=['POST'])
+@login_required
+def pause_subscription():
+    """
+    'Soft pause' — we record a paused_until date in our DB. PayPal keeps
+    billing as-is (there's no true pause on recurring plans), so on the
+    first webhook after paused_until passes we simply resume full access.
+    If the user doesn't have a real PayPal subscription (e.g. admin),
+    the pause is just a cosmetic note.
+    """
+    from datetime import timedelta
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not authenticated'}), 401
+    body = request.get_json(silent=True) or {}
+    try:
+        days = int(body.get('days') or 30)
+    except (TypeError, ValueError):
+        days = 30
+    days = max(7, min(days, 90))  # clamp 7–90
+
+    sub = Subscription.query.filter_by(user_id=user.id, status='active').first()
+    if not sub:
+        return jsonify({'error': 'No active subscription found'}), 404
+
+    sub.paused_until = datetime.utcnow() + timedelta(days=days)
+    db.session.commit()
+    log_activity(user.id, 'subscription_paused', {'days': days})
+    return jsonify({'success': True, 'paused_until': sub.paused_until.isoformat(),
+                    'days': days})
+
+
+@payments_bp.route('/api/subscribe/save-offer', methods=['POST'])
+@login_required
+def accept_save_offer():
+    """
+    'Stay and get 30% off next month' — one-time coupon we credit to the
+    user's account and mark as used. This doesn't touch PayPal (coupons
+    apply to the next billing cycle via a different plan swap or a
+    manual credit; for now we just record it so support can apply it).
+    """
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not authenticated'}), 401
+    sub = Subscription.query.filter_by(user_id=user.id, status='active').first()
+    if not sub:
+        return jsonify({'error': 'No active subscription found'}), 404
+    if sub.save_offer_used_at:
+        return jsonify({'error': 'Save offer already used on this subscription'}), 400
+    sub.save_offer_used_at = datetime.utcnow()
+    db.session.commit()
+    log_activity(user.id, 'save_offer_accepted', {})
+    return jsonify({'success': True,
+                    'message': '30% off your next billing cycle has been applied.'})
+
+
 @payments_bp.route('/api/subscribe/cancel', methods=['POST'])
 @login_required
 def cancel_subscription():

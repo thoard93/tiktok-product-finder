@@ -7,6 +7,90 @@
   <p class="page-subtitle">Manage your account, subscription, and preferences</p>
 </div>
 
+{# ===== CANCELLATION — BEFORE YOU GO MODAL ===== #}
+<div class="cancel-flow" id="cancelFlow" aria-hidden="true" role="dialog">
+  <div class="cancel-flow__backdrop" onclick="closeCancelFlow()"></div>
+  <div class="cancel-flow__card" role="document">
+    <button class="cancel-flow__close" onclick="closeCancelFlow()" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+
+    <div class="cancel-flow__pane" data-pane="intro">
+      <div class="cancel-flow__icon">👋</div>
+      <h2 class="cancel-flow__title">Before you go…</h2>
+      <p class="cancel-flow__sub">We'd hate to see you leave. Here are a couple options other creators have used:</p>
+
+      <div class="cancel-flow__option" onclick="showPane('pause')">
+        <div class="cancel-flow__option-icon">⏸</div>
+        <div>
+          <div class="cancel-flow__option-title">Pause your subscription</div>
+          <div class="cancel-flow__option-sub">Freeze your access for 30, 60, or 90 days. Come back anytime with all your saves intact.</div>
+        </div>
+        <div class="cancel-flow__option-arrow">→</div>
+      </div>
+
+      {% if subscription and not subscription.save_offer_used_at %}
+      <div class="cancel-flow__option cancel-flow__option--highlight" onclick="showPane('save-offer')">
+        <div class="cancel-flow__option-icon">🎁</div>
+        <div>
+          <div class="cancel-flow__option-title">Stay for 30% off next month</div>
+          <div class="cancel-flow__option-sub">One-time offer — your next billing cycle at $20.99 instead of $29.99.</div>
+        </div>
+        <div class="cancel-flow__option-arrow">→</div>
+      </div>
+      {% endif %}
+
+      <div class="cancel-flow__option cancel-flow__option--danger" onclick="showPane('confirm')">
+        <div class="cancel-flow__option-icon">✕</div>
+        <div>
+          <div class="cancel-flow__option-title">Cancel anyway</div>
+          <div class="cancel-flow__option-sub">Continue with cancellation.</div>
+        </div>
+        <div class="cancel-flow__option-arrow">→</div>
+      </div>
+    </div>
+
+    <div class="cancel-flow__pane" data-pane="pause" hidden>
+      <div class="cancel-flow__icon">⏸</div>
+      <h2 class="cancel-flow__title">Pause your subscription</h2>
+      <p class="cancel-flow__sub">Pick a pause length. Billing and access resume automatically after.</p>
+      <div class="cancel-flow__duration-grid">
+        <button class="cancel-flow__duration" data-days="30" onclick="acceptPause(30)">30 days</button>
+        <button class="cancel-flow__duration" data-days="60" onclick="acceptPause(60)">60 days</button>
+        <button class="cancel-flow__duration" data-days="90" onclick="acceptPause(90)">90 days</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:var(--space-4)" onclick="showPane('intro')">← Back</button>
+    </div>
+
+    <div class="cancel-flow__pane" data-pane="save-offer" hidden>
+      <div class="cancel-flow__icon">🎁</div>
+      <h2 class="cancel-flow__title">30% off next month</h2>
+      <p class="cancel-flow__sub">Your next billing cycle will be $20.99 instead of $29.99. After that, regular pricing resumes. You can still cancel anytime.</p>
+      <div class="cancel-flow__actions">
+        <button class="btn btn-ghost btn-sm" onclick="showPane('intro')">← Back</button>
+        <button class="btn btn-primary" onclick="acceptSaveOffer()">Apply 30% off</button>
+      </div>
+    </div>
+
+    <div class="cancel-flow__pane" data-pane="confirm" hidden>
+      <div class="cancel-flow__icon">⚠️</div>
+      <h2 class="cancel-flow__title">Cancel subscription?</h2>
+      <p class="cancel-flow__sub">Your access continues until the end of the current billing period. Saved products and creators will stay on your account if you come back.</p>
+      <div class="cancel-flow__actions">
+        <button class="btn btn-ghost btn-sm" onclick="showPane('intro')">← Back</button>
+        <button class="btn btn-danger" onclick="confirmCancel()">Yes, cancel</button>
+      </div>
+    </div>
+
+    <div class="cancel-flow__pane cancel-flow__pane--success" data-pane="success" hidden>
+      <div class="cancel-flow__icon" style="font-size:48px">✅</div>
+      <h2 class="cancel-flow__title" id="cancelSuccessTitle">All set</h2>
+      <p class="cancel-flow__sub" id="cancelSuccessMsg">—</p>
+      <button class="btn btn-primary" onclick="closeCancelFlow();location.reload()">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="settings-layout">
   {# Left: tab list #}
   <div class="settings-tabs">
@@ -91,8 +175,8 @@
             </div>
           </div>
           {% endif %}
-          <button class="btn btn-danger w-full" onclick="confirmAction('Cancel subscription','Your access continues until the end of the billing period.',cancelSub)">
-            <span class="btn-label">Cancel subscription</span><span class="btn-spinner"></span>
+          <button class="btn btn-danger w-full" onclick="openCancelFlow()">
+            <span class="btn-label">Cancel subscription</span>
           </button>
         {% else %}
           <div class="text-center" style="padding:var(--space-6) 0">
@@ -193,13 +277,77 @@ async function saveProfile(e) {
 
 function saveNotif() { showFlash("Preferences saved", "success"); }
 
-async function cancelSub() {
-  try {
-    var res = await fetch("/api/subscribe/cancel", {method:"POST"});
-    var data = await res.json();
-    if (data.success) { showFlash("Subscription cancelled", "success"); setTimeout(function(){ location.reload(); }, 1500); }
-    else { showFlash(data.error || "Failed to cancel", "error"); }
-  } catch(e) { showFlash("Network error", "error"); }
+/* =========================================================
+   CANCELLATION FLOW — pause / save offer / confirm
+   ========================================================= */
+function openCancelFlow() {
+  var modal = document.getElementById('cancelFlow');
+  if (!modal) return;
+  showPane('intro');
+  modal.classList.add('cancel-flow--open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
 }
+function closeCancelFlow() {
+  var modal = document.getElementById('cancelFlow');
+  if (!modal) return;
+  modal.classList.remove('cancel-flow--open');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+function showPane(name) {
+  document.querySelectorAll('.cancel-flow__pane').forEach(function(p) {
+    p.hidden = p.dataset.pane !== name;
+  });
+}
+function showSuccess(title, msg) {
+  document.getElementById('cancelSuccessTitle').textContent = title;
+  document.getElementById('cancelSuccessMsg').textContent = msg;
+  showPane('success');
+}
+async function acceptPause(days) {
+  try {
+    var res = await fetch('/api/subscribe/pause', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ days: days })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showSuccess('Paused for ' + days + ' days',
+        'We\'ll resume your subscription on ' +
+        new Date(data.paused_until).toLocaleDateString() + '. See you soon!');
+    } else {
+      showFlash(data.error || 'Failed to pause', 'error');
+    }
+  } catch(e) { showFlash('Network error', 'error'); }
+}
+async function acceptSaveOffer() {
+  try {
+    var res = await fetch('/api/subscribe/save-offer', { method: 'POST' });
+    var data = await res.json();
+    if (data.success) {
+      showSuccess('30% off applied',
+        data.message || 'Your next billing cycle will be $20.99.');
+    } else {
+      showFlash(data.error || 'Failed to apply', 'error');
+    }
+  } catch(e) { showFlash('Network error', 'error'); }
+}
+async function confirmCancel() {
+  try {
+    var res = await fetch('/api/subscribe/cancel', { method: 'POST' });
+    var data = await res.json();
+    if (data.success) {
+      showSuccess('Subscription cancelled',
+        'Your access continues until the end of this billing period.');
+    } else {
+      showFlash(data.error || 'Failed to cancel', 'error');
+    }
+  } catch(e) { showFlash('Network error', 'error'); }
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeCancelFlow();
+});
 </script>
 {% endblock %}

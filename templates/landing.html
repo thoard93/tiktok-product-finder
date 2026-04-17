@@ -20,11 +20,11 @@
     <div style="margin-top:var(--space-6);display:flex;gap:var(--space-6);flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--text-muted)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#36d9c4" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
-        200+ products tracked
+        {{ "{:,}".format(social_stats.products_tracked if social_stats else 200) }}+ products tracked
       </div>
       <div style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--text-muted)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#36d9c4" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
-        Daily data updates
+        Live data — updated hourly
       </div>
       <div style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--text-muted)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#36d9c4" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
@@ -61,6 +61,34 @@
       <span style="font-size:11px;color:var(--text-muted)">$52.00</span>
     </div>
   </div>
+</section>
+
+{# ===== SOCIAL PROOF BAND ===== #}
+<section class="social-proof-band" aria-label="Platform stats">
+  <div class="social-proof-band__inner">
+    <div class="social-proof-band__stat">
+      <div class="social-proof-band__num">{{ "{:,}".format(social_stats.products_tracked if social_stats else 200) }}+</div>
+      <div class="social-proof-band__label">products tracked</div>
+    </div>
+    <div class="social-proof-band__divider" aria-hidden="true"></div>
+    <div class="social-proof-band__stat">
+      <div class="social-proof-band__num">Hourly</div>
+      <div class="social-proof-band__label">data refresh</div>
+    </div>
+    <div class="social-proof-band__divider" aria-hidden="true"></div>
+    <div class="social-proof-band__stat">
+      <div class="social-proof-band__num">TikTok Shop</div>
+      <div class="social-proof-band__label">all categories</div>
+    </div>
+    <div class="social-proof-band__divider" aria-hidden="true"></div>
+    <div class="social-proof-band__stat">
+      <div class="social-proof-band__num">30 sec</div>
+      <div class="social-proof-band__label">from signup to insights</div>
+    </div>
+  </div>
+  <p class="social-proof-band__trust">
+    Built by TikTok affiliates, for TikTok affiliates. No guesswork, no fake data.
+  </p>
 </section>
 
 {# ===== HOW IT WORKS ===== #}

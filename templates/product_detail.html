@@ -75,6 +75,23 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.2 8.2 0 004.79 1.53V6.79a4.85 4.85 0 01-1.02-.1z"/></svg>
         View on TikTok Shop
       </button>
+      <button class="btn btn-ghost" id="copyAffiliateBtn"
+              data-product-url="{{ product.product_url | default('') }}"
+              data-raw-id="{{ product.product_id | replace('shop_', '') }}"
+              onclick="copyAffiliateLink(this)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span class="btn-label">Copy affiliate link</span>
+      </button>
+      {% if current_user and current_user.is_admin %}
+      <button class="btn btn-ghost" id="adminHideBtn"
+              data-product-id="{{ product.product_id }}"
+              data-status="{{ product.product_status or 'active' }}"
+              onclick="toggleAdminHide(this)"
+              style="margin-left:auto;color:#f87171">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        <span id="adminHideLabel">{% if (product.product_status or 'active') == 'hidden' %}Unhide{% else %}Hide{% endif %}</span>
+      </button>
+      {% endif %}
     </div>
 
     {# TAP Boosted Commission #}
@@ -307,6 +324,60 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close
   }
   if (typeof createLineChart === 'function') {
     createLineChart("detailSalesChart", labels, values, CHART_COLORS.teal);
+  }
+})();
+
+/* Copy affiliate link */
+window.copyAffiliateLink = function(btn) {
+  var url = btn.dataset.productUrl;
+  if (!url) {
+    var id = btn.dataset.rawId;
+    url = 'https://shop.tiktok.com/view/product/' + id + '?region=US&locale=en-US';
+  }
+  // Let the user paste this directly into the TikTok app under
+  // Creator tools → Affiliate to generate their personal commission link.
+  var label = btn.querySelector('.btn-label');
+  var original = label ? label.textContent : '';
+  navigator.clipboard.writeText(url).then(function() {
+    if (label) label.textContent = 'Copied ✓';
+    setTimeout(function() { if (label) label.textContent = original; }, 2000);
+  }).catch(function() {
+    if (typeof showFlash === 'function') showFlash('Copy failed — please select manually', 'error');
+  });
+};
+
+/* Admin: hide/unhide product */
+window.toggleAdminHide = function(btn) {
+  var pid = btn.dataset.productId;
+  var cur = btn.dataset.status;
+  if (!pid) return;
+  btn.disabled = true;
+  fetch('/api/admin/products/' + encodeURIComponent(pid) + '/hide', {
+    method: 'POST'
+  }).then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success) {
+        btn.dataset.status = data.product_status;
+        var label = document.getElementById('adminHideLabel');
+        if (label) label.textContent = data.product_status === 'hidden' ? 'Unhide' : 'Hide';
+        if (typeof showFlash === 'function')
+          showFlash(data.product_status === 'hidden' ? 'Product hidden' : 'Product restored', 'success');
+      } else if (typeof showFlash === 'function') {
+        showFlash(data.error || 'Failed', 'error');
+      }
+    }).catch(function() {
+      if (typeof showFlash === 'function') showFlash('Network error', 'error');
+    }).finally(function() { btn.disabled = false; });
+};
+
+/* Track this view in recent search history */
+(function() {
+  if (typeof window.__pushSearchHistory === 'function') {
+    window.__pushSearchHistory({
+      url: window.location.pathname,
+      label: {{ (product.product_name or '') | tojson }},
+      kind: 'product',
+    });
   }
 })();
 

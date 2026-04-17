@@ -503,19 +503,97 @@
       }
     }
 
+    /* =========================================================
+       SEARCH HISTORY — last 5 things the user clicked into
+       ========================================================= */
+    var HISTORY_KEY = 'vantage_search_history_v1';
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+      catch (e) { return []; }
+    }
+    window.__pushSearchHistory = function(entry) {
+      if (!entry || !entry.url || !entry.label) return;
+      var list = loadHistory();
+      list = list.filter(function(e) { return e.url !== entry.url; });
+      list.unshift({ url: entry.url, label: entry.label, kind: entry.kind || 'product', ts: Date.now() });
+      if (list.length > 5) list = list.slice(0, 5);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch (e) {}
+    };
+    function renderHistory() {
+      var list = loadHistory();
+      if (!list.length) {
+        resultsEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">Start typing to search.<br><span style="font-size:11px;color:var(--text-faint)">Recent lookups will appear here.</span></div>';
+        return;
+      }
+      resultsEl.innerHTML =
+        '<div style="padding:8px 14px 4px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-faint);text-transform:uppercase">Recent</div>'
+        + list.map(function(e) {
+            var icon = e.kind === 'creator' ? 'user' : (e.kind === 'brand' ? 'store' : 'package');
+            return '<a href="' + e.url + '" class="brand-search-item" style="text-decoration:none;color:inherit">'
+              + '<div class="brand-search-item__avatar" style="background:var(--bg-elevated);color:var(--text-muted)"><i data-lucide="' + icon + '" style="width:14px;height:14px"></i></div>'
+              + '<div class="brand-search-item__info" style="min-width:0">'
+              + '<div class="brand-search-item__name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + htmlEsc(e.label) + '</div>'
+              + '<div class="brand-search-item__cat">Recent</div>'
+              + '</div></a>';
+          }).join('');
+      if (window.lucide) lucide.createIcons();
+    }
+
     searchInput.addEventListener('input', function() {
       clearTimeout(debounceTimer);
-      if (this.value.trim().length < 2) { tabsPanel.style.display = 'none'; return; }
+      if (this.value.trim().length < 2) {
+        // Empty/short input → show history if available
+        tabsPanel.style.display = 'block';
+        renderHistory();
+        return;
+      }
       debounceTimer = setTimeout(runSearch, 300);
     });
 
     searchInput.addEventListener('focus', function() {
-      if (this.value.trim().length >= 2) tabsPanel.style.display = 'block';
+      tabsPanel.style.display = 'block';
+      if (this.value.trim().length < 2) {
+        renderHistory();
+      } else {
+        runSearch();
+      }
     });
 
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.topbar-search')) tabsPanel.style.display = 'none';
     });
+
+    /* =========================================================
+       KEYBOARD SHORTCUTS — `/` focuses search, Esc blurs/closes
+       ========================================================= */
+    document.addEventListener('keydown', function(e) {
+      // Skip if the user is already typing in an input/textarea/contentEditable
+      var target = e.target;
+      var isTyping = target && (
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+        || target.isContentEditable
+      );
+      if (e.key === '/' && !isTyping && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+      }
+      if (e.key === 'Escape' && document.activeElement === searchInput) {
+        searchInput.blur();
+        tabsPanel.style.display = 'none';
+      }
+    });
+
+    /* Hint: `/` badge in the placeholder area on desktop */
+    if (window.matchMedia && window.matchMedia('(min-width: 900px)').matches) {
+      var hintBadge = document.createElement('kbd');
+      hintBadge.textContent = '/';
+      hintBadge.style.cssText = 'position:absolute;right:10px;top:50%;transform:translateY(-50%);background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:10px;font-family:monospace;color:var(--text-faint);pointer-events:none';
+      searchInput.parentElement.style.position = 'relative';
+      searchInput.parentElement.appendChild(hintBadge);
+      searchInput.addEventListener('focus', function() { hintBadge.style.display = 'none'; });
+      searchInput.addEventListener('blur', function() { hintBadge.style.display = 'block'; });
+    }
   })();
   </script>
 </body>

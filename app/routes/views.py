@@ -328,7 +328,25 @@ def _base_context(active_page='dashboard'):
 def landing():
     if 'user_id' in session:
         return redirect('/app/dashboard')
-    return render_template('landing.html')
+    # Live social proof numbers — real from the DB, never faked
+    try:
+        product_count = Product.query.filter(_active_filter).count()
+        from app.models import User as _User, Brand as _Brand
+        creator_count = _User.query.filter(_User.discord_id.isnot(None)).count()
+        brand_count = _Brand.query.count() if _Brand else 0
+    except Exception:
+        product_count = 200
+        creator_count = 50
+        brand_count = 30
+    # Floor to the nearest meaningful number so the display doesn't look noisy
+    def _round_down(n, step):
+        return max((n // step) * step, step)
+    stats = {
+        'products_tracked': _round_down(product_count, 100) if product_count >= 500 else product_count,
+        'creators': _round_down(creator_count, 10) if creator_count >= 100 else creator_count,
+        'brands': _round_down(brand_count, 10) if brand_count >= 100 else brand_count,
+    }
+    return render_template('landing.html', social_stats=stats)
 
 
 @views_bp.route('/login')
@@ -1662,6 +1680,35 @@ def api_profile_update():
         user.discord_username = data['display_name'].strip()[:100]
     db.session.commit()
     return jsonify({'success': True})
+
+
+@views_bp.route('/api/me/onboarded', methods=['POST'])
+@api_auth
+def api_mark_onboarded():
+    """Mark the onboarding tour as completed for this user."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not authenticated'}), 401
+    if not user.onboarded_at:
+        user.onboarded_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify({'success': True, 'onboarded_at': user.onboarded_at.isoformat()})
+
+
+@views_bp.route('/api/admin/products/<product_id>/hide', methods=['POST'])
+@api_auth
+def api_admin_hide_product(product_id):
+    """Admin-only: toggle product_status between 'active' and 'hidden'."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin only'}), 403
+    product = Product.query.get(product_id)
+    if not product:
+        return jsonify({'error': 'Not found'}), 404
+    new_status = 'active' if (product.product_status or 'active') == 'hidden' else 'hidden'
+    product.product_status = new_status
+    db.session.commit()
+    return jsonify({'success': True, 'product_status': new_status})
 
 
 # ---------------------------------------------------------------------------

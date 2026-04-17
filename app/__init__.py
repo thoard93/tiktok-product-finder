@@ -28,6 +28,10 @@ def _auto_migrate(app, db):
         ("brand_scan_jobs", "brand_id_str", "VARCHAR(100)"),
         ("brand_scan_jobs", "brand_name", "VARCHAR(300)"),
         ("brand_scan_jobs", "brand_logo_url", "VARCHAR(500)"),
+        # Pre-launch feature sprint
+        ("users", "onboarded_at", "TIMESTAMP"),
+        ("subscriptions", "paused_until", "TIMESTAMP"),
+        ("subscriptions", "save_offer_used_at", "TIMESTAMP"),
     ]
     for table, column, col_type in column_migrations:
         try:

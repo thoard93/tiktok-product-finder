@@ -151,8 +151,104 @@
   <p class="text-sm text-muted">No recently viewed products. Start exploring in <a href="/app/products">Products</a>.</p>
 </div>
 {% endif %}
+
+{# ===== ONBOARDING TOUR (first visit only) ===== #}
+{% if current_user and not current_user.onboarded_at %}
+<div class="onboarding-tour" id="onboardingTour" aria-hidden="false" role="dialog">
+  <div class="onboarding-tour__backdrop"></div>
+  <div class="onboarding-tour__card" role="document">
+    <div class="onboarding-tour__progress">
+      <div class="onboarding-tour__dot onboarding-tour__dot--active" data-step="1"></div>
+      <div class="onboarding-tour__dot" data-step="2"></div>
+      <div class="onboarding-tour__dot" data-step="3"></div>
+    </div>
+
+    <div class="onboarding-tour__step" data-step="1">
+      <div class="onboarding-tour__icon">👋</div>
+      <h2 class="onboarding-tour__title">Welcome to Vantage</h2>
+      <p class="onboarding-tour__body">
+        You now have live access to TikTok Shop's top-selling products,
+        rising creators, and brand data. This tour takes 30 seconds.
+      </p>
+    </div>
+
+    <div class="onboarding-tour__step" data-step="2" hidden>
+      <div class="onboarding-tour__icon">🔍</div>
+      <h2 class="onboarding-tour__title">Find winning products</h2>
+      <p class="onboarding-tour__body">
+        Head to <strong>Products</strong> to browse trending items with
+        live commission rates and sales data. Paste any TikTok product
+        link in the top search bar to look it up instantly.
+      </p>
+    </div>
+
+    <div class="onboarding-tour__step" data-step="3" hidden>
+      <div class="onboarding-tour__icon">⭐</div>
+      <h2 class="onboarding-tour__title">Save &amp; track favorites</h2>
+      <p class="onboarding-tour__body">
+        Found a winner? Tap the heart on any product to save it. Track
+        creators the same way in <strong>Creators</strong>. Your saved
+        items sync across devices.
+      </p>
+    </div>
+
+    <div class="onboarding-tour__actions">
+      <button class="btn btn-ghost btn-sm" id="onboardingSkip">Skip tour</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-sm" id="onboardingBack" hidden>Back</button>
+      <button class="btn btn-primary btn-sm" id="onboardingNext">Next &rarr;</button>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/dashboard.js"></script>
+{% if current_user and not current_user.onboarded_at %}
+<script>
+(function() {
+  const tour = document.getElementById('onboardingTour');
+  if (!tour) return;
+  let step = 1;
+  const TOTAL = 3;
+  const dots = tour.querySelectorAll('.onboarding-tour__dot');
+  const steps = tour.querySelectorAll('.onboarding-tour__step');
+  const nextBtn = document.getElementById('onboardingNext');
+  const backBtn = document.getElementById('onboardingBack');
+  const skipBtn = document.getElementById('onboardingSkip');
+
+  function render() {
+    dots.forEach(function(d) {
+      d.classList.toggle('onboarding-tour__dot--active', Number(d.dataset.step) <= step);
+    });
+    steps.forEach(function(s) {
+      s.hidden = Number(s.dataset.step) !== step;
+    });
+    backBtn.hidden = step === 1;
+    nextBtn.textContent = step === TOTAL ? 'Start exploring' : 'Next →';
+  }
+  function finish() {
+    tour.classList.add('onboarding-tour--closing');
+    setTimeout(function() { tour.remove(); }, 250);
+    fetch('/api/me/onboarded', { method: 'POST' }).catch(function() {});
+  }
+  nextBtn.addEventListener('click', function() {
+    if (step >= TOTAL) { finish(); return; }
+    step++; render();
+  });
+  backBtn.addEventListener('click', function() {
+    if (step > 1) { step--; render(); }
+  });
+  skipBtn.addEventListener('click', finish);
+  document.addEventListener('keydown', function(e) {
+    if (!document.body.contains(tour)) return;
+    if (e.key === 'Escape') finish();
+    if (e.key === 'ArrowRight') nextBtn.click();
+    if (e.key === 'ArrowLeft') backBtn.click();
+  });
+  render();
+})();
+</script>
+{% endif %}
 {% endblock %}

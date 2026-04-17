@@ -28,6 +28,7 @@ class User(db.Model):
     is_dev_user = db.Column(db.Boolean, default=False)  # Logged in via passkey
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, default=datetime.utcnow)
+    onboarded_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
         return {
@@ -363,6 +364,8 @@ class Subscription(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     next_billing_date = db.Column(db.DateTime, nullable=True)
     cancelled_at = db.Column(db.DateTime, nullable=True)
+    paused_until = db.Column(db.DateTime, nullable=True)
+    save_offer_used_at = db.Column(db.DateTime, nullable=True)
 
     user = db.relationship('User', backref=db.backref('subscription', uselist=False))
 
