@@ -117,7 +117,7 @@
       <header class="topbar">
         <div class="topbar-search" style="position:relative">
           <i data-lucide="search"></i>
-          <input type="text" class="input" placeholder="Search..." id="globalSearch" autocomplete="off" aria-label="Global search">
+          <input type="text" class="input" placeholder="Search products, paste a TikTok link, or enter a creator name…" id="globalSearch" autocomplete="off" aria-label="Global search">
           <div id="globalSearchTabs" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);z-index:100;overflow:hidden;margin-top:4px">
             <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0">
               <button class="global-search-tab global-search-tab--active" data-tab="products" onclick="setGlobalSearchTab('products')" style="flex:1;background:none;border:none;padding:10px;font-size:12px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);cursor:pointer">Products</button>
@@ -125,6 +125,9 @@
               <button class="global-search-tab" data-tab="creators" onclick="setGlobalSearchTab('creators')" style="flex:1;background:none;border:none;padding:10px;font-size:12px;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer">Creators</button>
             </div>
             <div id="globalSearchResults" style="max-height:340px;overflow-y:auto"></div>
+            <div id="globalSearchHint" style="padding:8px 14px;font-size:11px;color:var(--text-faint);border-top:1px solid var(--border);background:var(--bg-elevated)">
+              💡 Tip: Paste any TikTok Shop product link to look it up instantly
+            </div>
           </div>
         </div>
         <div class="topbar-right">
@@ -337,6 +340,10 @@
     var resultsEl = document.getElementById('globalSearchResults');
     if (!searchInput || !tabsPanel) return;
 
+    var hintEl = document.getElementById('globalSearchHint');
+    var TIKTOK_URL_RE = /^https?:\/\/(www\.|vm\.|m\.)?tiktok\.com/i;
+    var PRODUCT_ID_RE = /^\d{15,}$/;
+
     window.setGlobalSearchTab = function(tab) {
       currentTab = tab;
       document.querySelectorAll('.global-search-tab').forEach(function(b) {
@@ -344,6 +351,7 @@
         b.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
         b.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
       });
+      if (hintEl) hintEl.style.display = (tab === 'products') ? 'block' : 'none';
       if (searchInput.value.trim().length >= 2) runSearch();
     };
 
@@ -387,12 +395,89 @@
       }).join('');
     }
 
+    function htmlEsc(s) {
+      return String(s).replace(/[&<>"']/g, function(c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+      });
+    }
+
+    function renderLookupCard(q, kind) {
+      var label = (kind === 'url')
+        ? 'Look up this TikTok product'
+        : 'Look up product ID ' + q;
+      var sub = (kind === 'url')
+        ? q
+        : 'Fetches live data from TikTok Shop';
+      var icon = (kind === 'url')
+        ? '<i data-lucide="link" style="width:16px;height:16px"></i>'
+        : '<i data-lucide="hash" style="width:16px;height:16px"></i>';
+      resultsEl.innerHTML =
+        '<div id="lookupCard" class="brand-search-item" style="cursor:pointer" '
+        + 'role="button" tabindex="0" data-query="' + htmlEsc(q) + '" '
+        + 'onclick="performProductLookup(this)">'
+        + '<div class="brand-search-item__avatar" style="background:var(--accent-glow);color:var(--accent)">'
+        + icon + '</div>'
+        + '<div class="brand-search-item__info" style="min-width:0;flex:1">'
+        + '<div class="brand-search-item__name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + htmlEsc(label) + '</div>'
+        + '<div class="brand-search-item__cat" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + htmlEsc(sub) + '</div>'
+        + '</div>'
+        + '<div id="lookupCardArrow" style="color:var(--accent);font-weight:700">→</div>'
+        + '</div>';
+      if (window.lucide) lucide.createIcons();
+    }
+
+    window.performProductLookup = function(card) {
+      var q = card.dataset.query;
+      if (!q) return;
+      // Swap to loading state
+      card.style.pointerEvents = 'none';
+      var arrow = document.getElementById('lookupCardArrow');
+      if (arrow) {
+        arrow.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite"></span>';
+      }
+      fetch('/api/products/lookup', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query: q})
+      }).then(function(r) {
+        return r.json().then(function(data) { return {status: r.status, data: data}; });
+      }).then(function(res) {
+        if (res.status >= 200 && res.status < 300 && res.data.product_url) {
+          window.location.href = res.data.product_url;
+          return;
+        }
+        // Error path — show message inside the card
+        var msg = (res.data && res.data.error)
+          || 'Could not find this product. Make sure the link is a TikTok Shop product link, not a regular TikTok video.';
+        resultsEl.innerHTML =
+          '<div class="brand-search-item" style="cursor:default">'
+          + '<div class="brand-search-item__avatar" style="background:rgba(248,113,113,0.1);color:#f87171">'
+          + '<i data-lucide="alert-circle" style="width:16px;height:16px"></i></div>'
+          + '<div class="brand-search-item__info" style="min-width:0">'
+          + '<div class="brand-search-item__name" style="color:#f87171">Not found</div>'
+          + '<div class="brand-search-item__cat" style="white-space:normal">' + htmlEsc(msg) + '</div>'
+          + '</div></div>';
+        if (window.lucide) lucide.createIcons();
+      }).catch(function() {
+        resultsEl.innerHTML =
+          '<div class="brand-search-item" style="cursor:default">'
+          + '<div class="brand-search-item__avatar" style="background:rgba(248,113,113,0.1);color:#f87171">!</div>'
+          + '<div class="brand-search-item__info">'
+          + '<div class="brand-search-item__name" style="color:#f87171">Network error</div>'
+          + '<div class="brand-search-item__cat">Please try again</div>'
+          + '</div></div>';
+      });
+    };
+
     function renderProducts(q) {
-      /* Products don't have a JSON autocomplete endpoint — link to filtered products page */
+      // Paste detection — TikTok share URL or raw product ID
+      if (TIKTOK_URL_RE.test(q)) { renderLookupCard(q, 'url'); return; }
+      if (PRODUCT_ID_RE.test(q)) { renderLookupCard(q, 'id'); return; }
+      // Default — link to DB-backed products page filter
       resultsEl.innerHTML = '<a href="/app/products?search=' + encodeURIComponent(q) + '" class="brand-search-item" style="text-decoration:none;color:inherit">'
         + '<div class="brand-search-item__avatar" style="background:var(--accent-glow);color:var(--accent)"><i data-lucide="search" style="width:16px;height:16px"></i></div>'
         + '<div class="brand-search-item__info">'
-        + '<div class="brand-search-item__name">Search products for "' + q + '"</div>'
+        + '<div class="brand-search-item__name">Search products for "' + htmlEsc(q) + '"</div>'
         + '<div class="brand-search-item__cat">Opens the products page with this filter</div>'
         + '</div></a>';
       if (window.lucide) lucide.createIcons();

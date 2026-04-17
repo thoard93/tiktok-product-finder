@@ -2676,6 +2676,129 @@ def api_image_proxy():
     return resp
 
 
+# ---------------------------------------------------------------------------
+# Product lookup — paste-a-TikTok-URL or paste-a-product-ID
+# ---------------------------------------------------------------------------
+
+_TIKTOK_URL_RE = None  # lazy-compiled
+_PRODUCT_ID_RE = None
+
+
+def _tiktok_url_re():
+    import re as _re
+    global _TIKTOK_URL_RE
+    if _TIKTOK_URL_RE is None:
+        _TIKTOK_URL_RE = _re.compile(
+            r'^https?://(?:www\.|vm\.|m\.)?tiktok\.com', _re.IGNORECASE
+        )
+    return _TIKTOK_URL_RE
+
+
+def _product_id_re():
+    import re as _re
+    global _PRODUCT_ID_RE
+    if _PRODUCT_ID_RE is None:
+        _PRODUCT_ID_RE = _re.compile(r'^\d{15,}$')
+    return _PRODUCT_ID_RE
+
+
+@views_bp.route('/api/products/lookup', methods=['POST'])
+@api_auth
+def api_products_lookup():
+    """
+    Fetch-and-save a product the user pasted into the search bar.
+
+    Accepts either:
+      - A TikTok share URL (https://www.tiktok.com/t/..., vm.tiktok.com/..., etc.)
+      - A raw numeric product_id (15+ digits)
+
+    Behaviour:
+      1. If the product already exists in our DB → return its URL, source='database'
+      2. Otherwise call EchoTik realtime → upsert → return new URL
+    """
+    body = request.get_json(silent=True) or {}
+    query = (body.get('query') or '').strip()
+    if not query:
+        return jsonify({'error': 'Missing query'}), 400
+
+    product_id = None
+    region = 'US'
+    source = None
+
+    # Flow A — TikTok share URL
+    if _tiktok_url_re().match(query):
+        try:
+            from app.services.echotik import extract_product_id_from_share_url
+            result = extract_product_id_from_share_url(query)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"[ProductLookup] extract_product_id {query!r} err: {e}")
+            result = None
+        if not result or not result.get('product_id'):
+            return jsonify({
+                'error': 'Could not extract a product from that TikTok link. '
+                         'Make sure it is a TikTok Shop product link, not a regular video.'
+            }), 404
+        product_id = result['product_id']
+        region = result.get('region') or 'US'
+        source = 'share_url'
+
+    # Flow B — raw product ID
+    elif _product_id_re().match(query):
+        product_id = query
+        region = 'US'
+        source = 'product_id'
+
+    else:
+        return jsonify({'error': 'Not a TikTok URL or product ID'}), 400
+
+    # Canonical primary key is "shop_<raw_id>"
+    raw_id = str(product_id).replace('shop_', '')
+    db_key = f"shop_{raw_id}"
+
+    # Fast path — already in DB
+    existing = Product.query.get(db_key)
+    if existing:
+        return jsonify({
+            'source': 'database',
+            'product_id': db_key,
+            'product_url': f'/app/products/{db_key}',
+        })
+
+    # Fetch from EchoTik realtime → normalize → upsert via existing sync_to_db
+    try:
+        from app.services.echotik import fetch_product_detail_realtime, sync_to_db
+        product_data = fetch_product_detail_realtime(raw_id, region=region)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[ProductLookup] realtime fetch {raw_id} err: {e}")
+        product_data = None
+
+    if not product_data:
+        return jsonify({
+            'error': 'Product not found on TikTok Shop. It may be region-restricted '
+                     'or delisted.'
+        }), 404
+
+    # Make sure product_id matches what we looked up (sync_to_db prefixes it)
+    product_data['product_id'] = raw_id
+    try:
+        sync_to_db([product_data])
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[ProductLookup] sync_to_db {raw_id} err: {e}")
+        # Don't block the user — fallthrough; product detail page has its own lookup
+
+    return jsonify({
+        'source': source,
+        'product_id': db_key,
+        'product_url': f'/app/products/{db_key}',
+    })
+
+
 @views_bp.route('/api/creators/<unique_id>/similar')
 @api_auth
 def api_creator_similar(unique_id):

@@ -318,6 +318,106 @@ def fetch_product_detail(product_id: str) -> Optional[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Public API — realtime product lookup (share URL / raw product_id)
+# ---------------------------------------------------------------------------
+
+def extract_product_id_from_share_url(share_url: str) -> Optional[dict]:
+    """
+    Resolve a TikTok share link to its product_id + region.
+
+    GET /api/v3/realtime/extract_product_id?share_url=<url>
+    Returns {'product_id', 'region'} or None on failure.
+    """
+    url = (share_url or '').strip()
+    if not url:
+        return None
+
+    endpoint = f"{ECHOTIK_REALTIME_BASE}/extract_product_id"
+    for attempt in range(2):
+        try:
+            resp = _request('GET', endpoint, params={'share_url': url})
+            code = resp.get('code')
+            data = resp.get('data') or {}
+            if code == 500:
+                log.warning("[EchoTik] extract_product_id 500 for %s (attempt %d)",
+                            url, attempt + 1)
+                continue
+            if isinstance(data, dict):
+                pid = str(data.get('productId') or data.get('product_id') or '')
+                reg = (data.get('region') or 'US').upper()
+                if pid:
+                    return {'product_id': pid, 'region': reg}
+            return None
+        except EchoTikError as exc:
+            log.warning("[EchoTik] extract_product_id err for %s (attempt %d): %s",
+                        url, attempt + 1, exc)
+            continue
+    return None
+
+
+def fetch_product_detail_realtime(product_id: str,
+                                  region: str = 'US') -> Optional[dict]:
+    """
+    Live product-detail lookup from EchoTik's real-time endpoint.
+
+    GET /api/v3/realtime/product/detail?product_id=<id>&region=<region>
+
+    Returns a normalized product dict (same shape as
+    ``fetch_product_detail``). On repeated code=500 failures, falls back
+    to the batch endpoint (``fetch_product_detail``).
+    """
+    raw_id = str(product_id or '').replace('shop_', '').strip()
+    if not raw_id:
+        return None
+    reg = (region or 'US').upper()
+
+    endpoint = f"{ECHOTIK_REALTIME_BASE}/product/detail"
+    for attempt in range(2):
+        status, body = _try_raw(endpoint, {'product_id': raw_id, 'region': reg})
+        if status is None:
+            print(f"[EchoTik] product_detail_realtime NETWORK err for {raw_id}", flush=True)
+            continue
+        code = (body or {}).get('code')
+        msg = (body or {}).get('message', '')
+        print(f"[EchoTik] product_detail_realtime pid={raw_id} region={reg} "
+              f"status={status} code={code} msg={msg!r} (attempt {attempt + 1})",
+              flush=True)
+        if code == 500:
+            continue
+        payload = (body or {}).get('data')
+        if not payload:
+            return None
+        # Realtime shape differs from batch: it's an object keyed by
+        # "shop/pdp/.../page" with nested basic_info. Try several shapes.
+        if isinstance(payload, dict):
+            # Look for the canonical batch-style fields directly first
+            candidate = payload
+            # If it's wrapped in a weird layout key, dig for nested
+            # basic_info / productInfo
+            if 'product_id' not in candidate:
+                for k, v in payload.items():
+                    if isinstance(v, dict) and ('basic_info' in v or 'product_id' in v):
+                        candidate = v.get('basic_info') if 'basic_info' in v else v
+                        break
+            if isinstance(candidate, dict) and (candidate.get('product_id')
+                                                or candidate.get('productId')):
+                return _normalize_product(candidate)
+        if isinstance(payload, list) and payload:
+            first = payload[0] if isinstance(payload[0], dict) else {}
+            if first:
+                return _normalize_product(first)
+        return None
+
+    # Realtime failed twice — fall back to the batch endpoint
+    log.info("[EchoTik] realtime failed for %s, falling back to batch", raw_id)
+    try:
+        return fetch_product_detail(raw_id)
+    except Exception as e:
+        log.warning("[EchoTik] batch fallback failed for %s: %s", raw_id, e)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Public API — fetch_batch_images
 # ---------------------------------------------------------------------------
 
