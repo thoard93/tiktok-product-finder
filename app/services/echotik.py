@@ -478,33 +478,27 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
     raw_id = str(product_id).replace('shop_', '')
     size = min(max(page_size, 1), 10)
 
-    # `/product/video` 404s; the working path mirrors influencer/video/list.
-    candidate_urls = [
-        f"{ECHOTIK_V3_BASE}/product/video/list",
-        f"{ECHOTIK_V3_BASE}/product/videos",
-    ]
-    raw_list = []
-    for url in candidate_urls:
-        params = {'product_id': raw_id, 'page_num': 1, 'page_size': size}
-        status, body = _try_raw(url, params)
-        tag = url.split('/echotik/')[-1]
-        if status is None:
-            print(f"[EchoTik] product_videos NETWORK err for {raw_id}", flush=True)
-            continue
-        code = (body or {}).get('code')
-        msg = (body or {}).get('message', '')
-        data = (body or {}).get('data')
-        if isinstance(data, dict):
-            data = data.get('list') or data.get('records') or []
-        n = len(data) if isinstance(data, list) else 0
-        print(f"[EchoTik] product_videos {tag} pid={raw_id} status={status} "
-              f"code={code} msg={msg!r} items={n}", flush=True)
-        if code == 0 and isinstance(data, list) and data:
-            raw_list = data
-            break
-
-    if not raw_list:
+    # Confirmed working endpoint — don't bother with /product/videos
+    # fallback which always 404s.
+    url = f"{ECHOTIK_V3_BASE}/product/video/list"
+    params = {'product_id': raw_id, 'page_num': 1, 'page_size': size}
+    status, body = _try_raw(url, params)
+    if status is None:
+        print(f"[EchoTik] product_videos NETWORK err for {raw_id}", flush=True)
         return []
+    code = (body or {}).get('code')
+    msg = (body or {}).get('message', '')
+    data = (body or {}).get('data')
+    if isinstance(data, dict):
+        data = data.get('list') or data.get('records') or []
+    n = len(data) if isinstance(data, list) else 0
+    print(f"[EchoTik] product_videos pid={raw_id} status={status} "
+          f"code={code} msg={msg!r} items={n}", flush=True)
+    if code != 0 or not isinstance(data, list):
+        return []
+    raw_list = data
+    if not raw_list:
+        return []  # API call succeeded — product genuinely has no videos
 
     # Log first-item keys so we can refine the mapping if needed
     if raw_list:

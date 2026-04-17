@@ -2207,92 +2207,125 @@ def _scan_single_brand(shop_id, brand_name, page_start, page_end, job):
         _time.sleep(0.3)
 
     # Clear old products, save new
-    BrandProduct.query.filter_by(brand_id=brand.id).delete()
-    for bp in all_products:
-        bp.brand_id = brand.id
-        db.session.add(bp)
-
-    # Update brand stats
-    brand.total_products = len(all_products)
-    brand.sales_30d = sum(bp.sales_30d or 0 for bp in all_products)
-    brand.revenue_30d = sum(bp.revenue_30d or 0 for bp in all_products)
-    brand.units_sold_30d = sum(bp.total_sales or 0 for bp in all_products)
-    if all_products:
-        comms = [bp.commission_rate for bp in all_products if bp.commission_rate and bp.commission_rate > 0]
-        brand.avg_commission = sum(comms) / len(comms) if comms else 0
-        top = max(all_products, key=lambda bp: bp.total_sales or 0)
-        brand.top_product_name = top.title
-    brand.is_hidden_gem = any(bp.is_hidden_gem for bp in all_products)
-    brand.scan_status = 'saving'
-    brand.last_scanned = datetime.utcnow()
-    job.brand_name = f"{brand_name} (saving {len(all_products)} products...)"
-    db.session.commit()
-
-    # Sync to main Product table so "View" is instant
     try:
-        from app.services.echotik import sync_to_db as echotik_sync
-        raw_for_sync = []
+        BrandProduct.query.filter_by(brand_id=brand.id).delete()
         for bp in all_products:
-            raw_for_sync.append({
-                'product_id': bp.product_id,
-                'product_name': bp.title,
-                'image_url': bp.image_url,
-                'price': bp.price,
-                'commission_rate': bp.commission_rate,
-                'sales': bp.total_sales,
-                'sales_7d': bp.sales_7d or (bp.sales_30d // 4 if bp.sales_30d else 0),
-                'sales_30d': bp.sales_30d,
-                'video_count_alltime': bp.total_videos,
-                'video_count': bp.total_videos,
-                'influencer_count': bp.influencer_count,
-                'category': bp.category,
-                'seller_name': brand_name,
-                'seller_id': str(shop_id),
-            })
-        for i in range(0, len(raw_for_sync), 50):
-            try:
-                echotik_sync(raw_for_sync[i:i+50])
-            except Exception:
-                pass
+            bp.brand_id = brand.id
+            db.session.add(bp)
     except Exception as e:
-        log.warning(f"[BrandScan] Product table sync failed: {e}")
+        log.warning(f"[BrandScan] clear/insert BrandProducts failed for {brand_name}: {e}")
+        try: db.session.rollback()
+        except Exception: pass
 
-    # Sign images on the MAIN Product table entries (not BrandProduct)
+    # Update brand stats (guard every step — we don't want a session
+    # error here to bubble out and kill the whole batch).
     try:
-        from app.services.echotik import fetch_batch_images
-        from sqlalchemy import or_
-        pids = [bp.product_id for bp in all_products]
-        shop_pids = [f'shop_{pid}' for pid in pids]
-        all_pids = pids + shop_pids
-        unsigned_products = Product.query.filter(
-            Product.product_id.in_(all_pids),
-            Product.image_url.isnot(None),
-            Product.image_url != '',
-            or_(Product.cached_image_url.is_(None), Product.cached_image_url == '')
-        ).limit(200).all()
-
-        job.brand_name = f"{brand_name} (signing {len(unsigned_products)} images...)"
+        brand.total_products = len(all_products)
+        brand.sales_30d = sum(bp.sales_30d or 0 for bp in all_products)
+        brand.revenue_30d = sum(bp.revenue_30d or 0 for bp in all_products)
+        brand.units_sold_30d = sum(bp.total_sales or 0 for bp in all_products)
+        if all_products:
+            comms = [bp.commission_rate for bp in all_products if bp.commission_rate and bp.commission_rate > 0]
+            brand.avg_commission = sum(comms) / len(comms) if comms else 0
+            top = max(all_products, key=lambda bp: bp.total_sales or 0)
+            brand.top_product_name = top.title
+        else:
+            brand.avg_commission = 0
+            brand.top_product_name = None
+        brand.is_hidden_gem = any(bp.is_hidden_gem for bp in all_products)
+        brand.scan_status = 'saving'
+        brand.last_scanned = datetime.utcnow()
+        job.brand_name = f"{brand_name} (saving {len(all_products)} products...)"
         db.session.commit()
+    except Exception as e:
+        log.warning(f"[BrandScan] brand stats commit failed for {brand_name}: {e}")
+        try: db.session.rollback()
+        except Exception: pass
 
-        for i in range(0, len(unsigned_products), 10):
-            batch = unsigned_products[i:i+10]
-            urls = [p.image_url for p in batch if p.image_url and p.image_url.startswith('http')]
-            if not urls:
-                continue
+    # If we found nothing, skip the sync + image-sign passes entirely.
+    # An empty in_([]) SELECT can leave the session wedged on some
+    # configurations, and there's nothing to sync anyway.
+    if all_products:
+        # Sync to main Product table so "View" is instant
+        try:
+            from app.services.echotik import sync_to_db as echotik_sync
+            raw_for_sync = []
+            for bp in all_products:
+                raw_for_sync.append({
+                    'product_id': bp.product_id,
+                    'product_name': bp.title,
+                    'image_url': bp.image_url,
+                    'price': bp.price,
+                    'commission_rate': bp.commission_rate,
+                    'sales': bp.total_sales,
+                    'sales_7d': bp.sales_7d or (bp.sales_30d // 4 if bp.sales_30d else 0),
+                    'sales_30d': bp.sales_30d,
+                    'video_count_alltime': bp.total_videos,
+                    'video_count': bp.total_videos,
+                    'influencer_count': bp.influencer_count,
+                    'category': bp.category,
+                    'seller_name': brand_name,
+                    'seller_id': str(shop_id),
+                })
+            for i in range(0, len(raw_for_sync), 50):
+                try:
+                    echotik_sync(raw_for_sync[i:i+50])
+                except Exception:
+                    try: db.session.rollback()
+                    except Exception: pass
+        except Exception as e:
+            log.warning(f"[BrandScan] Product table sync failed: {e}")
+            try: db.session.rollback()
+            except Exception: pass
+
+        # Sign images on the MAIN Product table entries (not BrandProduct)
+        try:
+            from app.services.echotik import fetch_batch_images
+            from sqlalchemy import or_
+            pids = [bp.product_id for bp in all_products]
+            shop_pids = [f'shop_{pid}' for pid in pids]
+            all_pids = pids + shop_pids
+            unsigned_products = Product.query.filter(
+                Product.product_id.in_(all_pids),
+                Product.image_url.isnot(None),
+                Product.image_url != '',
+                or_(Product.cached_image_url.is_(None), Product.cached_image_url == '')
+            ).limit(200).all()
+
             try:
-                signed = fetch_batch_images(urls)
-                for p in batch:
-                    if p.image_url in signed:
-                        p.cached_image_url = signed[p.image_url][:500]
+                job.brand_name = f"{brand_name} (signing {len(unsigned_products)} images...)"
                 db.session.commit()
             except Exception:
-                pass
-            _time.sleep(0.2)
-    except Exception:
-        pass
+                try: db.session.rollback()
+                except Exception: pass
 
-    brand.scan_status = 'complete'
-    db.session.commit()
+            for i in range(0, len(unsigned_products), 10):
+                batch = unsigned_products[i:i+10]
+                urls = [p.image_url for p in batch if p.image_url and p.image_url.startswith('http')]
+                if not urls:
+                    continue
+                try:
+                    signed = fetch_batch_images(urls)
+                    for p in batch:
+                        if p.image_url in signed:
+                            p.cached_image_url = signed[p.image_url][:500]
+                    db.session.commit()
+                except Exception:
+                    try: db.session.rollback()
+                    except Exception: pass
+                _time.sleep(0.2)
+        except Exception as e:
+            log.warning(f"[BrandScan] image signing block failed: {e}")
+            try: db.session.rollback()
+            except Exception: pass
+
+    # Final status — bulletproofed; failure here MUST NOT kill the batch.
+    try:
+        brand.scan_status = 'complete'
+        db.session.commit()
+    except Exception:
+        try: db.session.rollback()
+        except Exception: pass
 
     return len(all_products)
 
@@ -2308,72 +2341,92 @@ def _run_batch_brand_scan(app, job_id, brands_list):
         job.products_found = 0
         db.session.commit()
 
-        try:
-            for brand_info in brands_list:
-                # Defensive: always rollback any dirty session state from prior brand
-                try:
-                    db.session.rollback()
+        total_brands = len(brands_list or [])
+        processed = 0
+        for idx, brand_info in enumerate(brands_list or []):
+            shop_id = (brand_info or {}).get('shop_id', '')
+            name = (brand_info or {}).get('name', 'Unknown')
+            print(f"[BrandScan] ===== brand {idx+1}/{total_brands}: {name} "
+                  f"(shop_id={shop_id}) =====", flush=True)
+
+            # Defensive: always rollback any dirty session state from prior brand
+            try: db.session.rollback()
+            except Exception: pass
+
+            # Re-fetch job fresh from DB (survives cross-brand session issues).
+            # We explicitly DO NOT break on 'error' status — the user never set
+            # that, it's only ever set by a crash that shouldn't stop other
+            # brands. Only 'stopped' (user-initiated) halts the batch.
+            try:
+                job = BrandScanJob.query.get(job_id)
+            except Exception as e:
+                print(f"[BrandScan] job refetch failed at brand {idx+1}: {e}", flush=True)
+                try: db.session.rollback()
+                except Exception: pass
+                job = None
+            if not job:
+                print(f"[BrandScan] job gone, stopping batch", flush=True)
+                break
+            if job.status == 'stopped':
+                print(f"[BrandScan] user stopped batch at brand {idx+1}", flush=True)
+                break
+            # Heal a bad 'error' status set by a previous crash — keep going
+            if job.status == 'error':
+                job.status = 'running'
+                job.error_message = None
+                try: db.session.commit()
                 except Exception:
-                    pass
+                    try: db.session.rollback()
+                    except Exception: pass
 
-                # Re-fetch job fresh from DB (survives cross-brand session issues)
-                try:
-                    job = BrandScanJob.query.get(job_id)
-                    if not job or job.status in ('stopped', 'error'):
-                        break
-                except Exception:
-                    db.session.rollback()
-                    continue
+            if not shop_id:
+                print(f"[BrandScan] skipping {name}: missing shop_id", flush=True)
+                continue
 
-                shop_id = brand_info.get('shop_id', '')
-                name = brand_info.get('name', 'Unknown')
-                if not shop_id:
-                    continue
+            # Wrap each brand scan in a broad try/except so it can NEVER
+            # propagate an exception out to the outer try.
+            try:
+                found = _scan_single_brand(shop_id, name, job.page_start, job.page_end, job)
+                print(f"[BrandScan] {name} found {found} products", flush=True)
 
-                # Wrap each brand scan — don't let one brand's error kill the batch
-                try:
-                    found = _scan_single_brand(shop_id, name, job.page_start, job.page_end, job)
-
-                    # Fallback: if nothing found AND we weren't starting at page 1,
-                    # try pages 1-10 (catches small brands requested with high ranges)
-                    if found == 0 and job.page_start > 1:
-                        try:
-                            db.session.rollback()
-                        except Exception:
-                            pass
+                # Fallback: if nothing found AND we weren't starting at page 1,
+                # try pages 1-10 (catches small brands requested with high ranges)
+                if found == 0 and job.page_start > 1:
+                    try: db.session.rollback()
+                    except Exception: pass
+                    try:
                         job = BrandScanJob.query.get(job_id)
-                        if not job or job.status in ('stopped', 'error'):
-                            break
-                        log.info(f"[BrandScan] {name} found 0 in {job.page_start}-{job.page_end}, falling back to 1-10")
+                    except Exception:
+                        job = None
+                    if job and job.status != 'stopped':
+                        print(f"[BrandScan] {name} found 0, fallback scan pages 1-10", flush=True)
                         try:
                             _scan_single_brand(shop_id, name, 1, 10, job)
                         except Exception as e:
-                            log.error(f"[BrandScan] Fallback scan error for {name}: {e}")
-                            db.session.rollback()
-                except Exception as e:
-                    log.error(f"[BrandScan] Brand scan error for {name}: {e}")
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-                    continue  # Skip this brand, move to next
+                            print(f"[BrandScan] fallback failed for {name}: {e}", flush=True)
+                            try: db.session.rollback()
+                            except Exception: pass
+                processed += 1
+            except Exception as e:
+                print(f"[BrandScan] brand scan CRASHED for {name}: {e}", flush=True)
+                try: db.session.rollback()
+                except Exception: pass
+                continue  # Critical: move to next brand, never kill the batch
 
-            # Final status update — re-fetch job fresh
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
+        # Final status update — re-fetch job fresh
+        print(f"[BrandScan] batch finished — processed {processed}/{total_brands}", flush=True)
+        try: db.session.rollback()
+        except Exception: pass
+        try:
             job = BrandScanJob.query.get(job_id)
-            if job and job.status == 'running':
+            if job and job.status in ('running', 'error'):
                 job.status = 'complete'
                 job.completed_at = datetime.utcnow()
                 db.session.commit()
-
         except Exception as e:
-            job.status = 'error'
-            job.error_message = str(e)[:500]
-            job.completed_at = datetime.utcnow()
-            db.session.commit()
+            print(f"[BrandScan] final status commit failed: {e}", flush=True)
+            try: db.session.rollback()
+            except Exception: pass
 
 
 @views_bp.route('/app/brand-hunter/<int:brand_id>')
