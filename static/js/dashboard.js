@@ -245,7 +245,13 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 /* --- View Toggle (grid/table) --------------------------------------------- */
+function isMobileViewport() {
+  return (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+}
 function setView(mode) {
+  // The 11-column table is unusable on mobile — force grid regardless
+  // of the user's stored preference when the viewport is narrow.
+  if (isMobileViewport()) mode = 'grid';
   var grid = document.getElementById("productGrid");
   var table = document.getElementById("productTable");
   if (!grid || !table) return;
@@ -254,11 +260,18 @@ function setView(mode) {
   document.querySelectorAll(".view-toggle-btn").forEach(function(b) {
     b.classList.toggle("active", b.dataset.view === mode);
   });
-  localStorage.setItem("vantage_view", mode);
+  // Only persist the user's explicit choice on desktop
+  if (!isMobileViewport()) localStorage.setItem("vantage_view", mode);
 }
 
 /* Restore saved view on load */
 document.addEventListener("DOMContentLoaded", function() {
+  var saved = localStorage.getItem("vantage_view") || "table";
+  setView(saved);
+});
+
+/* Re-apply when the viewport crosses the breakpoint (rotation / split-screen) */
+window.addEventListener('resize', function() {
   var saved = localStorage.getItem("vantage_view") || "table";
   setView(saved);
 });
