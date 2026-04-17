@@ -394,15 +394,34 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 
-// ----- Video modal (TikTok embed) -----
-function openVideoModal(videoId, externalUrl) {
-  if (!videoId) return;
+// ----- Avatar error handler — swap to letter-initial circle -----
+window.handleAvatarError = function(img) {
+  if (img.dataset.swapped) return;
+  img.dataset.swapped = '1';
+  const letter = img.dataset.letter || '?';
+  const div = document.createElement('div');
+  div.className = 'creator-similar-avatar creator-similar-avatar--fallback';
+  div.textContent = letter;
+  img.replaceWith(div);
+};
+
+// ----- Video modal (TikTok embed or HTML5 video) -----
+function openVideoModal(videoId, externalUrl, playAddr) {
+  if (!videoId && !playAddr) return;
   const modal = document.getElementById('videoModal');
   const frame = document.getElementById('videoModalFrame');
   const ext = document.getElementById('videoModalExternal');
-  frame.innerHTML = '<iframe src="https://www.tiktok.com/embed/v2/' + encodeURIComponent(videoId)
-    + '?autoplay=1&loop=1&controls=1" allow="autoplay; encrypted-media; fullscreen" '
-    + 'allowfullscreen loading="lazy"></iframe>';
+  // Prefer direct HTML5 video when we have a fresh play_addr — far more
+  // reliable than TikTok's embed iframe which often shows "Video
+  // currently unavailable".
+  if (playAddr) {
+    frame.innerHTML = '<video src="' + playAddr + '" controls autoplay loop playsinline '
+      + 'style="width:100%;height:100%;background:#000;object-fit:contain"></video>';
+  } else {
+    frame.innerHTML = '<iframe src="https://www.tiktok.com/embed/v2/' + encodeURIComponent(videoId)
+      + '?autoplay=1&loop=1&controls=1" allow="autoplay; encrypted-media; fullscreen" '
+      + 'allowfullscreen loading="lazy"></iframe>';
+  }
   if (ext) ext.href = externalUrl || ('https://www.tiktok.com/video/' + videoId);
   modal.classList.add('video-modal--open');
   modal.setAttribute('aria-hidden', 'false');
@@ -620,16 +639,13 @@ async function loadSimilar() {
       const rawAvatar = c.avatar_url || c.avatar || '';
       // Route EchoTik's Asian CDN through our own image proxy.
       const proxied = rawAvatar ? '/api/image-proxy?url=' + encodeURIComponent(rawAvatar) : '';
-      // If the proxy 502s, swap the <img> for a letter-initial circle.
-      const onerr = 'if(this.dataset.swapped)return;this.dataset.swapped=1;'
-                  + 'this.outerHTML=\'<div class="creator-similar-avatar creator-similar-avatar--fallback">'
-                  + letter + '</div>\';';
       const avatar = proxied
         ? '<img src="' + proxied + '" '
           + 'alt="' + escapeHtml(c.nick_name || c.unique_id) + '" '
           + 'loading="lazy" referrerpolicy="no-referrer" '
+          + 'data-letter="' + letter + '" '
           + 'class="creator-similar-avatar similar-creator-avatar" '
-          + 'onerror="' + onerr + '" '
+          + 'onerror="handleAvatarError(this)" '
           + 'onload="this.dataset.loaded=\'1\'">'
         : '<div class="creator-similar-avatar creator-similar-avatar--fallback">' + letter + '</div>';
       const eng = c.interaction_rate;

@@ -2566,11 +2566,13 @@ def api_creator_sales(unique_id):
 _IMAGE_PROXY_ALLOWED_HOSTS = (
     'echosell-images.tos-ap-southeast-1.volces.com',
     'echosell-images.tos-ap-southeast-1.bytedance.net',
+    'tos-ap-southeast-1.volces.com',
     'tiktokcdn.com', 'tiktokcdn-us.com',
     'p16-sign-va.tiktokcdn.com', 'p16-sign-sg.tiktokcdn.com',
     'p77-sign-va.tiktokcdn.com', 'p19-sign-va.tiktokcdn.com',
     'p16-common-sign-va.tiktokcdn-us.com',
     'byteimg.com', 'p16-shop.tiktokcdn-us.com',
+    'cloudfront.net',
 )
 
 _IMAGE_PROXY_CACHE = {}  # url -> (bytes, content_type, expires_at)

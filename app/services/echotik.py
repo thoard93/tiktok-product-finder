@@ -431,6 +431,7 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
         vid = {
             'video_id': vid_id,
             'video_url': share,
+            'play_addr': v.get('play_addr') or '',
             'cover_url': _extract_image_url(
                 v.get('reflow_cover') or v.get('cover') or v.get('cover_url')
                 or v.get('dynamic_cover') or v.get('origin_cover')
@@ -458,6 +459,14 @@ def fetch_product_videos(product_id: str, page_size: int = 10) -> list[dict]:
         if vid['duration'] > 1000:
             vid['duration'] = vid['duration'] // 1000
         videos.append(vid)
+
+    # Batch-sign cover URLs so thumbnails load for non-subscribers
+    raw_covers = [v['cover_url'] for v in videos if v.get('cover_url')]
+    signed = _sign_urls_bulk(raw_covers)
+    if signed:
+        for v in videos:
+            if v.get('cover_url') in signed:
+                v['cover_url'] = signed[v['cover_url']]
 
     return videos
 
@@ -652,6 +661,32 @@ def _extract_creator_avatar(c: dict) -> Optional[str]:
     )
 
 
+def _sign_urls_bulk(urls: list[str]) -> dict[str, str]:
+    """
+    Bulk-sign EchoTik CDN URLs so the browser can actually load them.
+
+    Volcengine TOS returns 403 AccessDenied to anonymous requests. The
+    `/batch/cover/download` endpoint exchanges raw CDN URLs for signed
+    versions that the CDN accepts. Chunks into groups of 10 (the API
+    limit) and merges the results.
+    """
+    if not urls:
+        return {}
+    clean = list({u for u in urls if u and isinstance(u, str) and u.startswith('http')})
+    out = {}
+    # Process in batches of 10 (API limit)
+    for i in range(0, len(clean), 10):
+        batch = clean[i:i + 10]
+        try:
+            signed = fetch_batch_images(batch)
+            if signed:
+                out.update(signed)
+        except Exception as exc:
+            print(f"[EchoTik] _sign_urls_bulk chunk failed: {exc}", flush=True)
+            continue
+    return out
+
+
 def _extract_creator_avatar_large(c: dict) -> Optional[str]:
     """Prefer the 300x300 avatar for og:image / hero display."""
     obj = c.get('avatar_300x300')
@@ -796,8 +831,19 @@ def fetch_similar_creators(unique_id: str, region: str = 'US',
         if len(results) >= limit:
             break
 
-    log.info("[EchoTik] similar_creators(%s) returned %d results (%d with avatars)",
-             uid, len(results), sum(1 for r in results if r['avatar_url']))
+    # Batch-sign all avatar URLs so they actually load in the browser
+    raw_avatars = [r['avatar_url'] for r in results if r.get('avatar_url')]
+    signed = _sign_urls_bulk(raw_avatars)
+    if signed:
+        for r in results:
+            if r.get('avatar_url') in signed:
+                r['avatar_url'] = signed[r['avatar_url']]
+                r['avatar'] = r['avatar_url']
+
+    log.info("[EchoTik] similar_creators(%s) returned %d results (%d with avatars, %d signed)",
+             uid, len(results),
+             sum(1 for r in results if r['avatar_url']),
+             len(signed))
     return results
 
 
@@ -948,6 +994,14 @@ def fetch_creator_videos(unique_id: str, user_id: str = '',
             'video_url': share,
         })
 
+    # Batch-sign video cover URLs so thumbnails load
+    raw_covers = [v['cover_url'] for v in videos if v.get('cover_url')]
+    signed = _sign_urls_bulk(raw_covers)
+    if signed:
+        for v in videos:
+            if v.get('cover_url') in signed:
+                v['cover_url'] = signed[v['cover_url']]
+
     return videos
 
 
@@ -1039,7 +1093,8 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
             'product_id': str(p.get('product_id') or p.get('productId') or p.get('id') or ''),
             'product_name': (p.get('product_name') or p.get('title')
                              or p.get('productTitle') or p.get('name') or ''),
-            'image_url': img,
+            'image_url': img,  # signed below
+            'raw_image_url': img,
             'commission_rate': commission,  # not returned on this endpoint; stays 0
             'sales': _safe_int(
                 p.get('total_video_sale_cnt')  # sales this creator drove
@@ -1062,6 +1117,14 @@ def fetch_creator_shop_products(unique_id: str, user_id: str = '',
             'total_gmv': _safe_float(p.get('total_sale_gmv_amt') or 0),
             'price': _safe_float(p.get('spu_avg_price') or p.get('price') or 0),
         })
+
+    # Batch-sign product cover URLs
+    raw_imgs = [p['image_url'] for p in products if p.get('image_url')]
+    signed = _sign_urls_bulk(raw_imgs)
+    if signed:
+        for p in products:
+            if p.get('image_url') in signed:
+                p['image_url'] = signed[p['image_url']]
 
     return products
 
