@@ -2777,25 +2777,38 @@ def api_image_proxy():
     if not any(allowed in host for allowed in _IMAGE_PROXY_ALLOWED_HOSTS):
         abort(403)
 
-    # If this is an unsigned echosell URL, swap it for a signed one so
-    # the CDN won't 403 us. The batch/cover/download endpoint returns
-    # a short-lived signed URL keyed by the original URL.
-    if 'echosell-images' in host and 'X-Tos-Signature' not in url:
-        try:
-            from app.services.echotik import fetch_batch_images
-            signed_map = fetch_batch_images([url])
-            if signed_map and url in signed_map:
-                url = signed_map[url]
-        except Exception as e:
-            print(f"[ImageProxy] sign attempt failed for {url[:80]}: {e}", flush=True)
-
-    # Cache hit
+    # Cache by base URL (no query params) so signed URLs that expire
+    # and get re-signed still hit the same cache bucket.
+    cache_key = url.split('?', 1)[0]
     now = datetime.utcnow().timestamp()
-    cached = _IMAGE_PROXY_CACHE.get(url)
+    cached = _IMAGE_PROXY_CACHE.get(cache_key)
     if cached and cached[2] > now:
         resp = Response(cached[0], content_type=cached[1])
         resp.headers['Cache-Control'] = 'public, max-age=86400'
         return resp
+
+    # If this is an echosell URL, (re-)sign it via /batch/cover/download.
+    # TOS signatures expire after 3 days, so even a URL that already has
+    # X-Tos-Signature may be stale. We always re-sign based on the base
+    # URL — the batch endpoint strips existing query params for us.
+    _signed_for_log = None
+    if ('echosell-images' in host) or ('volces.com' in host):
+        try:
+            from app.services.echotik import fetch_batch_images
+            # Strip any existing query params so we sign the canonical URL
+            base_url = url.split('?', 1)[0]
+            signed_map = fetch_batch_images([base_url])
+            if signed_map:
+                # The batch endpoint keys by the base URL; pick the signed
+                # value no matter which form it used.
+                fresh = signed_map.get(base_url) or next(iter(signed_map.values()), None)
+                if fresh and fresh.startswith('http'):
+                    url = fresh
+                    _signed_for_log = fresh
+        except Exception as e:
+            print(f"[ImageProxy] sign attempt failed for {url[:80]}: {e}", flush=True)
+
+    # (Primary cache check done above using cache_key.)
 
     # Cache miss — fetch. Volcengine's TOS buckets return 403 AccessDenied
     # unless the request includes the Referer the bucket is configured to
@@ -2848,7 +2861,7 @@ def api_image_proxy():
         for k, _ in keys:
             _IMAGE_PROXY_CACHE.pop(k, None)
 
-    _IMAGE_PROXY_CACHE[url] = (body, ctype, now + _IMAGE_PROXY_CACHE_TTL)
+    _IMAGE_PROXY_CACHE[cache_key] = (body, ctype, now + _IMAGE_PROXY_CACHE_TTL)
     resp = Response(body, content_type=ctype)
     resp.headers['Cache-Control'] = 'public, max-age=86400'
     return resp

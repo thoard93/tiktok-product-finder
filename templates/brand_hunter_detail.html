@@ -58,7 +58,60 @@
 
 {# ===== PRODUCTS TABLE ===== #}
 {% if products and products | length > 0 %}
-<div class="product-table-wrap">
+
+{# Mobile-only card grid (hidden on desktop via CSS) #}
+<div class="brand-products-mobile" id="brandProductsMobile">
+  {% for p in products %}
+  {% set cat_lower = (p.category or '')|lower %}
+  {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'women' in cat_lower else ('cat-home' if 'home' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-food' if 'food' in cat_lower else 'cat-default'))))) %}
+  {% set pid = p.product_id %}
+  {% set view_pid = pid if pid.startswith('shop_') else 'shop_' ~ pid %}
+  {% set _raw = p._cached_img or p.image_url %}
+  {% set _img = ('/api/image-proxy?url=' ~ (_raw | urlencode)) if _raw else '' %}
+  <a href="/app/products/{{ view_pid }}" class="brand-products-mobile__card">
+    <div class="brand-products-mobile__img-wrap">
+      {% if _img %}
+      <img src="{{ _img }}" alt="{{ p.title }}" loading="lazy" referrerpolicy="no-referrer"
+           class="brand-products-mobile__img"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="brand-products-mobile__fallback {{ cat_class }}" style="display:none">{{ (p.title or '?')[0] | upper }}</div>
+      {% else %}
+      <div class="brand-products-mobile__fallback {{ cat_class }}">{{ (p.title or '?')[0] | upper }}</div>
+      {% endif %}
+      {% if p.is_hidden_gem %}<span class="brand-products-mobile__gem">💎</span>{% endif %}
+    </div>
+    <div class="brand-products-mobile__body">
+      <div class="brand-products-mobile__title">{{ p.title }}</div>
+      <div class="brand-products-mobile__stats">
+        <span class="brand-products-mobile__stat">
+          <span class="brand-products-mobile__stat-label">Comm</span>
+          <span class="brand-products-mobile__stat-value" style="color:var(--accent)">{% if is_pro %}{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%{% else %}<span class="blurred-data">15%</span>{% endif %}</span>
+        </span>
+        <span class="brand-products-mobile__stat">
+          <span class="brand-products-mobile__stat-label">Price</span>
+          <span class="brand-products-mobile__stat-value">{% if is_pro %}${{ "%.2f" | format(p.price or 0) }}{% else %}<span class="blurred-data">$24</span>{% endif %}</span>
+        </span>
+        <span class="brand-products-mobile__stat">
+          <span class="brand-products-mobile__stat-label">7d</span>
+          <span class="brand-products-mobile__stat-value">{% if is_pro %}{{ "{:,}".format(p.sales_7d or 0) }}{% else %}<span class="blurred-data">2K</span>{% endif %}</span>
+        </span>
+        <span class="brand-products-mobile__stat">
+          <span class="brand-products-mobile__stat-label">30d</span>
+          <span class="brand-products-mobile__stat-value">{% if is_pro %}{{ "{:,}".format(p.sales_30d or 0) }}{% else %}<span class="blurred-data">8K</span>{% endif %}</span>
+        </span>
+      </div>
+      <div class="brand-products-mobile__meta">
+        <span>{% if is_pro %}${{ p.revenue_30d | format_number if p.revenue_30d else '—' }}{% else %}<span class="blurred-data">$42K</span>{% endif %} revenue</span>
+        <span>·</span>
+        <span>{% if is_pro %}{{ "{:,}".format(p.total_videos or 0) }}{% else %}<span class="blurred-data">1.2K</span>{% endif %} videos</span>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{# Desktop table (hidden on mobile via CSS) #}
+<div class="product-table-wrap brand-products-desktop">
   <table class="product-table">
     <thead>
       <tr>
@@ -85,9 +138,12 @@
         <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index }}</td>
         <td>
           <div class="product-row-name">
-            {% set img = p._cached_img or p.image_url %}
+            {# Always route through /api/image-proxy so expired TOS
+               signatures on _cached_img get re-signed transparently. #}
+            {% set _raw = p._cached_img or p.image_url %}
+            {% set img = ('/api/image-proxy?url=' ~ (_raw | urlencode)) if _raw else '' %}
             {% if img %}
-              <img src="{{ img }}" class="product-row-thumb" alt="{{ p.title }}" loading="lazy"
+              <img src="{{ img }}" class="product-row-thumb" alt="{{ p.title }}" loading="lazy" referrerpolicy="no-referrer"
                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
               <div class="product-row-thumb-fallback {{ cat_class }}" style="display:none">{{ (p.title or '?')[0] | upper }}</div>
             {% else %}

@@ -85,7 +85,8 @@
         <td style="color:var(--text-faint);font-weight:600;font-size:12px">{{ loop.index + (page - 1) * 30 }}</td>
         <td>
           <div class="product-row-name">
-            {% set _row_src = p.cached_image_url or (('/api/image-proxy?url=' ~ (p.image_url | urlencode)) if p.image_url else '') %}
+            {% set _raw = p.cached_image_url or p.image_url %}
+            {% set _row_src = ('/api/image-proxy?url=' ~ (_raw | urlencode)) if _raw else '' %}
             {% if _row_src %}
               <img src="{{ _row_src }}" class="product-row-thumb" alt="{{ p.product_name }}" loading="lazy" referrerpolicy="no-referrer"
                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -166,9 +167,10 @@
   {% set cat_lower = (p.category or '')|lower %}
   {% set cat_class = 'cat-beauty' if 'beauty' in cat_lower else ('cat-electronics' if 'electr' in cat_lower else ('cat-fashion' if 'fashion' in cat_lower or 'apparel' in cat_lower or 'women' in cat_lower or 'men' in cat_lower else ('cat-home' if 'home' in cat_lower or 'kitchen' in cat_lower else ('cat-health' if 'health' in cat_lower else ('cat-food' if 'food' in cat_lower else ('cat-sports' if 'sport' in cat_lower else ('cat-pets' if 'pet' in cat_lower else 'cat-default'))))))) %}
   {% set score_color = '#0d9488' if p.trending_score >= 60 else ('#d97706' if p.trending_score >= 35 else '#dc2626') %}
+  {% set _raw = p.cached_image_url or p.image_url %}
+  {% set _img_src = ('/api/image-proxy?url=' ~ (_raw | urlencode)) if _raw else '' %}
   <div class="product-card">
     <div class="product-card-img">
-      {% set _img_src = p.cached_image_url or (('/api/image-proxy?url=' ~ (p.image_url | urlencode)) if p.image_url else '') %}
       {% if _img_src %}
         <img src="{{ _img_src }}" alt="{{ p.product_name }}" loading="lazy" referrerpolicy="no-referrer"
              data-category="{{ cat_lower }}" data-name="{{ (p.product_name or '?')[0] }}" class="product-img"

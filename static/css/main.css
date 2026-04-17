@@ -1357,3 +1357,38 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   .page-title{font-size:var(--text-xl)}
   .mob-tab span{font-size:9px}
 }
+
+/* 61. BRAND HUNTER DETAIL — mobile card layout ========================== */
+.brand-products-mobile{display:none}
+@media(max-width:768px){
+  .brand-products-mobile{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:var(--space-5)}
+  .brand-products-desktop{display:none !important}
+}
+.brand-products-mobile__card{display:flex;gap:12px;padding:10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);text-decoration:none;color:inherit;box-shadow:var(--shadow-sm);-webkit-tap-highlight-color:transparent;transition:transform var(--dur-fast)}
+.brand-products-mobile__card:active{transform:scale(0.98)}
+.brand-products-mobile__img-wrap{position:relative;width:90px;height:90px;flex-shrink:0;border-radius:var(--radius);overflow:hidden;background:var(--bg-elevated)}
+.brand-products-mobile__img{width:100%;height:100%;object-fit:cover;display:block}
+.brand-products-mobile__fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:rgba(255,255,255,0.7)}
+.brand-products-mobile__gem{position:absolute;top:4px;right:4px;font-size:12px;background:rgba(0,0,0,0.6);border-radius:var(--radius-full);padding:2px 5px}
+.brand-products-mobile__body{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.brand-products-mobile__title{font-size:13px;font-weight:600;line-height:1.35;color:var(--text-primary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.brand-products-mobile__stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.brand-products-mobile__stat{display:flex;flex-direction:column;gap:1px;min-width:0}
+.brand-products-mobile__stat-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint)}
+.brand-products-mobile__stat-value{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-products-mobile__meta{display:flex;gap:6px;font-size:11px;color:var(--text-muted);margin-top:2px}
+
+/* 62. TAP CALLOUT — bulletproof mobile stacking ========================= */
+@media(max-width:640px){
+  /* Ensure every TAP button is full-width on its own line.
+     Targets both known classes and any inline-styled button row. */
+  .tap-callout button,
+  .tap-callout .btn,
+  .tap-callout .btn-tap-copy{width:100% !important;justify-content:center !important;min-height:44px !important;margin:0 !important}
+  .tap-callout{padding:var(--space-4) !important}
+  /* Force any flex-row of buttons inside .tap-callout to stack vertically. */
+  .tap-callout > div{display:flex;flex-direction:column;gap:8px !important;flex-wrap:nowrap !important}
+  .tap-callout .tap-callout__header,
+  .tap-callout .tap-callout__rates{flex-direction:row !important}
+  .tap-callout__rates{justify-content:space-between}
+}
