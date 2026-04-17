@@ -1236,19 +1236,25 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 
 /* 58. MOBILE POLISH (< 768px) ============================================ */
 @media(max-width:768px){
-  /* Force grid view — hide the table and the view toggle entirely.
-     The desktop toggle is pointless at this width, and the 11-column
-     table is unreadable even at 12px. */
-  .product-table-wrap{display:none !important}
-  .view-toggle{display:none !important}
-  #productGrid{display:block !important}
+  /* Force grid view on the Products page — scope by ID so we don't
+     also hide Brand Hunter / Favorites / Creators product-style tables
+     which share the .product-table-wrap class. */
+  #productTable{display:none !important}
+  #productGrid{display:grid !important}
+  .products-page .view-toggle{display:none !important}
 
-  /* Bigger, more readable product cards on mobile */
-  .product-card{margin-bottom:var(--space-4)}
-  .product-card .product-card-body{padding:var(--space-4)}
-  .product-card .product-name-row,.product-card h3{font-size:14px;line-height:1.35}
-  .product-stats-row{font-size:12px}
-  .stat-chip{font-size:12px;padding:4px 8px}
+  /* Mobile product grid: 2 up at phone width (was column-count:1 which
+     made every card full-width → the aspect-ratio:1 cover image
+     rendered as a huge square). */
+  .product-grid{column-count:unset !important;column-gap:0 !important}
+  #productGrid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .product-card{break-inside:avoid;margin-bottom:0}
+  .product-card .product-card-body{padding:10px}
+  .product-card .product-card-name{font-size:13px;line-height:1.35;-webkit-line-clamp:2}
+  .product-card-commission{font-size:18px !important}
+  .product-card-stats{font-size:11px}
+  /* Keep cover images from dominating the card */
+  .product-card-img,.product-img-placeholder{max-height:180px}
 
   /* Page spacing */
   .page-header{padding:var(--space-4) 0 var(--space-3)}
