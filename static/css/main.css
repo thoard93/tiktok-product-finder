@@ -1457,6 +1457,49 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   .tap-callout__rates{justify-content:space-between}
 }
 
+/* 62a. GENERIC MODAL → BOTTOM SHEET ON MOBILE (Phase 2f) ==================
+   .modal-overlay / .modal-dialog is the baseline confirm-modal defined
+   in base.html (used by confirmAction() for delete confirmations, cancel
+   flows without the dedicated .cancel-flow sheet, etc.). On phones the
+   centered 400px card shrinks to 90vw and gets awkwardly small — worse,
+   its Confirm/Cancel buttons end up in the middle of the screen where
+   the thumb has to stretch. Transform into a bottom sheet at <=640px:
+   anchored to the bottom edge, full-width, safe-area padding, drag
+   handle, slide-up animation. Buttons still wrap via the existing
+   .modal-actions flex row.
+
+   The onboarding tour (.onboarding-tour) and cancellation flow
+   (.cancel-flow) already have their own sheet-style mobile rules and
+   are left alone here. */
+@media(max-width:640px){
+  .modal-overlay{align-items:flex-end}
+  .modal-dialog{
+    width:100% !important;max-width:none !important;
+    border-bottom-left-radius:0;border-bottom-right-radius:0;
+    border-top-left-radius:20px;border-top-right-radius:20px;
+    padding:var(--space-5) var(--space-4)
+      calc(var(--space-5) + var(--safe-bottom)) var(--space-4);
+    animation:sheetSlideUp .22s var(--ease);
+    border-bottom:none;
+    position:relative;
+  }
+  /* Drag handle */
+  .modal-dialog::before{
+    content:'';
+    display:block;width:40px;height:4px;border-radius:2px;
+    background:var(--border);
+    position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  }
+  .modal-dialog > :first-child{margin-top:14px}
+  /* Actions: stack Confirm above Cancel, primary action full-width at
+     the bottom where the thumb naturally rests. */
+  .modal-actions{
+    display:flex;flex-direction:column-reverse;gap:8px;
+    margin-top:var(--space-5);
+  }
+  .modal-actions .btn{width:100%;min-height:44px}
+}
+
 /* 62b. MOBILE FILTER BOTTOM-SHEET (Phase 2e) =============================
    Desktop renders the product filter-card inline at the top of the
    products page. On phones we collapse it into a trigger button and
