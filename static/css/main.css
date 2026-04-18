@@ -131,8 +131,12 @@
      below, not globally — charts, product-detail hero images, and any
      pinch-zoomable surfaces keep their default touch behavior. */
 *{-webkit-tap-highlight-color:transparent}
-html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;overflow-x:hidden;-webkit-overflow-scrolling:touch}
-body{font-family:var(--font-body);font-size:var(--text-base);line-height:1.5;color:var(--text-primary);background:var(--bg-base);min-height:100vh;min-height:100dvh;overflow-x:hidden}
+/* max-width + overflow-x clamp at both roots. Belt + suspenders:
+   some rogue child (carousel card flex:0 0 340px, campaign banner
+   marquee, etc.) can still inflate the layout past the viewport;
+   the clamp stops that from creating a scrollable page. */
+html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;max-width:100vw;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+body{font-family:var(--font-body);font-size:var(--text-base);line-height:1.5;color:var(--text-primary);background:var(--bg-base);min-height:100vh;min-height:100dvh;max-width:100vw;overflow-x:hidden}
 button,a,.btn,.filter-chip,.filter-mobile-trigger,
 .product-card,.creator-card,.creator-similar-card,.brand-card,
 .mob-tab,.sidebar-link,.settings-tab,.mob-more__link{
@@ -188,7 +192,11 @@ h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:700;line-height:1.
 
 /* Topbar */
 .topbar{position:sticky;top:0;height:calc(var(--topbar-h) + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px);display:flex;align-items:center;gap:var(--space-4);padding-left:var(--space-6);padding-right:var(--space-6);background:var(--bg-surface);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);z-index:50}
-.topbar-search{flex:1;max-width:420px;position:relative}
+/* min-width:0 lets the flex child actually shrink below its intrinsic
+   content size. Without this, a long placeholder string inside the
+   input ("Search products, paste a TikTok link, or enter a creator
+   name…") keeps the topbar wider than the viewport on 375px. */
+.topbar-search{flex:1 1 0;min-width:0;max-width:420px;position:relative}
 .topbar-search .lucide{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--text-muted);pointer-events:none}
 .topbar-search .input{padding-left:40px;height:40px;background:var(--bg-surface)}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:var(--space-3)}
@@ -1763,3 +1771,70 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   /* Settings tab chips + other nav-like buttons */
   .settings-tab{min-height:44px}
 }
+
+/* 64. MOBILE OVERFLOW HARDENING (Bugfix Batch, BUG 1) ====================
+   Bugs found during live iPhone walkthrough at 375px: dashboard KPI
+   cards in a row escaping the viewport, trending carousel cards the
+   wrong width for phone-width scroll-snap, recently-viewed rendered
+   as a horizontally scrolling 8-column table. These rules narrow-
+   focus on the dashboard, the trending row, and that recently-viewed
+   table. General .topbar-search / html-body clamps are above. */
+
+@media(max-width:900px){
+  /* Dashboard KPI row: 4-up on desktop, single column stacks at phone
+     width. 2-up leaves too little room for the stat-value + hint lines.
+     (The 768px rule elsewhere already forces 2-up on .stat-grid in
+     general; this override stacks the dashboard specifically.) */
+  .page-content > .stat-grid:first-of-type,
+  .stat-grid{grid-template-columns:1fr !important}
+}
+
+@media(max-width:640px){
+  /* Trending carousel: on phones, a card should take ~85% of the
+     viewport so the neighbor peeks in from the right — that's the
+     visual affordance that telegraphs "scroll me". The flex:0 0 220px
+     default is too narrow + doesn't snap predictably. */
+  .scroll-row{padding-right:16px;scroll-snap-type:x mandatory}
+  .scroll-row .scroll-card{
+    flex:0 0 calc(100vw - 64px);
+    max-width:320px;
+    scroll-snap-align:start;
+  }
+  /* Fade gradient on .scroll-row-wrap::after can introduce a few extra
+     px beyond the clamp on some iOS versions — safer hidden. */
+  .scroll-row-wrap::after{display:none}
+  .scroll-arrow{display:none}
+
+  /* Recently-viewed on dashboard: template now renders a parallel
+     .recent-cards list that's shown only on mobile; the 8-column
+     table is suppressed at phone width. See templates/dashboard.html. */
+  .recent-cards{display:grid !important;grid-template-columns:1fr;gap:10px}
+  .dashboard-recent-table{display:none !important}
+}
+@media(min-width:641px){
+  /* Hide the mobile card list on tablets and up; the original table
+     renders per the existing markup. */
+  .recent-cards{display:none !important}
+}
+
+/* Recent-viewed mobile card look — reuses the .card vocabulary. */
+.recent-cards{display:none}
+.recent-card{
+  display:flex;gap:12px;align-items:center;
+  padding:10px;background:var(--bg-surface);
+  border:1px solid var(--border);border-radius:var(--radius-lg);
+  text-decoration:none;color:inherit;
+  -webkit-tap-highlight-color:transparent;
+}
+.recent-card__thumb{
+  width:56px;height:56px;flex-shrink:0;border-radius:var(--radius);
+  background:var(--bg-elevated);overflow:hidden;position:relative;
+}
+.recent-card__thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.recent-card__body{flex:1;min-width:0}
+.recent-card__title{font-size:13px;font-weight:700;color:var(--text-primary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px}
+.recent-card__meta{display:flex;gap:10px;font-size:11px;color:var(--text-muted);
+  font-variant-numeric:tabular-nums}
+.recent-card__meta strong{color:var(--text-primary);font-weight:700}
+.recent-card__arrow{color:var(--text-faint);font-size:18px;flex-shrink:0}

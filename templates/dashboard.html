@@ -93,7 +93,38 @@
 </div>
 
 {% if recent_products and recent_products | length > 0 %}
-<div class="product-table-wrap">
+
+{# Mobile-only card list. CSS suppresses this at >=641px and suppresses
+   the desktop table below at <=640px, so exactly one view renders per
+   viewport. Same .blurred-data gates on every stat for non-pro users. #}
+<div class="recent-cards">
+  {% for p in recent_products[:5] %}
+  {% set score_color = '#0d9488' if p.trending_score >= 60 else ('#d97706' if p.trending_score >= 35 else '#dc2626') %}
+  {% set _raw = p.cached_image_url or p.image_url %}
+  {% set _img = ('/api/image-proxy?url=' ~ (_raw | urlencode)) if _raw else '' %}
+  <a href="/app/products/{{ p.product_id }}" class="recent-card">
+    <div class="recent-card__thumb">
+      {% if _img %}
+        <img src="{{ _img }}" alt="{{ p.product_name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+             onerror="this.onerror=null;this.src='/static/img/product-placeholder.png'">
+      {% else %}
+        <img src="/static/img/product-placeholder.png" alt="">
+      {% endif %}
+    </div>
+    <div class="recent-card__body">
+      <div class="recent-card__title">{{ p.product_name }}</div>
+      <div class="recent-card__meta">
+        <span><strong>{% if is_pro %}{{ "%.0f" | format((p.commission_rate or 0) * 100) }}%{% else %}<span class="blurred-data">15%</span>{% endif %}</strong> comm</span>
+        <span>{% if is_pro %}${{ "%.2f" | format(p.price or 0) }}{% else %}<span class="blurred-data">$29</span>{% endif %}</span>
+        <span>Score <strong style="color:{{ score_color }}">{% if is_pro %}{{ p.trending_score }}{% else %}<span class="blurred-data">68</span>{% endif %}</strong></span>
+      </div>
+    </div>
+    <span class="recent-card__arrow" aria-hidden="true">›</span>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="product-table-wrap dashboard-recent-table">
   <table class="product-table">
     <thead>
       <tr>
