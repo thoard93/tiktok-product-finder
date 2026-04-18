@@ -43,7 +43,11 @@
         <td>
           <div class="product-row-name">
             {% if p.cached_image_url or p.image_url %}
-              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="{{ p.product_name }}" loading="lazy" onerror="this.style.display='none'">
+              {% set _f_raw = p.cached_image_url or p.image_url %}
+              <img src="{% if _f_raw %}/api/image-proxy?url={{ _f_raw | urlencode }}{% else %}/static/img/product-placeholder.png{% endif %}"
+                   class="product-row-thumb" alt="{{ p.product_name }}"
+                   loading="lazy" decoding="async" referrerpolicy="no-referrer"
+                   onerror="this.onerror=null;this.src='/static/img/product-placeholder.png'">
             {% endif %}
             <div style="min-width:0">
               <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>

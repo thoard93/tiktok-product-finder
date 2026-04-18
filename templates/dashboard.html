@@ -50,12 +50,13 @@
     <div class="scroll-card">
       <div class="card card-hover" style="padding:0;overflow:hidden">
         <div class="product-card-img">
-          {% if p.cached_image_url or p.image_url %}
-            <img src="{{ p.cached_image_url or p.image_url }}" alt="{{ p.product_name }}" loading="lazy"
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div class="product-card-img-fallback" style="display:none"><i data-lucide="package"></i></div>
+          {% set _card_raw = p.cached_image_url or p.image_url %}
+          {% if _card_raw %}
+            <img src="/api/image-proxy?url={{ _card_raw | urlencode }}" alt="{{ p.product_name }}"
+                 loading="lazy" decoding="async" referrerpolicy="no-referrer"
+                 onerror="this.onerror=null;this.src='/static/img/product-placeholder.png'">
           {% else %}
-            <div class="product-card-img-fallback"><i data-lucide="package"></i></div>
+            <img src="/static/img/product-placeholder.png" alt="" aria-hidden="true">
           {% endif %}
           {% if p.category %}<span class="badge badge-muted badge-overlay-tl">{{ p.category }}</span>{% endif %}
           <span class="badge badge-overlay-tr {{ 'badge-green' if p.trending_score >= 60 else ('badge-gold' if p.trending_score >= 35 else 'badge-red') }}">{{ p.trending_score }}</span>
@@ -144,8 +145,13 @@
       <tr>
         <td>
           <div class="product-row-name">
-            {% if p.cached_image_url or p.image_url %}
-              <img src="{{ p.cached_image_url or p.image_url }}" class="product-row-thumb" alt="{{ p.product_name }}" loading="lazy" onerror="this.style.display='none'">
+            {% set _rv_raw = p.cached_image_url or p.image_url %}
+            {% if _rv_raw %}
+              <img src="/api/image-proxy?url={{ _rv_raw | urlencode }}" class="product-row-thumb" alt="{{ p.product_name }}"
+                   loading="lazy" decoding="async" referrerpolicy="no-referrer"
+                   onerror="this.onerror=null;this.src='/static/img/product-placeholder.png'">
+            {% else %}
+              <img class="product-row-thumb" src="/static/img/product-placeholder.png" alt="" aria-hidden="true">
             {% endif %}
             <div style="min-width:0">
               <a href="/app/products/{{ p.product_id }}" style="color:var(--text-primary);font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">{{ p.product_name }}</a>

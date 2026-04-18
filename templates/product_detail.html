@@ -9,12 +9,18 @@
   {# ===== LEFT: Product Info ===== #}
   <div>
     <div class="detail-image">
-      {% if product.cached_image_url or product.image_url %}
-        <img src="{{ product.cached_image_url or product.image_url }}" alt="{{ product.product_name }}"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="product-card-img-fallback" style="height:100%;display:none"><i data-lucide="package" style="width:64px;height:64px"></i></div>
+      {# Always route through the proxy so expired TOS signatures
+         (3-day lifetime on cached_image_url) get transparently
+         re-signed. If even that fails, onerror swaps in the local
+         product-placeholder.png. #}
+      {% set _raw = product.cached_image_url or product.image_url %}
+      {% if _raw %}
+        <img src="/api/image-proxy?url={{ _raw | urlencode }}"
+             alt="{{ product.product_name }}"
+             loading="eager" decoding="async" referrerpolicy="no-referrer"
+             onerror="this.onerror=null;this.src='/static/img/product-placeholder.png'">
       {% else %}
-        <div class="product-card-img-fallback" style="height:100%"><i data-lucide="package" style="width:64px;height:64px"></i></div>
+        <img src="/static/img/product-placeholder.png" alt="" aria-hidden="true">
       {% endif %}
     </div>
 
@@ -228,7 +234,8 @@
       {% for sp in similar_products[:4] %}
       <a href="/app/products/{{ sp.product_id }}" class="video-card" style="text-decoration:none">
         <div class="video-thumb">
-          {% if sp.image_url or sp.cached_image_url %}<img src="{{ sp.cached_image_url or sp.image_url }}" alt="{{ sp.product_name }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/static/img/avatar-placeholder.png'">{% endif %}
+          {% set _sp_raw = sp.cached_image_url or sp.image_url %}
+          {% if _sp_raw %}<img src="/api/image-proxy?url={{ _sp_raw | urlencode }}" alt="{{ sp.product_name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='/static/img/product-placeholder.png'">{% else %}<img src="/static/img/product-placeholder.png" alt="" aria-hidden="true">{% endif %}
         </div>
         <div>
           <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary)">{{ sp.product_name | truncate(35) }}</div>
