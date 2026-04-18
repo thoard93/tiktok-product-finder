@@ -4,22 +4,87 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f9f0f1">
+  <meta name="robots" content="noindex">
   <title>Offline — Vantage</title>
+  <!--
+    Inline-only styling so this page renders identically whether it came from
+    the service-worker cache (network is down) or the live server. Extending
+    base.html would render the drawer + bottom tab bar (not useful offline)
+    and depend on main.css being in cache, which isn't guaranteed on a user's
+    first offline visit. Kept under 8KB total per the PWA spec.
+  -->
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f9f0f1;color:#1a1a1a;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;background:#f9f0f1}
+    body{
+      font-family:'Satoshi',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      color:#1a1319;min-height:100vh;min-height:100dvh;
+      display:flex;align-items:center;justify-content:center;
+      padding:24px;padding-top:calc(24px + env(safe-area-inset-top,0px));
+      padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));
+      -webkit-font-smoothing:antialiased;
+    }
     .wrap{max-width:420px;width:100%;text-align:center}
-    h1{font-size:24px;font-weight:800;margin-bottom:8px}
-    p{font-size:15px;color:#555;line-height:1.6;margin-bottom:24px}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#ff5272;color:#fff;font-weight:600;padding:14px 28px;border-radius:12px;border:none;font-size:15px;text-decoration:none;cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent}
-    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff5272;margin-right:8px;vertical-align:middle}
+    .logo{display:inline-flex;align-items:center;gap:10px;margin-bottom:28px}
+    .logo__mark{flex-shrink:0}
+    .logo__word{
+      font-family:'Cabinet Grotesk','Satoshi',sans-serif;
+      font-size:22px;font-weight:800;letter-spacing:-.02em;color:#1a1319;
+    }
+    .card{
+      background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;
+      padding:32px 24px;box-shadow:0 6px 20px rgba(180,80,100,.08);
+    }
+    .status-dot{
+      display:inline-block;width:10px;height:10px;border-radius:50%;
+      background:#ff5272;margin-right:10px;vertical-align:middle;
+      box-shadow:0 0 0 4px rgba(255,82,114,.18);
+    }
+    h1{font-family:'Cabinet Grotesk','Satoshi',sans-serif;
+      font-size:22px;font-weight:800;line-height:1.25;margin-bottom:10px}
+    p{font-size:14px;color:#5b4a52;line-height:1.6;margin-bottom:22px}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      background:#ff5272;color:#fff;font-weight:700;font-size:14px;
+      padding:12px 24px;border-radius:10px;border:none;text-decoration:none;
+      cursor:pointer;min-height:44px;min-width:160px;
+      -webkit-tap-highlight-color:transparent;
+      box-shadow:0 4px 16px rgba(255,82,114,.28);
+      transition:transform 120ms ease,box-shadow 120ms ease;
+    }
+    .btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,82,114,.36)}
+    .btn:active{transform:translateY(0)}
+    .link{
+      display:inline-block;margin-top:14px;font-size:13px;font-weight:600;
+      color:#7c3aed;text-decoration:none;
+      padding:10px 12px;border-radius:8px;
+    }
+    .link:hover{text-decoration:underline}
+    .hint{margin-top:22px;font-size:12px;color:#8a7682}
   </style>
 </head>
 <body>
   <main class="wrap">
-    <h1><span class="dot"></span>You're offline</h1>
-    <p>Cached pages still work — try Products or Dashboard. We'll reconnect as soon as your network is back.</p>
-    <a href="/app/dashboard" class="btn">Open Dashboard</a>
+    <div class="logo" aria-label="Vantage">
+      <svg class="logo__mark" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <path d="M6 22L14 4L22 22" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 4V14" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M14 14L20 8" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="20" cy="8" r="2" fill="#2dd4bf"/>
+      </svg>
+      <span class="logo__word">Vantage</span>
+    </div>
+
+    <div class="card">
+      <h1><span class="status-dot" aria-hidden="true"></span>You're offline</h1>
+      <p>No internet right now — but your cached Vantage pages still work. Try again when your connection is back, or jump to the Dashboard.</p>
+      <button type="button" class="btn" onclick="location.reload()">Try again</button>
+      <div>
+        <a class="link" href="/app/dashboard">Back to dashboard →</a>
+      </div>
+    </div>
+
+    <p class="hint">Vantage works offline for pages you've already visited.</p>
   </main>
 </body>
 </html>
