@@ -312,7 +312,9 @@
     </div>
   </div>
 
-  {# AI Chat Widget #}
+  {# AI Chat Widget — suppressed on conversion-critical pages where
+     the floating bubble would obscure the PayPal / plan selection CTAs. #}
+  {% if active_page != 'subscribe' and active_page != 'redeem' %}
   <button class="chat-fab" id="chatFab" onclick="toggleChat()" aria-label="AI Assistant">
     <i data-lucide="message-circle" id="chatFabIcon"></i>
   </button>
@@ -335,6 +337,7 @@
       </button>
     </div>
   </div>
+  {% endif %}
 
   <script src="/static/js/main.js"></script>
   <script src="/static/js/dashboard.js"></script>
