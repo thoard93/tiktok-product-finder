@@ -193,39 +193,41 @@
       </div>
     </div>
 
-    {# Sales trend #}
+    {# Sales trend — only render if we have sales data to plot;
+       otherwise we'd render an empty cream box on mobile. #}
+    {% if (product.sales_7d or 0) > 0 or (product.sales_30d or 0) > 0 or (trend_data and trend_data | length > 0) %}
     <div class="chart-card mb-4">
       <div class="chart-title">Sales trend (30 days)</div>
       <div class="chart-wrap"><canvas id="detailSalesChart"></canvas></div>
     </div>
+    {% endif %}
 
-    {# Top videos #}
+    {# Top videos — only render if we actually have videos,
+       otherwise hide the whole card instead of showing empty scaffolding. #}
+    {% if videos and videos | length > 0 %}
     <div class="card mb-4">
       <div class="flex items-center gap-2 mb-4">
         <div class="text-sm font-semibold text-muted">Top Videos</div>
       </div>
-      {% if videos and videos | length > 0 %}
-        {% for v in videos[:5] %}
-        <div class="video-card" style="text-decoration:none;cursor:pointer" role="button" tabindex="0"
-             onclick="openVideoModal('{{ v.video_id }}', '{{ v.video_url | default('', true) | e }}')">
-          <div class="video-thumb">
-            {% if v.cover_url %}<img src="/api/image-proxy?url={{ v.cover_url | urlencode }}" alt="Video by {{ v.creator_name or 'creator' }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='/static/img/avatar-placeholder.png'">{% endif %}
-            {% if v.duration_seconds %}<span class="badge badge-muted" style="position:absolute;bottom:4px;right:4px;font-size:10px">{{ v.duration_seconds }}s</span>{% endif %}
-          </div>
-          <div style="overflow:hidden">
-            <div class="video-creator">@{{ v.creator_handle or 'Unknown' }}</div>
-            <div class="video-views">
-              <span><i data-lucide="eye" style="width:11px;height:11px"></i> {{ v.view_count | format_number }}</span>
-              &middot;
-              <span><i data-lucide="heart" style="width:11px;height:11px"></i> {{ v.like_count | format_number }}</span>
-            </div>
+      {% for v in videos[:5] %}
+      <div class="video-card" style="text-decoration:none;cursor:pointer" role="button" tabindex="0"
+           onclick="openVideoModal('{{ v.video_id }}', '{{ v.video_url | default('', true) | e }}')">
+        <div class="video-thumb">
+          {% if v.cover_url %}<img src="/api/image-proxy?url={{ v.cover_url | urlencode }}" alt="Video by {{ v.creator_name or 'creator' }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='/static/img/avatar-placeholder.png'">{% endif %}
+          {% if v.duration_seconds %}<span class="badge badge-muted" style="position:absolute;bottom:4px;right:4px;font-size:10px">{{ v.duration_seconds }}s</span>{% endif %}
+        </div>
+        <div style="overflow:hidden">
+          <div class="video-creator">@{{ v.creator_handle or 'Unknown' }}</div>
+          <div class="video-views">
+            <span><i data-lucide="eye" style="width:11px;height:11px"></i> {{ v.view_count | format_number }}</span>
+            &middot;
+            <span><i data-lucide="heart" style="width:11px;height:11px"></i> {{ v.like_count | format_number }}</span>
           </div>
         </div>
-        {% endfor %}
-      {% else %}
-        <p class="text-sm text-faint text-center" style="padding:var(--space-4) 0">No videos found yet</p>
-      {% endif %}
+      </div>
+      {% endfor %}
     </div>
+    {% endif %}
 
     {# Similar products #}
     {% if similar_products and similar_products | length > 0 %}

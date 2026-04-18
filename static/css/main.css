@@ -557,7 +557,12 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
     justify-content:center;gap:3px;padding:8px 4px;text-decoration:none;
     color:var(--text-faint);min-height:56px;
     -webkit-tap-highlight-color:transparent;transition:color 150ms}
-  .mob-tab i,.mob-tab svg{width:22px;height:22px}
+  /* Force every mob-tab icon to inherit its parent's text color.
+     The Creators tab's 'users' lucide icon was rendering pink on
+     inactive tabs because lucide-rendered <svg> retained attributes
+     that short-circuited the color cascade for that specific icon.
+     Explicit color:inherit + stroke:currentColor normalises all four. */
+  .mob-tab i,.mob-tab svg{width:22px;height:22px;color:inherit;stroke:currentColor;fill:none}
   .mob-tab span{font-size:10px;font-weight:600;line-height:1}
   .mob-tab:active{opacity:.7}
   .mob-tab--active{color:var(--accent)}
@@ -1773,6 +1778,23 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 
   /* Settings tab chips + other nav-like buttons */
   .settings-tab{min-height:44px}
+}
+
+/* 63c. SCORE RING ON NARROW CARDS (Bugfix Batch, BUG 8) =================
+   Desktop: .badge-overlay-tr is top/right var(--space-3) (12px) and
+   the score-ring-wrap is 44x44. That fits fine in a 280+ px card.
+   Mobile products grid cards are 2-up at calc((100vw - gutters)/2),
+   which at 375px ≈ 170px wide. The 44px ring starting at 12px right
+   edge + rendering past the SVG's 44px width was breaching the card's
+   right edge because the ring's viewBox extends stroke outside the
+   nominal 44x44 box. Snug it to 8px right and shrink to 40px on
+   phones. */
+@media(max-width:640px){
+  .product-card .badge-overlay-tr,
+  .product-card-img .badge-overlay-tr{top:8px !important;right:8px !important}
+  .product-card-img .score-ring-wrap{width:40px;height:40px}
+  .product-card-img .score-ring{width:40px;height:40px}
+  .product-card-img .score-ring-wrap .score-number{font-size:10px}
 }
 
 /* 63b. CAMPAIGN BANNER MOBILE (Bugfix Batch, BUG 6) =====================
