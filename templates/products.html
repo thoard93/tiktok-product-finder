@@ -7,8 +7,40 @@
   <p class="page-subtitle">Discover high-commission TikTok Shop products with proven demand</p>
 </div>
 
+{# ===== MOBILE FILTER TRIGGER =====
+   Hidden on desktop — there the inline filter-card below is always
+   visible. On mobile (<=768px) the filter-card becomes a bottom-sheet
+   and this button opens it. Uses the current applied-filter count as
+   a pill to hint at state. #}
+<button type="button" class="filter-mobile-trigger" id="filterMobileTrigger"
+        onclick="openProductFilters()" aria-expanded="false"
+        aria-controls="filterForm">
+  <i data-lucide="sliders-horizontal" aria-hidden="true"></i>
+  <span>Filter &amp; Sort</span>
+  {% set _active_filters = 0 %}
+  {% if current_category %}{% set _active_filters = _active_filters + 1 %}{% endif %}
+  {% if current_min_commission %}{% set _active_filters = _active_filters + 1 %}{% endif %}
+  {% if current_max_price %}{% set _active_filters = _active_filters + 1 %}{% endif %}
+  {% if current_max_videos %}{% set _active_filters = _active_filters + 1 %}{% endif %}
+  {% if current_search %}{% set _active_filters = _active_filters + 1 %}{% endif %}
+  {% if on_sale_filter %}{% set _active_filters = _active_filters + 1 %}{% endif %}
+  {% if _active_filters %}<span class="filter-mobile-trigger__count">{{ _active_filters }}</span>{% endif %}
+</button>
+
+{# Backdrop used only when the filter-card is in bottom-sheet mode (mobile). #}
+<div class="filter-sheet-backdrop" id="filterSheetBackdrop"
+     onclick="closeProductFilters()" aria-hidden="true"></div>
+
 {# ===== FILTER BAR ===== #}
 <form class="filter-card" id="filterForm" method="GET" action="/app/products">
+  {# Mobile-only sheet header with title + close button. Hidden on desktop. #}
+  <div class="filter-sheet-header">
+    <span>Filter &amp; Sort</span>
+    <button type="button" class="filter-sheet-close" onclick="closeProductFilters()"
+            aria-label="Close filters">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
   <div class="filter-row">
     <select class="filter-input" name="category" onchange="this.form.submit()" aria-label="Filter by category">
       <option value="">All Categories</option>
@@ -279,5 +311,36 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   }
 });
+
+/* ========================================================================
+   Mobile filter bottom-sheet
+   The desktop filter-card is always inline above the product grid. On
+   mobile the CSS transforms the exact same <form> into a bottom sheet
+   that's hidden until .filter-sheet--open is set. This JS just toggles
+   that class + the backdrop + body scroll lock.
+   ======================================================================== */
+(function() {
+  var form = document.getElementById('filterForm');
+  var trigger = document.getElementById('filterMobileTrigger');
+  var backdrop = document.getElementById('filterSheetBackdrop');
+  if (!form || !trigger || !backdrop) return;
+
+  window.openProductFilters = function() {
+    form.classList.add('filter-sheet--open');
+    backdrop.classList.add('filter-sheet-backdrop--open');
+    trigger.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  };
+  window.closeProductFilters = function() {
+    form.classList.remove('filter-sheet--open');
+    backdrop.classList.remove('filter-sheet-backdrop--open');
+    trigger.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  };
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && form.classList.contains('filter-sheet--open'))
+      closeProductFilters();
+  });
+})();
 </script>
 {% endblock %}

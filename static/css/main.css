@@ -1457,6 +1457,106 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   .tap-callout__rates{justify-content:space-between}
 }
 
+/* 62b. MOBILE FILTER BOTTOM-SHEET (Phase 2e) =============================
+   Desktop renders the product filter-card inline at the top of the
+   products page. On phones we collapse it into a trigger button and
+   turn the same <form> element into a bottom sheet — no duplicate
+   markup, the Flask submit target stays the same, and every input
+   keeps its existing name attribute so ?category=... URLs still work.
+*/
+.filter-mobile-trigger{display:none}  /* desktop: inline filter is visible */
+.filter-sheet-backdrop{display:none}
+.filter-sheet-header{display:none}    /* sheet chrome hidden on desktop */
+
+@media(max-width:768px){
+  /* Hide the inline filter card; open on demand. */
+  #filterForm.filter-card{
+    display:none;
+    position:fixed;left:0;right:0;bottom:0;top:auto;z-index:1200;
+    max-height:calc(100dvh - var(--safe-top) - 40px);
+    overflow-y:auto;
+    border-radius:20px 20px 0 0;
+    padding:0;
+    box-shadow:0 -8px 32px rgba(0,0,0,0.18);
+    padding-bottom:calc(var(--safe-bottom) + 12px);
+    animation:sheetSlideUp .25s var(--ease);
+  }
+  #filterForm.filter-card.filter-sheet--open{display:block}
+
+  #filterForm .filter-row{padding:var(--space-4)}
+  #filterForm .filter-actions{
+    padding:var(--space-3) var(--space-4);
+    border-top:1px solid var(--border);
+    position:sticky;bottom:0;background:var(--bg-surface);
+    padding-bottom:calc(var(--space-3) + var(--safe-bottom));
+  }
+
+  /* Sheet header */
+  .filter-sheet-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px var(--space-4);border-bottom:1px solid var(--border);
+    position:sticky;top:0;background:var(--bg-surface);z-index:1;
+    font-weight:700;font-size:15px;
+  }
+  .filter-sheet-close{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:44px;height:44px;border-radius:var(--radius);
+    background:transparent;border:none;cursor:pointer;
+    color:var(--text-muted);-webkit-tap-highlight-color:transparent;
+  }
+  .filter-sheet-close:active{background:var(--bg-hover)}
+
+  .filter-sheet-backdrop{
+    display:block;position:fixed;inset:0;z-index:1199;
+    background:rgba(0,0,0,0.5);
+    opacity:0;pointer-events:none;
+    transition:opacity var(--dur) var(--ease);
+  }
+  .filter-sheet-backdrop--open{opacity:1;pointer-events:auto}
+
+  /* Mobile trigger button — sits where the desktop filter-card would. */
+  .filter-mobile-trigger{
+    display:inline-flex;align-items:center;gap:8px;
+    height:44px;padding:0 16px;
+    background:var(--bg-surface);border:1px solid var(--border);
+    border-radius:var(--radius);color:var(--text-primary);
+    font-size:14px;font-weight:600;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    margin-bottom:var(--space-4);
+  }
+  .filter-mobile-trigger:active{background:var(--bg-hover)}
+  .filter-mobile-trigger i{width:16px;height:16px;color:var(--text-muted)}
+  .filter-mobile-trigger__count{
+    background:var(--accent);color:#fff;font-size:11px;font-weight:700;
+    min-width:18px;height:18px;border-radius:var(--radius-full);
+    display:inline-flex;align-items:center;justify-content:center;
+    padding:0 5px;margin-left:4px;
+  }
+}
+@keyframes sheetSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+/* 62c. SUBSCRIBE + SETTINGS LAYOUT STACKS (Phase 2e) ======================
+   .subscribe-layout is a 1fr 1fr grid on desktop. On phones, stack
+   single-column with the payment card on TOP of the features list —
+   users should see the price + PayPal button first on mobile per
+   the Vantage PWA spec. We do NOT reorder the features themselves. */
+@media(max-width:900px){
+  .subscribe-layout{grid-template-columns:1fr !important;gap:var(--space-6) !important}
+  .subscribe-payment{order:-1}
+
+  /* Settings sidebar + content stack. (The existing 768px rule handles
+     flex-direction; bumping breakpoint to 900px matches the new mobile
+     shell threshold so there's no awkward 768-900 dead zone.) */
+  .settings-layout{grid-template-columns:1fr !important;gap:var(--space-5) !important}
+  .settings-tabs{flex-direction:row !important;overflow-x:auto;
+    border-bottom:1px solid var(--border);padding-bottom:0;gap:0 !important;
+    -webkit-overflow-scrolling:touch}
+  .settings-tab{white-space:nowrap;padding:12px 14px !important;
+    border-bottom:2px solid transparent;border-radius:0}
+  .settings-tab.active{background:transparent !important;
+    border-bottom-color:var(--accent)}
+}
+
 /* 63. MOBILE iOS INPUT ZOOM FIX + TOUCH TARGETS (Phase 2c + 2d) ==========
    Safari on iOS auto-zooms the viewport when the focused input has a
    computed font-size < 16px. Bumping every editable control to 16px
