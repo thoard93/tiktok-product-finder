@@ -5,7 +5,7 @@
    Bumping CACHE_NAME here purges the legacy 'tiktok-finder-v1' caches
    (and any earlier 'vantage-v*' snapshots) on the next activate.
    ============================================================================ */
-const CACHE_NAME = 'vantage-v1';
+const CACHE_NAME = 'vantage-v2';
 
 // Keep this list tight — every asset here is fetched on install and will
 // block the service worker's `installed` transition if any URL 404s.
