@@ -1456,3 +1456,53 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   .tap-callout .tap-callout__rates{flex-direction:row !important}
   .tap-callout__rates{justify-content:space-between}
 }
+
+/* 63. MOBILE iOS INPUT ZOOM FIX + TOUCH TARGETS (Phase 2c + 2d) ==========
+   Safari on iOS auto-zooms the viewport when the focused input has a
+   computed font-size < 16px. Bumping every editable control to 16px
+   kills that behaviour. We also enforce 44x44 tap targets on controls
+   that desktop rendered at 28–36px — the a11y + Apple HIG minimum. */
+@media(max-width:768px){
+  /* --- iOS zoom fix: every text input gets 16px at phone width --- */
+  input,select,textarea,
+  .input,.select,.textarea,
+  .filter-input,
+  input[type="text"],input[type="email"],input[type="password"],
+  input[type="search"],input[type="url"],input[type="number"],
+  input[type="tel"],input[type="date"]{
+    font-size:16px !important;
+  }
+
+  /* --- Tap targets: 44x44 minimum --- */
+  /* btn-sm at mobile is still a button the thumb has to hit; bump it
+     from 36px to 44px while keeping the tighter padding. */
+  .btn-sm{height:44px;min-width:44px;padding:0 16px}
+  .btn-icon.btn-sm{width:44px;height:44px}
+
+  /* Favorite heart + inline row controls bumped to 44x44 but we clamp
+     the visible art to the original size via padding so layout isn't
+     visually noisier — just easier to tap. */
+  .fav-btn{width:44px;height:44px;padding:6px}
+  .fav-btn .lucide{width:18px;height:18px}
+  .fav-btn-inline{width:44px;height:44px;padding:8px}
+
+  /* Filter inputs — already 40px from the shell rules; the 16px font
+     override pushes them to a comfortable tappable height. */
+  .filter-input{height:44px !important;padding:0 12px}
+  select.filter-input{padding-right:32px}
+
+  /* Product-card action buttons at 36px → 44px. */
+  .product-card-actions .btn{height:44px}
+
+  /* Bottom-tab bar tabs: already 56px min-height; confirm explicit
+     min-width so the last two tabs don't shrink below 44px on 360px
+     viewports. */
+  .mob-tab{min-height:56px;min-width:44px}
+
+  /* Topbar icon buttons: theme toggle / log-out button any that
+     survive the hide rule in the 900px mobile block. */
+  .topbar-right .btn-icon,.topbar-right .btn.btn-sm{min-height:44px;min-width:44px}
+
+  /* Settings tab chips + other nav-like buttons */
+  .settings-tab{min-height:44px}
+}
