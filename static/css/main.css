@@ -1457,6 +1457,54 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   .tap-callout__rates{justify-content:space-between}
 }
 
+/* 61a. SERVICE-WORKER UPDATE TOAST (Phase 3c) ============================
+   Rendered by base.html at the root of the DOM. Hidden by default; the
+   SW-registration script adds .sw-toast--open when a new SW is installed
+   and waiting. Uses the existing .card/.btn vocabulary so visually it
+   reads as a pinned card, not a foreign component.
+
+   z-index ordering (tallest wins): drawer-backdrop 1099 < drawer 1100 <
+   modal/sheet 1200 < sw-toast 1300 < install banner 1300.
+   The toast sits ABOVE the bottom tab bar (1000). On mobile its `bottom`
+   offset clears the tab bar + safe-area. */
+.sw-toast{
+  position:fixed;left:50%;
+  transform:translate(-50%, 120%);
+  bottom:24px;
+  z-index:1300;
+  display:flex;align-items:center;gap:10px;
+  max-width:calc(100vw - 24px);
+  padding:10px 14px;
+  background:var(--bg-surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);
+  font-size:13px;font-weight:600;
+  opacity:0;pointer-events:none;
+  transition:transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.sw-toast--open{transform:translate(-50%, 0);opacity:1;pointer-events:auto}
+.sw-toast__msg{display:inline-flex;align-items:center;gap:8px;color:var(--text-primary)}
+.sw-toast__btn{white-space:nowrap}
+.sw-toast__close{
+  background:transparent;border:none;
+  width:32px;height:32px;min-width:32px;
+  border-radius:var(--radius);
+  display:inline-flex;align-items:center;justify-content:center;
+  color:var(--text-muted);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.sw-toast__close:hover{background:var(--bg-hover);color:var(--text-primary)}
+@media(max-width:900px){
+  .sw-toast{
+    left:12px;right:12px;
+    transform:translateY(120%);
+    bottom:calc(64px + var(--safe-bottom) + 12px);
+    max-width:none;
+  }
+  .sw-toast--open{transform:translateY(0)}
+}
+
 /* 62a. GENERIC MODAL → BOTTOM SHEET ON MOBILE (Phase 2f) ==================
    .modal-overlay / .modal-dialog is the baseline confirm-modal defined
    in base.html (used by confirmAction() for delete confirmations, cancel

@@ -394,17 +394,85 @@
   })();
   </script>
 
+  {# ===== Update toast =====
+     Surfaced by the SW registration script below when a new SW has
+     finished installing but is still waiting to activate. Clicking
+     Refresh posts SKIP_WAITING, the SW activates immediately, the
+     controllerchange listener below force-reloads, and the user lands
+     on the fresh build. #}
+  <div class="sw-toast" id="swUpdateToast" role="status" aria-live="polite">
+    <div class="sw-toast__msg">
+      <i data-lucide="sparkles" aria-hidden="true" style="width:16px;height:16px;color:var(--accent)"></i>
+      <span>New version available</span>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm sw-toast__btn" id="swUpdateToastBtn">Refresh</button>
+    <button type="button" class="sw-toast__close" id="swUpdateToastClose" aria-label="Dismiss">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
   {# ===== PWA service worker registration =====
      Scope is '/', matching the Service-Worker-Allowed header we send
-     when serving /service-worker.js. Update-toast wire-up happens in
-     Phase 3 once the SW itself supports SKIP_WAITING. #}
+     when serving /service-worker.js. #}
   <script>
-  if ('serviceWorker' in navigator) {
+  (function() {
+    var toast = document.getElementById('swUpdateToast');
+    var toastBtn = document.getElementById('swUpdateToastBtn');
+    var toastClose = document.getElementById('swUpdateToastClose');
+    var autoHideTimer = null;
+
+    function showUpdateToast(onConfirm) {
+      if (!toast) return;
+      toast.classList.add('sw-toast--open');
+      var handler = function() {
+        if (autoHideTimer) clearTimeout(autoHideTimer);
+        onConfirm();
+      };
+      toastBtn.onclick = handler;
+      toastClose.onclick = function() { hideUpdateToast(); };
+      // Auto-dismiss after 15s if the user ignores it. They'll still
+      // get the fresh build on their next full navigation.
+      if (autoHideTimer) clearTimeout(autoHideTimer);
+      autoHideTimer = setTimeout(hideUpdateToast, 15000);
+    }
+    function hideUpdateToast() {
+      if (!toast) return;
+      toast.classList.remove('sw-toast--open');
+      if (autoHideTimer) { clearTimeout(autoHideTimer); autoHideTimer = null; }
+    }
+
+    if (!('serviceWorker' in navigator)) return;
+
     window.addEventListener('load', function() {
       navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+        .then(function(reg) {
+          reg.addEventListener('updatefound', function() {
+            var newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', function() {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // Existing SW is in control and a new one just installed —
+                // this is a real update, not first install. Prompt the user.
+                showUpdateToast(function() {
+                  newWorker.postMessage({ type: 'SKIP_WAITING' });
+                  // controllerchange listener below will reload.
+                });
+              }
+            });
+          });
+        })
         .catch(function(e) { console.warn('[Vantage] SW registration failed:', e); });
+
+      // Once the new SW takes control, hard-reload so the user gets the
+      // fresh HTML/CSS/JS. Guard against double-reload loops.
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function() {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
     });
-  }
+  })();
   </script>
 
   {# Campaign banner JS: dismiss + countdown #}
