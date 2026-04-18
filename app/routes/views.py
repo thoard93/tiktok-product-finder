@@ -375,6 +375,47 @@ def health():
     return 'ok', 200
 
 
+# ---------------------------------------------------------------------------
+# PWA root-level routes
+# ---------------------------------------------------------------------------
+
+@views_bp.route('/manifest.json')
+def pwa_manifest():
+    """Serve the PWA manifest at the root. Browsers require the manifest
+    to be reachable from the same origin/scope; keeping it at /manifest.json
+    (rather than /pwa/manifest.json) also matches what Lighthouse expects."""
+    from flask import send_from_directory, current_app
+    import os as _os
+    pwa_dir = _os.path.join(current_app.root_path, '..', 'pwa')
+    resp = send_from_directory(pwa_dir, 'manifest.json',
+                               mimetype='application/manifest+json')
+    resp.headers['Cache-Control'] = 'public, max-age=3600'
+    return resp
+
+
+@views_bp.route('/service-worker.js')
+def pwa_service_worker():
+    """Serve the service worker from the site root so its scope covers the
+    whole origin. If it were served from /static/ the default scope would
+    be /static/ — too narrow. Never cache the SW itself; we want updates
+    to roll out the moment the browser checks for them."""
+    from flask import send_from_directory, current_app
+    import os as _os
+    static_dir = _os.path.join(current_app.root_path, '..', 'static')
+    resp = send_from_directory(static_dir, 'service-worker.js',
+                               mimetype='application/javascript')
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Service-Worker-Allowed'] = '/'
+    return resp
+
+
+@views_bp.route('/offline')
+def offline_page():
+    """Branded offline fallback rendered by the service worker when the
+    network is down AND the requested page isn't in the cache."""
+    return render_template('offline.html')
+
+
 @views_bp.route('/robots.txt')
 def robots_txt():
     """Search engine crawl rules. Crawl the public marketing pages;
