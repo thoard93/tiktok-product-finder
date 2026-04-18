@@ -475,6 +475,157 @@
   })();
   </script>
 
+  {# ===== Install prompt banner (Phase 4a) =====
+     Shown once a returning logged-in user has opened the app a 2nd+
+     session on a non-conversion-critical page. Two variants:
+       - Android / Chrome: triggers the stashed beforeinstallprompt event
+       - iOS Safari:      static banner explaining the Share -> Add to
+                           Home Screen flow, with the iOS share SVG inline
+
+     Suppressed when already installed (display-mode:standalone),
+     dismissed recently (localStorage, 30d), or the user isn't logged
+     in. Gate flag rendered by Jinja below. #}
+  <div class="install-banner" id="installBanner" role="dialog" aria-live="polite" aria-hidden="true">
+    <div class="install-banner__mark" aria-hidden="true">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M6 22L14 4L22 22" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 4V14" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M14 14L20 8" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="20" cy="8" r="2" fill="#2dd4bf"/>
+      </svg>
+    </div>
+    <div class="install-banner__body">
+      <div class="install-banner__title" id="installBannerTitle">Install Vantage</div>
+      <div class="install-banner__sub" id="installBannerSub">Faster access and an app icon on your home screen.</div>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm install-banner__cta" id="installBannerCta">Install</button>
+    <button type="button" class="install-banner__close" id="installBannerClose" aria-label="Dismiss install prompt">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <script>
+  (function() {
+    // Jinja-rendered gates. `VANTAGE_AUTHED` is true only for logged-in
+    // users; the path list blocks conversion-critical funnels.
+    window.VANTAGE_AUTHED = {{ 'true' if current_user else 'false' }};
+    var CRITICAL_PATHS = ['/', '/login', '/register',
+                          '/app/subscribe', '/app/redeem'];
+    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    var onCriticalPath = CRITICAL_PATHS.indexOf(path) !== -1;
+
+    var banner = document.getElementById('installBanner');
+    var titleEl = document.getElementById('installBannerTitle');
+    var subEl = document.getElementById('installBannerSub');
+    var ctaEl = document.getElementById('installBannerCta');
+    var closeEl = document.getElementById('installBannerClose');
+
+    // Session counter: tick up at most once per 30 min so SPA-style navs
+    // don't over-count.
+    var SESSION_KEY = 'vantage_session_count';
+    var LAST_TS_KEY = 'vantage_last_session_ts';
+    function bumpSessionCounter() {
+      try {
+        var now = Date.now();
+        var last = parseInt(localStorage.getItem(LAST_TS_KEY) || '0', 10);
+        if (!last || (now - last) > 30 * 60 * 1000) {
+          var count = parseInt(localStorage.getItem(SESSION_KEY) || '0', 10) + 1;
+          localStorage.setItem(SESSION_KEY, String(count));
+          localStorage.setItem(LAST_TS_KEY, String(now));
+        }
+      } catch (e) {}
+    }
+    function currentSessionCount() {
+      try { return parseInt(localStorage.getItem(SESSION_KEY) || '0', 10); }
+      catch (e) { return 0; }
+    }
+    bumpSessionCounter();
+
+    function isStandalone() {
+      return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+          || window.navigator.standalone === true;
+    }
+
+    function dismissalFresh(key) {
+      try {
+        var ts = parseInt(localStorage.getItem(key) || '0', 10);
+        if (!ts) return false;
+        return (Date.now() - ts) < 30 * 24 * 60 * 60 * 1000; // 30d
+      } catch (e) { return false; }
+    }
+
+    function canShowBanner() {
+      if (!banner) return false;
+      if (!window.VANTAGE_AUTHED) return false;
+      if (onCriticalPath) return false;
+      if (isStandalone()) return false;
+      if (currentSessionCount() < 2) return false;
+      return true;
+    }
+
+    function showBanner() {
+      banner.classList.add('install-banner--open');
+      banner.setAttribute('aria-hidden', 'false');
+    }
+    function hideBanner() {
+      banner.classList.remove('install-banner--open');
+      banner.setAttribute('aria-hidden', 'true');
+    }
+
+    // ---- Android / Chrome flow ----
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      if (dismissalFresh('vantage_install_dismissed')) return;
+      deferredPrompt = e;
+      if (!canShowBanner()) return;
+      titleEl.textContent = 'Install Vantage';
+      subEl.textContent = 'Faster access, home-screen icon, works offline.';
+      ctaEl.textContent = 'Install';
+      ctaEl.style.display = '';
+      ctaEl.onclick = function() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function(choice) {
+          hideBanner();
+          if (choice && choice.outcome === 'dismissed') {
+            try { localStorage.setItem('vantage_install_dismissed', String(Date.now())); }
+            catch (e) {}
+          }
+          deferredPrompt = null;
+        });
+      };
+      closeEl.onclick = function() {
+        try { localStorage.setItem('vantage_install_dismissed', String(Date.now())); }
+        catch (e) {}
+        hideBanner();
+      };
+      showBanner();
+    });
+    // If Chrome fires appinstalled, hide immediately regardless.
+    window.addEventListener('appinstalled', hideBanner);
+
+    // ---- iOS Safari flow ----
+    var ua = navigator.userAgent;
+    var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.navigator.standalone;
+    var isIOSChromeOrFirefox = /CriOS|FxiOS/.test(ua); // can't install from these
+    if (isIOS && !isIOSChromeOrFirefox) {
+      if (dismissalFresh('vantage_ios_install_dismissed')) return;
+      if (!canShowBanner()) return;
+      titleEl.textContent = 'Install Vantage';
+      // Inline SVG share icon so the hint is self-explanatory
+      subEl.innerHTML = 'Tap <svg class="ios-share-inline" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> then <strong>Add to Home Screen</strong>.';
+      ctaEl.style.display = 'none';
+      closeEl.onclick = function() {
+        try { localStorage.setItem('vantage_ios_install_dismissed', String(Date.now())); }
+        catch (e) {}
+        hideBanner();
+      };
+      showBanner();
+    }
+  })();
+  </script>
+
   {# Campaign banner JS: dismiss + countdown #}
   <script>
   function dismissCampaign(id){

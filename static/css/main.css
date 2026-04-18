@@ -1457,6 +1457,58 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   .tap-callout__rates{justify-content:space-between}
 }
 
+/* 61b. INSTALL BANNER (Phase 4a) =========================================
+   Bottom banner shown once per 30d to returning logged-in users on
+   non-conversion-critical pages. Two variants share the same DOM:
+     - Android/Chrome: "Install Vantage [Install]"
+     - iOS Safari:     "Tap [share] then Add to Home Screen" (no CTA)
+   Stacks ABOVE the bottom tab bar and the update toast. Uses the
+   existing .card/.btn vocabulary. */
+.install-banner{
+  position:fixed;
+  left:50%;transform:translate(-50%, 130%);
+  bottom:24px;
+  z-index:1300;
+  display:flex;align-items:center;gap:12px;
+  width:min(calc(100vw - 24px), 520px);
+  padding:12px 14px;
+  background:var(--bg-surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);
+  opacity:0;pointer-events:none;
+  transition:transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.install-banner--open{transform:translate(-50%, 0);opacity:1;pointer-events:auto}
+.install-banner__mark{flex-shrink:0;width:36px;height:36px;border-radius:var(--radius);
+  background:var(--bg-base);display:inline-flex;align-items:center;justify-content:center}
+.install-banner__body{flex:1;min-width:0}
+.install-banner__title{font-size:13px;font-weight:700;color:var(--text-primary);line-height:1.2;margin-bottom:2px}
+.install-banner__sub{font-size:12px;color:var(--text-muted);line-height:1.35}
+.install-banner__sub .ios-share-inline{vertical-align:-2px;margin:0 2px;color:var(--accent)}
+.install-banner__cta{white-space:nowrap;flex-shrink:0}
+.install-banner__close{
+  background:transparent;border:none;
+  width:32px;height:32px;min-width:32px;flex-shrink:0;
+  border-radius:var(--radius);
+  display:inline-flex;align-items:center;justify-content:center;
+  color:var(--text-muted);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.install-banner__close:hover{background:var(--bg-hover);color:var(--text-primary)}
+@media(max-width:900px){
+  .install-banner{
+    left:12px;right:12px;width:auto;
+    transform:translateY(130%);
+    /* Sits 80px above the tab bar so it coexists with the update toast
+       (which lives at +12px) without overlap. */
+    bottom:calc(64px + var(--safe-bottom) + 80px);
+  }
+  .install-banner--open{transform:translateY(0)}
+  .install-banner__title{font-size:14px}
+  .install-banner__sub{font-size:12.5px}
+}
+
 /* 61a. SERVICE-WORKER UPDATE TOAST (Phase 3c) ============================
    Rendered by base.html at the root of the DOM. Hidden by default; the
    SW-registration script adds .sw-toast--open when a new SW is installed
