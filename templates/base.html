@@ -27,8 +27,11 @@
   <a href="#main-content" class="skip-link">Skip to content</a>
   <div class="app-shell">
 
-    {# ===== SIDEBAR ===== #}
-    <aside class="sidebar">
+    {# ===== SIDEBAR =====
+       On desktop: permanent fixed sidebar.
+       On mobile (<=900px): transforms into an off-canvas drawer that slides
+       in from the left when .sidebar--open is toggled by the hamburger. #}
+    <aside class="sidebar" id="appSidebar">
       <div class="sidebar-logo">
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M6 22L14 4L22 22" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 4V14" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round"/><path d="M14 14L20 8" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="8" r="2" fill="#2dd4bf"/></svg>
         <span class="sidebar-wordmark">Vantage</span>
@@ -119,9 +122,29 @@
       </div>
     </aside>
 
+    {# Drawer backdrop — dims the page when the sidebar is open as a
+       mobile drawer. Hidden on desktop via CSS. #}
+    <div class="drawer-backdrop" id="drawerBackdrop"
+         onclick="closeDrawer()" aria-hidden="true"></div>
+
     {# ===== MAIN ===== #}
     <main class="main-area">
       <header class="topbar">
+        {# Hamburger — hidden on desktop (sidebar is always visible there).
+           On mobile, tapping toggles the sidebar as an off-canvas drawer. #}
+        <button class="topbar-hamburger" id="drawerToggle"
+                type="button" onclick="openDrawer()"
+                aria-label="Open menu" aria-controls="appSidebar"
+                aria-expanded="false">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+
         <div class="topbar-search" style="position:relative">
           <i data-lucide="search"></i>
           <input type="text" class="input" placeholder="Search products, paste a TikTok link, or enter a creator name…" id="globalSearch" autocomplete="off" aria-label="Global search">
@@ -211,99 +234,28 @@
       </div>
     </main>
 
-    {# ===== MOBILE TAB BAR — 5 pinned tabs + More sheet ===== #}
+    {# ===== MOBILE BOTTOM TAB BAR =====
+       4 Tier-1 destinations. Everything else (Analytics, Favorites,
+       Settings, TAP Lists, Redeem, Admin) lives inside the drawer
+       (the sidebar transformed off-canvas). #}
     <nav class="mob-bar" role="navigation" aria-label="Mobile navigation">
-      <a href="/app/dashboard" class="mob-tab {% if active_page == 'dashboard' %}mob-tab--active{% endif %}" aria-label="Home">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
-        <span>Home</span>
+      <a href="/app/dashboard" class="mob-tab {% if active_page == 'dashboard' %}mob-tab--active{% endif %}" aria-label="Dashboard">
+        <i data-lucide="layout-dashboard" aria-hidden="true"></i>
+        <span>Dashboard</span>
       </a>
       <a href="/app/products" class="mob-tab {% if active_page == 'products' %}mob-tab--active{% endif %}" aria-label="Products">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        <i data-lucide="package-search" aria-hidden="true"></i>
         <span>Products</span>
       </a>
-      <button type="button" class="mob-tab mob-tab--center" onclick="document.getElementById('globalSearch').focus();window.scrollTo({top:0,behavior:'smooth'})" aria-label="Search">
-        <div class="mob-tab-zap">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </div>
-        <span>Search</span>
-      </button>
-      <a href="/app/favorites" class="mob-tab {% if active_page == 'favorites' %}mob-tab--active{% endif %}" aria-label="Favorites">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-        <span>Saves</span>
+      <a href="/app/creators" class="mob-tab {% if active_page == 'creators' %}mob-tab--active{% endif %}" aria-label="Creators">
+        <i data-lucide="users" aria-hidden="true"></i>
+        <span>Creators</span>
       </a>
-      <button type="button" class="mob-tab" onclick="document.getElementById('mobMoreSheet').classList.add('mob-more--open');document.body.style.overflow='hidden'" aria-label="More">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        <span>More</span>
-      </button>
+      <a href="/app/brand-hunter" class="mob-tab {% if active_page == 'brands' %}mob-tab--active{% endif %}" aria-label="Brand Hunter">
+        <i data-lucide="store" aria-hidden="true"></i>
+        <span>Brands</span>
+      </a>
     </nav>
-
-    {# ===== MOBILE "MORE" BOTTOM SHEET ===== #}
-    <div class="mob-more" id="mobMoreSheet" aria-hidden="true" role="dialog">
-      <div class="mob-more__backdrop" onclick="document.getElementById('mobMoreSheet').classList.remove('mob-more--open');document.body.style.overflow=''"></div>
-      <div class="mob-more__sheet" role="document">
-        <div class="mob-more__handle" aria-hidden="true"></div>
-
-        {% if current_user %}
-        <div class="mob-more__user">
-          <div class="avatar avatar-lg">
-            {% if current_user.discord_avatar %}
-              <img src="https://cdn.discordapp.com/avatars/{{ current_user.discord_id }}/{{ current_user.discord_avatar }}.png" alt="">
-            {% else %}
-              {{ (current_user.discord_username or 'U')[0] | upper }}
-            {% endif %}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ current_user.discord_username or 'Guest' }}</div>
-            <div style="font-size:12px;color:var(--text-muted)">
-              {% if current_user.is_admin %}Admin account
-              {% elif subscription and subscription.status == 'active' %}Vantage Pro
-              {% else %}Free account{% endif %}
-            </div>
-          </div>
-          {% if not is_pro %}
-            <a href="/app/subscribe" class="btn btn-primary btn-sm">Upgrade</a>
-          {% endif %}
-        </div>
-        {% endif %}
-
-        <div class="mob-more__section">Explore</div>
-        <a href="/app/analytics" class="mob-more__link {% if active_page == 'analytics' %}mob-more__link--active{% endif %}">
-          <i data-lucide="bar-chart-2"></i> <span>Analytics</span>
-        </a>
-        <a href="/app/brand-hunter" class="mob-more__link {% if active_page == 'brands' %}mob-more__link--active{% endif %}">
-          <i data-lucide="store"></i> <span>Brand Hunter</span>
-        </a>
-        <a href="/app/creators" class="mob-more__link {% if active_page == 'creators' %}mob-more__link--active{% endif %}">
-          <i data-lucide="users"></i> <span>Creators</span>
-        </a>
-        <a href="/app/tap-lists" class="mob-more__link {% if active_page == 'boosted' %}mob-more__link--active{% endif %}">
-          <i data-lucide="zap"></i> <span>Boosted Lists</span>
-          {% if is_pro %}<span class="nav-badge" style="background:var(--teal-dim);color:var(--teal);font-size:10px;margin-left:auto">NEW</span>{% endif %}
-        </a>
-
-        <div class="mob-more__section">Manage</div>
-        <a href="/app/redeem" class="mob-more__link {% if active_page == 'redeem' %}mob-more__link--active{% endif %}">
-          <i data-lucide="gift"></i> <span>Redeem Code</span>
-        </a>
-        <a href="/app/settings" class="mob-more__link {% if active_page == 'settings' %}mob-more__link--active{% endif %}">
-          <i data-lucide="settings"></i> <span>Settings</span>
-        </a>
-
-        {% if current_user and current_user.is_admin %}
-        <div class="mob-more__section">Admin</div>
-        <a href="/app/admin" class="mob-more__link"><i data-lucide="shield"></i> <span>Admin Panel</span></a>
-        <a href="/app/admin/logs" class="mob-more__link"><i data-lucide="scroll-text"></i> <span>Activity Logs</span></a>
-        <a href="/app/admin/tap" class="mob-more__link"><i data-lucide="zap"></i> <span>TAP Products</span></a>
-        <a href="/app/admin/tap-lists" class="mob-more__link"><i data-lucide="list"></i> <span>TAP Lists</span></a>
-        <a href="/app/admin/campaigns" class="mob-more__link"><i data-lucide="megaphone"></i> <span>Campaigns</span></a>
-        <a href="/app/admin/coupons" class="mob-more__link"><i data-lucide="ticket"></i> <span>Coupons</span></a>
-        {% endif %}
-
-        <div style="padding:var(--space-4) var(--space-5);border-top:1px solid var(--border);margin-top:var(--space-3)">
-          <a href="/logout" style="display:block;text-align:center;color:var(--text-muted);font-size:13px;font-weight:600;text-decoration:none">Log out</a>
-        </div>
-      </div>
-    </div>
   </div>
 
   {# Upgrade FAB for non-subscribers #}
@@ -370,6 +322,77 @@
   <script src="/static/js/dashboard.js"></script>
   {% block scripts %}{% endblock %}
   <script>lucide.createIcons();</script>
+
+  {# ===== Mobile drawer controller =====
+     The sidebar is a permanent rail on desktop and an off-canvas
+     drawer on mobile (<=900px). CSS handles the geometry; this
+     script only toggles .sidebar--open and keeps a11y/body-scroll
+     in sync. Swipe-left-to-close uses vanilla touch handlers. #}
+  <script>
+  (function() {
+    var sidebar = document.getElementById('appSidebar');
+    var backdrop = document.getElementById('drawerBackdrop');
+    var toggle = document.getElementById('drawerToggle');
+    if (!sidebar || !backdrop || !toggle) return;
+
+    function isOpen() { return sidebar.classList.contains('sidebar--open'); }
+
+    window.openDrawer = function() {
+      sidebar.classList.add('sidebar--open');
+      backdrop.classList.add('drawer-backdrop--open');
+      toggle.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+    };
+    window.closeDrawer = function() {
+      sidebar.classList.remove('sidebar--open');
+      backdrop.classList.remove('drawer-backdrop--open');
+      toggle.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+    };
+
+    // ESC closes
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && isOpen()) closeDrawer();
+    });
+
+    // Clicking ANY link inside the drawer closes it so the page
+    // transition starts from a closed state on the next view.
+    sidebar.addEventListener('click', function(e) {
+      var link = e.target.closest('a');
+      if (link && isOpen()) closeDrawer();
+    });
+
+    // Swipe-left-to-close on the drawer itself.
+    // Only act on horizontal swipes (ignore vertical scrolls).
+    var startX = null, startY = null, tracking = false;
+    sidebar.addEventListener('touchstart', function(e) {
+      if (!isOpen()) return;
+      var t = e.touches[0];
+      startX = t.clientX; startY = t.clientY; tracking = true;
+    }, { passive: true });
+    sidebar.addEventListener('touchmove', function(e) {
+      if (!tracking || startX === null) return;
+      var t = e.touches[0];
+      var dx = t.clientX - startX, dy = t.clientY - startY;
+      // Only if predominantly horizontal and leftward
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) && dx < -60) {
+        closeDrawer();
+        tracking = false;
+      }
+    }, { passive: true });
+    sidebar.addEventListener('touchend', function() {
+      tracking = false; startX = startY = null;
+    }, { passive: true });
+
+    // If the viewport grows past the mobile threshold while the drawer
+    // is open (e.g. rotate landscape), close it so the desktop sidebar
+    // doesn't render with leftover mobile state.
+    var mq = window.matchMedia('(min-width: 901px)');
+    var onChange = function(e) { if (e.matches && isOpen()) closeDrawer(); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  })();
+  </script>
 
   {# ===== PWA service worker registration =====
      Scope is '/', matching the Service-Worker-Allowed header we send

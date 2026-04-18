@@ -515,29 +515,85 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
 .settings-tab:hover{color:var(--text-primary);background:var(--bg-hover)}
 .settings-tab.active{color:var(--accent);background:var(--accent-glow)}
 
-/* 19. MOBILE TAB BAR ======================================================= */
+/* 19. MOBILE BOTTOM TAB BAR + DRAWER SHELL =================================
+   Mobile layout kicks in at 900px and below — wider than our old 768px
+   break so the single-column nav fits comfortably on phablets too.
+   Product-grid rules inside a separate 768px block below stay put.    */
+
+/* Hidden by default; shown inside the mobile shell block. */
 .mob-bar{display:none}
+.topbar-hamburger{display:none}
+.drawer-backdrop{display:none}
+
+@media(max-width:900px){
+  /* --- 4-tab bottom bar --- */
+  .mob-bar{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:1000;
+    background:var(--bg-surface);border-top:1px solid var(--border);
+    padding-bottom:var(--safe-bottom);
+    height:calc(64px + var(--safe-bottom));align-items:stretch}
+  .mob-tab{flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:3px;padding:8px 4px;text-decoration:none;
+    color:var(--text-faint);min-height:56px;
+    -webkit-tap-highlight-color:transparent;transition:color 150ms}
+  .mob-tab i,.mob-tab svg{width:22px;height:22px}
+  .mob-tab span{font-size:10px;font-weight:600;line-height:1}
+  .mob-tab:active{opacity:.7}
+  .mob-tab--active{color:var(--accent)}
+
+  /* --- Sidebar becomes off-canvas drawer --- */
+  .sidebar{
+    /* override the desktop `position:fixed; top:8px; left:8px; bottom:8px`
+       inset + the rounded corners — drawer takes the full height and
+       butts flush to the screen edge. */
+    top:0 !important;left:0 !important;bottom:0 !important;
+    width:min(85vw, 320px) !important;
+    border-radius:0 !important;border:none !important;
+    border-right:1px solid var(--border) !important;
+    padding-top:var(--safe-top);
+    padding-bottom:var(--safe-bottom);
+    transform:translateX(-100%);
+    transition:transform var(--dur) var(--ease);
+    z-index:1100;
+    box-shadow:0 0 40px rgba(0,0,0,0.25);
+  }
+  .sidebar--open{transform:translateX(0)}
+
+  .drawer-backdrop{
+    display:block;position:fixed;inset:0;z-index:1099;
+    background:rgba(0,0,0,0.5);
+    opacity:0;pointer-events:none;
+    transition:opacity var(--dur) var(--ease);
+  }
+  .drawer-backdrop--open{opacity:1;pointer-events:auto}
+
+  .main-area{margin-left:0 !important;
+    padding-bottom:calc(64px + var(--safe-bottom) + 8px) !important}
+  .upgrade-fab{bottom:calc(64px + var(--safe-bottom) + 12px) !important}
+  .chat-fab{bottom:calc(64px + var(--safe-bottom) + 12px) !important}
+  .chat-drawer{bottom:calc(128px + var(--safe-bottom)) !important}
+
+  /* --- Compact topbar with hamburger --- */
+  .topbar{height:52px;padding:0 var(--space-3);gap:var(--space-3)}
+  .topbar-search{max-width:none}
+  .topbar-search .input{height:40px}
+  .topbar-hamburger{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:44px;height:44px;flex-shrink:0;
+    background:transparent;border:1px solid transparent;border-radius:var(--radius);
+    color:var(--text-primary);cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .topbar-hamburger:active{background:var(--bg-hover)}
+  /* On phones we hide the theme toggle + log-out icons — the drawer is
+     the canonical place to reach settings, and cramming them into the
+     40px-high search row makes the input too narrow. */
+  .topbar-right .theme-toggle,.topbar-right a.btn-icon{display:none}
+}
 
 @media(max-width:768px){
-.mob-bar{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:1000;background:var(--bg-surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);height:calc(64px + env(safe-area-inset-bottom));align-items:flex-start}
-.mob-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 6px;text-decoration:none;color:var(--text-faint);min-height:56px;-webkit-tap-highlight-color:transparent;transition:color 150ms}
-.mob-tab span{font-size:10px;font-weight:500;line-height:1;margin-top:3px}
-.mob-tab:active{opacity:.7}
 .mob-tab--active{color:var(--accent)}
-.mob-tab--center{margin-top:-14px}
-.mob-tab-zap{background:var(--accent);border-radius:14px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(232,56,77,.4);color:#fff;margin-bottom:2px}
-.mob-tab-zap svg{stroke:#fff}
-.mob-tab--center span{color:var(--accent);font-weight:600}
 
-/* Hide sidebar, adjust layout */
-.sidebar{display:none !important}
-.main-area{margin-left:0 !important;padding-bottom:calc(80px + env(safe-area-inset-bottom)) !important}
-.upgrade-fab{bottom:calc(80px + env(safe-area-inset-bottom) + 12px) !important}
-.chat-fab{bottom:calc(80px + env(safe-area-inset-bottom) + 12px) !important}
-.chat-drawer{bottom:calc(140px + env(safe-area-inset-bottom)) !important}
-
-/* Compact topbar */
-.topbar{height:48px;padding:0 var(--space-4)}
+/* Compact topbar further at phone width */
 .topbar-search{max-width:none}
 
 /* Single column products */
