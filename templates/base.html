@@ -21,6 +21,24 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/static/css/main.css">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  {# ===== PWA standalone detection (Phase 4d) =====
+     Runs in <head> BEFORE main.css paints so any .is-pwa rule we add
+     later applies on first paint without FOUC. Adds an is_pwa cookie
+     that server-side analytics / session init can read to measure
+     PWA-vs-browser usage. #}
+  <script>
+  (function(){
+    var isPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+             || window.navigator.standalone === true;
+    if (isPwa) {
+      try {
+        document.cookie = 'is_pwa=1; path=/; max-age=' + (60*60*24*30) + '; SameSite=Lax';
+      } catch(e){}
+      document.documentElement.classList.add('is-pwa');
+    }
+  })();
+  </script>
   {% block head %}{% endblock %}
 </head>
 <body>
