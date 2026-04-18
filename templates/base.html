@@ -72,6 +72,9 @@
         <a href="/app/admin" class="sidebar-link {% if active_page == 'admin' %}active{% endif %}">
           <i data-lucide="shield"></i> Admin Panel
         </a>
+        <a href="/app/admin/logs" class="sidebar-link {% if active_page == 'admin_logs' %}active{% endif %}">
+          <i data-lucide="scroll-text"></i> Activity Logs
+        </a>
         <a href="/app/admin/tap" class="sidebar-link {% if active_page == 'tap' %}active{% endif %}">
           <i data-lucide="zap"></i> TAP Products
         </a>
@@ -288,6 +291,7 @@
         {% if current_user and current_user.is_admin %}
         <div class="mob-more__section">Admin</div>
         <a href="/app/admin" class="mob-more__link"><i data-lucide="shield"></i> <span>Admin Panel</span></a>
+        <a href="/app/admin/logs" class="mob-more__link"><i data-lucide="scroll-text"></i> <span>Activity Logs</span></a>
         <a href="/app/admin/tap" class="mob-more__link"><i data-lucide="zap"></i> <span>TAP Products</span></a>
         <a href="/app/admin/tap-lists" class="mob-more__link"><i data-lucide="list"></i> <span>TAP Lists</span></a>
         <a href="/app/admin/campaigns" class="mob-more__link"><i data-lucide="megaphone"></i> <span>Campaigns</span></a>

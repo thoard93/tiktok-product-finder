@@ -1182,6 +1182,15 @@ def api_tap_lists():
         return jsonify([])
 
 
+@views_bp.route('/app/admin/logs')
+@admin_page_required
+def admin_logs_page():
+    """Filterable activity-log feed for admins. Data comes from
+    /api/admin/logs (polled client-side)."""
+    ctx = _base_context('admin_logs')
+    return render_template('admin_logs.html', **ctx)
+
+
 @views_bp.route('/app/admin')
 @admin_page_required
 def admin_panel():
@@ -1749,6 +1758,11 @@ def api_mark_onboarded():
     if not user.onboarded_at:
         user.onboarded_at = datetime.utcnow()
         db.session.commit()
+        try:
+            from app.routes.auth import log_activity
+            log_activity(user.id, 'onboarding_completed', {})
+        except Exception:
+            pass
     return jsonify({'success': True, 'onboarded_at': user.onboarded_at.isoformat()})
 
 
@@ -2983,6 +2997,17 @@ def api_products_lookup():
             f"[ProductLookup] sync_to_db {raw_id} err: {e}")
         # Don't block the user — fallthrough; product detail page has its own lookup
 
+    try:
+        from app.routes.auth import log_activity
+        _user = get_current_user()
+        if _user:
+            log_activity(_user.id, 'product_lookup', {
+                'source': source, 'product_id': db_key,
+                'query': (query[:120] if source == 'share_url' else '')
+            })
+    except Exception:
+        pass
+
     return jsonify({
         'source': source,
         'product_id': db_key,
@@ -3023,6 +3048,11 @@ def _toggle_creator_favorite(unique_id: str, data: dict):
     if existing:
         db.session.delete(existing)
         db.session.commit()
+        try:
+            from app.routes.auth import log_activity
+            log_activity(user.id, 'creator_unsaved', {'unique_id': uid})
+        except Exception:
+            pass
         return jsonify({'saved': False})
 
     fav = FavoritedCreator(
@@ -3041,6 +3071,14 @@ def _toggle_creator_favorite(unique_id: str, data: dict):
     except Exception:
         db.session.rollback()
         return jsonify({'error': 'Failed to save'}), 500
+    try:
+        from app.routes.auth import log_activity
+        log_activity(user.id, 'creator_saved', {
+            'unique_id': uid,
+            'nick_name': (data.get('nick_name') or '')[:120]
+        })
+    except Exception:
+        pass
     return jsonify({'saved': True})
 
 

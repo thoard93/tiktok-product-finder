@@ -113,16 +113,46 @@ def log_activity(user_id, action, details=None):
     try:
         if isinstance(details, dict):
             details = json.dumps(details, default=str)
+        ip = None
+        try:
+            ip = request.remote_addr
+        except Exception:
+            pass  # No request context (e.g. scheduler)
         log = ActivityLog(
             user_id=user_id,
             action=action,
             details=str(details)[:500] if details else None,
-            ip_address=request.remote_addr
+            ip_address=ip,
         )
         db.session.add(log)
         db.session.commit()
     except Exception as e:
         print(f"Log Error: {e}")
+
+
+def log_system_event(action, details=None):
+    """
+    Log a system-level event (scheduler, webhooks, background jobs) to
+    the activity feed. Uses user_id=None so the admin UI can tag it
+    as a 'system' event.
+    """
+    try:
+        if isinstance(details, dict):
+            details = json.dumps(details, default=str)
+        log = ActivityLog(
+            user_id=None,
+            action=action,
+            details=str(details)[:500] if details else None,
+            ip_address='system',
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print(f"[log_system_event] {action} failed: {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 # =============================================================================
 # CONFIG HELPERS

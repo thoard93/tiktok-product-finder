@@ -1144,6 +1144,18 @@ def toggle_favorite(product_id):
         product.is_favorite = not product.is_favorite
         db.session.commit()
 
+        # Log the action to the activity feed (non-fatal if it fails)
+        try:
+            from app.routes.auth import log_activity, get_current_user
+            user = get_current_user()
+            if user:
+                log_activity(user.id,
+                             'favorite_added' if product.is_favorite else 'favorite_removed',
+                             {'product_id': product_id,
+                              'product_name': (product.product_name or '')[:120]})
+        except Exception:
+            pass
+
         return jsonify({
             'success': True,
             'product_id': product_id,

@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Activity Logs{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Activity Logs</h1>
+  <p class="page-subtitle">Live feed of user actions + scheduled jobs</p>
+</div>
+
+{# ===== SUMMARY CHIPS (filters) ===== #}
+<div class="logs-filters card" style="padding:var(--space-4);margin-bottom:var(--space-4)">
+  <div class="logs-chips" id="logsChips">
+    <button class="logs-chip logs-chip--active" data-cat="all">All <span class="logs-chip-count" id="chip-all">—</span></button>
+    <button class="logs-chip" data-cat="auth">🔐 Auth <span class="logs-chip-count" id="chip-auth">—</span></button>
+    <button class="logs-chip" data-cat="subscription">💳 Subscription <span class="logs-chip-count" id="chip-subscription">—</span></button>
+    <button class="logs-chip" data-cat="user">⭐ User <span class="logs-chip-count" id="chip-user">—</span></button>
+    <button class="logs-chip" data-cat="admin">🛠 Admin <span class="logs-chip-count" id="chip-admin">—</span></button>
+    <button class="logs-chip" data-cat="scheduler">⏰ Scheduler <span class="logs-chip-count" id="chip-scheduler">—</span></button>
+    <button class="logs-chip" data-cat="other">❓ Other <span class="logs-chip-count" id="chip-other">—</span></button>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:var(--space-3);align-items:center">
+    <div style="position:relative;flex:1;min-width:220px">
+      <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-faint);pointer-events:none"></i>
+      <input type="text" class="input" id="logsSearch" placeholder="Search action or details…" style="padding-left:32px">
+    </div>
+    <select class="input" id="logsLimit" style="width:120px">
+      <option value="50">Last 50</option>
+      <option value="100" selected>Last 100</option>
+      <option value="250">Last 250</option>
+      <option value="500">Last 500</option>
+    </select>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer">
+      <input type="checkbox" id="logsAutoRefresh" checked> Auto-refresh
+    </label>
+    <button class="btn btn-ghost btn-sm" onclick="fetchLogs(true)">
+      <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Refresh
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="exportLogsCSV()">
+      <i data-lucide="download" style="width:14px;height:14px"></i> Export CSV
+    </button>
+  </div>
+</div>
+
+{# ===== FEED ===== #}
+<div class="card" style="padding:0;overflow:hidden">
+  <div class="logs-feed" id="logsFeed">
+    <div style="padding:var(--space-8);text-align:center;color:var(--text-muted)">
+      <span style="display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px"></span>
+      Loading activity…
+    </div>
+  </div>
+</div>
+
+<p class="text-xs text-faint" style="margin-top:var(--space-3);text-align:center">
+  Feed updates every 10 seconds when auto-refresh is on. Showing the most recent events first.
+</p>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.logs-chips{display:flex;gap:8px;flex-wrap:wrap}
+.logs-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-secondary);border-radius:var(--radius-full);font-size:12px;font-weight:600;cursor:pointer;transition:all var(--dur-fast)}
+.logs-chip:hover{border-color:var(--text-muted);color:var(--text-primary)}
+.logs-chip--active{background:var(--accent-glow);border-color:var(--accent);color:var(--accent)}
+.logs-chip-count{font-size:10px;opacity:.8;background:rgba(0,0,0,0.08);padding:1px 6px;border-radius:var(--radius-full);min-width:16px;text-align:center}
+.logs-chip--active .logs-chip-count{background:rgba(124,58,237,0.15)}
+
+.logs-feed{max-height:70vh;overflow-y:auto}
+.logs-row{display:grid;grid-template-columns:110px 180px 1fr 110px;gap:var(--space-3);padding:10px var(--space-4);border-bottom:1px solid var(--border);font-size:13px;align-items:start;transition:background var(--dur-fast)}
+.logs-row:hover{background:var(--bg-elevated)}
+.logs-row:last-child{border-bottom:none}
+.logs-row--new{animation:logsHighlight 2s ease-out}
+@keyframes logsHighlight{from{background:var(--accent-glow)}to{background:transparent}}
+
+.logs-time{font-family:ui-monospace,'Cascadia Code',monospace;font-size:11px;color:var(--text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+.logs-user{display:flex;align-items:center;gap:8px;min-width:0}
+.logs-user-avatar{width:24px;height:24px;border-radius:50%;background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;overflow:hidden}
+.logs-user-avatar img{width:100%;height:100%;object-fit:cover}
+.logs-user-name{font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logs-user--system .logs-user-avatar{background:#1e293b;color:#38bdf8}
+.logs-user--system .logs-user-name{color:var(--text-muted);font-style:italic}
+
+.logs-action{min-width:0}
+.logs-action-name{font-size:13px;font-weight:700;color:var(--text-primary);font-family:ui-monospace,'Cascadia Code',monospace}
+.logs-action-details{font-size:11px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-family:ui-monospace,'Cascadia Code',monospace}
+
+.logs-category{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--radius-full);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;align-self:start}
+.logs-category--auth{background:rgba(14,165,233,0.1);color:#0ea5e9}
+.logs-category--subscription{background:rgba(34,197,94,0.1);color:#22c55e}
+.logs-category--user{background:rgba(124,58,237,0.1);color:#7c3aed}
+.logs-category--admin{background:rgba(249,115,22,0.12);color:#f97316}
+.logs-category--scheduler{background:rgba(6,182,212,0.12);color:#06b6d4}
+.logs-category--other{background:var(--bg-elevated);color:var(--text-muted)}
+
+@media(max-width:768px){
+  .logs-row{grid-template-columns:1fr;gap:4px;padding:12px var(--space-3)}
+  .logs-time{order:4}
+  .logs-user{order:2}
+  .logs-action{order:3}
+  .logs-category{order:1;align-self:start}
+}
+</style>
+
+<script>
+(function() {
+  let currentCat = 'all';
+  let allLogs = [];
+  let latestId = 0;
+  let pollTimer = null;
+
+  const feed = document.getElementById('logsFeed');
+  const chips = document.querySelectorAll('.logs-chip');
+  const searchInput = document.getElementById('logsSearch');
+  const limitSelect = document.getElementById('logsLimit');
+  const autoRefresh = document.getElementById('logsAutoRefresh');
+
+  chips.forEach(c => c.addEventListener('click', () => {
+    chips.forEach(x => x.classList.toggle('logs-chip--active', x === c));
+    currentCat = c.dataset.cat;
+    render();
+  }));
+
+  let searchDebounce;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => fetchLogs(true), 250);
+  });
+  limitSelect.addEventListener('change', () => fetchLogs(true));
+  autoRefresh.addEventListener('change', () => {
+    if (autoRefresh.checked) startPolling();
+    else stopPolling();
+  });
+
+  function fmtTime(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    const now = new Date();
+    const diff = (now - d) / 1000;
+    if (diff < 60) return Math.floor(diff) + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return d.toLocaleString(undefined, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function formatDetails(raw) {
+    if (!raw) return '';
+    // details is stored as stringified JSON in most cases
+    try {
+      const obj = JSON.parse(raw);
+      if (typeof obj !== 'object' || obj === null) return String(raw);
+      return Object.entries(obj)
+        .map(([k, v]) => k + '=' + (typeof v === 'string' ? v : JSON.stringify(v)))
+        .join(' · ');
+    } catch (_) {
+      return String(raw);
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function row(log, isNew) {
+    const isSystem = !log.user_id;
+    const userClass = isSystem ? 'logs-user--system' : '';
+    const name = isSystem
+      ? 'system'
+      : (log.username || ('user #' + log.user_id));
+    const avatar = isSystem
+      ? '<i data-lucide="cpu" style="width:12px;height:12px"></i>'
+      : escapeHtml((name || '?')[0].toUpperCase());
+    const cat = log.category || 'other';
+    const newClass = isNew ? ' logs-row--new' : '';
+    const details = formatDetails(log.details);
+    const time = log.created_at_est || fmtTime(log.created_at);
+    const relTime = fmtTime(log.created_at);
+
+    return '<div class="logs-row' + newClass + '" data-id="' + log.id + '">'
+      + '<div class="logs-time" title="' + escapeHtml(log.created_at || '') + '">' + escapeHtml(relTime) + '</div>'
+      + '<div class="logs-user ' + userClass + '">'
+      + '<div class="logs-user-avatar">' + avatar + '</div>'
+      + '<div class="logs-user-name">' + escapeHtml(name) + '</div>'
+      + '</div>'
+      + '<div class="logs-action">'
+      + '<div class="logs-action-name">' + escapeHtml(log.action) + '</div>'
+      + (details ? '<div class="logs-action-details" title="' + escapeHtml(details) + '">' + escapeHtml(details) + '</div>' : '')
+      + '</div>'
+      + '<span class="logs-category logs-category--' + cat + '">' + cat + '</span>'
+      + '</div>';
+  }
+
+  function render() {
+    const filtered = currentCat === 'all'
+      ? allLogs
+      : allLogs.filter(l => (l.category || 'other') === currentCat);
+    if (!filtered.length) {
+      feed.innerHTML = '<div style="padding:var(--space-8);text-align:center;color:var(--text-muted);font-size:13px">No activity yet for this filter.</div>';
+      return;
+    }
+    const knownIds = new Set(Array.from(feed.querySelectorAll('.logs-row')).map(r => r.dataset.id));
+    feed.innerHTML = filtered.map(l => row(l, !knownIds.has(String(l.id)))).join('');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function updateChips(summary) {
+    if (!summary) return;
+    for (const key of ['all', 'auth', 'subscription', 'user', 'admin', 'scheduler', 'other']) {
+      const el = document.getElementById('chip-' + key);
+      if (!el) continue;
+      const val = key === 'all' ? (summary.total || 0) : (summary[key] || 0);
+      el.textContent = val;
+    }
+  }
+
+  window.fetchLogs = async function(reset) {
+    const q = searchInput.value.trim();
+    const limit = limitSelect.value;
+    const params = new URLSearchParams({ limit: limit });
+    if (q) params.set('q', q);
+    try {
+      const res = await fetch('/api/admin/logs?' + params.toString());
+      const data = await res.json();
+      allLogs = data.logs || [];
+      latestId = data.latest_id || latestId;
+      updateChips(data.summary || {});
+      render();
+    } catch (e) {
+      feed.innerHTML = '<div style="padding:var(--space-8);text-align:center;color:#ef4444">Failed to load logs. Try refreshing.</div>';
+    }
+  };
+
+  window.exportLogsCSV = function() {
+    if (!allLogs.length) return;
+    const rows = [['timestamp', 'category', 'user', 'action', 'details', 'ip']];
+    for (const l of allLogs) {
+      rows.push([
+        l.created_at || '', l.category || '',
+        (l.user_id ? (l.username || 'user#' + l.user_id) : 'system'),
+        l.action || '', (l.details || '').replace(/\r?\n/g, ' '),
+        l.ip_address || ''
+      ]);
+    }
+    const csv = rows.map(r => r.map(c =>
+      '"' + String(c).replace(/"/g, '""') + '"'
+    ).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'vantage-activity-' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(() => fetchLogs(false), 10000);
+  }
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  fetchLogs(true);
+  startPolling();
+})();
+</script>
+{% endblock %}

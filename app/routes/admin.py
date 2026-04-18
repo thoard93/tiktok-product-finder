@@ -345,6 +345,131 @@ def admin_activity():
     return jsonify({'logs': [l.to_dict() for l in logs]})
 
 
+# =============================================================================
+# ADMIN ACTIVITY LOG FEED  — filterable, paginated, categorized
+# =============================================================================
+
+# Mapping from raw action strings → display category. Anything not mapped
+# falls into 'other'. Kept broad so adding new actions doesn't silently fall
+# through the filter UI.
+_ACTION_CATEGORY_MAP = {
+    # Auth
+    'login': 'auth', 'logout': 'auth',
+    'maintenance_enabled': 'auth', 'maintenance_disabled': 'auth',
+    'maintenance_resumed': 'auth',
+    # Subscription lifecycle
+    'subscription_created': 'subscription',
+    'subscription_activated': 'subscription',
+    'subscription_cancelled': 'subscription',
+    'subscription_paused': 'subscription',
+    'save_offer_accepted': 'subscription',
+    # User product/creator interactions
+    'favorite_added': 'user', 'favorite_removed': 'user',
+    'creator_saved': 'user', 'creator_unsaved': 'user',
+    'product_lookup': 'user',
+    'onboarding_completed': 'user',
+    'add_brand': 'user', 'delete_brand': 'user',
+    'sync_brand': 'user',
+    'ai_image_generated': 'user',
+    # Scheduler + background
+    'scheduler_daily_sync_started': 'scheduler',
+    'scheduler_daily_sync_complete': 'scheduler',
+    'scheduler_product_sync': 'scheduler',
+    'scheduler_product_sync_failed': 'scheduler',
+    'scheduler_deep_refresh_complete': 'scheduler',
+    'scheduler_deep_refresh_failed': 'scheduler',
+    'scheduler_brand_sync_complete': 'scheduler',
+    'scheduler_brand_sync_failed': 'scheduler',
+}
+
+
+def _categorize_action(action):
+    if not action:
+        return 'other'
+    if action in _ACTION_CATEGORY_MAP:
+        return _ACTION_CATEGORY_MAP[action]
+    if action.startswith('admin_') or action.startswith('cleanup_') \
+       or action.startswith('config_') or action.startswith('echotik_') \
+       or action in ('reset_product_status', 'deduplicate_products',
+                     'delete_low_videos', 'mark_unavailable'):
+        return 'admin'
+    if action.startswith('scheduler_'):
+        return 'scheduler'
+    return 'other'
+
+
+@admin_bp.route('/api/admin/logs')
+@login_required
+@admin_required
+def admin_logs_feed():
+    """
+    Filterable activity log feed for the admin logs page.
+
+    Query params:
+      category  — auth|subscription|user|admin|scheduler|other|all (default all)
+      action    — exact action string (optional)
+      user_id   — filter by user (optional)
+      q         — free-text search in action/details (optional)
+      since_id  — only return rows with id > since_id (for incremental polling)
+      limit     — default 100, max 500
+    """
+    from datetime import timedelta
+
+    category = (request.args.get('category') or 'all').lower()
+    action = (request.args.get('action') or '').strip()
+    user_id = request.args.get('user_id', type=int)
+    q = (request.args.get('q') or '').strip()
+    since_id = request.args.get('since_id', type=int)
+    try:
+        limit = min(max(int(request.args.get('limit', 100)), 1), 500)
+    except Exception:
+        limit = 100
+
+    query = ActivityLog.query
+    if action:
+        query = query.filter(ActivityLog.action == action)
+    if user_id:
+        query = query.filter(ActivityLog.user_id == user_id)
+    if q:
+        like = f'%{q}%'
+        query = query.filter(
+            db.or_(ActivityLog.action.ilike(like), ActivityLog.details.ilike(like))
+        )
+    if since_id:
+        query = query.filter(ActivityLog.id > since_id)
+
+    # Category filter runs AFTER the DB query since it's a derived property
+    rows = query.order_by(ActivityLog.created_at.desc()).limit(limit * 3).all()
+    if category and category != 'all':
+        rows = [r for r in rows if _categorize_action(r.action) == category]
+    rows = rows[:limit]
+
+    # Count summary for the top filter chips (over the last 24h)
+    summary = {}
+    try:
+        since = datetime.utcnow() - timedelta(hours=24)
+        recent = ActivityLog.query.filter(
+            ActivityLog.created_at >= since
+        ).all()
+        for r in recent:
+            cat = _categorize_action(r.action)
+            summary[cat] = summary.get(cat, 0) + 1
+        summary['total'] = len(recent)
+    except Exception:
+        summary = {}
+
+    payload = []
+    for r in rows:
+        d = r.to_dict()
+        d['category'] = _categorize_action(r.action)
+        payload.append(d)
+
+    return jsonify({'logs': payload, 'summary': summary,
+                    'latest_id': (rows[0].id if rows else (since_id or 0))})
+
+
+
+
 @admin_bp.route('/api/admin/kick/<int:user_id>', methods=['POST'])
 @login_required
 @admin_required

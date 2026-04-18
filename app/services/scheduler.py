@@ -120,8 +120,13 @@ def daily_sync(app):
     2. For new/stale products, fetch detail + videos (incremental — skip <24h)
     3. Sync brands
     """
+    from app.routes.auth import log_system_event
+    from datetime import datetime as _dt
     with app.app_context():
         log.info("[SCHEDULER] === Daily sync starting ===")
+        log_system_event('scheduler_daily_sync_started', {})
+        started_at = _dt.utcnow()
+        stage_results = {}
 
         # Step 1: Product list sync (uses existing run_echotik_sync)
         try:
@@ -132,20 +137,32 @@ def daily_sync(app):
                 result.get('fetched', 0), result.get('filtered', 0),
                 result.get('created', 0), result.get('updated', 0),
             )
-        except Exception:
+            stage_results['product_list'] = {
+                'fetched': result.get('fetched', 0),
+                'filtered': result.get('filtered', 0),
+                'created': result.get('created', 0),
+                'updated': result.get('updated', 0),
+            }
+            log_system_event('scheduler_product_sync', stage_results['product_list'])
+        except Exception as e:
             log.exception("[SCHEDULER] Product list sync failed")
+            log_system_event('scheduler_product_sync_failed', {'error': str(e)[:200]})
 
         # Step 2: Deep refresh stale products + video sync
         try:
             _deep_refresh_with_videos(app)
-        except Exception:
+            log_system_event('scheduler_deep_refresh_complete', {})
+        except Exception as e:
             log.exception("[SCHEDULER] Deep refresh failed")
+            log_system_event('scheduler_deep_refresh_failed', {'error': str(e)[:200]})
 
         # Step 3: Brand sync
         try:
             _run_brand_sync(app)
-        except Exception:
+            log_system_event('scheduler_brand_sync_complete', {})
+        except Exception as e:
             log.exception("[SCHEDULER] Brand sync failed")
+            log_system_event('scheduler_brand_sync_failed', {'error': str(e)[:200]})
 
         # Step 4: Refresh Brand Hunter product stats
         try:
@@ -165,7 +182,12 @@ def daily_sync(app):
         except Exception:
             log.exception("[SCHEDULER] Score cache warm failed")
 
+        duration = (_dt.utcnow() - started_at).total_seconds()
         log.info("[SCHEDULER] === Daily sync complete ===")
+        log_system_event('scheduler_daily_sync_complete', {
+            'duration_sec': round(duration, 1),
+            **stage_results,
+        })
 
 
 def _warm_score_cache(app):
