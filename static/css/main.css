@@ -122,8 +122,22 @@
 
 /* 2. RESET + TYPOGRAPHY ==================================================== */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;overflow-x:hidden}
+/* Native-feel polish (Phase 4b):
+   - Tap-highlight turned off globally so iOS/Android don't flash a grey
+     rectangle on every tap; we provide our own :active states.
+   - `-webkit-overflow-scrolling:touch` on <html> enables momentum scroll
+     on iOS for any scrollable descendant.
+   - touch-action:manipulation is applied ONLY to interactive elements
+     below, not globally — charts, product-detail hero images, and any
+     pinch-zoomable surfaces keep their default touch behavior. */
+*{-webkit-tap-highlight-color:transparent}
+html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 body{font-family:var(--font-body);font-size:var(--text-base);line-height:1.5;color:var(--text-primary);background:var(--bg-base);min-height:100vh;min-height:100dvh;overflow-x:hidden}
+button,a,.btn,.filter-chip,.filter-mobile-trigger,
+.product-card,.creator-card,.creator-similar-card,.brand-card,
+.mob-tab,.sidebar-link,.settings-tab,.mob-more__link{
+  touch-action:manipulation;
+}
 a{color:var(--accent);text-decoration:none;transition:color var(--dur-fast)}
 a:hover{color:var(--accent-hover)}
 img{max-width:100%;display:block}

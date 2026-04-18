@@ -228,7 +228,7 @@
       {% for sp in similar_products[:4] %}
       <a href="/app/products/{{ sp.product_id }}" class="video-card" style="text-decoration:none">
         <div class="video-thumb">
-          {% if sp.image_url or sp.cached_image_url %}<img src="{{ sp.cached_image_url or sp.image_url }}" alt="{{ sp.product_name }}">{% endif %}
+          {% if sp.image_url or sp.cached_image_url %}<img src="{{ sp.cached_image_url or sp.image_url }}" alt="{{ sp.product_name }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/static/img/avatar-placeholder.png'">{% endif %}
         </div>
         <div>
           <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary)">{{ sp.product_name | truncate(35) }}</div>

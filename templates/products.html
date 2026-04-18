@@ -120,7 +120,7 @@
             {% set _raw = p.cached_image_url or p.image_url %}
             {% set _row_src = ('/api/image-proxy?url=' ~ (_raw | urlencode)) if _raw else '' %}
             {% if _row_src %}
-              <img src="{{ _row_src }}" class="product-row-thumb" alt="{{ p.product_name }}" loading="lazy" referrerpolicy="no-referrer"
+              <img src="{{ _row_src }}" class="product-row-thumb" alt="{{ p.product_name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer"
                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
               <div class="product-row-thumb-fallback {{ cat_class }}" style="display:none">{{ (p.product_name or '?')[0] | upper }}</div>
             {% else %}
@@ -204,7 +204,7 @@
   <div class="product-card">
     <div class="product-card-img">
       {% if _img_src %}
-        <img src="{{ _img_src }}" alt="{{ p.product_name }}" loading="lazy" referrerpolicy="no-referrer"
+        <img src="{{ _img_src }}" alt="{{ p.product_name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer"
              data-category="{{ cat_lower }}" data-name="{{ (p.product_name or '?')[0] }}" class="product-img"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         <div class="product-img-placeholder {{ cat_class }}" style="display:none">{{ (p.product_name or '?')[0] | upper }}</div>
