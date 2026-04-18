@@ -398,6 +398,55 @@ def _categorize_action(action):
     return 'other'
 
 
+@admin_bp.route('/api/admin/scheduler/run-now', methods=['POST'])
+@login_required
+@admin_required
+def admin_scheduler_run_now():
+    """Admin: trigger the daily EchoTik sync immediately (in a background
+    thread). Useful to confirm scheduler logs are wired up correctly
+    without waiting for 8 PM EST."""
+    from app import executor
+    from flask import current_app
+    try:
+        from app.services.scheduler import daily_sync
+        app = current_app._get_current_object()
+        executor.submit(daily_sync, app)
+        return jsonify({'success': True, 'message': 'Daily sync started in background. Refresh logs in a few seconds.'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/api/admin/scheduler/status')
+@login_required
+@admin_required
+def admin_scheduler_status():
+    """Return the last scheduler run + next scheduled run time."""
+    from datetime import timedelta as _td
+    last = ActivityLog.query.filter(
+        ActivityLog.action == 'scheduler_daily_sync_complete'
+    ).order_by(ActivityLog.created_at.desc()).first()
+    last_started = ActivityLog.query.filter(
+        ActivityLog.action == 'scheduler_daily_sync_started'
+    ).order_by(ActivityLog.created_at.desc()).first()
+    last_failed = ActivityLog.query.filter(
+        ActivityLog.action.like('scheduler_%_failed')
+    ).order_by(ActivityLog.created_at.desc()).first()
+
+    # Next scheduled run = next 1 AM UTC
+    now = datetime.utcnow()
+    next_run = now.replace(hour=1, minute=0, second=0, microsecond=0)
+    if next_run <= now:
+        next_run = next_run + _td(days=1)
+
+    return jsonify({
+        'last_completed_at': last.created_at.isoformat() if last else None,
+        'last_started_at': last_started.created_at.isoformat() if last_started else None,
+        'last_failed_at': last_failed.created_at.isoformat() if last_failed else None,
+        'last_failed_action': last_failed.action if last_failed else None,
+        'next_scheduled_at': next_run.isoformat() + 'Z',
+    })
+
+
 @admin_bp.route('/api/admin/logs')
 @login_required
 @admin_required
@@ -438,25 +487,24 @@ def admin_logs_feed():
     if since_id:
         query = query.filter(ActivityLog.id > since_id)
 
-    # Category filter runs AFTER the DB query since it's a derived property
-    rows = query.order_by(ActivityLog.created_at.desc()).limit(limit * 3).all()
-    if category and category != 'all':
-        rows = [r for r in rows if _categorize_action(r.action) == category]
-    rows = rows[:limit]
+    # Fetch a larger pool so the client-side category filter can still
+    # return `limit` rows when most are filtered out. Then compute the
+    # summary from the SAME pool (pre-category) so chip counts match
+    # what the user can actually see when they click a chip.
+    pool = query.order_by(ActivityLog.created_at.desc()).limit(limit * 3).all()
 
-    # Count summary for the top filter chips (over the last 24h)
     summary = {}
-    try:
-        since = datetime.utcnow() - timedelta(hours=24)
-        recent = ActivityLog.query.filter(
-            ActivityLog.created_at >= since
-        ).all()
-        for r in recent:
-            cat = _categorize_action(r.action)
-            summary[cat] = summary.get(cat, 0) + 1
-        summary['total'] = len(recent)
-    except Exception:
-        summary = {}
+    for r in pool:
+        cat = _categorize_action(r.action)
+        summary[cat] = summary.get(cat, 0) + 1
+    summary['total'] = len(pool)
+
+    # Apply the category filter to produce the display rows
+    if category and category != 'all':
+        rows = [r for r in pool if _categorize_action(r.action) == category]
+    else:
+        rows = pool
+    rows = rows[:limit]
 
     payload = []
     for r in rows:
